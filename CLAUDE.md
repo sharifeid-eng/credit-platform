@@ -178,11 +178,30 @@ Environment variable needed: `ANTHROPIC_API_KEY` in `.env` file at project root.
 
 ## Known Gaps / Next Steps (as of last session)
 
-- `core/analysis.py` content not yet reviewed — may contain additional analytics
-- Chart components in `frontend/src/components/charts/` not yet read (DeploymentChart, CollectionVelocityChart, DenialTrendChart, CohortTable, ActualVsExpectedChart, AgeingChart, RevenueChart, ConcentrationChart, AICommentary)
+- `core/analysis.py` is empty — placeholder only, no logic yet
+- All chart components fully read and understood (see Chart Components section below)
 - No authentication / login system
 - No multi-user support
 - `analyze.py` CLI and backend are somewhat duplicated — could be unified
+
+---
+
+## Chart Components (frontend/src/components/charts/)
+
+| Component | Library | What It Renders |
+|---|---|---|
+| `DeploymentChart` | Recharts BarChart | Stacked bar: new vs repeat business by month |
+| `CollectionVelocityChart` | Recharts LineChart + BarChart | Monthly collection rate line + completed deal buckets by days |
+| `DenialTrendChart` | Recharts ComposedChart | Bars for monthly denial rate + line for 3M rolling average |
+| `ActualVsExpectedChart` | Recharts AreaChart | Cumulative collected vs expected, with performance % header |
+| `AgeingChart` | Recharts PieChart + BarChart | Health donut (Healthy/Watch/Delayed/Poor) + ageing bucket bar chart |
+| `RevenueChart` | Recharts ComposedChart | Stacked bars realised/unrealised + gross margin % line, plus 4 KPI tiles |
+| `ConcentrationChart` | Recharts PieChart | Two donuts (Group + Product) + top 10 deals table |
+| `CohortTable` | Plain HTML table | Vintage cohort rows with collection rate, denial rate, IRR spread |
+
+All charts share the same dark theme palette (`#0A0F1E` bg, `#111D3E` cards, `#1B2B5A` borders) and a shared `formatMillions` helper. Custom tooltips are consistent across all charts.
+
+`AICommentary` — on-demand button that calls `/ai-commentary` and renders the response with basic line parsing (headers in blue, bullets, paragraphs). Has Generate/Regenerate states with a spinner.
 
 ---
 
