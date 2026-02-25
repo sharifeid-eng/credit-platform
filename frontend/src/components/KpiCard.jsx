@@ -1,38 +1,97 @@
-export default function KpiCard({ title, value, subtitle, trend, color = 'blue' }) {
-  const colors = {
-    blue: { accent: '#3B82F6', bg: '#111D3E', border: '#1B2B5A' },
-    teal: { accent: '#14B8A6', bg: '#0D1F1E', border: '#134040' },
-    red:  { accent: '#EF4444', bg: '#1F0D0D', border: '#3F1313' },
-    gold: { accent: '#F59E0B', bg: '#1F1A0D', border: '#3F3213' },
-  };
-
-  const c = colors[color] || colors.blue;
+/**
+ * KpiCard — dark theme
+ *
+ * Props:
+ *   label      string   — uppercase label e.g. "Collection Rate"
+ *   value      string   — formatted value e.g. "94.3%" or "$164.4M"
+ *   sub        string   — small subtitle e.g. "7,536 deals"
+ *   trend      number   — optional delta e.g. 1.2 or -0.4 (shows ↑↓ badge)
+ *   trendLabel string   — optional suffix e.g. "vs prev month"
+ *   color      string   — 'gold' | 'teal' | 'red' | 'blue'  (default 'gold')
+ */
+export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold' }) {
+  const palette = {
+    gold: { accent: 'var(--gold)',  muted: 'var(--gold-muted)' },
+    teal: { accent: 'var(--teal)',  muted: 'var(--teal-muted)' },
+    red:  { accent: 'var(--red)',   muted: 'var(--red-muted)'  },
+    blue: { accent: 'var(--blue)',  muted: 'var(--blue-muted)' },
+  }
+  const { accent, muted } = palette[color] || palette.gold
+  const isUp = trend > 0
+  const isDown = trend < 0
 
   return (
-    <div className="rounded-xl p-5 flex flex-col gap-2"
-         style={{ 
-           backgroundColor: c.bg,
-           border: `1px solid ${c.border}`
-         }}>
-      <div className="text-xs font-medium uppercase tracking-widest"
-           style={{ color: '#64748B' }}>
-        {title}
+    <div style={{
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-md)',
+      padding: '16px 16px 14px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Left accent bar */}
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: accent,
+        borderRadius: '10px 0 0 10px',
+      }} />
+
+      {/* Subtle background glow */}
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: '40%',
+        background: `linear-gradient(to right, ${muted}, transparent)`,
+        pointerEvents: 'none',
+      }} />
+
+      {/* Trend badge */}
+      {trend !== undefined && trend !== null && (
+        <div style={{
+          position: 'absolute', top: 12, right: 12,
+          fontSize: 9, fontWeight: 700,
+          fontFamily: 'var(--font-mono)',
+          padding: '2px 7px', borderRadius: 20,
+          color: isUp ? 'var(--teal)' : isDown ? 'var(--red)' : 'var(--text-muted)',
+          background: isUp ? 'var(--teal-muted)' : isDown ? 'var(--red-muted)' : 'transparent',
+        }}>
+          {isUp ? '↑' : isDown ? '↓' : '–'} {Math.abs(trend).toFixed(1)}%
+        </div>
+      )}
+
+      {/* Label */}
+      <div style={{
+        fontSize: 9, fontWeight: 600,
+        textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: 'var(--text-muted)', marginBottom: 9,
+      }}>
+        {label}
       </div>
-      <div className="text-2xl font-bold text-white">
+
+      {/* Value */}
+      <div style={{
+        fontSize: 22, fontWeight: 700,
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '-0.02em', lineHeight: 1,
+        color: accent, marginBottom: 5,
+      }}>
         {value}
       </div>
-      {subtitle && (
-        <div className="text-xs" style={{ color: '#94A3B8' }}>
-          {subtitle}
+
+      {/* Sub */}
+      {sub && (
+        <div style={{
+          fontSize: 10, color: 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}>
+          {sub}
         </div>
       )}
-      {trend !== undefined && (
-        <div className={`text-xs font-medium ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
+
+      {/* Trend label */}
+      {trendLabel && trend !== undefined && (
+        <div style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 3 }}>
+          {trendLabel}
         </div>
       )}
-      <div className="h-0.5 w-8 rounded mt-1"
-           style={{ backgroundColor: c.accent }} />
     </div>
-  );
+  )
 }

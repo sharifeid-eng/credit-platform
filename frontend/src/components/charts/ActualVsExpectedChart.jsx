@@ -1,119 +1,84 @@
+import { useState, useEffect } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine
-} from 'recharts';
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
+import ChartPanel from '../ChartPanel'
+import { getActualVsExpectedChart } from '../../services/api'
+import {
+  gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
+  GradientDefs, fmtMoney, fmtPct, COLORS,
+} from '../../styles/chartTheme'
 
-const formatMillions = (value) => {
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
-  return value.toFixed(0);
-};
+export default function ActualVsExpectedChart({ company, product, snapshot, currency }) {
+  const [data, setData]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+  const [perfPct, setPerfPct] = useState(null)
 
-const CustomTooltip = ({ active, payload, label, currency }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="p-3 rounded-lg text-xs"
-         style={{ backgroundColor: '#0D1428', border: '1px solid #1B2B5A' }}>
-      <div className="font-medium text-white mb-2">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color }}>
-          {p.name}: {currency} {formatMillions(p.value)}
-        </div>
-      ))}
+  useEffect(() => {
+    if (!product || !snapshot) return
+    setLoading(true)
+    getActualVsExpectedChart(company, product, snapshot, currency)
+      .then(res => {
+        // normalise field names from backend
+        const raw = res.data ?? res
+        const normalised = raw.map(d => ({
+          month:    d.Month ?? d.month,
+          actual:   d.cumulative_collected ?? d.actual,
+          expected: d.cumulative_expected  ?? d.expected,
+        }))
+        setData(normalised)
+        setPerfPct(res.overall_performance ?? res.performance_pct ?? null)
+        setError(null)
+      })
+      .catch(() => setError('Failed to load actual vs expected data.'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency])
+
+  const action = perfPct != null && (
+    <div style={{
+      fontSize: 11, fontWeight: 700,
+      fontFamily: 'var(--font-mono)',
+      color: perfPct >= 100 ? 'var(--teal)' : 'var(--red)',
+      background: perfPct >= 100 ? 'var(--teal-muted)' : 'var(--red-muted)',
+      padding: '3px 10px', borderRadius: 20,
+    }}>
+      {fmtPct(perfPct)} of expected collected
     </div>
-  );
-};
-
-export default function ActualVsExpectedChart({ data, currency, totals }) {
-  if (!data?.length) return null;
-
-  const performance = totals?.overall_performance || 0;
-  const performanceColor = performance >= 95 ? '#4ADE80' : performance >= 85 ? '#F59E0B' : '#EF4444';
+  )
 
   return (
-    <div className="rounded-xl p-6"
-         style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-white">Actual vs Expected Collections</h3>
-          <p className="text-xs mt-1" style={{ color: '#64748B' }}>
-            Cumulative collected vs expected — {currency}
-          </p>
-        </div>
-        {totals && (
-          <div className="flex gap-4 text-right">
-            <div>
-              <div className="text-xs" style={{ color: '#64748B' }}>Performance</div>
-              <div className="text-lg font-bold" style={{ color: performanceColor }}>
-                {performance}%
-              </div>
-            </div>
-            <div>
-              <div className="text-xs" style={{ color: '#64748B' }}>Collected</div>
-              <div className="text-sm font-semibold text-white">
-                {currency} {formatMillions(totals.total_collected)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs" style={{ color: '#64748B' }}>Expected</div>
-              <div className="text-sm font-semibold" style={{ color: '#64748B' }}>
-                {currency} {formatMillions(totals.total_expected)}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-          <defs>
-            <linearGradient id="collectedGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="expectedGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1B2B5A" vertical={false} />
-          <XAxis
-            dataKey="Month"
-            tick={{ fill: '#64748B', fontSize: 10 }}
-            tickLine={false}
-            axisLine={{ stroke: '#1B2B5A' }}
-            angle={-45}
-            textAnchor="end"
-            interval={2}
+    <ChartPanel
+      title="Actual vs Expected Collections"
+      subtitle="Cumulative collected amount vs expected total — measures recovery performance"
+      loading={loading}
+      error={error}
+      action={action}
+    >
+      <ResponsiveContainer width="100%" height={320}>
+        <AreaChart data={data}>
+          <GradientDefs />
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="month" {...xAxisProps} />
+          <YAxis {...yAxisProps} tickFormatter={v => fmtMoney(v, currency)} />
+          <Tooltip
+            {...tooltipStyle}
+            formatter={(v, name) => [fmtMoney(v, currency), name]}
           />
-          <YAxis
-            tick={{ fill: '#64748B', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={formatMillions}
-          />
-          <Tooltip content={<CustomTooltip currency={currency} />} />
-          <Legend
-            wrapperStyle={{ fontSize: '11px', color: '#94A3B8', paddingTop: '16px' }}
+          <Legend {...legendProps} />
+          <Area
+            type="monotone" dataKey="expected"
+            name="Expected" stroke={COLORS.blue} strokeWidth={1.5}
+            fill="url(#grad-blue)" strokeDasharray="5 3"
           />
           <Area
-            type="monotone"
-            dataKey="cumulative_collected"
-            name="Collected"
-            stroke="#3B82F6"
-            strokeWidth={2}
-            fill="url(#collectedGrad)"
-          />
-          <Area
-            type="monotone"
-            dataKey="cumulative_expected"
-            name="Expected"
-            stroke="#F59E0B"
-            strokeWidth={2}
-            strokeDasharray="5 5"
-            fill="url(#expectedGrad)"
+            type="monotone" dataKey="actual"
+            name="Actual" stroke={COLORS.teal} strokeWidth={2}
+            fill="url(#grad-teal)"
           />
         </AreaChart>
       </ResponsiveContainer>
-    </div>
-  );
+    </ChartPanel>
+  )
 }

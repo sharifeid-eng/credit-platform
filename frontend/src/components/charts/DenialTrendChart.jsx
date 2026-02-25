@@ -1,71 +1,66 @@
+import { useState, useEffect } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+} from 'recharts'
+import ChartPanel from '../ChartPanel'
+import { getDenialTrendChart } from '../../services/api'
+import {
+  gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
+  GradientDefs, fmtPct, COLORS,
+} from '../../styles/chartTheme'
 
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+export default function DenialTrendChart({ company, product, snapshot, currency }) {
+  const [data, setData]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => {
+    if (!product || !snapshot) return
+    setLoading(true)
+    getDenialTrendChart(company, product, snapshot, currency)
+      .then(res => {
+        const raw = res.data ?? res
+        const normalised = raw.map(d => ({
+          month:       d.Month ?? d.month,
+          denial_rate: d.denial_rate,
+          rolling_avg: d.denial_rate_3m_avg,
+        }))
+        setData(normalised)
+        setError(null)
+      })
+      .catch(() => setError('Failed to load denial trend data.'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency])
+
+  const avg = data.length
+    ? data.reduce((s, d) => s + (d.denial_rate ?? 0), 0) / data.length
+    : null
+
   return (
-    <div className="p-3 rounded-lg text-xs"
-         style={{ backgroundColor: '#0D1428', border: '1px solid #1B2B5A' }}>
-      <div className="font-medium text-white mb-2">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color }}>
-          {p.name}: {p.value.toFixed(1)}%
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export default function DenialTrendChart({ data }) {
-  if (!data?.length) return null;
-
-  const chartData = data.slice(-24);
-
-  return (
-    <div className="rounded-xl p-6"
-         style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-white">Denial Rate Trend</h3>
-        <p className="text-xs mt-1" style={{ color: '#64748B' }}>
-          Monthly denial rate with 3-month rolling average
-        </p>
-      </div>
-      <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1B2B5A" vertical={false} />
-          <XAxis
-            dataKey="Month"
-            tick={{ fill: '#64748B', fontSize: 10 }}
-            tickLine={false}
-            axisLine={{ stroke: '#1B2B5A' }}
-            angle={-45}
-            textAnchor="end"
-            interval={2}
-          />
-          <YAxis
-            tick={{ fill: '#64748B', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={v => `${v}%`}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: '11px', color: '#94A3B8', paddingTop: '16px' }}
-          />
-          <Bar dataKey="denial_rate" name="Denial Rate"
-               fill="#EF4444" opacity={0.7} radius={[2, 2, 0, 0]} />
-          <Line
-            type="monotone"
-            dataKey="denial_rate_3m_avg"
-            name="3M Average"
-            stroke="#F59E0B"
-            strokeWidth={2}
-            dot={false}
-          />
+    <ChartPanel
+      title="Denial Rate Trend"
+      subtitle="Monthly denial rate % with 3-month rolling average — watch for spikes above portfolio avg"
+      loading={loading}
+      error={error}
+    >
+      <ResponsiveContainer width="100%" height={320}>
+        <ComposedChart data={data} barCategoryGap="30%">
+          <GradientDefs />
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="month" {...xAxisProps} />
+          <YAxis {...yAxisProps} tickFormatter={v => fmtPct(v)} />
+          <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtPct(v), name]} />
+          <Legend {...legendProps} />
+          {avg != null && (
+            <ReferenceLine y={avg} stroke={COLORS.muted} strokeDasharray="4 4"
+              label={{ value: `Avg ${fmtPct(avg)}`, fill: COLORS.text, fontSize: 9, fontFamily: 'IBM Plex Mono' }}
+            />
+          )}
+          <Bar dataKey="denial_rate" name="Denial Rate" fill="url(#grad-red)" stroke={COLORS.red} strokeWidth={0} radius={[3,3,0,0]} />
+          <Line type="monotone" dataKey="rolling_avg" name="3M Avg" stroke={COLORS.gold} strokeWidth={2} dot={false} strokeDasharray="4 2" />
         </ComposedChart>
       </ResponsiveContainer>
-    </div>
-  );
+    </ChartPanel>
+  )
 }

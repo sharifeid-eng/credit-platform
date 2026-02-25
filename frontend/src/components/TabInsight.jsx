@@ -1,53 +1,95 @@
-import { useState } from 'react';
-import { getTabInsight } from '../services/api';
+import { useState } from 'react'
+import { getTabInsight } from '../services/api'
 
-export default function TabInsight({ company, product, snapshot, asOfDate, currency, tab }) {
-  const [insight, setInsight] = useState(null);
-  const [loading, setLoading] = useState(false);
+/**
+ * TabInsight — compact one-click AI insight bar shown at top of each non-overview tab
+ *
+ * Props:
+ *   company   string
+ *   product   string
+ *   snapshot  string
+ *   currency  string
+ *   tab       string   — e.g. "deployment", "denial-trend"
+ */
+export default function TabInsight({ company, product, snapshot, currency, tab }) {
+  const [text, setText]       = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen]       = useState(false)
+  const [error, setError]     = useState(null)
 
-  const generate = async () => {
-    setLoading(true);
+  async function fetch() {
+    if (text) { setOpen(o => !o); return }
+    setLoading(true)
+    setOpen(true)
+    setError(null)
     try {
-      const data = await getTabInsight(company, product, snapshot, asOfDate, currency, tab);
-      setInsight(data.insight);
+      const result = await getTabInsight(company, product, snapshot, currency, tab)
+      setText(result)
     } catch {
-      setInsight('Unable to generate insight. Please check your API key.');
+      setError('Failed to load insight.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false);
-  };
+  }
 
   return (
-    <div className="rounded-xl p-4 flex gap-4 items-start"
-         style={{ backgroundColor: '#0D1F1E', border: '1px solid #134040' }}>
-      <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
-           style={{ backgroundColor: '#134040' }}>
-        <span className="text-sm">🤖</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        {insight ? (
-          <p className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{insight}</p>
-        ) : (
-          <p className="text-sm" style={{ color: '#4B6B69' }}>
-            AI insight for this view — click to generate.
-          </p>
-        )}
-      </div>
-      <button
-        onClick={generate}
-        disabled={loading}
-        className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg transition-all font-medium"
-        style={{
-          backgroundColor: loading ? '#134040' : '#14B8A6',
-          color: loading ? '#4B6B69' : '#fff',
-          opacity: loading ? 0.8 : 1,
-        }}>
-        {loading
-          ? <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-              Analyzing
-            </span>
-          : insight ? 'Refresh' : 'Insight'}
+    <div style={{
+      background: open ? 'rgba(201,168,76,0.06)' : 'transparent',
+      border: '1px solid',
+      borderColor: open ? 'rgba(201,168,76,0.25)' : 'var(--border)',
+      borderRadius: 'var(--radius-md)',
+      overflow: 'hidden',
+      marginBottom: 16,
+      transition: 'all 0.2s',
+    }}>
+      {/* Trigger row */}
+      <button onClick={fetch} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+        padding: '9px 14px', background: 'none', border: 'none',
+        cursor: 'pointer', textAlign: 'left',
+      }}>
+        <SparkIcon />
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          AI Insight
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', flex: 1 }}>
+          {loading ? 'Analysing…' : text ? 'Click to toggle' : `Get AI insight for this view`}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+          ▾
+        </span>
       </button>
+
+      {/* Expanded body */}
+      {open && (
+        <div style={{
+          padding: '2px 14px 12px 36px',
+          borderTop: '1px solid rgba(201,168,76,0.12)',
+        }}>
+          {loading && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: 8 }}>
+              Generating…
+            </div>
+          )}
+          {error && (
+            <div style={{ fontSize: 11, color: 'var(--red)', paddingTop: 8 }}>{error}</div>
+          )}
+          {text && !loading && (
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '8px 0 0' }}>
+              {text}
+            </p>
+          )}
+        </div>
+      )}
     </div>
-  );
+  )
+}
+
+function SparkIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+      <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"
+        fill="#C9A84C" opacity="0.9" />
+    </svg>
+  )
 }

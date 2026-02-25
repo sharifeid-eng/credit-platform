@@ -1,110 +1,64 @@
+import { useState, useEffect } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line, Legend
-} from 'recharts';
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
+import ChartPanel from '../ChartPanel'
+import { getCollectionVelocityChart } from '../../services/api'
+import {
+  gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
+  GradientDefs, fmtPct, COLORS,
+} from '../../styles/chartTheme'
 
-const formatMillions = (value) => {
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
-  return value.toFixed(0);
-};
+function rolling3m(arr, key) {
+  return arr.map((d, i) => {
+    const slice = arr.slice(Math.max(0, i - 2), i + 1)
+    const avg = slice.reduce((s, x) => s + (x[key] ?? 0), 0) / slice.length
+    return { ...d, rolling_avg: parseFloat(avg.toFixed(2)) }
+  })
+}
 
-const CustomTooltip = ({ active, payload, label, currency }) => {
-  if (!active || !payload?.length) return null;
+export default function CollectionVelocityChart({ company, product, snapshot, currency }) {
+  const [data, setData]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => {
+    if (!product || !snapshot) return
+    setLoading(true)
+    getCollectionVelocityChart(company, product, snapshot, currency)
+      .then(res => {
+        const raw = res.monthly ?? res.data ?? res
+        const normalised = raw.map(d => ({
+          month:           d.Month ?? d.month,
+          collection_rate: d.collection_rate,
+        }))
+        setData(rolling3m(normalised, 'collection_rate'))
+        setError(null)
+      })
+      .catch(() => setError('Failed to load collection data.'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency])
+
   return (
-    <div className="p-3 rounded-lg text-xs"
-         style={{ backgroundColor: '#0D1428', border: '1px solid #1B2B5A' }}>
-      <div className="font-medium text-white mb-2">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color }}>
-          {p.name}: {p.name.includes('Rate') ? `${p.value}%` : `${currency} ${formatMillions(p.value)}`}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export default function CollectionVelocityChart({ data, currency }) {
-  if (!data) return null;
-
-  const monthlyData = data.monthly?.slice(-24) || [];
-
-  return (
-    <div className="space-y-6">
-      {/* Monthly collection rate */}
-      <div className="rounded-xl p-6"
-           style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white">Monthly Collection Rate</h3>
-          <p className="text-xs mt-1" style={{ color: '#64748B' }}>
-            Collected as % of purchase value by origination month
-          </p>
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={monthlyData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1B2B5A" vertical={false} />
-            <XAxis
-              dataKey="Month"
-              tick={{ fill: '#64748B', fontSize: 10 }}
-              tickLine={false}
-              axisLine={{ stroke: '#1B2B5A' }}
-              angle={-45}
-              textAnchor="end"
-              interval={2}
-            />
-            <YAxis
-              tick={{ fill: '#64748B', fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={v => `${v}%`}
-              domain={[0, 120]}
-            />
-            <Tooltip content={<CustomTooltip currency={currency} />} />
-            <Line
-              type="monotone"
-              dataKey="collection_rate"
-              name="Collection Rate"
-              stroke="#14B8A6"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Collection buckets */}
-      <div className="rounded-xl p-6"
-           style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white">Completed Deals by Days Outstanding</h3>
-          <p className="text-xs mt-1" style={{ color: '#64748B' }}>
-            Distribution of collection timing
-          </p>
-        </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart
-            data={data.buckets}
-            margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1B2B5A" vertical={false} />
-            <XAxis
-              dataKey="bucket"
-              tick={{ fill: '#64748B', fontSize: 10 }}
-              tickLine={false}
-              axisLine={{ stroke: '#1B2B5A' }}
-            />
-            <YAxis
-              tick={{ fill: '#64748B', fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={v => v.toLocaleString()}
-            />
-            <Tooltip content={<CustomTooltip currency={currency} />} />
-            <Bar dataKey="deal_count" name="Deal Count"
-                 fill="#3B82F6" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
+    <ChartPanel
+      title="Collection Velocity"
+      subtitle="Monthly collection rate % with 3-month rolling average overlay"
+      loading={loading}
+      error={error}
+    >
+      <ResponsiveContainer width="100%" height={320}>
+        <ComposedChart data={data} barCategoryGap="30%">
+          <GradientDefs />
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="month" {...xAxisProps} />
+          <YAxis {...yAxisProps} tickFormatter={v => fmtPct(v)} domain={[0, 110]} />
+          <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtPct(v), name]} />
+          <Legend {...legendProps} />
+          <Bar dataKey="collection_rate" name="Collection Rate" fill="url(#grad-teal)" stroke={COLORS.teal} strokeWidth={0} radius={[3,3,0,0]} />
+          <Line type="monotone" dataKey="rolling_avg" name="3M Avg" stroke={COLORS.gold} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </ChartPanel>
+  )
 }

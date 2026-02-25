@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Backgrounds ── */
+  --bg-base:    #0C1018;
+  --bg-surface: #111620;
+  --bg-nav:     #080B12;
+  --bg-deep:    #050810;
+
+  /* ── Borders ── */
+  --border:       #1E2736;
+  --border-faint: #141B27;
+
+  /* ── Brand Accents ── */
+  --gold:       #C9A84C;
+  --gold-dim:   #8A6D2E;
+  --gold-muted: rgba(201,168,76,0.12);
+  --gold-glow:  rgba(201,168,76,0.25);
+
+  /* ── Metric Colors ── */
+  --teal:       #2DD4BF;
+  --teal-muted: rgba(45,212,191,0.12);
+  --red:        #F06060;
+  --red-muted:  rgba(240,96,96,0.12);
+  --blue:       #5B8DEF;
+  --blue-muted: rgba(91,141,239,0.12);
+
+  /* ── Text ── */
+  --text-primary: #E8EAF0;
+  --text-secondary: #8A94A8;
+  --text-muted:   #4A5568;
+  --text-faint:   #2A3548;
+
+  /* ── Typography ── */
+  --font-ui:   'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  /* ── Spacing ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px var(--border);
+  --shadow-glow-gold: 0 0 16px rgba(201,168,76,0.2);
+  --shadow-glow-teal: 0 0 8px rgba(45,212,191,0.3);
+}
+
+/* ── Base Reset ── */
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+/* ── Utility Classes ── */
+.mono { font-family: var(--font-mono); }
+
+.label-xs {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.label-sm {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}

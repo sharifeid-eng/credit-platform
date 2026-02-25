@@ -1,72 +1,60 @@
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
+import ChartPanel from '../ChartPanel'
+import { getDeploymentChart } from '../../services/api'
+import {
+  gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
+  GradientDefs, fmtMoney,
+} from '../../styles/chartTheme'
 
-const formatMillions = (value) => {
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
-  return value.toFixed(0);
-};
+export default function DeploymentChart({ company, product, snapshot, currency }) {
+  const [data, setData]     = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]   = useState(null)
 
-const CustomTooltip = ({ active, payload, label, currency }) => {
-  if (!active || !payload?.length) return null;
+  useEffect(() => {
+    if (!product || !snapshot) return
+    setLoading(true)
+    getDeploymentChart(company, product, snapshot, currency)
+      .then(res => {
+        const raw = res.data ?? res
+        const normalised = raw.map(d => ({
+          month:        d.Month ?? d.month,
+          new_business: d.new_business,
+          repeat:       d.repeat_business ?? d.repeat,
+        }))
+        setData(normalised)
+        setError(null)
+      })
+      .catch(() => setError('Failed to load deployment data.'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency])
+
   return (
-    <div className="p-3 rounded-lg text-xs"
-         style={{ backgroundColor: '#0D1428', border: '1px solid #1B2B5A' }}>
-      <div className="font-medium text-white mb-2">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color }}>
-          {p.name}: {currency} {formatMillions(p.value)}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export default function DeploymentChart({ data, currency }) {
-  if (!data?.length) return null;
-
-  // Show last 24 months
-  const chartData = data.slice(-24);
-
-  return (
-    <div className="rounded-xl p-6"
-         style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-white">Capital Deployed by Month</h3>
-        <p className="text-xs mt-1" style={{ color: '#64748B' }}>
-          New vs repeat business — {currency}
-        </p>
-      </div>
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1B2B5A" vertical={false} />
-          <XAxis
-            dataKey="Month"
-            tick={{ fill: '#64748B', fontSize: 10 }}
-            tickLine={false}
-            axisLine={{ stroke: '#1B2B5A' }}
-            angle={-45}
-            textAnchor="end"
-            interval={2}
+    <ChartPanel
+      title="Capital Deployed"
+      subtitle="Monthly new vs repeat originations — stacked by deal type"
+      loading={loading}
+      error={error}
+    >
+      <ResponsiveContainer width="100%" height={320}>
+        <BarChart data={data} barCategoryGap="30%">
+          <GradientDefs />
+          <CartesianGrid {...gridProps} />
+          <XAxis dataKey="month" {...xAxisProps} />
+          <YAxis {...yAxisProps} tickFormatter={v => fmtMoney(v, currency)} />
+          <Tooltip
+            {...tooltipStyle}
+            formatter={(v, name) => [fmtMoney(v, currency), name]}
           />
-          <YAxis
-            tick={{ fill: '#64748B', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={formatMillions}
-          />
-          <Tooltip content={<CustomTooltip currency={currency} />} />
-          <Legend
-            wrapperStyle={{ fontSize: '11px', color: '#94A3B8', paddingTop: '16px' }}
-          />
-          <Bar dataKey="new_business" name="New Business"
-               stackId="a" fill="#3B82F6" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="repeat_business" name="Repeat Business"
-               stackId="a" fill="#F59E0B" radius={[3, 3, 0, 0]} />
+          <Legend {...legendProps} />
+          <Bar dataKey="new_business"  name="New"    stackId="a" fill="url(#grad-blue)" stroke="#5B8DEF" strokeWidth={0} radius={[0,0,0,0]} />
+          <Bar dataKey="repeat"        name="Repeat" stackId="a" fill="url(#grad-gold)" stroke="#C9A84C" strokeWidth={0} radius={[3,3,0,0]} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
-  );
+    </ChartPanel>
+  )
 }

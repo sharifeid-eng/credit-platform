@@ -5,37 +5,59 @@ const api = axios.create({ baseURL: API_BASE, headers: { 'Content-Type': 'applic
 
 export default api;
 
-export const getCompanies        = () => api.get('/companies').then(r => r.data);
-export const getProducts         = (co) => api.get(`/companies/${co}/products`).then(r => r.data);
-export const getSnapshots        = (co, p) => api.get(`/companies/${co}/products/${p}/snapshots`).then(r => r.data);
-export const getProductConfig    = (co, p) => api.get(`/companies/${co}/products/${p}/config`).then(r => r.data);
-export const getDateRange        = (co, p, snap) =>
+// ── Core ──────────────────────────────────────────────────────────────────────
+export const getCompanies     = () => api.get('/companies').then(r => r.data);
+export const getProducts      = (co) => api.get(`/companies/${co}/products`).then(r => r.data);
+export const getSnapshots     = (co, p) => api.get(`/companies/${co}/products/${p}/snapshots`).then(r => r.data);
+export const getConfig        = (co, p) => api.get(`/companies/${co}/products/${p}/config`).then(r => r.data);
+export const getProductConfig = getConfig; // legacy alias
+export const getDateRange     = (co, p, snap) =>
   api.get(`/companies/${co}/products/${p}/date-range`, { params: { snapshot: snap } }).then(r => r.data);
 
-const chartParams = (snap, asOf, cur) => ({ snapshot: snap, as_of_date: asOf, currency: cur });
+// ── Params helper — asOf is optional ─────────────────────────────────────────
+const p = (snap, cur, asOf) => ({
+  snapshot: snap,
+  currency: cur,
+  ...(asOf ? { as_of_date: asOf } : {}),
+});
 
-export const getPortfolioSummary = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/summary`, { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+// ── Summary & AI ──────────────────────────────────────────────────────────────
+export const getSummary          = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/summary`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getPortfolioSummary = getSummary; // legacy alias
 
-export const getAICommentary     = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/ai-commentary`, { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getAICommentary     = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
-export const getTabInsight       = (co, p, snap, asOf, cur, tab) =>
-  api.get(`/companies/${co}/products/${p}/ai-tab-insight`, { params: { ...chartParams(snap, asOf, cur), tab } }).then(r => r.data);
+export const getTabInsight       = (co, prod, snap, cur, tab, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab } }).then(r => r.data);
 
-export const getDeploymentChart      = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/deployment`,          { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getCollectionVelocity   = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/collection-velocity`, { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getDenialTrend          = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/denial-trend`,        { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getCohortAnalysis       = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/cohort`,              { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getActualVsExpected     = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/actual-vs-expected`,  { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getAgeing               = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/ageing`,              { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getRevenue              = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/revenue`,             { params: chartParams(snap, asOf, cur) }).then(r => r.data);
-export const getConcentration        = (co, p, snap, asOf, cur) =>
-  api.get(`/companies/${co}/products/${p}/charts/concentration`,       { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const postChat            = (co, prod, snap, cur, question, history = []) =>
+  api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data);
+
+// ── Charts — new names (used by new chart components) ────────────────────────
+export const getDeploymentChart         = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/deployment`,          { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getActualVsExpectedChart   = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/actual-vs-expected`,  { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getCollectionVelocityChart = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/collection-velocity`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getDenialTrendChart        = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/denial-trend`,        { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getAgeingChart             = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/ageing`,              { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getRevenueChart            = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/revenue`,             { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getConcentrationChart      = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/concentration`,       { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getCohortChart             = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/cohort`,              { params: p(snap, cur, asOf) }).then(r => r.data);
+
+// ── Legacy aliases (old names kept for any existing code) ────────────────────
+export const getCollectionVelocity = getCollectionVelocityChart;
+export const getDenialTrend        = getDenialTrendChart;
+export const getActualVsExpected   = getActualVsExpectedChart;
+export const getAgeing             = getAgeingChart;
+export const getRevenue            = getRevenueChart;
+export const getConcentration      = getConcentrationChart;
+export const getCohortAnalysis     = getCohortChart;

@@ -10,6 +10,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/company/:companyName" element={<Company />} />
+        <Route path="/companies/:companyName" element={<Company />} />
       </Routes>
     </BrowserRouter>
   );

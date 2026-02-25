@@ -1,103 +1,87 @@
-export default function CohortTable({ cohorts, currency }) {
-  if (!cohorts?.length) return null;
+import { useState, useEffect } from 'react'
+import ChartPanel from '../ChartPanel'
+import { getCohortChart } from '../../services/api'
+import { fmtPct, fmtMoney } from '../../styles/chartTheme'
 
-  const hasIRR = cohorts.some(c => c.avg_expected_irr !== undefined);
+export default function CohortTable({ company, product, snapshot, currency }) {
+  const [data, setData]       = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => {
+    if (!product || !snapshot) return
+    setLoading(true)
+    getCohortChart(company, product, snapshot, currency)
+      .then(res => {
+        const raw = res.cohorts ?? res.data ?? res
+        setData(raw)
+        setError(null)
+      })
+      .catch(() => setError('Failed to load cohort data.'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency])
 
   return (
-    <div className="rounded-xl overflow-hidden"
-         style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-      <div className="p-6 pb-4">
-        <h3 className="text-sm font-semibold text-white">Vintage Cohort Analysis</h3>
-        <p className="text-xs mt-1" style={{ color: '#64748B' }}>
-          Performance by deal origination month — {currency}
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+    <ChartPanel
+      title="Cohort Analysis"
+      subtitle="Vintage performance by origination month — collection rate, denial rate, completion"
+      loading={loading}
+      error={error}
+      minHeight={0}
+    >
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
           <thead>
-            <tr style={{ backgroundColor: '#0A0F1E', borderTop: '1px solid #1B2B5A' }}>
-              <th className="text-left px-4 py-3 font-medium" style={{ color: '#64748B' }}>Month</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Deals</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Completion</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Purchase Value</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Collected</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Collection Rate</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Denial Rate</th>
-              {hasIRR && (
-                <>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Exp IRR</th>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Act IRR</th>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Spread</th>
-                </>
-              )}
+            <tr>
+              {['Vintage', 'Deals', 'Completed', 'Deployed', 'Collection Rate', 'Denial Rate', 'Completion'].map(h => (
+                <th key={h} style={{
+                  textAlign: 'left', padding: '8px 10px',
+                  fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: 'var(--text-muted)', borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap',
+                }}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {cohorts.slice(-36).reverse().map((cohort, i) => {
-              const spread = hasIRR && cohort.avg_actual_irr !== undefined && cohort.avg_expected_irr !== undefined
-                ? cohort.avg_actual_irr - cohort.avg_expected_irr
-                : null;
-
-              const collectionColor = cohort.collection_rate >= 90
-                ? '#4ADE80' : cohort.collection_rate >= 75
-                ? '#F59E0B' : '#EF4444';
-
-              const denialColor = cohort.denial_rate <= 5
-                ? '#4ADE80' : cohort.denial_rate <= 10
-                ? '#F59E0B' : '#EF4444';
-
+            {data.map((row, i) => {
+              const collGood    = (row.collection_rate ?? 0) >= 90
+              const denialBad   = (row.denial_rate     ?? 0) > 10
+              const completeBad = (row.completion_rate ?? 0) < 70
               return (
-                <tr key={cohort.month}
-                    style={{
-                      borderTop: '1px solid #1B2B5A',
-                      backgroundColor: i % 2 === 0 ? 'transparent' : '#0D1428'
-                    }}>
-                  <td className="px-4 py-2.5 font-medium" style={{ color: '#93C5FD' }}>
-                    {cohort.month}
+                <tr key={i} style={{ borderBottom: '1px solid var(--border-faint)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <td style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{row.month}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{row.total_deals}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{row.completed_deals}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', color: 'var(--gold)' }}>{fmtMoney(row.purchase_value, currency)}</td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <Heat value={row.collection_rate} fmt={fmtPct} good={collGood} goodColor="var(--teal)" badColor="var(--gold)" />
                   </td>
-                  <td className="px-4 py-2.5 text-right text-white">
-                    {cohort.total_deals}
+                  <td style={{ padding: '8px 10px' }}>
+                    <Heat value={row.denial_rate} fmt={fmtPct} good={!denialBad} goodColor="var(--text-secondary)" badColor="var(--red)" />
                   </td>
-                  <td className="px-4 py-2.5 text-right" style={{ color: '#94A3B8' }}>
-                    {cohort.completion_rate}%
+                  <td style={{ padding: '8px 10px' }}>
+                    <Heat value={row.completion_rate} fmt={fmtPct} good={!completeBad} goodColor="var(--teal)" badColor="var(--red)" />
                   </td>
-                  <td className="px-4 py-2.5 text-right text-white">
-                    {(cohort.purchase_value / 1e6).toFixed(2)}M
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-white">
-                    {(cohort.collected / 1e6).toFixed(2)}M
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-medium"
-                      style={{ color: collectionColor }}>
-                    {cohort.collection_rate}%
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-medium"
-                      style={{ color: denialColor }}>
-                    {cohort.denial_rate}%
-                  </td>
-                  {hasIRR && (
-                    <>
-                      <td className="px-4 py-2.5 text-right" style={{ color: '#94A3B8' }}>
-                        {cohort.avg_expected_irr !== undefined ? `${cohort.avg_expected_irr}%` : '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-right" style={{ color: '#94A3B8' }}>
-                        {cohort.avg_actual_irr !== undefined ? `${cohort.avg_actual_irr}%` : '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-medium"
-                          style={{
-                            color: spread === null ? '#64748B'
-                              : spread >= 0 ? '#4ADE80' : '#EF4444'
-                          }}>
-                        {spread !== null ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}%` : '—'}
-                      </td>
-                    </>
-                  )}
                 </tr>
-              );
+              )
             })}
+            {data.length === 0 && !loading && (
+              <tr><td colSpan={7} style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>No cohort data.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </ChartPanel>
+  )
+}
+
+function Heat({ value, fmt, good, goodColor, badColor }) {
+  return (
+    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: value == null ? 'var(--text-faint)' : good ? goodColor : badColor }}>
+      {value == null ? '—' : fmt(value)}
+    </span>
+  )
 }

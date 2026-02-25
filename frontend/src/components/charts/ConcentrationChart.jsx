@@ -1,165 +1,116 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState, useEffect } from 'react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import ChartPanel from '../ChartPanel'
+import { getConcentrationChart } from '../../services/api'
+import { tooltipStyle, fmtMoney, fmtPct } from '../../styles/chartTheme'
 
-const formatMillions = (value) => {
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
-  return value.toFixed(0);
-};
+const SLICE_COLORS = [
+  '#C9A84C','#2DD4BF','#5B8DEF','#F06060',
+  '#A78BFA','#FB923C','#34D399','#F472B6',
+  '#60A5FA','#FBBF24',
+]
 
-const COLORS = [
-  '#3B82F6', '#14B8A6', '#F59E0B', '#EF4444', '#8B5CF6',
-  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
-  '#10B981', '#F43F5E', '#0EA5E9', '#A855F7', '#22C55E'
-];
+export default function ConcentrationChart({ company, product, snapshot, currency }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
 
-function ConcentrationDonut({ data, title, valueKey, labelKey, currency }) {
-  if (!data?.length) return null;
+  useEffect(() => {
+    if (!product || !snapshot) return
+    setLoading(true)
+    getConcentrationChart(company, product, snapshot, currency)
+      .then(res => {
+        const groupData = (res.group ?? []).map(d => ({
+          name:  d.Group ?? d.name,
+          value: d.purchase_value,
+          pct:   d.percentage,
+        }))
+        const topDeals = (res.top_deals ?? []).map(d => ({
+          date:          d['Deal date'] ?? d.date,
+          status:        d.Status ?? d.status,
+          purchase_value: d['Purchase value'] ?? d.purchase_value,
+          discount:      d.Discount ?? d.discount,
+          collected:     d['Collected till date'] ?? d.collected,
+          denied:        d['Denied by insurance'] ?? d.denied,
+        }))
+        setData({ groupData, topDeals })
+        setError(null)
+      })
+      .catch(() => setError('Failed to load concentration data.'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency])
 
-  const total = data.reduce((sum, d) => sum + (d[valueKey] || 0), 0);
+  const groupData = data?.groupData ?? []
+  const topDeals  = data?.topDeals  ?? []
 
   return (
-    <div className="rounded-xl p-6"
-         style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-      <h3 className="text-sm font-semibold text-white mb-4">{title}</h3>
-      <div className="flex gap-4">
-        <div className="flex-shrink-0">
-          <ResponsiveContainer width={160} height={160}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Group concentration donut */}
+      <ChartPanel title="Group Concentration" subtitle="Share of portfolio by insurer / payer group — top 15 shown" loading={loading} error={error} minHeight={260}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <ResponsiveContainer width={220} height={220}>
             <PieChart>
-              <Pie
-                data={data.slice(0, 10)}
-                cx="50%"
-                cy="50%"
-                innerRadius={45}
-                outerRadius={75}
-                dataKey={valueKey}
-              >
-                {data.slice(0, 10).map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
+              <Pie data={groupData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                {groupData.map((_, i) => <Cell key={i} fill={SLICE_COLORS[i % SLICE_COLORS.length]} />)}
               </Pie>
-              <Tooltip
-                formatter={(v) => [`${currency} ${formatMillions(v)}`, '']}
-                contentStyle={{
-                  backgroundColor: '#0D1428',
-                  border: '1px solid #1B2B5A',
-                  fontSize: '10px'
-                }}
-              />
+              <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
             </PieChart>
           </ResponsiveContainer>
-        </div>
-        <div className="flex-1 overflow-y-auto max-h-40 space-y-1.5">
-          {data.slice(0, 10).map((item, i) => (
-            <div key={i} className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <div className="w-2 h-2 rounded-full flex-shrink-0"
-                     style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                <span className="truncate" style={{ color: '#CBD5E1' }}>
-                  {item[labelKey] || 'Unknown'}
-                </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+            {groupData.slice(0, 8).map((d, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: SLICE_COLORS[i % SLICE_COLORS.length], flexShrink: 0 }} />
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: SLICE_COLORS[i % SLICE_COLORS.length], fontWeight: 600, flexShrink: 0 }}>{fmtPct(d.pct)}</div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                <span style={{ color: '#64748B' }}>
-                  {((item[valueKey] / total) * 100).toFixed(1)}%
-                </span>
-                <span className="text-white font-medium">
-                  {formatMillions(item[valueKey])}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TopDealsTable({ deals, currency }) {
-  if (!deals?.length) return null;
-
-  return (
-    <div className="rounded-xl overflow-hidden"
-         style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A' }}>
-      <div className="p-6 pb-4">
-        <h3 className="text-sm font-semibold text-white">Top 10 Largest Deals</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ backgroundColor: '#0A0F1E', borderTop: '1px solid #1B2B5A' }}>
-              <th className="text-left px-4 py-3 font-medium" style={{ color: '#64748B' }}>Date</th>
-              <th className="text-left px-4 py-3 font-medium" style={{ color: '#64748B' }}>Status</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Purchase Value</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Discount</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: '#64748B' }}>Collected</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deals.map((deal, i) => (
-              <tr key={i}
-                  style={{
-                    borderTop: '1px solid #1B2B5A',
-                    backgroundColor: i % 2 === 0 ? 'transparent' : '#0D1428'
-                  }}>
-                <td className="px-4 py-2.5" style={{ color: '#93C5FD' }}>
-                  {deal['Deal date']?.split('T')[0] || '—'}
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className="px-2 py-0.5 rounded-full text-xs"
-                        style={{
-                          backgroundColor: deal.Status === 'Completed' ? '#0D2818' : '#1F1A0D',
-                          color: deal.Status === 'Completed' ? '#4ADE80' : '#F59E0B',
-                          border: `1px solid ${deal.Status === 'Completed' ? '#166534' : '#713F12'}`
-                        }}>
-                    {deal.Status}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-right text-white font-medium">
-                  {currency} {formatMillions(deal['Purchase value'])}
-                </td>
-                <td className="px-4 py-2.5 text-right" style={{ color: '#94A3B8' }}>
-                  {deal.Discount ? `${(deal.Discount * 100).toFixed(1)}%` : '—'}
-                </td>
-                <td className="px-4 py-2.5 text-right" style={{ color: '#4ADE80' }}>
-                  {deal['Collected till date']
-                    ? `${currency} ${formatMillions(deal['Collected till date'])}`
-                    : '—'}
-                </td>
-              </tr>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+            {groupData.length > 8 && <div style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 2 }}>+{groupData.length - 8} more</div>}
+          </div>
+        </div>
+      </ChartPanel>
 
-export default function ConcentrationChart({ data, currency }) {
-  if (!data) return null;
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {data.group && (
-          <ConcentrationDonut
-            data={data.group}
-            title="Concentration by Group"
-            valueKey="purchase_value"
-            labelKey="Group"
-            currency={currency}
-          />
-        )}
-        {data.product && (
-          <ConcentrationDonut
-            data={data.product}
-            title="Concentration by Product"
-            valueKey="purchase_value"
-            labelKey="Product"
-            currency={currency}
-          />
-        )}
-      </div>
-      <TopDealsTable deals={data.top_deals} currency={currency} />
+      {/* Top deals table */}
+      <ChartPanel title="Top 10 Deals" subtitle="Largest receivables by purchase value" loading={loading} error={error} minHeight={0}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr>
+                {['Deal Date', 'Status', 'Purchase Value', 'Discount', 'Collected', 'Denied'].map(h => (
+                  <th key={h} style={{
+                    textAlign: 'left', padding: '6px 10px',
+                    fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em',
+                    color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {topDeals.map((d, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid var(--border-faint)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{d.date}</td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 20,
+                      background: d.status === 'Executed' ? 'var(--teal-muted)' : 'var(--blue-muted)',
+                      color: d.status === 'Executed' ? 'var(--teal)' : 'var(--blue)',
+                    }}>{d.status}</span>
+                  </td>
+                  <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--gold)', fontWeight: 600 }}>{fmtMoney(d.purchase_value, currency)}</td>
+                  <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{fmtPct((d.discount ?? 0) * 100)}</td>
+                  <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>{fmtMoney(d.collected, currency)}</td>
+                  <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--red)' }}>{fmtMoney(d.denied, currency)}</td>
+                </tr>
+              ))}
+              {topDeals.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>No data</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </ChartPanel>
     </div>
-  );
+  )
 }

@@ -1,44 +1,97 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom'
 
 export default function Navbar() {
-  return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-navy-700"
-         style={{ backgroundColor: '#0D1428' }}>
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-               style={{ backgroundColor: '#3B82F6' }}>
-            <span className="text-white font-bold text-sm">ACP</span>
-          </div>
-          <div>
-            <div className="text-white font-semibold text-sm tracking-wide">
-              ACP Private Credit
-            </div>
-            <div className="text-xs" style={{ color: '#60A5FA' }}>
-              Portfolio Analytics
-            </div>
-          </div>
-        </Link>
+  const { pathname } = useLocation()
+  const isHome = pathname === '/'
 
-        {/* Nav links */}
-        <div className="flex items-center gap-6">
-          <Link to="/" 
-                className="text-sm transition-colors"
-                style={{ color: '#93C5FD' }}>
-            Companies
-          </Link>
-          <div className="text-sm px-3 py-1.5 rounded-lg"
-               style={{ 
-                 color: '#60A5FA',
-                 backgroundColor: '#111D3E',
-                 border: '1px solid #1B2B5A'
-               }}>
-            v1.0
+  return (
+    <nav style={{
+      background: 'var(--bg-nav)',
+      borderBottom: '1px solid var(--border)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 28px',
+      height: '52px',
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+    }}>
+      {/* Left — Logo */}
+      <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <LogoMark />
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            ACP Private Credit
+          </div>
+          <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--gold)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Portfolio Analytics
           </div>
         </div>
+      </Link>
+
+      {/* Right — Status chips */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <LiveDot />
+        <Chip>v1.0</Chip>
+        <Chip highlight>Sharif Eid</Chip>
       </div>
     </nav>
-  );
+  )
+}
+
+function LogoMark() {
+  return (
+    <div style={{
+      width: 30, height: 30,
+      background: 'linear-gradient(135deg, #C9A84C, #8A6D2E)',
+      borderRadius: 8,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 9, fontWeight: 800, color: '#000',
+      letterSpacing: '0.05em',
+      flexShrink: 0,
+      boxShadow: '0 2px 8px rgba(201,168,76,0.25)',
+    }}>
+      ACP
+    </div>
+  )
+}
+
+function LiveDot() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{
+        width: 5, height: 5, borderRadius: '50%',
+        background: 'var(--teal)',
+        boxShadow: 'var(--shadow-glow-teal)',
+        animation: 'pulse 2s infinite',
+      }} />
+      <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--teal)', fontFamily: 'var(--font-mono)' }}>
+        Live
+      </span>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function Chip({ children, highlight }) {
+  return (
+    <div style={{
+      fontSize: 10,
+      padding: '3px 10px',
+      borderRadius: 20,
+      border: '1px solid var(--border)',
+      color: highlight ? 'var(--text-secondary)' : 'var(--text-muted)',
+      background: highlight ? 'var(--bg-surface)' : 'transparent',
+      fontFamily: 'var(--font-mono)',
+      letterSpacing: '0.02em',
+    }}>
+      {children}
+    </div>
+  )
 }
