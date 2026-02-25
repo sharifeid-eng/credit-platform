@@ -18,34 +18,41 @@ import RevenueChart from '../components/charts/RevenueChart';
 import ConcentrationChart from '../components/charts/ConcentrationChart';
 import AICommentary from '../components/AICommentary';
 import DataChat from '../components/DataChat';
+import TabInsight from '../components/TabInsight';
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'overview',           label: 'Overview' },
   { id: 'actual-vs-expected', label: 'Actual vs Expected' },
-  { id: 'deployment', label: 'Deployment' },
-  { id: 'collection', label: 'Collection' },
-  { id: 'ageing', label: 'Ageing' },
-  { id: 'revenue', label: 'Revenue' },
-  { id: 'concentration', label: 'Portfolio' },
-  { id: 'cohort', label: 'Cohort Analysis' },
+  { id: 'deployment',         label: 'Deployment' },
+  { id: 'collection',         label: 'Collection' },
+  { id: 'denial-trend',       label: 'Denial Trend' },
+  { id: 'ageing',             label: 'Ageing' },
+  { id: 'revenue',            label: 'Revenue' },
+  { id: 'concentration',      label: 'Portfolio' },
+  { id: 'cohort',             label: 'Cohort Analysis' },
 ];
 
 export default function Company() {
   const { companyName } = useParams();
-  const [products, setProducts] = useState([]);
+  const [products, setProducts]               = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [snapshots, setSnapshots] = useState([]);
+  const [snapshots, setSnapshots]             = useState([]);
   const [selectedSnapshot, setSelectedSnapshot] = useState(null);
-  const [dateRange, setDateRange] = useState(null);
-  const [asOfDate, setAsOfDate] = useState(null);
-  const [productConfig, setProductConfig] = useState(null);
+  const [dateRange, setDateRange]             = useState(null);
+  const [asOfDate, setAsOfDate]               = useState(null);
+  const [productConfig, setProductConfig]     = useState(null);
   const [displayCurrency, setDisplayCurrency] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [summary, setSummary] = useState(null);
-  const [chartData, setChartData] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab]             = useState('overview');
+  const [summary, setSummary]                 = useState(null);
+  const [chartData, setChartData]             = useState({});
+
+  // Cache AI commentary so it survives tab switches
+  const [commentaryCache, setCommentaryCache] = useState(null);
+  const [commentaryKey, setCommentaryKey]     = useState(null);
+
+  const [loading, setLoading]           = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [tabLoading, setTabLoading] = useState(false);
+  const [tabLoading, setTabLoading]     = useState(false);
 
   useEffect(() => {
     getProducts(companyName).then(data => {
@@ -57,9 +64,9 @@ export default function Company() {
 
   useEffect(() => {
     if (!selectedProduct) return;
-    getProductConfig(companyName, selectedProduct).then(config => {
-      setProductConfig(config);
-      setDisplayCurrency(config.currency);
+    getProductConfig(companyName, selectedProduct).then(cfg => {
+      setProductConfig(cfg);
+      setDisplayCurrency(cfg.currency);
     });
     getSnapshots(companyName, selectedProduct).then(data => {
       setSnapshots(data);
@@ -81,9 +88,15 @@ export default function Company() {
     getPortfolioSummary(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency)
       .then(data => { setSummary(data); setSummaryLoading(false); })
       .catch(() => setSummaryLoading(false));
+
+    // Invalidate commentary cache when context changes
+    const newKey = `${selectedProduct}-${selectedSnapshot}-${asOfDate}-${displayCurrency}`;
+    if (newKey !== commentaryKey) {
+      setCommentaryCache(null);
+      setCommentaryKey(newKey);
+    }
   }, [selectedProduct, selectedSnapshot, asOfDate, displayCurrency]);
 
-  // Load chart data when tab changes
   useEffect(() => {
     if (!selectedProduct || !selectedSnapshot || !asOfDate || !displayCurrency) return;
     if (activeTab === 'overview') return;
@@ -92,12 +105,13 @@ export default function Company() {
 
     const loaders = {
       'actual-vs-expected': () => getActualVsExpected(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
-      'deployment': () => getDeploymentChart(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
-      'collection': () => getCollectionVelocity(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
-      'ageing': () => getAgeing(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
-      'revenue': () => getRevenue(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
-      'concentration': () => getConcentration(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
-      'cohort': () => getCohortAnalysis(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'deployment':         () => getDeploymentChart(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'collection':         () => getCollectionVelocity(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'denial-trend':       () => getDenialTrend(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'ageing':             () => getAgeing(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'revenue':            () => getRevenue(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'concentration':      () => getConcentration(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
+      'cohort':             () => getCohortAnalysis(companyName, selectedProduct, selectedSnapshot, asOfDate, displayCurrency),
     };
 
     if (loaders[activeTab]) {
@@ -110,7 +124,11 @@ export default function Company() {
     }
   }, [activeTab, selectedProduct, selectedSnapshot, asOfDate, displayCurrency]);
 
-  const currencySymbol = displayCurrency === 'USD' ? '$' : (displayCurrency + ' ');
+  const cur = displayCurrency === 'USD' ? '$' : (displayCurrency + ' ');
+
+  // Shared props passed to TabInsight on every non-overview tab
+  const insightProps = { company: companyName, product: selectedProduct,
+                         snapshot: selectedSnapshot, asOfDate, currency: displayCurrency };
 
   if (loading) return (
     <div className="min-h-screen pt-24 flex items-center justify-center"
@@ -151,9 +169,7 @@ export default function Company() {
                     onChange={e => setSelectedProduct(e.target.value)}
                     className="text-sm px-3 py-2 rounded-lg outline-none"
                     style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A', color: '#93C5FD' }}>
-                    {products.map(p => (
-                      <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
-                    ))}
+                    {products.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
                   </select>
                 </div>
               )}
@@ -163,9 +179,7 @@ export default function Company() {
                   onChange={e => setSelectedSnapshot(e.target.value)}
                   className="text-sm px-3 py-2 rounded-lg outline-none"
                   style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A', color: '#93C5FD' }}>
-                  {snapshots.map(s => (
-                    <option key={s.date} value={s.date}>{s.date}</option>
-                  ))}
+                  {snapshots.map(s => <option key={s.date} value={s.date}>{s.date}</option>)}
                 </select>
               </div>
               {productConfig && (
@@ -173,23 +187,15 @@ export default function Company() {
                   <label className="text-xs" style={{ color: '#64748B' }}>Currency</label>
                   <div className="flex rounded-lg overflow-hidden"
                        style={{ border: '1px solid #1B2B5A' }}>
-                    <button onClick={() => setDisplayCurrency(productConfig.currency)}
-                      className="text-sm px-3 py-2 transition-colors"
-                      style={{
-                        backgroundColor: displayCurrency === productConfig.currency ? '#3B82F6' : '#111D3E',
-                        color: displayCurrency === productConfig.currency ? 'white' : '#93C5FD'
-                      }}>
-                      {productConfig.currency}
-                    </button>
-                    <button onClick={() => setDisplayCurrency('USD')}
-                      className="text-sm px-3 py-2 transition-colors"
-                      style={{
-                        backgroundColor: displayCurrency === 'USD' ? '#3B82F6' : '#111D3E',
-                        color: displayCurrency === 'USD' ? 'white' : '#93C5FD',
-                        borderLeft: '1px solid #1B2B5A'
-                      }}>
-                      USD
-                    </button>
+                    {[productConfig.currency, 'USD'].map(c => (
+                      <button key={c} onClick={() => setDisplayCurrency(c)}
+                        className="text-sm px-3 py-2 transition-colors"
+                        style={{
+                          backgroundColor: displayCurrency === c ? '#3B82F6' : '#111D3E',
+                          color: displayCurrency === c ? 'white' : '#93C5FD',
+                          borderLeft: c === 'USD' ? '1px solid #1B2B5A' : 'none',
+                        }}>{c}</button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -206,10 +212,8 @@ export default function Company() {
                   min={dateRange.min_date} max={dateRange.max_date}
                   onChange={e => setAsOfDate(e.target.value)}
                   className="text-sm px-3 py-2 rounded-lg outline-none"
-                  style={{
-                    backgroundColor: '#111D3E', border: '1px solid #1B2B5A',
-                    color: '#93C5FD', colorScheme: 'dark'
-                  }} />
+                  style={{ backgroundColor: '#111D3E', border: '1px solid #1B2B5A',
+                           color: '#93C5FD', colorScheme: 'dark' }} />
               </div>
             )}
           </div>
@@ -239,14 +243,12 @@ export default function Company() {
         <div className="flex gap-1 mb-6 overflow-x-auto"
              style={{ borderBottom: '1px solid #1B2B5A' }}>
           {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className="text-xs px-4 py-2.5 whitespace-nowrap transition-all"
               style={{
                 color: activeTab === tab.id ? '#3B82F6' : '#64748B',
                 borderBottom: activeTab === tab.id ? '2px solid #3B82F6' : '2px solid transparent',
-                marginBottom: '-1px'
+                marginBottom: '-1px',
               }}>
               {tab.label}
             </button>
@@ -264,114 +266,105 @@ export default function Company() {
 
         {/* Tab content */}
         {!summaryLoading && summary && (
-
           <div className="space-y-6">
 
-            {/* OVERVIEW TAB */}
+            {/* OVERVIEW */}
             {activeTab === 'overview' && (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <KpiCard title="Total Deals"
-                    value={summary.total_deals.toLocaleString()}
+                  <KpiCard title="Total Deals"     value={summary.total_deals.toLocaleString()}
                     subtitle="As of selected date" color="blue" />
-                  <KpiCard title="Purchase Value"
-                    value={`${currencySymbol}${(summary.total_purchase_value / 1e6).toFixed(1)}M`}
+                  <KpiCard title="Purchase Value"  value={`${cur}${(summary.total_purchase_value/1e6).toFixed(1)}M`}
                     subtitle={displayCurrency} color="blue" />
-                  <KpiCard title="Collection Rate"
-                    value={`${summary.collection_rate.toFixed(1)}%`}
+                  <KpiCard title="Collection Rate" value={`${summary.collection_rate.toFixed(1)}%`}
                     subtitle="Collected / Purchase Value" color="teal" />
-                  <KpiCard title="Denial Rate"
-                    value={`${summary.denial_rate.toFixed(1)}%`}
+                  <KpiCard title="Denial Rate"     value={`${summary.denial_rate.toFixed(1)}%`}
                     subtitle="Denied / Purchase Value" color="red" />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <KpiCard title="Total Collected"
-                    value={`${currencySymbol}${(summary.total_collected / 1e6).toFixed(1)}M`}
+                  <KpiCard title="Total Collected" value={`${cur}${(summary.total_collected/1e6).toFixed(1)}M`}
                     color="teal" />
-                  <KpiCard title="Pending Response"
-                    value={`${currencySymbol}${(summary.total_pending / 1e6).toFixed(1)}M`}
+                  <KpiCard title="Pending Response" value={`${cur}${(summary.total_pending/1e6).toFixed(1)}M`}
                     subtitle={`${summary.pending_rate.toFixed(1)}% of portfolio`} color="gold" />
-                  <KpiCard title="Completed Deals"
-                    value={summary.completed_deals.toLocaleString()}
-                    subtitle={`${((summary.completed_deals / summary.total_deals) * 100).toFixed(1)}% of total`}
+                  <KpiCard title="Completed Deals" value={summary.completed_deals.toLocaleString()}
+                    subtitle={`${((summary.completed_deals/summary.total_deals)*100).toFixed(1)}% of total`}
                     color="blue" />
-                  <KpiCard title="Active Deals"
-                    value={summary.active_deals.toLocaleString()}
-                    subtitle={`${((summary.active_deals / summary.total_deals) * 100).toFixed(1)}% of total`}
+                  <KpiCard title="Active Deals"    value={summary.active_deals.toLocaleString()}
+                    subtitle={`${((summary.active_deals/summary.total_deals)*100).toFixed(1)}% of total`}
                     color="gold" />
                 </div>
-                <AICommentary
-                  company={companyName}
-                  product={selectedProduct}
-                  snapshot={selectedSnapshot}
-                  asOfDate={asOfDate}
-                  currency={displayCurrency}
-                />
-                <DataChat
-                  company={companyName}
-                  product={selectedProduct}
-                  snapshot={selectedSnapshot}
-                  asOfDate={asOfDate}
-                  currency={displayCurrency}
-                />
+                <AICommentary {...insightProps}
+                  cached={commentaryCache}
+                  onGenerated={setCommentaryCache} />
+                <DataChat {...insightProps} />
               </>
             )}
 
-            {/* ACTUAL VS EXPECTED TAB */}
+            {/* ACTUAL VS EXPECTED */}
             {activeTab === 'actual-vs-expected' && !tabLoading && chartData['actual-vs-expected'] && (
-              <ActualVsExpectedChart
-                data={chartData['actual-vs-expected'].data}
-                currency={displayCurrency}
-                totals={chartData['actual-vs-expected']}
-              />
+              <>
+                <TabInsight {...insightProps} tab="actual-vs-expected" />
+                <ActualVsExpectedChart
+                  data={chartData['actual-vs-expected'].data}
+                  currency={displayCurrency}
+                  totals={chartData['actual-vs-expected']} />
+              </>
             )}
 
-            {/* DEPLOYMENT TAB */}
+            {/* DEPLOYMENT */}
             {activeTab === 'deployment' && !tabLoading && chartData['deployment'] && (
-              <DeploymentChart
-                data={chartData['deployment'].data}
-                currency={displayCurrency}
-              />
+              <>
+                <TabInsight {...insightProps} tab="deployment" />
+                <DeploymentChart data={chartData['deployment'].data} currency={displayCurrency} />
+              </>
             )}
 
-            {/* COLLECTION TAB */}
+            {/* COLLECTION */}
             {activeTab === 'collection' && !tabLoading && chartData['collection'] && (
-              <CollectionVelocityChart
-                data={chartData['collection']}
-                currency={displayCurrency}
-              />
+              <>
+                <TabInsight {...insightProps} tab="collection" />
+                <CollectionVelocityChart data={chartData['collection']} currency={displayCurrency} />
+              </>
             )}
 
-            {/* AGEING TAB */}
+            {/* DENIAL TREND */}
+            {activeTab === 'denial-trend' && !tabLoading && chartData['denial-trend'] && (
+              <>
+                <TabInsight {...insightProps} tab="denial-trend" />
+                <DenialTrendChart data={chartData['denial-trend'].data} />
+              </>
+            )}
+
+            {/* AGEING */}
             {activeTab === 'ageing' && !tabLoading && chartData['ageing'] && (
-              <AgeingChart
-                data={chartData['ageing']}
-                currency={displayCurrency}
-              />
+              <>
+                <TabInsight {...insightProps} tab="ageing" />
+                <AgeingChart data={chartData['ageing']} currency={displayCurrency} />
+              </>
             )}
 
-            {/* REVENUE TAB */}
+            {/* REVENUE */}
             {activeTab === 'revenue' && !tabLoading && chartData['revenue'] && (
-              <RevenueChart
-                data={chartData['revenue']}
-                currency={displayCurrency}
-              />
+              <>
+                <TabInsight {...insightProps} tab="revenue" />
+                <RevenueChart data={chartData['revenue']} currency={displayCurrency} />
+              </>
             )}
 
-            {/* CONCENTRATION TAB */}
+            {/* CONCENTRATION */}
             {activeTab === 'concentration' && !tabLoading && chartData['concentration'] && (
-              <ConcentrationChart
-                data={chartData['concentration']}
-                currency={displayCurrency}
-              />
+              <>
+                <TabInsight {...insightProps} tab="concentration" />
+                <ConcentrationChart data={chartData['concentration']} currency={displayCurrency} />
+              </>
             )}
 
-            {/* COHORT TAB */}
+            {/* COHORT */}
             {activeTab === 'cohort' && !tabLoading && chartData['cohort'] && (
-              <CohortTable
-                cohorts={chartData['cohort'].cohorts}
-                currency={displayCurrency}
-              />
+              <>
+                <TabInsight {...insightProps} tab="cohort" />
+                <CohortTable cohorts={chartData['cohort'].cohorts} currency={displayCurrency} />
+              </>
             )}
 
           </div>

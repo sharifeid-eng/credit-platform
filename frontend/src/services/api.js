@@ -1,118 +1,41 @@
 import axios from 'axios';
 
 const API_BASE = 'http://localhost:8000';
-
-const api = axios.create({
-  baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-export const getCompanies = async () => {
-  const response = await api.get('/companies');
-  return response.data;
-};
-
-export const getProducts = async (company) => {
-  const response = await api.get(`/companies/${company}/products`);
-  return response.data;
-};
-
-export const getSnapshots = async (company, product) => {
-  const response = await api.get(`/companies/${company}/products/${product}/snapshots`);
-  return response.data;
-};
-
-export const getProductConfig = async (company, product) => {
-  const response = await api.get(`/companies/${company}/products/${product}/config`);
-  return response.data;
-};
-
-export const getDateRange = async (company, product, snapshot) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/date-range`,
-    { params: { snapshot } }
-  );
-  return response.data;
-};
-
-export const getPortfolioSummary = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/summary`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+const api = axios.create({ baseURL: API_BASE, headers: { 'Content-Type': 'application/json' } });
 
 export default api;
 
-export const getAICommentary = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/ai-commentary`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+export const getCompanies        = () => api.get('/companies').then(r => r.data);
+export const getProducts         = (co) => api.get(`/companies/${co}/products`).then(r => r.data);
+export const getSnapshots        = (co, p) => api.get(`/companies/${co}/products/${p}/snapshots`).then(r => r.data);
+export const getProductConfig    = (co, p) => api.get(`/companies/${co}/products/${p}/config`).then(r => r.data);
+export const getDateRange        = (co, p, snap) =>
+  api.get(`/companies/${co}/products/${p}/date-range`, { params: { snapshot: snap } }).then(r => r.data);
 
-export const getDeploymentChart = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/deployment`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+const chartParams = (snap, asOf, cur) => ({ snapshot: snap, as_of_date: asOf, currency: cur });
 
-export const getCollectionVelocity = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/collection-velocity`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+export const getPortfolioSummary = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/summary`, { params: chartParams(snap, asOf, cur) }).then(r => r.data);
 
-export const getDenialTrend = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/denial-trend`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+export const getAICommentary     = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/ai-commentary`, { params: chartParams(snap, asOf, cur) }).then(r => r.data);
 
-export const getCohortAnalysis = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/cohort`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+export const getTabInsight       = (co, p, snap, asOf, cur, tab) =>
+  api.get(`/companies/${co}/products/${p}/ai-tab-insight`, { params: { ...chartParams(snap, asOf, cur), tab } }).then(r => r.data);
 
-export const getActualVsExpected = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/actual-vs-expected`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
-
-export const getAgeing = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/ageing`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
-
-export const getRevenue = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/revenue`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
-
-export const getConcentration = async (company, product, snapshot, asOfDate, currency) => {
-  const response = await api.get(
-    `/companies/${company}/products/${product}/charts/concentration`,
-    { params: { snapshot, as_of_date: asOfDate, currency } }
-  );
-  return response.data;
-};
+export const getDeploymentChart      = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/deployment`,          { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getCollectionVelocity   = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/collection-velocity`, { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getDenialTrend          = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/denial-trend`,        { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getCohortAnalysis       = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/cohort`,              { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getActualVsExpected     = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/actual-vs-expected`,  { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getAgeing               = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/ageing`,              { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getRevenue              = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/revenue`,             { params: chartParams(snap, asOf, cur) }).then(r => r.data);
+export const getConcentration        = (co, p, snap, asOf, cur) =>
+  api.get(`/companies/${co}/products/${p}/charts/concentration`,       { params: chartParams(snap, asOf, cur) }).then(r => r.data);
