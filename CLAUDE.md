@@ -5,6 +5,14 @@
 
 ---
 
+## Session Rules (Claude Must Follow Every Session)
+
+1. **Always update this file** — At the end of every session (or when a significant decision is made), update CLAUDE.md to reflect the latest state: design decisions, implementation progress, next steps, and any architectural choices made during the conversation.
+
+2. **Warn before context limit** — When the conversation is getting long and approaching the context window limit, proactively warn the user so they have time to prepare a handoff. Say something like: *"⚠️ We're approaching the context limit — let me update CLAUDE.md with our progress before we lose it."* Then update the file and summarize the handoff.
+
+---
+
 ## What This Project Is
 
 **ACP Private Credit Platform** — an institutional-grade, full-stack web application for analyzing and monitoring asset-backed loan portfolios. Built for a private credit fund (ACP) that purchases receivables and short-term loans from portfolio companies.
@@ -214,6 +222,19 @@ Each product has a `config.json` with its reported currency. The frontend shows 
 
 ---
 
+## Dashboard Customization Philosophy
+
+Each company and product has its own configured dashboard. The platform shares a common shell (tab structure, controls, KPI cards, AI chat, currency toggle) but the specific views, metrics, charts, and AI prompts are driven by:
+
+- **Asset class** — e.g. insurance claims factoring (Klaim) vs POS lending (SILQ) have fundamentally different risk metrics, collection dynamics, and what "performance" means
+- **Available columns** — each company's loan tape has different fields; charts and KPIs should only show what the data actually supports
+
+This means onboarding a new company is not just plugging in different data — it requires designing the right views for that asset class. Some tabs may not apply, new ones may be needed, and AI prompts must be rewritten to reflect the correct credit context.
+
+**Current implementation:** The dashboard is built around Klaim's healthcare receivables data. It is not yet fully abstracted for multi-asset-class use. This is a key area of work before SILQ can be onboarded properly.
+
+---
+
 ## Key Architectural Decisions
 
 - **`core/analysis.py`** — all pure data computation lives here. No FastAPI, no I/O. Backend endpoints are thin wrappers that load data, call these functions, and return results.
@@ -222,6 +243,78 @@ Each product has a `config.json` with its reported currency. The frontend shows 
 - **`filter_by_date()`** — filters deals to `Deal date <= as_of_date`, enabling time-travel analysis within a tape.
 - **AICommentary caching** — commentary is stored in `Company.jsx` state and passed down as a `cached` prop, so it survives tab switches without re-generating.
 - All AI calls use `claude-opus-4-6`.
+
+---
+
+## Design System — Dark Theme ✅ DECIDED
+
+**Decision made:** Full Dark theme selected (session: Feb 2026).
+
+### Color Palette
+| Token | Value | Usage |
+|---|---|---|
+| `--bg-base` | `#0C1018` | Page background |
+| `--bg-surface` | `#111620` | Cards, panels |
+| `--bg-nav` | `#080B12` | Navbar |
+| `--border` | `#1E2736` | All borders |
+| `--accent-gold` | `#C9A84C` | Primary brand, active tab, AI panel |
+| `--accent-teal` | `#2DD4BF` | Collection rate, positive metrics, live dot |
+| `--accent-red` | `#F06060` | Denial rate, negative metrics |
+| `--accent-blue` | `#5B8DEF` | Pending/neutral metrics, deployment bars |
+| `--text-primary` | `#E8EAF0` | Main text |
+| `--text-muted` | `#4A5568` | Secondary text, subtitles |
+| `--text-faint` | `#2A3548` | Labels, borders |
+
+### Typography
+- **UI text:** Inter (300, 400, 500, 600, 700)
+- **Numbers/data:** IBM Plex Mono (400, 500) — Bloomberg/terminal feel
+- **KPI values:** 22px bold mono, letter-spacing -0.02em
+- **Labels:** 9px uppercase, letter-spacing 0.1em, muted color
+
+### KPI Cards
+- Left accent bar (3px, color-coded per metric type) instead of full border
+- Trend badge (↑↓) top-right, color-coded
+- Generous internal padding, number breathes
+
+### Navbar
+- Background `#080B12`, bottom border `#1E2736`
+- Gold gradient logo mark, "ACP" text
+- Live dot (teal), version chip, user chip in IBM Plex Mono
+
+### Implementation Status
+- ✅ `tokens.css` — CSS variables, fonts, base reset
+- ✅ `tailwind.config.js` — color/font/shadow tokens
+- ✅ `Navbar.jsx` — gold logo, live dot, chips
+- ✅ `KpiCard.jsx` — accent bar, trend badge, glow
+- ✅ `ChartPanel.jsx` — wrapper with loading/error/shimmer states
+- ✅ `chartTheme.jsx` — shared Recharts props + formatters (NOTE: must be `.jsx` not `.js`)
+- ✅ `AICommentary.jsx` — shimmer skeleton, section parser
+- ✅ `DataChat.jsx` — bubbles, typing indicator, suggestions
+- ✅ `TabInsight.jsx` — collapsible AI bar with spark icon
+- ✅ `Company.jsx` — full page with tabs, controls, KPI grid
+- ✅ `Home.jsx` — company cards with hover glow
+- ✅ `main.jsx` — tokens import added
+- ✅ `App.jsx` — routes for both `/company/:name` and `/companies/:name`
+- ✅ `api.js` — all new function names + legacy aliases + `postChat`
+- ✅ `DeploymentChart.jsx` — field mapping: `Month`, `new_business`, `repeat_business`
+- ✅ `ActualVsExpectedChart.jsx` — fields: `Month`, `cumulative_collected`, `cumulative_expected`, `overall_performance`
+- ✅ `CollectionVelocityChart.jsx` — fields: `monthly[]`, `Month`, `collection_rate`; 3M avg computed client-side
+- ✅ `DenialTrendChart.jsx` — fields: `Month`, `denial_rate`, `denial_rate_3m_avg`
+- ✅ `AgeingChart.jsx` — fields: `health_summary[]` (status/value/percentage), `ageing_buckets[]` (bucket/purchase_value)
+- ✅ `RevenueChart.jsx` — fields: `monthly[]`, `Month`, `realised_revenue`, `unrealised_revenue`, `gross_margin`; totals from `totals{}`
+- ✅ `ConcentrationChart.jsx` — fields: `group[]` (Group/purchase_value/percentage), `top_deals[]` (Deal date/Status/Purchase value etc.)
+- ✅ `CohortTable.jsx` — fields: `cohorts[]`, `month`, `total_deals`, `completed_deals`, `purchase_value`, `collection_rate`, `denial_rate`, `completion_rate`
+
+### Key Backend Field Name Notes (critical for future work)
+- All chart endpoints return `Month` with capital M
+- Collection velocity: data is in `res.monthly[]` not `res.data[]`
+- Revenue: data is in `res.monthly[]`, totals in `res.totals{}`
+- Cohort: data is in `res.cohorts[]`
+- Ageing: health in `res.health_summary[]`, buckets in `res.ageing_buckets[]`
+- Concentration: groups in `res.group[]`, top deals in `res.top_deals[]` with original column names (`Purchase value`, `Deal date`, etc.)
+- Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`
+- Snapshots API returns objects `{filename, date}` — must extract `.filename`
+- Companies API may return objects — must extract `.name`
 
 ---
 
@@ -242,7 +335,10 @@ Each product has a `config.json` with its reported currency. The frontend shows 
 ## Known Gaps & Next Steps
 
 **Short term:**
-- [ ] Onboard SILQ as a second portfolio company
+- [ ] Verify remaining tabs work end-to-end (AI Commentary, DataChat, TabInsight)
+- [ ] Test currency toggle (AED ↔ USD) across all charts
+- [ ] Test snapshot selector switching
+- [ ] Onboard SILQ — POS lending asset class
 - [ ] Add `core/analysis.py` unit tests
 - [ ] Replace hardcoded FX rates with live API
 - [ ] Startup script — single command to boot both servers
