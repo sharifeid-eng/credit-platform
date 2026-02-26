@@ -12,9 +12,8 @@ from core.analysis import (
     compute_summary, compute_deployment, compute_collection_velocity,
     compute_denial_trend, compute_cohorts, compute_actual_vs_expected,
     compute_ageing, compute_revenue, compute_concentration,
-    apply_multiplier, filter_by_date,
+    compute_returns_analysis, apply_multiplier, filter_by_date,
 )
-
 app = FastAPI(title="ACP Private Credit API")
 
 app.add_middleware(
@@ -186,6 +185,17 @@ def get_concentration(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
     return {**compute_concentration(df, mult), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/returns-analysis")
+def get_returns_analysis(company: str, product: str,
+                         snapshot: Optional[str] = None,
+                         as_of_date: Optional[str] = None,
+                         currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_returns_analysis(df, mult), 'currency': disp}
 
 # ── AI endpoints ──────────────────────────────────────────────────────────────
 

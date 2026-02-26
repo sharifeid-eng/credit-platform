@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCompanies } from '../services/api'
+import { LaithLogo } from '../components/Navbar'
 
 export default function Home() {
   const [companies, setCompanies] = useState([])
@@ -8,15 +9,17 @@ export default function Home() {
 
   useEffect(() => {
     getCompanies().then(data => {
-      // API may return strings or objects like {name: "klaim"}
       setCompanies(data.map(c => (typeof c === 'string' ? c : c.name ?? c.id ?? String(c))))
     })
   }, [])
 
   return (
     <div style={{ padding: '36px 28px' }}>
-      {/* Page title */}
+      {/* Page header with logo */}
       <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 16 }}>
+          <LaithLogo size="home" />
+        </div>
         <h1 style={{
           fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em',
           color: 'var(--text-primary)', margin: 0,

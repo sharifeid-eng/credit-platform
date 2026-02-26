@@ -52,6 +52,8 @@ export const getConcentrationChart      = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/concentration`,       { params: p(snap, cur, asOf) }).then(r => r.data);
 export const getCohortChart             = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/cohort`,              { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getReturnsAnalysisChart = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/returns-analysis`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;

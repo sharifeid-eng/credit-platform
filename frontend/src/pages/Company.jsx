@@ -20,10 +20,11 @@ import AgeingChart            from '../components/charts/AgeingChart'
 import RevenueChart           from '../components/charts/RevenueChart'
 import ConcentrationChart     from '../components/charts/ConcentrationChart'
 import CohortTable            from '../components/charts/CohortTable'
+import ReturnsAnalysisChart from '../components/charts/ReturnsAnalysisChart'
 
 const TABS = [
   'Overview', 'Actual vs Expected', 'Deployment', 'Collection',
-  'Denial Trend', 'Ageing', 'Revenue', 'Portfolio', 'Cohort Analysis',
+  'Denial Trend', 'Ageing', 'Revenue', 'Portfolio', 'Cohort Analysis', 'Returns',
 ]
 
 export default function Company() {
@@ -163,6 +164,8 @@ export default function Company() {
           display: 'flex', gap: 0,
           borderBottom: '1px solid var(--border)',
           overflowX: 'auto',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
         }}>
           {TABS.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
@@ -229,6 +232,11 @@ export default function Company() {
         {activeTab === 'Cohort Analysis' && (
           <ChartTab tab="cohort" company={company} product={product} snapshot={snapshot} currency={currency}>
             <CohortTable company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+          </ChartTab>
+        )}
+        {activeTab === 'Returns' && (
+          <ChartTab tab="returns-analysis" company={company} product={product} snapshot={snapshot} currency={currency}>
+            <ReturnsAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
       </div>

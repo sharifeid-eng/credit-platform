@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 
 export default function Navbar() {
   const { pathname } = useLocation()
-  const isHome = pathname === '/'
 
   return (
     <nav style={{
@@ -19,14 +18,14 @@ export default function Navbar() {
     }}>
       {/* Left — Logo */}
       <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <LogoMark />
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            ACP Private Credit
-          </div>
-          <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--gold)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            Portfolio Analytics
-          </div>
+        <LaithLogo size="nav" />
+        <div style={{
+          fontSize: 9, fontWeight: 600,
+          color: 'var(--gold)',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+        }}>
+          Portfolio Analytics
         </div>
       </Link>
 
@@ -40,22 +39,63 @@ export default function Navbar() {
   )
 }
 
-function LogoMark() {
+function LaithLogo({ size = 'nav' }) {
+  const isNav = size === 'nav'
+  const h = isNav ? 30 : 44
+
   return (
     <div style={{
-      width: 30, height: 30,
-      background: 'linear-gradient(135deg, #C9A84C, #8A6D2E)',
-      borderRadius: 8,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 9, fontWeight: 800, color: '#000',
-      letterSpacing: '0.05em',
-      flexShrink: 0,
-      boxShadow: '0 2px 8px rgba(201,168,76,0.25)',
+      display: 'flex', alignItems: 'center', gap: isNav ? 8 : 10,
+      height: h,
     }}>
-      ACP
+      {/* Icon mark — lion */}
+      <div style={{
+        width: h, height: h,
+        background: 'linear-gradient(135deg, var(--gold), #8A6D2E)',
+        borderRadius: isNav ? 8 : 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: isNav ? 22 : 32,
+        lineHeight: 1,
+        flexShrink: 0,
+        boxShadow: '0 2px 8px rgba(201,168,76,0.25)',
+      }}>
+        🦁
+      </div>
+      {/* Wordmark */}
+      <div style={{ display: 'flex', alignItems: 'baseline' }}>
+        <span style={{
+          fontSize: isNav ? 18 : 28,
+          fontWeight: 800,
+          letterSpacing: '-0.02em',
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-ui)',
+        }}>
+          L
+        </span>
+        <span style={{
+          fontSize: isNav ? 18 : 28,
+          fontWeight: 800,
+          letterSpacing: '-0.02em',
+          color: 'var(--gold)',
+          fontFamily: 'var(--font-ui)',
+        }}>
+          AI
+        </span>
+        <span style={{
+          fontSize: isNav ? 18 : 28,
+          fontWeight: 800,
+          letterSpacing: '-0.02em',
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-ui)',
+        }}>
+          TH
+        </span>
+      </div>
     </div>
   )
 }
+
+export { LaithLogo }
 
 function LiveDot() {
   return (

@@ -423,3 +423,132 @@ def compute_concentration(df, mult):
     result['top_deals'] = top.to_dict(orient='records')
 
     return result
+
+def compute_returns_analysis(df, mult):
+    """Returns analysis: margins, discount performance, fee income, provisions."""
+    df = add_month_column(df)
+
+    has_setup = 'Setup fee' in df.columns
+    has_other = 'Other fee' in df.columns
+    has_prov  = 'Provisions' in df.columns
+    has_adj   = 'Adjustments' in df.columns
+
+    # ── Portfolio-level summary ──
+    total_pv        = df['Purchase value'].sum() * mult
+    total_pp        = df['Purchase price'].sum() * mult
+    total_collected = df['Collected till date'].sum() * mult
+    total_denied    = df['Denied by insurance'].sum() * mult
+    total_pending   = df['Pending insurance response'].sum() * mult
+    total_gross_rev = df['Gross revenue'].sum() * mult if 'Gross revenue' in df.columns else 0
+    total_setup     = df['Setup fee'].sum() * mult if has_setup else 0
+    total_other     = df['Other fee'].sum() * mult if has_other else 0
+    total_prov      = df['Provisions'].sum() * mult if has_prov else 0
+    total_adj       = df['Adjustments'].sum() * mult if has_adj else 0
+
+    realised_margin = (total_collected - total_pp) / total_pp * 100 if total_pp else 0
+    expected_margin = (total_pv - total_pp) / total_pp * 100 if total_pp else 0
+    fee_yield       = (total_setup + total_other) / total_pv * 100 if total_pv else 0
+
+    completed = df[df['Status'] == 'Completed']
+    comp_pv   = completed['Purchase value'].sum() * mult
+    comp_pp   = completed['Purchase price'].sum() * mult
+    comp_coll = completed['Collected till date'].sum() * mult
+    comp_denied = completed['Denied by insurance'].sum() * mult
+    comp_margin = (comp_coll - comp_pp) / comp_pp * 100 if comp_pp else 0
+    comp_loss   = comp_denied / comp_pv * 100 if comp_pv else 0
+
+    summary = {
+        'total_deployed':       round(total_pp, 2),
+        'total_face_value':     round(total_pv, 2),
+        'avg_discount':         round(float(df['Discount'].mean()) * 100, 2),
+        'weighted_avg_discount': round(float((df['Discount'] * df['Purchase value']).sum() / total_pv * mult * 100), 2) if total_pv else 0,
+        'expected_margin':      round(expected_margin, 2),
+        'realised_margin':      round(realised_margin, 2),
+        'completed_margin':     round(comp_margin, 2),
+        'completed_loss_rate':  round(comp_loss, 2),
+        'fee_yield':            round(fee_yield, 2),
+        'total_fees':           round(total_setup + total_other, 2),
+        'provision_coverage':   round(total_prov / total_denied * 100, 2) if total_denied else 0,
+        'total_provisions':     round(total_prov, 2),
+        'total_adjustments':    round(total_adj, 2),
+    }
+
+    # ── Monthly returns ──
+    monthly_rows = []
+    for month, grp in df.groupby('Month'):
+        pv   = grp['Purchase value'].sum() * mult
+        pp   = grp['Purchase price'].sum() * mult
+        coll = grp['Collected till date'].sum() * mult
+        den  = grp['Denied by insurance'].sum() * mult
+        gr   = grp['Gross revenue'].sum() * mult if 'Gross revenue' in grp.columns else 0
+        sf   = grp['Setup fee'].sum() * mult if has_setup else 0
+        of_  = grp['Other fee'].sum() * mult if has_other else 0
+        prov = grp['Provisions'].sum() * mult if has_prov else 0
+
+        monthly_rows.append({
+            'month':             month,
+            'deployed':          round(pp, 2),
+            'face_value':        round(pv, 2),
+            'collected':         round(coll, 2),
+            'denied':            round(den, 2),
+            'gross_revenue':     round(gr, 2),
+            'realised_margin':   round((coll - pp) / pp * 100, 2) if pp else 0,
+            'expected_margin':   round((pv - pp) / pp * 100, 2) if pp else 0,
+            'avg_discount':      round(float(grp['Discount'].mean()) * 100, 2),
+            'collection_rate':   round(coll / pv * 100, 1) if pv else 0,
+            'fee_income':        round(sf + of_, 2),
+            'provisions':        round(prov, 2),
+        })
+
+    # ── Discount band analysis ──
+    df['discount_band'] = pd.cut(
+        df['Discount'],
+        bins=[0, 0.04, 0.06, 0.08, 0.10, 0.15, 1.0],
+        labels=['≤4%', '4-6%', '6-8%', '8-10%', '10-15%', '>15%'],
+        include_lowest=True,
+    )
+    discount_bands = []
+    for band, grp in df.groupby('discount_band', observed=True):
+        pv   = grp['Purchase value'].sum() * mult
+        pp   = grp['Purchase price'].sum() * mult
+        coll = grp['Collected till date'].sum() * mult
+        den  = grp['Denied by insurance'].sum() * mult
+        discount_bands.append({
+            'band':            str(band),
+            'deals':           len(grp),
+            'face_value':      round(pv, 2),
+            'deployed':        round(pp, 2),
+            'collected':       round(coll, 2),
+            'collection_rate': round(coll / pv * 100, 1) if pv else 0,
+            'denial_rate':     round(den / pv * 100, 1) if pv else 0,
+            'margin':          round((coll - pp) / pp * 100, 2) if pp else 0,
+            'avg_discount':    round(float(grp['Discount'].mean()) * 100, 2),
+        })
+
+    # ── New vs Repeat ──
+    new_repeat = []
+    if 'New business' in df.columns:
+        for flag, grp in df.groupby('New business'):
+            pv   = grp['Purchase value'].sum() * mult
+            pp   = grp['Purchase price'].sum() * mult
+            coll = grp['Collected till date'].sum() * mult
+            den  = grp['Denied by insurance'].sum() * mult
+            comp = grp[grp['Status'] == 'Completed']
+            new_repeat.append({
+                'type':            'New' if flag else 'Repeat',
+                'deals':           len(grp),
+                'face_value':      round(pv, 2),
+                'deployed':        round(pp, 2),
+                'collected':       round(coll, 2),
+                'collection_rate': round(coll / pv * 100, 1) if pv else 0,
+                'denial_rate':     round(den / pv * 100, 1) if pv else 0,
+                'margin':          round((coll - pp) / pp * 100, 2) if pp else 0,
+                'completion_rate': round(len(comp) / len(grp) * 100, 1) if len(grp) else 0,
+            })
+
+    return {
+        'summary':        summary,
+        'monthly':        monthly_rows,
+        'discount_bands': discount_bands,
+        'new_vs_repeat':  new_repeat,
+    }

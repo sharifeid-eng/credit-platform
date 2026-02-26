@@ -9,7 +9,7 @@ export const COLORS = {
   red:   '#F06060',
   blue:  '#5B8DEF',
   muted: '#2A3548',
-  text:  '#4A5568',
+  text:  '#8494A7',
   grid:  '#1E2736',
 }
 
@@ -61,7 +61,7 @@ export const legendProps = {
   wrapperStyle: {
     fontSize: 10,
     fontFamily: 'Inter',
-    color: '#4A5568',
+    color: '#8494A7',
     paddingTop: 8,
   },
 }
