@@ -32,7 +32,7 @@ def _load(company, product, snapshot):
     snaps = get_snapshots(company, product)
     if not snaps:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    sel = next((s for s in snaps if s['date'] == snapshot), snaps[-1])
+    sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
     return load_snapshot(sel['filepath']), sel
 
 def _currency(company, product, requested):

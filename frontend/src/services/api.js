@@ -27,13 +27,13 @@ export const getSummary          = (co, prod, snap, cur, asOf) =>
 export const getPortfolioSummary = getSummary; // legacy alias
 
 export const getAICommentary     = (co, prod, snap, cur, asOf) =>
-  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: p(snap, cur, asOf) }).then(r => r.data);
+  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: p(snap, cur, asOf) }).then(r => r.data.commentary);
 
 export const getTabInsight       = (co, prod, snap, cur, tab, asOf) =>
-  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab } }).then(r => r.data);
+  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab } }).then(r => r.data.insight);
 
 export const postChat            = (co, prod, snap, cur, question, history = []) =>
-  api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data);
+  api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data.answer);
 
 // ── Charts — new names (used by new chart components) ────────────────────────
 export const getDeploymentChart         = (co, prod, snap, cur, asOf) =>

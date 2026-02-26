@@ -36,8 +36,11 @@ export default function Company() {
   const [config, setConfig]         = useState({})
   const [currency, setCurrency]     = useState('USD')
   const [summary, setSummary]       = useState(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const [activeTab, setActiveTab]   = useState('Overview')
-  const [aiCache, setAiCache]       = useState(null)   // cached commentary
+  const [aiCache, setAiCache]       = useState(null)
+  const [asOfDate, setAsOfDate]     = useState('')
+  const [dateRange, setDateRange]   = useState({ min: '', max: '' })
 
   // Load products
   useEffect(() => {
@@ -54,7 +57,6 @@ export default function Company() {
       getSnapshots(company, product),
       getConfig(company, product),
     ]).then(([snaps, cfg]) => {
-      // snaps may be strings or objects like {filename, date}
       const snapStrings = snaps.map(s => typeof s === 'string' ? s : s.filename ?? s.date ?? String(s))
       setSnapshots(snapStrings)
       setSnapshot(snapStrings[snapStrings.length - 1] ?? null)
@@ -64,11 +66,27 @@ export default function Company() {
     setAiCache(null)
   }, [product])
 
+  // Load date range when snapshot changes
+  useEffect(() => {
+    if (!product || !snapshot) return
+    getDateRange(company, product, snapshot).then(dr => {
+      setDateRange({ min: dr.min_date ?? '', max: dr.max_date ?? '' })
+      setAsOfDate(dr.max_date ?? '')
+    }).catch(() => {
+      setDateRange({ min: '', max: '' })
+      setAsOfDate('')
+    })
+  }, [product, snapshot])
+
   // Load summary KPIs
   useEffect(() => {
     if (!product || !snapshot) return
-    getSummary(company, product, snapshot, currency).then(setSummary)
-  }, [product, snapshot, currency])
+    setSummaryLoading(true)
+    setSummary(null)
+    getSummary(company, product, snapshot, currency, asOfDate || undefined)
+      .then(setSummary)
+      .finally(() => setSummaryLoading(false))
+  }, [product, snapshot, currency, asOfDate])
 
   const localCcy = config.currency ?? 'AED'
 
@@ -106,9 +124,27 @@ export default function Company() {
 
             {/* Snapshot selector */}
             <ControlGroup label="Tape">
-              <DarkSelect value={snapshot ?? ''} onChange={setSnapshot}>
+              <DarkSelect value={snapshot ?? ''} onChange={v => { setSnapshot(v); setAiCache(null) }}>
                 {snapshots.map(s => <option key={s} value={s}>{s}</option>)}
               </DarkSelect>
+            </ControlGroup>
+
+            {/* As-of Date picker */}
+            <ControlGroup label="As-of Date">
+              <input
+                type="date"
+                value={asOfDate}
+                min={dateRange.min}
+                max={dateRange.max}
+                onChange={e => setAsOfDate(e.target.value)}
+                style={{
+                  fontSize: 11, padding: '5px 10px',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                  borderRadius: 7, color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-mono)', outline: 'none',
+                  colorScheme: 'dark',
+                }}
+              />
             </ControlGroup>
 
             {/* Currency toggle */}
@@ -149,49 +185,50 @@ export default function Company() {
       <div style={{ padding: '20px 28px 40px' }}>
         {activeTab === 'Overview' && (
           <OverviewTab
-            summary={summary} company={company} product={product}
-            snapshot={snapshot} currency={currency}
+            summary={summary} summaryLoading={summaryLoading}
+            company={company} product={product}
+            snapshot={snapshot} currency={currency} asOfDate={asOfDate}
             aiCache={aiCache} onAiCache={setAiCache}
           />
         )}
         {activeTab === 'Actual vs Expected' && (
           <ChartTab tab="actual-vs-expected" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <ActualVsExpectedChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <ActualVsExpectedChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Deployment' && (
           <ChartTab tab="deployment" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <DeploymentChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <DeploymentChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Collection' && (
           <ChartTab tab="collection-velocity" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <CollectionVelocityChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <CollectionVelocityChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Denial Trend' && (
           <ChartTab tab="denial-trend" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <DenialTrendChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <DenialTrendChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Ageing' && (
           <ChartTab tab="ageing" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <AgeingChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <AgeingChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Revenue' && (
           <ChartTab tab="revenue" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <RevenueChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <RevenueChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Portfolio' && (
           <ChartTab tab="concentration" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <ConcentrationChart company={company} product={product} snapshot={snapshot} currency={currency} />
+            <ConcentrationChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
         {activeTab === 'Cohort Analysis' && (
           <ChartTab tab="cohort" company={company} product={product} snapshot={snapshot} currency={currency}>
-            <CohortTable company={company} product={product} snapshot={snapshot} currency={currency} />
+            <CohortTable company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
       </div>
@@ -200,7 +237,7 @@ export default function Company() {
 }
 
 /* ── Overview Tab ── */
-function OverviewTab({ summary, company, product, snapshot, currency, aiCache, onAiCache }) {
+function OverviewTab({ summary, summaryLoading, company, product, snapshot, currency, asOfDate, aiCache, onAiCache }) {
   const ccy = summary?.display_currency ?? 'AED'
   const fmt  = (v) => v == null ? '—' : v >= 1_000_000 ? `${ccy} ${(v/1_000_000).toFixed(1)}M` : `${ccy} ${(v/1_000).toFixed(0)}K`
   const pct  = (v) => v == null ? '—' : `${v.toFixed(1)}%`
@@ -216,14 +253,19 @@ function OverviewTab({ summary, company, product, snapshot, currency, aiCache, o
     { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red'  },
   ] : Array(8).fill(null)
 
+  const showSkeleton = summaryLoading || !summary
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Loading bar */}
+      {summaryLoading && <LoadingBar />}
+
       {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        {kpis.map((k, i) => k
-          ? <KpiCard key={i} {...k} />
-          : <SkeletonKpi key={i} />
-        )}
+        {showSkeleton
+          ? Array(8).fill(null).map((_, i) => <SkeletonKpi key={i} />)
+          : kpis.map((k, i) => <KpiCard key={i} {...k} />)
+        }
       </div>
 
       {/* Bottom row: AI commentary + Data Chat */}
@@ -238,6 +280,28 @@ function OverviewTab({ summary, company, product, snapshot, currency, aiCache, o
           snapshot={snapshot} currency={currency}
         />
       </div>
+    </div>
+  )
+}
+
+/* ── Loading Bar ── */
+function LoadingBar() {
+  return (
+    <div style={{
+      height: 3, borderRadius: 2, overflow: 'hidden',
+      background: 'var(--border)',
+    }}>
+      <div style={{
+        height: '100%', width: '40%', borderRadius: 2,
+        background: 'var(--gold)',
+        animation: 'loadSlide 1s ease-in-out infinite',
+      }} />
+      <style>{`
+        @keyframes loadSlide {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
     </div>
   )
 }

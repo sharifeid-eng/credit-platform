@@ -10,7 +10,7 @@ import {
   GradientDefs, fmtMoney,
 } from '../../styles/chartTheme'
 
-export default function DeploymentChart({ company, product, snapshot, currency }) {
+export default function DeploymentChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]     = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
@@ -18,7 +18,7 @@ export default function DeploymentChart({ company, product, snapshot, currency }
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getDeploymentChart(company, product, snapshot, currency)
+    getDeploymentChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         const raw = res.data ?? res
         const normalised = raw.map(d => ({
@@ -31,7 +31,7 @@ export default function DeploymentChart({ company, product, snapshot, currency }
       })
       .catch(() => setError('Failed to load deployment data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   return (
     <ChartPanel

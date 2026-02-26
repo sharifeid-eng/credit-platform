@@ -10,7 +10,7 @@ import {
   GradientDefs, fmtMoney, fmtPct, COLORS,
 } from '../../styles/chartTheme'
 
-export default function ActualVsExpectedChart({ company, product, snapshot, currency }) {
+export default function ActualVsExpectedChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -19,7 +19,7 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getActualVsExpectedChart(company, product, snapshot, currency)
+    getActualVsExpectedChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         // normalise field names from backend
         const raw = res.data ?? res
@@ -34,7 +34,7 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
       })
       .catch(() => setError('Failed to load actual vs expected data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   const action = perfPct != null && (
     <div style={{

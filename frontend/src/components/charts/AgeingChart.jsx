@@ -17,7 +17,7 @@ const HEALTH_COLORS = {
   Poor:    '#8B1A1A',
 }
 
-export default function AgeingChart({ company, product, snapshot, currency }) {
+export default function AgeingChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -25,7 +25,7 @@ export default function AgeingChart({ company, product, snapshot, currency }) {
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getAgeingChart(company, product, snapshot, currency)
+    getAgeingChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         // health_summary → donut, ageing_buckets → bar
         const donut = (res.health_summary ?? []).map(d => ({
@@ -42,7 +42,7 @@ export default function AgeingChart({ company, product, snapshot, currency }) {
       })
       .catch(() => setError('Failed to load ageing data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   const donut   = data?.donut   ?? []
   const buckets = data?.buckets ?? []

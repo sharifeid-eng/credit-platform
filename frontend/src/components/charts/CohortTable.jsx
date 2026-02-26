@@ -3,7 +3,7 @@ import ChartPanel from '../ChartPanel'
 import { getCohortChart } from '../../services/api'
 import { fmtPct, fmtMoney } from '../../styles/chartTheme'
 
-export default function CohortTable({ company, product, snapshot, currency }) {
+export default function CohortTable({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -11,7 +11,7 @@ export default function CohortTable({ company, product, snapshot, currency }) {
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getCohortChart(company, product, snapshot, currency)
+    getCohortChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         const raw = res.cohorts ?? res.data ?? res
         setData(raw)
@@ -19,7 +19,7 @@ export default function CohortTable({ company, product, snapshot, currency }) {
       })
       .catch(() => setError('Failed to load cohort data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   return (
     <ChartPanel

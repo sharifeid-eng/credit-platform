@@ -18,7 +18,7 @@ function rolling3m(arr, key) {
   })
 }
 
-export default function CollectionVelocityChart({ company, product, snapshot, currency }) {
+export default function CollectionVelocityChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -26,7 +26,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getCollectionVelocityChart(company, product, snapshot, currency)
+    getCollectionVelocityChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         const raw = res.monthly ?? res.data ?? res
         const normalised = raw.map(d => ({
@@ -38,7 +38,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
       })
       .catch(() => setError('Failed to load collection data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   return (
     <ChartPanel

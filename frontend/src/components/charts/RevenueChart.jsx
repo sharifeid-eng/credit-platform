@@ -10,7 +10,7 @@ import {
   GradientDefs, fmtMoney, fmtPct, COLORS,
 } from '../../styles/chartTheme'
 
-export default function RevenueChart({ company, product, snapshot, currency }) {
+export default function RevenueChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]       = useState([])
   const [totals, setTotals]   = useState(null)
   const [loading, setLoading] = useState(true)
@@ -19,7 +19,7 @@ export default function RevenueChart({ company, product, snapshot, currency }) {
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getRevenueChart(company, product, snapshot, currency)
+    getRevenueChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         const raw = res.monthly ?? res.data ?? res
         const normalised = raw.map(d => ({
@@ -34,7 +34,7 @@ export default function RevenueChart({ company, product, snapshot, currency }) {
       })
       .catch(() => setError('Failed to load revenue data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

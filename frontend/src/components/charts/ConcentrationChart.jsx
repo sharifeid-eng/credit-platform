@@ -10,7 +10,7 @@ const SLICE_COLORS = [
   '#60A5FA','#FBBF24',
 ]
 
-export default function ConcentrationChart({ company, product, snapshot, currency }) {
+export default function ConcentrationChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -18,7 +18,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getConcentrationChart(company, product, snapshot, currency)
+    getConcentrationChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         const groupData = (res.group ?? []).map(d => ({
           name:  d.Group ?? d.name,
@@ -38,7 +38,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
       })
       .catch(() => setError('Failed to load concentration data.'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency])
+  }, [company, product, snapshot, currency, asOfDate])
 
   const groupData = data?.groupData ?? []
   const topDeals  = data?.topDeals  ?? []
