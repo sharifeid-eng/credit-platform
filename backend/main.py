@@ -628,11 +628,16 @@ def chat_with_data(company: str, product: str, request: dict,
                    snapshot: Optional[str] = None,
                    as_of_date: Optional[str] = None,
                    currency: Optional[str] = None):
-    df, sel  = _load(company, product, snapshot)
-    df       = filter_by_date(df, as_of_date)
-    config, disp = _currency(company, product, currency)
+    # Allow snapshot/currency from body (frontend sends them there) or query params
+    snap = snapshot or request.get('snapshot')
+    cur  = currency or request.get('currency')
+    aod  = as_of_date or request.get('as_of_date')
+
+    df, sel  = _load(company, product, snap)
+    df       = filter_by_date(df, aod)
+    config, disp = _currency(company, product, cur)
     mult     = apply_multiplier(config, disp)
-    s        = compute_summary(df, config, disp, sel['date'], as_of_date)
+    s        = compute_summary(df, config, disp, sel['date'], aod)
 
     from core.analysis import add_month_column
     monthly  = add_month_column(df).groupby('Month').agg(
@@ -649,10 +654,10 @@ def chat_with_data(company: str, product: str, request: dict,
         top = df.groupby('Group')['Purchase value'].sum().sort_values(ascending=False).head(10)
         group_ctx = f"\nTop groups by purchase value: {top.to_dict()}"
 
-    system = f"""You are an expert credit analyst assistant for ACP Private Credit, 
+    system = f"""You are an expert credit analyst assistant for ACP Private Credit,
 analyzing the {company.upper()} - {product.replace('_', ' ').title()} loan portfolio.
 
-PORTFOLIO DATA (as of {as_of_date or sel['date']}, currency: {disp}):
+PORTFOLIO DATA (as of {aod or sel['date']}, currency: {disp}):
 - Total Deals: {s['total_deals']:,}
 - Purchase Value: {disp} {s['total_purchase_value']/1e6:.2f}M
 - Collection Rate: {s['collection_rate']:.1f}%
@@ -666,7 +671,8 @@ MONTHLY PERFORMANCE (last 12 months):
 
 Answer questions precisely with specific numbers. Be concise but thorough."""
 
-    msgs = [{"role": h['role'], "content": h['content']}
+    msgs = [{"role": ("assistant" if h.get('role') == 'ai' else h.get('role', 'user')),
+             "content": h.get('content') or h.get('text', '')}
             for h in request.get('history', [])[-6:]]
     msgs.append({"role": "user", "content": request.get('question', '')})
 

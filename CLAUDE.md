@@ -195,8 +195,9 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/integrity/report`          |Get cached AI integrity report       |
 |`POST /companies/{co}/products/{p}/integrity/notes`          |Save analyst notes for questions     |
 |`GET /companies/{co}/products/{p}/integrity/notes`           |Get saved analyst notes              |
-|`POST /companies/{co}/products/{p}/chat`                     |AI data chat                       |
+|`POST /companies/{co}/products/{p}/chat`                     |AI data chat (multi-turn)          |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
+Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 -----
 ## Dashboard Tabs (12)
 |Tab               |What It Shows                                                   |
@@ -240,6 +241,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **`core/validation.py`** — single-tape integrity checks (dupes, date sanity, negatives, nulls, logical consistency).
 - **Risk migration endpoint** — auto-selects the two most recent snapshots for comparison. Also bundles stress test + EL model results.
 - **Data Integrity tab** — two-step workflow: Run Checks (fast, no API cost) → Generate AI Report (Claude API call). Results, reports, and notes cached as JSON files in `reports/{company}_{product}/`. Auto-loads cached results on tab load. Notes saved with 500ms debounce.
+- **Data Chat history** — frontend sends `{role: 'ai', text: '...'}`, backend maps to Anthropic format `{role: 'assistant', content: '...'}`. Reads both `text` and `content` fields for compatibility.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme implemented. See color palette:
