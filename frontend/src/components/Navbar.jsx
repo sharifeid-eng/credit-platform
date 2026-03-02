@@ -64,13 +64,13 @@ function LaithLogo({ size = 'nav' }) {
           src="/lion.png"
           alt="Laith"
           style={{
-            width: '140%',
-            height: '140%',
+            width: '135%',
+            height: '135%',
             objectFit: 'cover',
-            objectPosition: 'center 36%',
+            objectPosition: 'center 45%',
             display: 'block',
-            marginTop: '-15%',
-            marginLeft: '-20%',
+            marginTop: '0%',
+            marginLeft: '-18%',
           }}
         />
       </div>
