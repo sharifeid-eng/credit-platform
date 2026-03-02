@@ -34,22 +34,41 @@ export default function RiskMigrationChart({ company, product, snapshot, currenc
   const summary     = data?.summary ?? {}
   const stressTest  = data?.stress_test ?? {}
   const expectedLoss = data?.expected_loss ?? {}
+  const migrationError = summary?.error || data?.error
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+      {/* Migration error — e.g. older tape has no ID column */}
+      {migrationError && (
+        <div style={{
+          background: 'rgba(240,96,96,0.08)', border: '1px solid rgba(240,96,96,0.25)',
+          borderRadius: 'var(--radius-md)', padding: '16px 20px',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--red)', marginBottom: 4 }}>
+            Migration analysis unavailable
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {migrationError}. Roll-rate migration requires two snapshots where deals can be matched by ID.
+            Try selecting the most recent tape — it will auto-compare with the previous one.
+          </div>
+        </div>
+      )}
+
       {/* Migration Summary KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        <MiniKpi label="Matched Deals" value={summary.total_matched_deals ?? '—'} color="var(--gold)" />
-        <MiniKpi label="Improved" value={summary.improved_pct ? `${summary.improved_pct}%` : '—'} sub={`${summary.improved ?? 0} deals`} color="var(--teal)" />
-        <MiniKpi label="Stable" value={summary.stable ?? '—'} color="var(--blue)" />
-        <MiniKpi label="Worsened" value={summary.worsened_pct ? `${summary.worsened_pct}%` : '—'} sub={`${summary.worsened ?? 0} deals`} color="var(--red)" />
-      </div>
+      {!migrationError && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          <MiniKpi label="Matched Deals" value={summary.total_matched_deals ?? '—'} color="var(--gold)" />
+          <MiniKpi label="Improved" value={summary.improved_pct ? `${summary.improved_pct}%` : '—'} sub={`${summary.improved ?? 0} deals`} color="var(--teal)" />
+          <MiniKpi label="Stable" value={summary.stable ?? '—'} color="var(--blue)" />
+          <MiniKpi label="Worsened" value={summary.worsened_pct ? `${summary.worsened_pct}%` : '—'} sub={`${summary.worsened ?? 0} deals`} color="var(--red)" />
+        </div>
+      )}
 
       {/* Roll-Rate Migration Matrix */}
-      <ChartPanel
+      {!migrationError && <ChartPanel
         title="Roll-Rate Migration Matrix"
-        subtitle={`Transition probabilities: ${data?.old_snapshot ?? '?'} → ${data?.new_snapshot ?? '?'}`}
+        subtitle={`Transition probabilities: ${summary?.old_snapshot ?? '?'} → ${summary?.new_snapshot ?? '?'}`}
         loading={loading} error={error} minHeight={200}
       >
         <div style={{ overflowX: 'auto' }}>
@@ -81,10 +100,10 @@ export default function RiskMigrationChart({ company, product, snapshot, currenc
             </tbody>
           </table>
         </div>
-      </ChartPanel>
+      </ChartPanel>}
 
       {/* Cure Rates */}
-      <ChartPanel title="Cure Rates" subtitle="% of delinquent deals that improved or resolved between snapshots" loading={loading} error={error} minHeight={100}>
+      {!migrationError && <ChartPanel title="Cure Rates" subtitle="% of delinquent deals that improved or resolved between snapshots" loading={loading} error={error} minHeight={100}>
         <div style={{ display: 'flex', gap: 20 }}>
           {Object.entries(cureRates).map(([bucket, stats]) => (
             <div key={bucket} style={{ flex: 1, textAlign: 'center', padding: '12px 0' }}>
@@ -100,7 +119,7 @@ export default function RiskMigrationChart({ company, product, snapshot, currenc
             </div>
           ))}
         </div>
-      </ChartPanel>
+      </ChartPanel>}
 
       {/* Expected Loss Model */}
       <ChartPanel title="Expected Loss Model" subtitle="PD × LGD × Exposure derived from completed deal outcomes" loading={loading} error={error} minHeight={100}>
