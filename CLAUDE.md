@@ -299,7 +299,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ Risk & Migration tab (11th tab) — institutional-grade risk analytics
 - ✅ Enhanced Overview with 10 KPI cards (added DSO + HHI)
 - ✅ Enhanced Concentration tab (HHI badges + group performance table)
-- ✅ Methodology page (`/methodology`) — standalone reference with definitions, formulas, rationale for all analytics
+- ✅ Methodology page (`/company/:name/methodology`) — company-scoped reference with definitions, formulas, rationale for all analytics; back-to-dashboard navigation; accessed via book icon in tab bar
 -----
 ## Known Gaps & Next Steps
 **Short term:**
