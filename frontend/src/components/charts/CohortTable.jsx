@@ -21,11 +21,14 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
       .finally(() => setLoading(false))
   }, [company, product, snapshot, currency, asOfDate])
 
+  const hasIrr = data.some(r => r.avg_expected_irr != null || r.avg_actual_irr != null)
+
   // Summary row
   const totals = data.length ? {
     deals: data.reduce((s, r) => s + (r.total_deals ?? 0), 0),
     completed: data.reduce((s, r) => s + (r.completed_deals ?? 0), 0),
     pv: data.reduce((s, r) => s + (r.purchase_value ?? 0), 0),
+    pp: data.reduce((s, r) => s + (r.purchase_price ?? 0), 0),
     collected: data.reduce((s, r) => s + (r.collected ?? 0), 0),
     denied: data.reduce((s, r) => s + (r.denied ?? 0), 0),
     pending: data.reduce((s, r) => s + (r.pending ?? 0), 0),
@@ -36,6 +39,8 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
     totals.denialRate = totals.pv ? (totals.denied / totals.pv * 100) : 0
     totals.completionRate = totals.deals ? (totals.completed / totals.deals * 100) : 0
     totals.pendingRate = totals.pv ? (totals.pending / totals.pv * 100) : 0
+    totals.expectedMargin = totals.pp ? ((totals.pv - totals.pp) / totals.pp * 100) : 0
+    totals.realisedMargin = totals.pp ? ((totals.collected - totals.pp) / totals.pp * 100) : 0
     const irrVals = data.filter(r => r.avg_actual_irr != null)
     totals.avgActualIrr = irrVals.length ? irrVals.reduce((s, r) => s + r.avg_actual_irr, 0) / irrVals.length : null
     const eirrVals = data.filter(r => r.avg_expected_irr != null)
@@ -45,19 +50,20 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
   const columns = [
     'Vintage', 'Deals', 'Done', 'Deployed', 'Collected', 'Denied', 'Pending',
     'Coll %', 'Denial %', 'Pend %', 'Done %',
-    'Exp IRR', 'Act IRR', 'Spread',
+    'Exp Margin', 'Act Margin', 'Δ Margin',
+    ...(hasIrr ? ['Exp IRR', 'Act IRR', 'Spread'] : []),
   ]
 
   return (
     <ChartPanel
       title="Cohort Analysis"
-      subtitle="Vintage performance — collection, denial, pending exposure, and IRR tracking by origination month"
+      subtitle="Vintage performance — collection, denial, pending exposure, margins, and IRR tracking by origination month"
       loading={loading}
       error={error}
       minHeight={0}
     >
       <div style={{ overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 900 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: hasIrr ? 1200 : 1000 }}>
           <thead>
             <tr>
               {columns.map(h => (
@@ -72,8 +78,10 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
           </thead>
           <tbody>
             {data.map((row, i) => {
-              const spread = (row.avg_actual_irr != null && row.avg_expected_irr != null)
+              const irrSpread = (row.avg_actual_irr != null && row.avg_expected_irr != null)
                 ? row.avg_actual_irr - row.avg_expected_irr : null
+              const marginSpread = (row.realised_margin != null && row.expected_margin != null)
+                ? row.realised_margin - row.expected_margin : null
               const pendingRate = row.purchase_value ? (row.pending ?? 0) / row.purchase_value * 100 : 0
 
               return (
@@ -92,16 +100,37 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
                   <Cell><Heat v={row.denial_rate} good={v => v <= 10} goodC="var(--text-secondary)" badC="var(--red)" /></Cell>
                   <Cell><Heat v={pendingRate} good={v => v <= 20} goodC="var(--text-secondary)" badC="var(--blue)" /></Cell>
                   <Cell><Heat v={row.completion_rate} good={v => v >= 70} goodC="var(--teal)" badC="var(--red)" /></Cell>
-                  <Cell mono color="var(--text-secondary)">{row.avg_expected_irr != null ? `${row.avg_expected_irr.toFixed(1)}%` : '—'}</Cell>
-                  <Cell mono color="var(--teal)">{row.avg_actual_irr != null ? `${row.avg_actual_irr.toFixed(1)}%` : '—'}</Cell>
+                  {/* Margins — always shown */}
+                  <Cell mono color="var(--text-secondary)">{row.expected_margin != null ? `${row.expected_margin.toFixed(2)}%` : '–'}</Cell>
                   <Cell>
-                    {spread != null
-                      ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: spread >= 0 ? 'var(--teal)' : 'var(--red)' }}>
-                          {spread >= 0 ? '+' : ''}{spread.toFixed(1)}%
+                    {row.realised_margin != null
+                      ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: row.realised_margin >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                          {row.realised_margin.toFixed(2)}%
                         </span>
-                      : <span style={{ color: 'var(--text-faint)' }}>—</span>
+                      : <span style={{ color: 'var(--text-faint)' }}>–</span>
                     }
                   </Cell>
+                  <Cell>
+                    {marginSpread != null
+                      ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: marginSpread >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                          {marginSpread >= 0 ? '+' : ''}{marginSpread.toFixed(2)}%
+                        </span>
+                      : <span style={{ color: 'var(--text-faint)' }}>–</span>
+                    }
+                  </Cell>
+                  {/* IRR — only shown when tape has IRR data */}
+                  {hasIrr && <>
+                    <Cell mono color="var(--text-secondary)">{row.avg_expected_irr != null ? `${row.avg_expected_irr.toFixed(1)}%` : '–'}</Cell>
+                    <Cell mono color="var(--teal)">{row.avg_actual_irr != null ? `${row.avg_actual_irr.toFixed(1)}%` : '–'}</Cell>
+                    <Cell>
+                      {irrSpread != null
+                        ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: irrSpread >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                            {irrSpread >= 0 ? '+' : ''}{irrSpread.toFixed(1)}%
+                          </span>
+                        : <span style={{ color: 'var(--text-faint)' }}>–</span>
+                      }
+                    </Cell>
+                  </>}
                 </tr>
               )
             })}
@@ -120,21 +149,39 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
                 <Cell bold><Heat v={totals.denialRate} good={v => v <= 10} goodC="var(--text-secondary)" badC="var(--red)" /></Cell>
                 <Cell bold><Heat v={totals.pendingRate} good={v => v <= 20} goodC="var(--text-secondary)" badC="var(--blue)" /></Cell>
                 <Cell bold><Heat v={totals.completionRate} good={v => v >= 70} goodC="var(--teal)" badC="var(--red)" /></Cell>
-                <Cell mono bold color="var(--text-secondary)">{totals.avgExpectedIrr != null ? `${totals.avgExpectedIrr.toFixed(1)}%` : '—'}</Cell>
-                <Cell mono bold color="var(--teal)">{totals.avgActualIrr != null ? `${totals.avgActualIrr.toFixed(1)}%` : '—'}</Cell>
+                {/* Margin totals */}
+                <Cell mono bold color="var(--text-secondary)">{totals.expectedMargin.toFixed(2)}%</Cell>
                 <Cell bold>
-                  {totals.avgActualIrr != null && totals.avgExpectedIrr != null
-                    ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: (totals.avgActualIrr - totals.avgExpectedIrr) >= 0 ? 'var(--teal)' : 'var(--red)' }}>
-                        {(totals.avgActualIrr - totals.avgExpectedIrr) >= 0 ? '+' : ''}{(totals.avgActualIrr - totals.avgExpectedIrr).toFixed(1)}%
-                      </span>
-                    : <span style={{ color: 'var(--text-faint)' }}>—</span>
-                  }
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: totals.realisedMargin >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                    {totals.realisedMargin.toFixed(2)}%
+                  </span>
                 </Cell>
+                <Cell bold>
+                  {(() => {
+                    const ms = totals.realisedMargin - totals.expectedMargin
+                    return <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: ms >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                      {ms >= 0 ? '+' : ''}{ms.toFixed(2)}%
+                    </span>
+                  })()}
+                </Cell>
+                {/* IRR totals */}
+                {hasIrr && <>
+                  <Cell mono bold color="var(--text-secondary)">{totals.avgExpectedIrr != null ? `${totals.avgExpectedIrr.toFixed(1)}%` : '–'}</Cell>
+                  <Cell mono bold color="var(--teal)">{totals.avgActualIrr != null ? `${totals.avgActualIrr.toFixed(1)}%` : '–'}</Cell>
+                  <Cell bold>
+                    {totals.avgActualIrr != null && totals.avgExpectedIrr != null
+                      ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: (totals.avgActualIrr - totals.avgExpectedIrr) >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                          {(totals.avgActualIrr - totals.avgExpectedIrr) >= 0 ? '+' : ''}{(totals.avgActualIrr - totals.avgExpectedIrr).toFixed(1)}%
+                        </span>
+                      : <span style={{ color: 'var(--text-faint)' }}>–</span>
+                    }
+                  </Cell>
+                </>}
               </tr>
             )}
 
             {data.length === 0 && !loading && (
-              <tr><td colSpan={14} style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>No cohort data.</td></tr>
+              <tr><td colSpan={columns.length} style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>No cohort data.</td></tr>
             )}
           </tbody>
         </table>
@@ -161,7 +208,7 @@ function Cell({ children, left, mono, bold, color }) {
 }
 
 function Heat({ v, good, goodC, badC }) {
-  if (v == null) return <span style={{ color: 'var(--text-faint)' }}>—</span>
+  if (v == null) return <span style={{ color: 'var(--text-faint)' }}>–</span>
   const isGood = good(v)
   return (
     <span style={{

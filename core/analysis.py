@@ -188,6 +188,7 @@ def compute_cohorts(df, mult):
         total     = len(grp)
         completed = len(grp[grp['Status'] == 'Completed'])
         pv        = grp['Purchase value'].sum() * mult
+        pp        = grp['Purchase price'].sum() * mult
         collected = grp['Collected till date'].sum() * mult
         denied    = grp['Denied by insurance'].sum() * mult
         pending   = grp['Pending insurance response'].sum() * mult
@@ -198,11 +199,15 @@ def compute_cohorts(df, mult):
             'completed_deals':  int(completed),
             'completion_rate':  round(completed / total * 100, 1) if total else 0,
             'purchase_value':   round(pv, 2),
+            'purchase_price':   round(pp, 2),
             'collected':        round(collected, 2),
             'denied':           round(denied, 2),
             'pending':          round(pending, 2),
             'collection_rate':  round(collected / pv * 100, 1) if pv else 0,
             'denial_rate':      round(denied    / pv * 100, 1) if pv else 0,
+            # Calculated margins (always available)
+            'expected_margin':  round((pv - pp) / pp * 100, 2) if pp else 0,
+            'realised_margin':  round((collected - pp) / pp * 100, 2) if pp else 0,
         }
 
         if 'Expected IRR' in grp.columns:
@@ -525,17 +530,21 @@ def compute_returns_analysis(df, mult):
             'avg_discount':    round(float(grp['Discount'].mean()) * 100, 2),
         })
 
-    # ── New vs Repeat ──
+# ── New vs Repeat ──
     new_repeat = []
     if 'New business' in df.columns:
-        for flag, grp in df.groupby('New business'):
+        # Map to binary: any truthy value = "New", falsy (NaN/empty/0) = "Repeat"
+        df['_biz_type'] = df['New business'].apply(
+            lambda x: 'New' if pd.notna(x) and x != '' and x != 0 else 'Repeat'
+        )
+        for biz_type, grp in df.groupby('_biz_type'):
             pv   = grp['Purchase value'].sum() * mult
             pp   = grp['Purchase price'].sum() * mult
             coll = grp['Collected till date'].sum() * mult
             den  = grp['Denied by insurance'].sum() * mult
             comp = grp[grp['Status'] == 'Completed']
             new_repeat.append({
-                'type':            'New' if flag else 'Repeat',
+                'type':            biz_type,
                 'deals':           len(grp),
                 'face_value':      round(pv, 2),
                 'deployed':        round(pp, 2),
@@ -545,6 +554,7 @@ def compute_returns_analysis(df, mult):
                 'margin':          round((coll - pp) / pp * 100, 2) if pp else 0,
                 'completion_rate': round(len(comp) / len(grp) * 100, 1) if len(grp) else 0,
             })
+        df.drop(columns=['_biz_type'], inplace=True)
 
     return {
         'summary':        summary,
