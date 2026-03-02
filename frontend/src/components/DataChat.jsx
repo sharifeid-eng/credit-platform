@@ -178,7 +178,7 @@ function TypingIndicator() {
 
 function Suggestions({ onSelect }) {
   const prompts = [
-    'What is the current denial rate by insurer?',
+    'What is the current denial rate by provider group?',
     'Which cohort has the worst collection performance?',
     'How has deployment trended over the last 6 months?',
   ]

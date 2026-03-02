@@ -135,7 +135,7 @@ export default function RiskMigrationChart({ company, product, snapshot, currenc
       </ChartPanel>
 
       {/* Stress Test Scenarios */}
-      <ChartPanel title="Stress Testing" subtitle="Payer concentration shock scenarios" loading={loading} error={error} minHeight={100}>
+      <ChartPanel title="Stress Testing" subtitle="Provider concentration shock scenarios" loading={loading} error={error} minHeight={100}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {(stressTest.scenarios ?? []).map((s, i) => (
             <div key={i} style={{

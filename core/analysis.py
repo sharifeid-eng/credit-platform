@@ -672,7 +672,7 @@ def compute_denial_funnel(df, mult):
 # ── Stress Testing ───────────────────────────────────────────────────────────
 
 def compute_stress_test(df, mult):
-    """Payer/group shock simulation across multiple scenarios."""
+    """Provider/group shock simulation across multiple scenarios."""
     if 'Group' not in df.columns:
         return {'scenarios': [], 'error': 'No Group column available'}
 
@@ -689,9 +689,9 @@ def compute_stress_test(df, mult):
 
     scenarios = []
     configs = [
-        ('Top 1 payer — 50% haircut',  1, 0.50),
-        ('Top 3 payers — 30% haircut', 3, 0.30),
-        ('Top 5 payers — 20% haircut', 5, 0.20),
+        ('Top 1 provider — 50% haircut',  1, 0.50),
+        ('Top 3 providers — 30% haircut', 3, 0.30),
+        ('Top 5 providers — 20% haircut', 5, 0.20),
     ]
 
     for label, top_n, haircut_pct in configs:
@@ -839,7 +839,7 @@ def compute_loss_triangle(df, mult):
     return {'triangle': triangle}
 
 
-# ── Group / Payer Performance ─────────────────────────────────────────────────
+# ── Group / Provider Performance ──────────────────────────────────────────────
 
 def compute_group_performance(df, mult, as_of_date=None):
     """Per-group metrics: collection rate, denial rate, DSO, deal count, pending %."""

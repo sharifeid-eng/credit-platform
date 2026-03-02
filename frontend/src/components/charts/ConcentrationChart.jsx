@@ -61,7 +61,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
       )}
 
       {/* Group concentration donut */}
-      <ChartPanel title="Group Concentration" subtitle="Share of portfolio by insurer / payer group — top 15 shown" loading={loading} error={error} minHeight={260}>
+      <ChartPanel title="Group Concentration" subtitle="Share of portfolio by provider group — top 15 shown" loading={loading} error={error} minHeight={260}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <ResponsiveContainer width={220} height={220}>
             <PieChart>
@@ -86,7 +86,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
 
       {/* Group Performance Table */}
       {groupPerf && groupPerf.length > 0 && (
-        <ChartPanel title="Group Performance" subtitle="Collection, denial, and DSO metrics per insurer/payer group" loading={loading} error={error} minHeight={0}>
+        <ChartPanel title="Group Performance" subtitle="Collection, denial, and DSO metrics per provider group" loading={loading} error={error} minHeight={0}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>

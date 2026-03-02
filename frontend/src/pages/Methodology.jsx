@@ -132,12 +132,12 @@ export default function Methodology() {
           <Metric
             name="Denial Rate"
             formula="Denied by insurance / Purchase value"
-            rationale="Measures the proportion of receivables rejected by the payer. High or rising denial rates signal deterioration in underwriting quality, payer disputes, or provider documentation issues."
+            rationale="Measures the proportion of receivables rejected by the insurer. High or rising denial rates signal deterioration in underwriting quality, insurer disputes, or provider documentation issues."
           />
           <Metric
             name="Pending Rate"
             formula="Pending insurance response / Purchase value"
-            rationale="Captures receivables still awaiting payer decision. A growing pending balance indicates slower adjudication or processing bottlenecks."
+            rationale="Captures receivables still awaiting insurer decision. A growing pending balance indicates slower adjudication or processing bottlenecks."
           />
           <Metric
             name="Weighted DSO (Days Sales Outstanding)"
@@ -157,7 +157,7 @@ export default function Methodology() {
           <Metric
             name="HHI (Herfindahl-Hirschman Index)"
             formula={<>HHI = &Sigma;(Share<sub>i</sub>)<sup>2</sup> where Share<sub>i</sub> = Exposure<sub>i</sub> / Total Exposure</>}
-            rationale="Standard measure of portfolio concentration. Ranges from 0 (perfectly diversified) to 1 (single counterparty). Computed separately on Group (payer) and Product dimensions. Thresholds: &lt;0.15 unconcentrated, 0.15&ndash;0.25 moderate, &gt;0.25 highly concentrated."
+            rationale="Standard measure of portfolio concentration. Ranges from 0 (perfectly diversified) to 1 (single counterparty). Computed separately on Group (provider) and Product dimensions. Thresholds: &lt;0.15 unconcentrated, 0.15&ndash;0.25 moderate, &gt;0.25 highly concentrated."
           />
           <Note>
             Top-1, top-5, and top-10 counterparty shares are also reported alongside HHI to identify single-name risk.
@@ -288,7 +288,7 @@ export default function Methodology() {
             rows={[
               ['Total Portfolio', 'Sum of all purchase values (100% baseline)'],
               ['Collected', 'Cash received to date'],
-              ['Pending Response', 'Awaiting payer adjudication'],
+              ['Pending Response', 'Awaiting insurer adjudication'],
               ['Denied', 'Rejected by insurer (adverse decision)'],
               ['Provisioned', 'Loss reserves set against denied amounts'],
             ]}
@@ -311,21 +311,21 @@ export default function Methodology() {
         {/* 6 — Stress Testing */}
         <Section id="stress" title="Stress Testing">
           <p style={styles.body}>
-            Three payer-shock scenarios simulate the impact of counterparty distress on portfolio collections.
-            Each scenario identifies the affected payers, applies a haircut to their collected amounts,
+            Three provider-shock scenarios simulate the impact of counterparty distress on portfolio collections.
+            Each scenario identifies the affected provider groups, applies a haircut to their collected amounts,
             and recomputes portfolio-level metrics.
           </p>
           <Table
             headers={['Scenario', 'Counterparties', 'Haircut', 'Rationale']}
             rows={[
-              ['Severe', 'Top 1 payer', '50%', 'Single-name concentration risk \u2014 largest payer halves payments'],
-              ['Moderate', 'Top 3 payers', '30%', 'Sector-wide stress \u2014 top three payers simultaneously impaired'],
-              ['Mild', 'Top 5 payers', '20%', 'Broad market stress \u2014 widespread but shallow reduction'],
+              ['Severe', 'Top 1 provider', '50%', 'Single-name concentration risk \u2014 largest provider halves payments'],
+              ['Moderate', 'Top 3 providers', '30%', 'Sector-wide stress \u2014 top three providers simultaneously impaired'],
+              ['Mild', 'Top 5 providers', '20%', 'Broad market stress \u2014 widespread but shallow reduction'],
             ]}
           />
           <Subsection title="Metrics per Scenario">
             <ul style={styles.list}>
-              <li><strong>Affected exposure:</strong> Face value of deals linked to stressed payers</li>
+              <li><strong>Affected exposure:</strong> Face value of deals linked to stressed providers</li>
               <li><strong>Collection loss:</strong> Affected collected amount multiplied by haircut percentage</li>
               <li><strong>Stressed collection rate:</strong> (Original collected {'\u2212'} loss) / total face value</li>
               <li><strong>Rate impact:</strong> Change in collection rate from base scenario</li>
@@ -333,8 +333,8 @@ export default function Methodology() {
             </ul>
           </Subsection>
           <Note>
-            Payer ranking is based on total exposure (purchase value) to that counterparty.
-            If payer names are not normalized, concentration may be understated.
+            Provider ranking is based on total exposure (purchase value) to that counterparty.
+            If provider names are not normalized, concentration may be understated.
           </Note>
         </Section>
 

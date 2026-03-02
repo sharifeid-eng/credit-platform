@@ -150,7 +150,7 @@ Key columns in loan tape files:
 |`Pending insurance response` |Amount awaiting decision          |
 |`Expected total`             |Expected total collection         |
 |`Expected IRR` / `Actual IRR`|Deal-level returns (Sep 2025 tape only)|
-|`Group`                      |Insurer/payer group               |
+|`Group`                      |Healthcare provider/client group  |
 |`Product`                    |Sub-product type                  |
 |`New business`               |New vs repeat flag                |
 |`Setup fee` / `Other fee`    |Fee income                        |
@@ -183,7 +183,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/returns-analysis`   |Returns, discounts, new vs repeat  |
 |`GET /companies/{co}/products/{p}/charts/dso`                |DSO metrics (weighted, median, p95) |
 |`GET /companies/{co}/products/{p}/charts/denial-funnel`      |Resolution pipeline funnel          |
-|`GET /companies/{co}/products/{p}/charts/stress-test`        |Payer shock stress scenarios        |
+|`GET /companies/{co}/products/{p}/charts/stress-test`        |Provider concentration shock scenarios|
 |`GET /companies/{co}/products/{p}/charts/expected-loss`      |PD × LGD × EAD expected loss model  |
 |`GET /companies/{co}/products/{p}/charts/loss-triangle`      |Denial development by vintage       |
 |`GET /companies/{co}/products/{p}/charts/group-performance`  |Per-group collection/denial/DSO     |
@@ -303,10 +303,10 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ DSO (Days Sales Outstanding) — weighted, median, p95 on completed deals
 - ✅ HHI (Herfindahl-Hirschman Index) — on Group and Product concentration
 - ✅ Denial funnel / resolution pipeline (Total → Collected → Pending → Denied → Provisioned)
-- ✅ Stress testing — top-1/3/5 payer shock scenarios
+- ✅ Stress testing — top-1/3/5 provider shock scenarios
 - ✅ Expected Loss model (PD × LGD × EAD from completed deal outcomes)
 - ✅ Loss development triangle (denial by vintage age)
-- ✅ Per-group performance table (collection rate, denial rate, DSO per insurer)
+- ✅ Per-group performance table (collection rate, denial rate, DSO per provider)
 - ✅ Roll-rate migration matrix across snapshots (cure rates, transition probabilities)
 - ✅ Single-tape data quality validation (dupes, date sanity, negatives, nulls)
 - ✅ Risk & Migration tab (11th tab) — institutional-grade risk analytics
