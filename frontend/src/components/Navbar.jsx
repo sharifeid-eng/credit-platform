@@ -50,7 +50,7 @@ function LaithLogo({ size = 'nav' }) {
       gap: isNav ? 12 : 10,
       height: h,
     }}>
-      {/* Icon mark — lion (cropped & gold-tinted from original SVG) */}
+      {/* Icon mark — lion */}
       <div style={{
         width: h,
         height: h,
@@ -58,32 +58,19 @@ function LaithLogo({ size = 'nav' }) {
         overflow: 'hidden',
         flexShrink: 0,
         boxShadow: '0 2px 8px rgba(201,168,76,0.25)',
-        position: 'relative',
+        background: '#000',
       }}>
-        {/* SVG filter to map to exact brand gold #C9A84C */}
-        <svg style={{ position: 'absolute', width: 0, height: 0 }}>
-          <defs>
-            <filter id="gold-tint">
-              <feColorMatrix type="matrix" values="
-                -0.79 -0.59 -0.11 0 0.79
-                -0.66 -0.49 -0.09 0 0.66
-                -0.30 -0.22 -0.04 0 0.30
-                 0     0     0    1 0
-              "/>
-            </filter>
-          </defs>
-        </svg>
-
         <img
-          src="/logo.svg"
+          src="/lion.png"
           alt="Laith"
           style={{
-            width: h * 2.3,
-            height: 'auto',
-            marginTop: h * -0.3,
-            marginLeft: h * -0.6,
+            width: '140%',
+            height: '140%',
+            objectFit: 'cover',
+            objectPosition: 'center 36%',
             display: 'block',
-            filter: 'url(#gold-tint)',
+            marginTop: '-15%',
+            marginLeft: '-20%',
           }}
         />
       </div>
