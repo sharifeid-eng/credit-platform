@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import {
   getProducts, getSnapshots, getConfig,
   getSummary, getDateRange,
@@ -184,6 +184,25 @@ export default function Company() {
               {tab}
             </button>
           ))}
+          {/* Methodology link */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+            <Link to={`/company/${company}/methodology`} style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              textDecoration: 'none',
+              fontSize: 10, fontWeight: 600,
+              color: 'var(--text-muted)',
+              padding: '9px 12px',
+              whiteSpace: 'nowrap',
+              transition: 'color 0.15s',
+              letterSpacing: '0.04em',
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              Methodology
+            </Link>
+          </div>
         </div>
       </div>
 

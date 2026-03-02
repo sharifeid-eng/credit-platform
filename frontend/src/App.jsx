@@ -12,7 +12,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/company/:companyName" element={<Company />} />
         <Route path="/companies/:companyName" element={<Company />} />
-        <Route path="/methodology" element={<Methodology />} />
+        <Route path="/company/:companyName/methodology" element={<Methodology />} />
+        <Route path="/companies/:companyName/methodology" element={<Methodology />} />
       </Routes>
     </BrowserRouter>
   );

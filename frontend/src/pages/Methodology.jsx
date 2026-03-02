@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useParams, Link } from 'react-router-dom'
 
 const SECTIONS = [
   { id: 'overview', title: 'Portfolio Overview Metrics' },
@@ -14,6 +15,7 @@ const SECTIONS = [
 ]
 
 export default function Methodology() {
+  const { companyName } = useParams()
   const [active, setActive] = useState('overview')
 
   useEffect(() => {
@@ -92,6 +94,20 @@ export default function Methodology() {
 
       {/* Main content */}
       <main style={{ flex: 1, padding: '36px 40px 80px', maxWidth: 820 }}>
+        {/* Back to dashboard */}
+        <Link to={`/company/${companyName}`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          textDecoration: 'none',
+          fontSize: 11, fontWeight: 600,
+          color: 'var(--gold)',
+          marginBottom: 16,
+          transition: 'opacity 0.15s',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
+          </svg>
+          Back to {companyName?.toUpperCase()} Dashboard
+        </Link>
         <h1 style={{
           fontSize: 26,
           fontWeight: 800,
