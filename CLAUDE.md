@@ -103,7 +103,8 @@ credit-platform/
 │   │   ├── App.jsx
 │   │   ├── pages/
 │   │   │   ├── Home.jsx
-│   │   │   └── Company.jsx
+│   │   │   ├── Company.jsx
+│   │   │   └── Methodology.jsx    # Definitions, formulas, rationale for all analytics
 │   │   ├── components/
 │   │   │   ├── CompanyCard.jsx
 │   │   │   ├── KpiCard.jsx
@@ -298,6 +299,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ Risk & Migration tab (11th tab) — institutional-grade risk analytics
 - ✅ Enhanced Overview with 10 KPI cards (added DSO + HHI)
 - ✅ Enhanced Concentration tab (HHI badges + group performance table)
+- ✅ Methodology page (`/methodology`) — standalone reference with definitions, formulas, rationale for all analytics
 -----
 ## Known Gaps & Next Steps
 **Short term:**
