@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Company from './pages/Company';
+import Methodology from './pages/Methodology';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/company/:companyName" element={<Company />} />
         <Route path="/companies/:companyName" element={<Company />} />
+        <Route path="/methodology" element={<Methodology />} />
       </Routes>
     </BrowserRouter>
   );

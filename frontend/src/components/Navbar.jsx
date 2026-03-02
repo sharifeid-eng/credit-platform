@@ -29,8 +29,26 @@ export default function Navbar() {
         </div>
       </Link>
 
-      {/* Right — Status chips */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Right — Nav link + Status chips */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <Link to="/methodology" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          textDecoration: 'none',
+          fontSize: 11,
+          fontWeight: 600,
+          color: pathname === '/methodology' ? 'var(--gold)' : 'var(--text-muted)',
+          transition: 'color 0.2s',
+          letterSpacing: '0.04em',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          </svg>
+          Methodology
+        </Link>
+        <div style={{ width: 1, height: 18, background: 'var(--border)' }} />
         <LiveDot />
         <Chip>v1.0</Chip>
         <Chip highlight>Sharif Eid</Chip>
