@@ -32,7 +32,7 @@ export default function Navbar() {
       {/* Right — Status chips */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <LiveDot />
-        <Chip>v1.0</Chip>
+        <Chip>v0.5</Chip>
         <Chip highlight>Sharif Eid</Chip>
       </div>
     </nav>
