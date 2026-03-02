@@ -44,12 +44,27 @@ def compute_roll_rates(old_df, new_df, as_of_old, as_of_new):
     old_date = pd.Timestamp(as_of_old)
     new_date = pd.Timestamp(as_of_new)
 
-    # Find ID column
+    # Find ID column — handle name mismatches across tapes
+    id_candidates = ['ID', 'Id', 'id', 'Deal ID', 'Deal Id', 'deal_id', 'Reference']
+
+    # First try exact match
     id_col = None
-    for candidate in ['ID', 'Id', 'id', 'Reference']:
+    for candidate in id_candidates:
         if candidate in old_df.columns and candidate in new_df.columns:
             id_col = candidate
             break
+
+    # If no exact match, try renaming common variants to a shared name
+    if not id_col:
+        old_id = next((c for c in id_candidates if c in old_df.columns), None)
+        new_id = next((c for c in id_candidates if c in new_df.columns), None)
+        if old_id and new_id:
+            # Rename both to a common key
+            id_col = '_merge_id'
+            old_df = old_df.copy()
+            new_df = new_df.copy()
+            old_df[id_col] = old_df[old_id]
+            new_df[id_col] = new_df[new_id]
 
     if not id_col:
         return {
