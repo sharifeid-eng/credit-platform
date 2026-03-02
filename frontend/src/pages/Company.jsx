@@ -21,10 +21,13 @@ import RevenueChart           from '../components/charts/RevenueChart'
 import ConcentrationChart     from '../components/charts/ConcentrationChart'
 import CohortTable            from '../components/charts/CohortTable'
 import ReturnsAnalysisChart from '../components/charts/ReturnsAnalysisChart'
+import RiskMigrationChart  from '../components/charts/RiskMigrationChart'
+import DenialFunnelChart   from '../components/charts/DenialFunnelChart'
 
 const TABS = [
   'Overview', 'Actual vs Expected', 'Deployment', 'Collection',
   'Denial Trend', 'Ageing', 'Revenue', 'Portfolio', 'Cohort Analysis', 'Returns',
+  'Risk & Migration',
 ]
 
 export default function Company() {
@@ -211,6 +214,7 @@ export default function Company() {
         )}
         {activeTab === 'Denial Trend' && (
           <ChartTab tab="denial-trend" company={company} product={product} snapshot={snapshot} currency={currency}>
+            <DenialFunnelChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
             <DenialTrendChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
@@ -235,8 +239,13 @@ export default function Company() {
           </ChartTab>
         )}
         {activeTab === 'Returns' && (
-          <ChartTab tab="returns-analysis" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <ChartTab tab="returns" company={company} product={product} snapshot={snapshot} currency={currency}>
             <ReturnsAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+          </ChartTab>
+        )}
+        {activeTab === 'Risk & Migration' && (
+          <ChartTab tab="risk-migration" company={company} product={product} snapshot={snapshot} currency={currency}>
+            <RiskMigrationChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
         )}
       </div>
@@ -250,6 +259,8 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
   const fmt  = (v) => v == null ? '—' : v >= 1_000_000 ? `${ccy} ${(v/1_000_000).toFixed(1)}M` : `${ccy} ${(v/1_000).toFixed(0)}K`
   const pct  = (v) => v == null ? '—' : `${v.toFixed(1)}%`
 
+  const hhiFmt = (v) => v == null ? '—' : v.toFixed(4)
+
   const kpis = summary ? [
     { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold' },
     { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal' },
@@ -259,7 +270,9 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
     { label: 'Completed Deals', value: String(summary.completed_deals),   sub: 'fully collected',                 color: 'teal' },
     { label: 'Total Collected', value: fmt(summary.total_collected),      sub: 'cumulative collections',          color: 'teal' },
     { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red'  },
-  ] : Array(8).fill(null)
+    { label: 'Wtd Avg DSO',     value: summary.dso != null ? `${summary.dso.toFixed(0)}d` : '—', sub: `Median: ${summary.median_dso != null ? summary.median_dso.toFixed(0) + 'd' : '—'}`, color: 'gold' },
+    { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top payer: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal' },
+  ] : Array(10).fill(null)
 
   const showSkeleton = summaryLoading || !summary
 
@@ -269,9 +282,9 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
       {summaryLoading && <LoadingBar />}
 
       {/* KPI grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         {showSkeleton
-          ? Array(8).fill(null).map((_, i) => <SkeletonKpi key={i} />)
+          ? Array(10).fill(null).map((_, i) => <SkeletonKpi key={i} />)
           : kpis.map((k, i) => <KpiCard key={i} {...k} />)
         }
       </div>

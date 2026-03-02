@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import ChartPanel from '../ChartPanel'
-import { getConcentrationChart } from '../../services/api'
+import { getConcentrationChart, getGroupPerformanceChart } from '../../services/api'
 import { tooltipStyle, fmtMoney, fmtPct } from '../../styles/chartTheme'
 
 const SLICE_COLORS = [
@@ -11,21 +11,25 @@ const SLICE_COLORS = [
 ]
 
 export default function ConcentrationChart({ company, product, snapshot, currency, asOfDate }) {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [data, setData]               = useState(null)
+  const [groupPerf, setGroupPerf]     = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
 
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    getConcentrationChart(company, product, snapshot, currency, asOfDate)
-      .then(res => {
-        const groupData = (res.group ?? []).map(d => ({
+    Promise.all([
+      getConcentrationChart(company, product, snapshot, currency, asOfDate),
+      getGroupPerformanceChart(company, product, snapshot, currency, asOfDate),
+    ])
+      .then(([concRes, perfRes]) => {
+        const groupData = (concRes.group ?? []).map(d => ({
           name:  d.Group ?? d.name,
           value: d.purchase_value,
           pct:   d.percentage,
         }))
-        const topDeals = (res.top_deals ?? []).map(d => ({
+        const topDeals = (concRes.top_deals ?? []).map(d => ({
           date:          d['Deal date'] ?? d.date,
           status:        d.Status ?? d.status,
           purchase_value: d['Purchase value'] ?? d.purchase_value,
@@ -33,7 +37,8 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           collected:     d['Collected till date'] ?? d.collected,
           denied:        d['Denied by insurance'] ?? d.denied,
         }))
-        setData({ groupData, topDeals })
+        setData({ groupData, topDeals, hhi: concRes.hhi ?? {} })
+        setGroupPerf(perfRes.groups ?? [])
         setError(null)
       })
       .catch(() => setError('Failed to load concentration data.'))
@@ -42,9 +47,19 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
 
   const groupData = data?.groupData ?? []
   const topDeals  = data?.topDeals  ?? []
+  const hhi       = data?.hhi ?? {}
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* HHI Concentration Badges */}
+      {hhi.group && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <HHIBadge label="Group HHI" value={hhi.group.hhi} top1={hhi.group.top_1_pct} top5={hhi.group.top_5_pct} maxName={hhi.group.max_name} />
+          {hhi.product && <HHIBadge label="Product HHI" value={hhi.product.hhi} top1={hhi.product.top_1_pct} top5={hhi.product.top_5_pct} maxName={hhi.product.max_name} />}
+        </div>
+      )}
+
       {/* Group concentration donut */}
       <ChartPanel title="Group Concentration" subtitle="Share of portfolio by insurer / payer group — top 15 shown" loading={loading} error={error} minHeight={260}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -68,6 +83,44 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           </div>
         </div>
       </ChartPanel>
+
+      {/* Group Performance Table */}
+      {groupPerf && groupPerf.length > 0 && (
+        <ChartPanel title="Group Performance" subtitle="Collection, denial, and DSO metrics per insurer/payer group" loading={loading} error={error} minHeight={0}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr>
+                  {['Group', 'Deals', 'Purchase Value', 'Collect %', 'Denial %', 'Pending %', 'DSO', 'Completion'].map(h => (
+                    <th key={h} style={{
+                      textAlign: 'left', padding: '6px 10px',
+                      fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
+                      color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groupPerf.slice(0, 20).map((g, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border-faint)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <td style={{ padding: '7px 10px', color: 'var(--text-primary)', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.group}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{g.deal_count}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--gold)' }}>{fmtMoney(g.purchase_value, currency)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>{fmtPct(g.collection_rate)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--red)' }}>{fmtPct(g.denial_rate)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--blue)' }}>{fmtPct(g.pending_rate)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{g.dso > 0 ? `${g.dso.toFixed(0)}d` : '—'}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{fmtPct(g.completion_rate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ChartPanel>
+      )}
 
       {/* Top deals table */}
       <ChartPanel title="Top 10 Deals" subtitle="Largest receivables by purchase value" loading={loading} error={error} minHeight={0}>
@@ -111,6 +164,40 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           </table>
         </div>
       </ChartPanel>
+    </div>
+  )
+}
+
+/* ── HHI Badge ── */
+function HHIBadge({ label, value, top1, top5, maxName }) {
+  const level = value > 0.25 ? 'High' : value > 0.15 ? 'Moderate' : 'Low'
+  const color = value > 0.25 ? 'var(--red)' : value > 0.15 ? 'var(--gold)' : 'var(--teal)'
+
+  return (
+    <div style={{
+      flex: 1, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-md)', padding: '14px 18px',
+      display: 'flex', alignItems: 'center', gap: 16,
+    }}>
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)', color }}>
+          {value.toFixed(4)}
+        </div>
+        <div style={{
+          fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 20, display: 'inline-block', marginTop: 4,
+          background: color === 'var(--teal)' ? 'var(--teal-muted)' : color === 'var(--red)' ? 'var(--red-muted)' : 'var(--gold-muted)',
+          color,
+        }}>
+          {level} concentration
+        </div>
+      </div>
+      <div style={{ flex: 1, fontSize: 10, color: 'var(--text-muted)' }}>
+        <div>Top 1: <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{top1}%</span> ({maxName})</div>
+        <div style={{ marginTop: 3 }}>Top 5: <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{top5}%</span></div>
+      </div>
     </div>
   )
 }

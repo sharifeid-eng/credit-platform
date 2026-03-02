@@ -13,7 +13,12 @@ from core.analysis import (
     compute_denial_trend, compute_cohorts, compute_actual_vs_expected,
     compute_ageing, compute_revenue, compute_concentration,
     compute_returns_analysis, apply_multiplier, filter_by_date,
+    compute_dso, compute_hhi, compute_denial_funnel,
+    compute_stress_test, compute_expected_loss, compute_loss_triangle,
+    compute_group_performance,
 )
+from core.migration import compute_roll_rates
+from core.validation import validate_tape
 app = FastAPI(title="ACP Private Credit API")
 
 app.add_middleware(
@@ -93,8 +98,17 @@ def get_summary(company: str, product: str,
     if not len(df):
         raise HTTPException(status_code=400, detail="No deals found for selected date range")
     config, disp = _currency(company, product, currency)
-    return {'company': company, 'product': product,
-            **compute_summary(df, config, disp, sel['date'], as_of_date)}
+    mult     = apply_multiplier(config, disp)
+    summary  = compute_summary(df, config, disp, sel['date'], as_of_date)
+    # Enrich with DSO and HHI
+    dso_data = compute_dso(df, mult, as_of_date)
+    hhi_data = compute_hhi(df, mult)
+    summary['dso']          = dso_data['weighted_dso']
+    summary['median_dso']   = dso_data['median_dso']
+    summary['hhi_group']    = hhi_data.get('group', {}).get('hhi', 0)
+    summary['hhi_product']  = hhi_data.get('product', {}).get('hhi', 0)
+    summary['top_1_group_pct'] = hhi_data.get('group', {}).get('top_1_pct', 0)
+    return {'company': company, 'product': product, **summary}
 
 # ── Chart endpoints ───────────────────────────────────────────────────────────
 
@@ -184,7 +198,10 @@ def get_concentration(company: str, product: str,
     df       = filter_by_date(df, as_of_date)
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
-    return {**compute_concentration(df, mult), 'currency': disp}
+    result   = compute_concentration(df, mult)
+    # Enrich with HHI
+    result['hhi'] = compute_hhi(df, mult)
+    return {**result, 'currency': disp}
 
 @app.get("/companies/{company}/products/{product}/charts/returns-analysis")
 def get_returns_analysis(company: str, product: str,
@@ -196,6 +213,133 @@ def get_returns_analysis(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
     return {**compute_returns_analysis(df, mult), 'currency': disp}
+
+# ── New analytics endpoints ───────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/dso")
+def get_dso(company: str, product: str,
+            snapshot: Optional[str] = None,
+            as_of_date: Optional[str] = None,
+            currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_dso(df, mult, as_of_date), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/denial-funnel")
+def get_denial_funnel(company: str, product: str,
+                      snapshot: Optional[str] = None,
+                      as_of_date: Optional[str] = None,
+                      currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_denial_funnel(df, mult), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/stress-test")
+def get_stress_test(company: str, product: str,
+                    snapshot: Optional[str] = None,
+                    as_of_date: Optional[str] = None,
+                    currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_stress_test(df, mult), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/expected-loss")
+def get_expected_loss(company: str, product: str,
+                      snapshot: Optional[str] = None,
+                      as_of_date: Optional[str] = None,
+                      currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_expected_loss(df, mult), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/loss-triangle")
+def get_loss_triangle(company: str, product: str,
+                      snapshot: Optional[str] = None,
+                      as_of_date: Optional[str] = None,
+                      currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_loss_triangle(df, mult), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/group-performance")
+def get_group_performance(company: str, product: str,
+                          snapshot: Optional[str] = None,
+                          as_of_date: Optional[str] = None,
+                          currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_group_performance(df, mult, as_of_date), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/risk-migration")
+def get_risk_migration(company: str, product: str,
+                       snapshot: Optional[str] = None,
+                       compare_snapshot: Optional[str] = None,
+                       as_of_date: Optional[str] = None,
+                       currency: Optional[str] = None):
+    """Roll-rate migration analysis comparing two snapshots."""
+    snaps = get_snapshots(company, product)
+    if len(snaps) < 2:
+        return {'error': 'Need at least 2 snapshots for migration analysis',
+                'available_snapshots': len(snaps)}
+
+    # Default: compare second-to-last vs last snapshot
+    if not snapshot:
+        snapshot = snaps[-1]['filename']
+    if not compare_snapshot:
+        # Find the snapshot before the selected one
+        sel_idx = next((i for i, s in enumerate(snaps) if s['filename'] == snapshot or s['date'] == snapshot), len(snaps) - 1)
+        if sel_idx > 0:
+            compare_snapshot = snaps[sel_idx - 1]['filename']
+        else:
+            return {'error': 'No earlier snapshot to compare against'}
+
+    # Load both snapshots
+    old_sel = next((s for s in snaps if s['filename'] == compare_snapshot or s['date'] == compare_snapshot), None)
+    new_sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), None)
+    if not old_sel or not new_sel:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    old_df = load_snapshot(old_sel['filepath'])
+    new_df = load_snapshot(new_sel['filepath'])
+
+    if as_of_date:
+        old_df = filter_by_date(old_df, as_of_date)
+        new_df = filter_by_date(new_df, as_of_date)
+
+    result = compute_roll_rates(old_df, new_df, old_sel['date'], new_sel['date'])
+
+    # Also compute stress test & EL on the new snapshot for the Risk tab
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    result['stress_test']    = compute_stress_test(new_df, mult)
+    result['expected_loss']  = compute_expected_loss(new_df, mult)
+    result['currency']       = disp
+    result['old_snapshot']   = old_sel['date']
+    result['new_snapshot']   = new_sel['date']
+
+    return result
+
+@app.get("/companies/{company}/products/{product}/validate")
+def validate_snapshot(company: str, product: str,
+                      snapshot: Optional[str] = None):
+    """Run data quality checks on a single tape."""
+    df, sel = _load(company, product, snapshot)
+    result  = validate_tape(df)
+    result['snapshot'] = sel['date']
+    result['filename'] = sel['filename']
+    return result
 
 # ── AI endpoints ──────────────────────────────────────────────────────────────
 
@@ -295,6 +439,13 @@ def get_tab_insight(company: str, product: str,
                     'total_collected': ave['total_collected'],
                     'total_expected': ave['total_expected'],
                     'recent': ave['data'][-6:]}
+    elif tab == 'returns':
+        ret = compute_returns_analysis(df, mult)
+        tab_data = {'summary': ret['summary'], 'recent_monthly': ret['monthly'][-12:]}
+    elif tab == 'risk-migration':
+        el = compute_expected_loss(df, mult)
+        st = compute_stress_test(df, mult)
+        tab_data = {'expected_loss': el['portfolio'], 'stress_scenarios': st['scenarios']}
 
     tab_labels = {
         'deployment':          'Capital Deployment',
@@ -305,6 +456,8 @@ def get_tab_insight(company: str, product: str,
         'concentration':       'Portfolio Concentration',
         'cohort':              'Cohort Analysis',
         'actual-vs-expected':  'Actual vs Expected',
+        'returns':             'Returns Analysis',
+        'risk-migration':      'Risk & Migration Analysis',
     }
 
     prompt = f"""You are a senior credit analyst at ACP Private Credit reviewing the {tab_labels.get(tab, tab)} view for {company.upper()} ({product.replace('_', ' ').title()}) as of {as_of_date or sel['date']}.

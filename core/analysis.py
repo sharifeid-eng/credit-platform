@@ -552,3 +552,325 @@ def compute_returns_analysis(df, mult):
         'discount_bands': discount_bands,
         'new_vs_repeat':  new_repeat,
     }
+
+
+# ── DSO (Days Sales Outstanding) ─────────────────────────────────────────────
+
+def compute_dso(df, mult, as_of_date=None):
+    """Weighted average days to collect on completed deals + DSO by vintage."""
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+    completed = df[df['Status'] == 'Completed'].copy()
+
+    if completed.empty:
+        return {
+            'weighted_dso': 0, 'median_dso': 0, 'p95_dso': 0,
+            'total_completed': 0, 'by_vintage': [],
+        }
+
+    completed['days_outstanding'] = (today - completed['Deal date']).dt.days
+    collected = completed['Collected till date'] * mult
+    days = completed['days_outstanding']
+
+    total_collected = collected.sum()
+    weighted_dso = float((days * collected).sum() / total_collected) if total_collected else 0
+    median_dso = float(days.median())
+    p95_dso = float(days.quantile(0.95))
+
+    # DSO by vintage month
+    completed = add_month_column(completed)
+    by_vintage = []
+    for month, grp in completed.groupby('Month'):
+        g_coll = grp['Collected till date'] * mult
+        g_days = (today - grp['Deal date']).dt.days
+        g_total = g_coll.sum()
+        by_vintage.append({
+            'month':        month,
+            'weighted_dso': round(float((g_days * g_coll).sum() / g_total), 1) if g_total else 0,
+            'median_dso':   round(float(g_days.median()), 1),
+            'deal_count':   int(len(grp)),
+            'collected':    round(float(g_total), 2),
+        })
+
+    return {
+        'weighted_dso':    round(weighted_dso, 1),
+        'median_dso':      round(median_dso, 1),
+        'p95_dso':         round(p95_dso, 1),
+        'total_completed': int(len(completed)),
+        'by_vintage':      by_vintage,
+    }
+
+
+# ── HHI (Herfindahl-Hirschman Index) ─────────────────────────────────────────
+
+def compute_hhi(df, mult):
+    """HHI concentration indices on Group and Product + top-N exposure caps."""
+    total = df['Purchase value'].sum() * mult
+    result = {}
+
+    for col_name, key in [('Group', 'group'), ('Product', 'product')]:
+        if col_name not in df.columns:
+            continue
+        agg = df.groupby(col_name)['Purchase value'].sum() * mult
+        shares = agg / total
+        hhi = float((shares ** 2).sum())
+        sorted_shares = shares.sort_values(ascending=False)
+        result[key] = {
+            'hhi':       round(hhi, 4),
+            'top_1_pct': round(float(sorted_shares.iloc[0]) * 100, 1) if len(sorted_shares) >= 1 else 0,
+            'top_5_pct': round(float(sorted_shares.head(5).sum()) * 100, 1) if len(sorted_shares) >= 5 else round(float(sorted_shares.sum()) * 100, 1),
+            'top_10_pct': round(float(sorted_shares.head(10).sum()) * 100, 1) if len(sorted_shares) >= 10 else round(float(sorted_shares.sum()) * 100, 1),
+            'count':      int(len(sorted_shares)),
+            'max_name':   str(sorted_shares.index[0]) if len(sorted_shares) >= 1 else '',
+            'max_value':  round(float(agg.max()), 2) if len(agg) else 0,
+        }
+
+    return result
+
+
+# ── Denial Funnel ─────────────────────────────────────────────────────────────
+
+def compute_denial_funnel(df, mult):
+    """Resolution pipeline: Total → Collected → Pending → Denied → Provisioned."""
+    total_pv    = df['Purchase value'].sum() * mult
+    collected   = df['Collected till date'].sum() * mult
+    pending     = df['Pending insurance response'].sum() * mult
+    denied      = df['Denied by insurance'].sum() * mult
+    provisions  = df['Provisions'].sum() * mult if 'Provisions' in df.columns else 0
+    # Unresolved = total - collected - denied - pending
+    unresolved  = max(total_pv - collected - denied - pending, 0)
+
+    stages = [
+        {'stage': 'Total Portfolio',  'amount': round(total_pv, 2),   'pct': 100.0},
+        {'stage': 'Collected',        'amount': round(collected, 2),  'pct': round(collected / total_pv * 100, 1) if total_pv else 0},
+        {'stage': 'Pending Response', 'amount': round(pending, 2),   'pct': round(pending / total_pv * 100, 1) if total_pv else 0},
+        {'stage': 'Denied',           'amount': round(denied, 2),    'pct': round(denied / total_pv * 100, 1) if total_pv else 0},
+        {'stage': 'Provisioned',      'amount': round(provisions, 2),'pct': round(provisions / total_pv * 100, 1) if total_pv else 0},
+    ]
+
+    # Net loss = denied - provisions (unrecovered)
+    net_loss = denied - provisions
+    recovery_rate = round(provisions / denied * 100, 1) if denied else 0
+
+    return {
+        'stages':        stages,
+        'net_loss':      round(net_loss, 2),
+        'recovery_rate': recovery_rate,
+        'unresolved':    round(unresolved, 2),
+    }
+
+
+# ── Stress Testing ───────────────────────────────────────────────────────────
+
+def compute_stress_test(df, mult):
+    """Payer/group shock simulation across multiple scenarios."""
+    if 'Group' not in df.columns:
+        return {'scenarios': [], 'error': 'No Group column available'}
+
+    total_pv = df['Purchase value'].sum() * mult
+    total_collected = df['Collected till date'].sum() * mult
+    base_collection_rate = round(total_collected / total_pv * 100, 1) if total_pv else 0
+
+    group_exposure = df.groupby('Group').agg(
+        purchase_value = ('Purchase value', 'sum'),
+        collected      = ('Collected till date', 'sum'),
+    ).sort_values('purchase_value', ascending=False)
+    group_exposure['purchase_value'] *= mult
+    group_exposure['collected'] *= mult
+
+    scenarios = []
+    configs = [
+        ('Top 1 payer — 50% haircut',  1, 0.50),
+        ('Top 3 payers — 30% haircut', 3, 0.30),
+        ('Top 5 payers — 20% haircut', 5, 0.20),
+    ]
+
+    for label, top_n, haircut_pct in configs:
+        top_groups = group_exposure.head(top_n)
+        affected_pv = top_groups['purchase_value'].sum()
+        affected_collected = top_groups['collected'].sum()
+        loss = affected_collected * haircut_pct
+
+        stressed_collected = total_collected - loss
+        stressed_rate = round(stressed_collected / total_pv * 100, 1) if total_pv else 0
+
+        scenarios.append({
+            'scenario':              label,
+            'affected_groups':       list(top_groups.index[:top_n]),
+            'affected_exposure':     round(affected_pv, 2),
+            'affected_pct':          round(affected_pv / total_pv * 100, 1) if total_pv else 0,
+            'collection_loss':       round(loss, 2),
+            'base_collection_rate':  base_collection_rate,
+            'stressed_collection_rate': stressed_rate,
+            'rate_impact':           round(stressed_rate - base_collection_rate, 1),
+            'portfolio_value_retained': round((total_pv - loss) / total_pv * 100, 1) if total_pv else 0,
+        })
+
+    return {
+        'base_portfolio_value':     round(total_pv, 2),
+        'base_collection_rate':     base_collection_rate,
+        'total_groups':             int(len(group_exposure)),
+        'scenarios':                scenarios,
+    }
+
+
+# ── Expected Loss Model ──────────────────────────────────────────────────────
+
+def compute_expected_loss(df, mult):
+    """EL = PD × LGD × Exposure derived from completed deal outcomes."""
+    df = add_month_column(df)
+    has_prov = 'Provisions' in df.columns
+
+    # Portfolio-level EL
+    completed = df[df['Status'] == 'Completed']
+    total_completed_pv = completed['Purchase value'].sum() * mult
+    total_denied = completed['Denied by insurance'].sum() * mult
+    total_provisions = completed['Provisions'].sum() * mult if has_prov else 0
+
+    # PD = probability a completed deal has material denial (>1% of PV)
+    if len(completed):
+        denied_deals = completed[completed['Denied by insurance'] > completed['Purchase value'] * 0.01]
+        pd_rate = len(denied_deals) / len(completed)
+    else:
+        pd_rate = 0
+
+    # LGD = (denied - recovered/provisioned) / denied
+    if total_denied > 0:
+        lgd = (total_denied - total_provisions) / total_denied
+    else:
+        lgd = 0
+
+    # EAD (Exposure at Default) — active deals
+    active = df[df['Status'] == 'Executed']
+    ead = active['Purchase value'].sum() * mult
+
+    el_amount = pd_rate * lgd * ead
+    el_rate = round(el_amount / ead * 100, 2) if ead else 0
+
+    # By vintage
+    by_vintage = []
+    for month, grp in df.groupby('Month'):
+        comp = grp[grp['Status'] == 'Completed']
+        act = grp[grp['Status'] == 'Executed']
+        comp_pv = comp['Purchase value'].sum() * mult
+        comp_denied = comp['Denied by insurance'].sum() * mult
+        comp_prov = comp['Provisions'].sum() * mult if has_prov else 0
+
+        v_pd = 0
+        if len(comp):
+            v_denied_deals = comp[comp['Denied by insurance'] > comp['Purchase value'] * 0.01]
+            v_pd = len(v_denied_deals) / len(comp)
+
+        v_lgd = (comp_denied - comp_prov) / comp_denied if comp_denied else 0
+        v_ead = act['Purchase value'].sum() * mult
+        v_el = v_pd * v_lgd * v_ead
+
+        by_vintage.append({
+            'month':      month,
+            'pd':         round(v_pd * 100, 2),
+            'lgd':        round(v_lgd * 100, 2),
+            'ead':        round(v_ead, 2),
+            'el':         round(v_el, 2),
+            'el_rate':    round(v_el / v_ead * 100, 2) if v_ead else 0,
+            'completed':  int(len(comp)),
+            'active':     int(len(act)),
+        })
+
+    return {
+        'portfolio': {
+            'pd':               round(pd_rate * 100, 2),
+            'lgd':              round(lgd * 100, 2),
+            'ead':              round(ead, 2),
+            'el':               round(el_amount, 2),
+            'el_rate':          el_rate,
+            'completed_deals':  int(len(completed)),
+            'denied_amount':    round(total_denied, 2),
+            'provisions':       round(total_provisions, 2),
+        },
+        'by_vintage': by_vintage,
+    }
+
+
+# ── Loss Development Triangle ────────────────────────────────────────────────
+
+def compute_loss_triangle(df, mult):
+    """Denial development triangle by vintage age (months since origination)."""
+    df = add_month_column(df)
+
+    # For each vintage, compute cumulative denial rate
+    # Since we only have one snapshot, we use deal age as a proxy for development
+    # Group deals by vintage month and age bucket (months since origination)
+    if 'Deal date' not in df.columns:
+        return {'triangle': [], 'vintages': []}
+
+    today = df['Deal date'].max()  # use latest deal date as reference
+    df2 = df.copy()
+    df2['months_since_orig'] = ((today - df2['Deal date']).dt.days / 30.44).astype(int)
+
+    triangle = []
+    for month, grp in df2.groupby('Month'):
+        pv = grp['Purchase value'].sum() * mult
+        denied = grp['Denied by insurance'].sum() * mult
+        collected = grp['Collected till date'].sum() * mult
+        pending = grp['Pending insurance response'].sum() * mult
+        avg_age = grp['months_since_orig'].mean()
+
+        triangle.append({
+            'vintage':          month,
+            'deal_count':       int(len(grp)),
+            'purchase_value':   round(pv, 2),
+            'denial_rate':      round(denied / pv * 100, 2) if pv else 0,
+            'collection_rate':  round(collected / pv * 100, 2) if pv else 0,
+            'pending_rate':     round(pending / pv * 100, 2) if pv else 0,
+            'loss_rate':        round(denied / pv * 100, 2) if pv else 0,
+            'avg_age_months':   round(avg_age, 1),
+            'resolved_pct':     round((collected + denied) / pv * 100, 1) if pv else 0,
+        })
+
+    return {'triangle': triangle}
+
+
+# ── Group / Payer Performance ─────────────────────────────────────────────────
+
+def compute_group_performance(df, mult, as_of_date=None):
+    """Per-group metrics: collection rate, denial rate, DSO, deal count, pending %."""
+    if 'Group' not in df.columns:
+        return {'groups': []}
+
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+    groups = []
+
+    for name, grp in df.groupby('Group'):
+        pv        = grp['Purchase value'].sum() * mult
+        collected = grp['Collected till date'].sum() * mult
+        denied    = grp['Denied by insurance'].sum() * mult
+        pending   = grp['Pending insurance response'].sum() * mult
+        total     = len(grp)
+        completed = grp[grp['Status'] == 'Completed']
+        active    = grp[grp['Status'] == 'Executed']
+
+        # DSO for completed deals in this group
+        dso = 0
+        if len(completed):
+            comp_days = (today - completed['Deal date']).dt.days
+            comp_coll = completed['Collected till date'] * mult
+            dso_total = comp_coll.sum()
+            dso = float((comp_days * comp_coll).sum() / dso_total) if dso_total else 0
+
+        groups.append({
+            'group':           str(name),
+            'deal_count':      int(total),
+            'purchase_value':  round(pv, 2),
+            'collected':       round(collected, 2),
+            'denied':          round(denied, 2),
+            'pending':         round(pending, 2),
+            'collection_rate': round(collected / pv * 100, 1) if pv else 0,
+            'denial_rate':     round(denied / pv * 100, 1) if pv else 0,
+            'pending_rate':    round(pending / pv * 100, 1) if pv else 0,
+            'completion_rate': round(len(completed) / total * 100, 1) if total else 0,
+            'active_deals':    int(len(active)),
+            'dso':             round(dso, 1),
+        })
+
+    groups.sort(key=lambda x: x['purchase_value'], reverse=True)
+
+    return {'groups': groups}

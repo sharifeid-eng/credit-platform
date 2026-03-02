@@ -55,6 +55,24 @@ export const getCohortChart             = (co, prod, snap, cur, asOf) =>
 export const getReturnsAnalysisChart = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/returns-analysis`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
+// ── New analytics endpoints ───────────────────────────────────────────────────
+export const getDSOChart              = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/dso`,              { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getDenialFunnelChart     = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/denial-funnel`,    { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getStressTestChart       = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/stress-test`,      { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getExpectedLossChart     = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/expected-loss`,    { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getLossTriangleChart     = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/loss-triangle`,    { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getGroupPerformanceChart = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/group-performance`,{ params: p(snap, cur, asOf) }).then(r => r.data);
+export const getRiskMigrationChart    = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/risk-migration`,   { params: p(snap, cur, asOf) }).then(r => r.data);
+export const validateSnapshot         = (co, prod, snap) =>
+  api.get(`/companies/${co}/products/${prod}/validate`, { params: { snapshot: snap } }).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;
