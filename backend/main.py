@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-import sys, os, pandas as pd
+import sys, os, json, re, pandas as pd
 from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,11 +19,13 @@ from core.analysis import (
 )
 from core.migration import compute_roll_rates
 from core.validation import validate_tape
+from core.consistency import run_consistency_check
+from core.reporter import generate_ai_analysis, save_pdf_report
 app = FastAPI(title="ACP Private Credit API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,6 +44,36 @@ def _load(company, product, snapshot):
 def _currency(company, product, requested):
     config = load_config(company, product)
     return config, requested or (config['currency'] if config else 'USD')
+
+def _integrity_dir(company, product):
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'reports', f'{company}_{product}')
+    os.makedirs(base, exist_ok=True)
+    return base
+
+def _integrity_path(company, product, snap_old, snap_new, suffix=''):
+    # Sanitize snapshot names for filenames (replace problematic chars)
+    safe_old = snap_old.replace('/', '_').replace('\\', '_')
+    safe_new = snap_new.replace('/', '_').replace('\\', '_')
+    return os.path.join(_integrity_dir(company, product), f'{safe_old}__vs__{safe_new}{suffix}.json')
+
+def _extract_questions(text):
+    """Extract numbered questions from AI analysis text."""
+    questions = []
+    in_questions = False
+    for line in text.split('\n'):
+        stripped = line.strip()
+        if 'QUESTIONS FOR THE COMPANY' in stripped.upper():
+            in_questions = True
+            continue
+        if in_questions:
+            # Stop at next section header
+            if stripped and (stripped.isupper() and len(stripped) > 10) or stripped.startswith('4.') and 'RECOMMENDED' in stripped.upper():
+                break
+            # Extract numbered questions
+            m = re.match(r'^\d+[\.\)]\s*(.+)', stripped)
+            if m:
+                questions.append(m.group(1).strip())
+    return questions
 
 # ── Company / Product / Snapshot endpoints ────────────────────────────────────
 
@@ -340,6 +372,122 @@ def validate_snapshot(company: str, product: str,
     result['snapshot'] = sel['date']
     result['filename'] = sel['filename']
     return result
+
+# ── Data Integrity endpoints ──────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/integrity/cached")
+def get_integrity_cached(company: str, product: str,
+                         snapshot_old: str, snapshot_new: str):
+    """Check if integrity results are already cached."""
+    path = _integrity_path(company, product, snapshot_old, snapshot_new)
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {"cached": False}
+
+@app.get("/companies/{company}/products/{product}/integrity")
+def run_integrity_checks(company: str, product: str,
+                         snapshot_old: str, snapshot_new: str):
+    """Run validation + consistency checks on two snapshots."""
+    old_df, old_sel = _load(company, product, snapshot_old)
+    new_df, new_sel = _load(company, product, snapshot_new)
+
+    validation_old = validate_tape(old_df)
+    validation_new = validate_tape(new_df)
+    consistency    = run_consistency_check(old_df, new_df, old_sel['date'], new_sel['date'])
+
+    result = {
+        "validation_old": validation_old,
+        "validation_new": validation_new,
+        "consistency":    consistency,
+        "snapshot_old":   old_sel['date'],
+        "snapshot_new":   new_sel['date'],
+        "ran_at":         datetime.now().isoformat(),
+    }
+
+    # Cache to disk
+    path = _integrity_path(company, product, snapshot_old, snapshot_new)
+    with open(path, 'w') as f:
+        json.dump(result, f, indent=2, default=str)
+
+    return result
+
+@app.post("/companies/{company}/products/{product}/integrity/report")
+def generate_integrity_report(company: str, product: str, request: dict):
+    """Generate AI analysis report from cached integrity results."""
+    snapshot_old = request.get('snapshot_old')
+    snapshot_new = request.get('snapshot_new')
+    if not snapshot_old or not snapshot_new:
+        raise HTTPException(status_code=400, detail="snapshot_old and snapshot_new are required")
+
+    # Load cached integrity results
+    cached_path = _integrity_path(company, product, snapshot_old, snapshot_new)
+    if not os.path.exists(cached_path):
+        raise HTTPException(status_code=404, detail="Must run integrity checks first")
+
+    with open(cached_path, 'r') as f:
+        cached = json.load(f)
+
+    # Build checks list for reporter
+    checks = [{
+        "old_label": cached['snapshot_old'],
+        "new_label": cached['snapshot_new'],
+        "report":    cached['consistency'],
+    }]
+
+    # Generate AI analysis and PDF
+    analysis_text = generate_ai_analysis(company, product, checks)
+    pdf_path      = save_pdf_report(company, product, analysis_text, checks)
+    questions     = _extract_questions(analysis_text)
+
+    report = {
+        "analysis_text": analysis_text,
+        "questions":     questions,
+        "pdf_path":      pdf_path,
+        "generated_at":  datetime.now().isoformat(),
+    }
+
+    # Cache report JSON
+    report_path = _integrity_path(company, product, snapshot_old, snapshot_new, '_report')
+    with open(report_path, 'w') as f:
+        json.dump(report, f, indent=2, default=str)
+
+    return report
+
+@app.get("/companies/{company}/products/{product}/integrity/report")
+def get_integrity_report_cached(company: str, product: str,
+                                snapshot_old: str, snapshot_new: str):
+    """Return cached AI integrity report if available."""
+    path = _integrity_path(company, product, snapshot_old, snapshot_new, '_report')
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {"cached": False}
+
+@app.post("/companies/{company}/products/{product}/integrity/notes")
+def save_integrity_notes(company: str, product: str, request: dict):
+    """Save analyst notes/answers for integrity questions."""
+    snapshot_old = request.get('snapshot_old')
+    snapshot_new = request.get('snapshot_new')
+    notes        = request.get('notes', {})
+    if not snapshot_old or not snapshot_new:
+        raise HTTPException(status_code=400, detail="snapshot_old and snapshot_new are required")
+
+    path = _integrity_path(company, product, snapshot_old, snapshot_new, '_notes')
+    with open(path, 'w') as f:
+        json.dump({"notes": notes, "saved_at": datetime.now().isoformat()}, f, indent=2)
+
+    return {"saved": True}
+
+@app.get("/companies/{company}/products/{product}/integrity/notes")
+def get_integrity_notes(company: str, product: str,
+                        snapshot_old: str, snapshot_new: str):
+    """Return saved analyst notes for an integrity check pair."""
+    path = _integrity_path(company, product, snapshot_old, snapshot_new, '_notes')
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {"notes": {}}
 
 # ── AI endpoints ──────────────────────────────────────────────────────────────
 

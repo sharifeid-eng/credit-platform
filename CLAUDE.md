@@ -12,7 +12,7 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 The platform allows analysts and investment committee members to:
 - Upload loan tape snapshots (CSV/Excel) and explore portfolio performance
 - Run automated data integrity checks across snapshots
-- View interactive dashboards with 11 analysis tabs (including institutional risk analytics)
+- View interactive dashboards with 12 analysis tabs (including institutional risk analytics and data integrity)
 - Generate AI-powered portfolio commentary and ask natural language questions about the data
 -----
 ## Branding
@@ -124,7 +124,8 @@ credit-platform/
 │   │   │       ├── RevenueChart.jsx
 │   │   │       ├── ReturnsAnalysisChart.jsx  # Discount bands, margins, new vs repeat
 │   │   │       ├── RiskMigrationChart.jsx   # Roll-rates, cure rates, EL model, stress test
-│   │   │       └── DenialFunnelChart.jsx    # Resolution pipeline funnel visualization
+│   │   │       ├── DenialFunnelChart.jsx    # Resolution pipeline funnel visualization
+│   │   │       └── DataIntegrityChart.jsx   # Two-tape comparison, validation, AI report + notes
 │   │   ├── styles/
 │   │   │   ├── chartTheme.js
 │   │   │   └── tokens.css
@@ -188,10 +189,16 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/group-performance`  |Per-group collection/denial/DSO     |
 |`GET /companies/{co}/products/{p}/charts/risk-migration`     |Roll-rate matrix + cure rates       |
 |`GET /companies/{co}/products/{p}/validate`                  |Single-tape data quality checks     |
+|`GET /companies/{co}/products/{p}/integrity/cached`          |Check for cached integrity results   |
+|`GET /companies/{co}/products/{p}/integrity`                 |Run validation + consistency checks  |
+|`POST /companies/{co}/products/{p}/integrity/report`         |Generate AI integrity report         |
+|`GET /companies/{co}/products/{p}/integrity/report`          |Get cached AI integrity report       |
+|`POST /companies/{co}/products/{p}/integrity/notes`          |Save analyst notes for questions     |
+|`GET /companies/{co}/products/{p}/integrity/notes`           |Get saved analyst notes              |
 |`POST /companies/{co}/products/{p}/chat`                     |AI data chat                       |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 -----
-## Dashboard Tabs (11)
+## Dashboard Tabs (12)
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
 |Overview          |10 KPI cards (incl DSO + HHI) + AI commentary + Data Chat       |
@@ -205,7 +212,8 @@ All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 |Cohort Analysis   |Enhanced vintage table: 14 columns incl IRR, pending, loss rate, totals row|
 |Returns           |Margin KPIs, monthly returns chart, discount band analysis, new vs repeat|
 |Risk & Migration  |Roll-rate matrix, cure rates, EL model (PD×LGD×EAD), stress test scenarios|
-Each non-overview tab has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
+|Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency, AI report + per-question notes|
+Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
 Dashboard controls: Product selector, Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD).
 -----
 ## Currency System
@@ -231,6 +239,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **`core/migration.py`** — multi-snapshot roll-rate analysis. Requires ≥2 snapshots. Matches deals by ID column across tapes.
 - **`core/validation.py`** — single-tape integrity checks (dupes, date sanity, negatives, nulls, logical consistency).
 - **Risk migration endpoint** — auto-selects the two most recent snapshots for comparison. Also bundles stress test + EL model results.
+- **Data Integrity tab** — two-step workflow: Run Checks (fast, no API cost) → Generate AI Report (Claude API call). Results, reports, and notes cached as JSON files in `reports/{company}_{product}/`. Auto-loads cached results on tab load. Notes saved with 500ms debounce.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme implemented. See color palette:
@@ -263,14 +272,18 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Expected loss: `res.portfolio{}` (pd, lgd, ead, el, el_rate), `res.by_vintage[]`
 - Group performance: `res.groups[]` (collection_rate, denial_rate, dso per group)
 - Risk migration: `res.matrix[]`, `res.cure_rates{}`, `res.summary{}`, `res.stress_test{}`, `res.expected_loss{}`
-- Validation: `res.critical[]`, `res.warnings[]`, `res.info[]`, `res.passed`
+- Validation: `res.critical[]`, `res.warnings[]`, `res.info[]`, `res.passed`, `res.total_rows`
+- Consistency: `res.issues[]` (critical), `res.warnings[]`, `res.info[]`, `res.passed`
+- Integrity run: `res.validation_old{}`, `res.validation_new{}`, `res.consistency{}`, `res.snapshot_old`, `res.snapshot_new`, `res.ran_at`
+- Integrity report: `res.analysis_text`, `res.questions[]`, `res.pdf_path`, `res.generated_at`
+- Integrity notes: `res.notes{}` (keyed by question index)
 - Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`
 - Snapshots API returns objects `{filename, date}` — must extract `.filename`
 - Companies API may return objects — must extract `.name`
 -----
 ## What's Working
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
-- ✅ 10-tab React dashboard with dark theme
+- ✅ 12-tab React dashboard with dark theme
 - ✅ AI commentary (cached, clears on snapshot change)
 - ✅ Per-tab AI insights (TabInsight)
 - ✅ Data chat (natural language questions)
@@ -300,6 +313,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ Enhanced Overview with 10 KPI cards (added DSO + HHI)
 - ✅ Enhanced Concentration tab (HHI badges + group performance table)
 - ✅ Methodology page (`/company/:name/methodology`) — company-scoped reference with definitions, formulas, rationale for all analytics; back-to-dashboard navigation; accessed via book icon in tab bar
+- ✅ Data Integrity tab (12th tab) — pick two tapes to compare, per-tape validation + cross-tape consistency, cached results auto-load, AI report generation (separate button), per-question notes with debounced auto-save, PDF report saved to reports/
 -----
 ## Known Gaps & Next Steps
 **Short term:**

@@ -23,11 +23,12 @@ import CohortTable            from '../components/charts/CohortTable'
 import ReturnsAnalysisChart from '../components/charts/ReturnsAnalysisChart'
 import RiskMigrationChart  from '../components/charts/RiskMigrationChart'
 import DenialFunnelChart   from '../components/charts/DenialFunnelChart'
+import DataIntegrityChart  from '../components/charts/DataIntegrityChart'
 
 const TABS = [
   'Overview', 'Actual vs Expected', 'Deployment', 'Collection',
   'Denial Trend', 'Ageing', 'Revenue', 'Portfolio', 'Cohort Analysis', 'Returns',
-  'Risk & Migration',
+  'Risk & Migration', 'Data Integrity',
 ]
 
 export default function Company() {
@@ -266,6 +267,9 @@ export default function Company() {
           <ChartTab tab="risk-migration" company={company} product={product} snapshot={snapshot} currency={currency}>
             <RiskMigrationChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           </ChartTab>
+        )}
+        {activeTab === 'Data Integrity' && (
+          <DataIntegrityChart company={company} product={product} snapshots={snapshots} currency={currency} />
         )}
       </div>
     </div>

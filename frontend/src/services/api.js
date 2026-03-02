@@ -73,6 +73,20 @@ export const getRiskMigrationChart    = (co, prod, snap, cur, asOf) =>
 export const validateSnapshot         = (co, prod, snap) =>
   api.get(`/companies/${co}/products/${prod}/validate`, { params: { snapshot: snap } }).then(r => r.data);
 
+// ── Data Integrity ───────────────────────────────────────────────────────────
+export const getIntegrityCached = (co, prod, snapOld, snapNew) =>
+  api.get(`/companies/${co}/products/${prod}/integrity/cached`, { params: { snapshot_old: snapOld, snapshot_new: snapNew } }).then(r => r.data);
+export const runIntegrityCheck = (co, prod, snapOld, snapNew) =>
+  api.get(`/companies/${co}/products/${prod}/integrity`, { params: { snapshot_old: snapOld, snapshot_new: snapNew } }).then(r => r.data);
+export const generateIntegrityReport = (co, prod, snapOld, snapNew) =>
+  api.post(`/companies/${co}/products/${prod}/integrity/report`, { snapshot_old: snapOld, snapshot_new: snapNew }).then(r => r.data);
+export const getIntegrityReportCached = (co, prod, snapOld, snapNew) =>
+  api.get(`/companies/${co}/products/${prod}/integrity/report`, { params: { snapshot_old: snapOld, snapshot_new: snapNew } }).then(r => r.data);
+export const saveIntegrityNotes = (co, prod, snapOld, snapNew, notes) =>
+  api.post(`/companies/${co}/products/${prod}/integrity/notes`, { snapshot_old: snapOld, snapshot_new: snapNew, notes }).then(r => r.data);
+export const getIntegrityNotes = (co, prod, snapOld, snapNew) =>
+  api.get(`/companies/${co}/products/${prod}/integrity/notes`, { params: { snapshot_old: snapOld, snapshot_new: snapNew } }).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;
