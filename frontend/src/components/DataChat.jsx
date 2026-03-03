@@ -178,9 +178,10 @@ function TypingIndicator() {
 
 function Suggestions({ onSelect }) {
   const prompts = [
-    'What is the current denial rate by provider group?',
-    'Which cohort has the worst collection performance?',
-    'How has deployment trended over the last 6 months?',
+    'Which provider groups have the highest denial rates?',
+    'What are the current portfolio margins and how do they vary by discount band?',
+    'How healthy is the active portfolio — what share of deals are aging?',
+    'How does new business compare to repeat business in collection performance?',
   ]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

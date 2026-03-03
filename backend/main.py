@@ -649,27 +649,123 @@ def chat_with_data(company: str, product: str, request: dict,
     monthly['collection_rate'] = (monthly['collected'] / monthly['purchase_value'] * 100).round(1)
     monthly['denial_rate']     = (monthly['denied']    / monthly['purchase_value'] * 100).round(1)
 
-    group_ctx = ""
-    if 'Group' in df.columns:
-        top = df.groupby('Group')['Purchase value'].sum().sort_values(ascending=False).head(10)
-        group_ctx = f"\nTop groups by purchase value: {top.to_dict()}"
+    # ── Enriched context sections (each wrapped so failures are silently skipped) ──
+
+    group_perf_ctx = ""
+    try:
+        gp = compute_group_performance(df, mult, aod)
+        top_groups = gp['groups'][:8]
+        rows = []
+        for g in top_groups:
+            rows.append(f"  {g['group']}: {g['deal_count']} deals, "
+                        f"coll {g['collection_rate']}%, denial {g['denial_rate']}%, "
+                        f"DSO {g['dso']:.0f}d")
+        if rows:
+            group_perf_ctx = "\nGROUP PERFORMANCE (top 8 providers):\n" + "\n".join(rows)
+    except Exception:
+        pass
+
+    ageing_ctx = ""
+    try:
+        ag = compute_ageing(df, mult, aod)
+        health = {h['status']: f"{h['percentage']}% ({h['deal_count']})" for h in ag['health_summary']}
+        ageing_ctx = (f"\nACTIVE PORTFOLIO HEALTH ({ag['total_active_deals']} active deals):\n"
+                      f"  {', '.join(f'{k}: {v}' for k, v in health.items())}")
+    except Exception:
+        pass
+
+    dso_ctx = ""
+    try:
+        dso = compute_dso(df, mult, aod)
+        dso_ctx = (f"\nDSO (Days Sales Outstanding, completed deals):\n"
+                   f"  Weighted avg: {dso['weighted_dso']:.0f} days, "
+                   f"Median: {dso['median_dso']:.0f} days, "
+                   f"P95: {dso['p95_dso']:.0f} days")
+    except Exception:
+        pass
+
+    # compute_returns_analysis mutates df, so pass a copy
+    ret = None
+    try:
+        ret = compute_returns_analysis(df.copy(), mult)
+    except Exception:
+        pass
+
+    returns_ctx = ""
+    if ret:
+        try:
+            rs = ret['summary']
+            returns_ctx = (f"\nRETURNS & MARGINS:\n"
+                           f"  Avg discount: {rs['avg_discount']:.1f}%, "
+                           f"Wgt avg discount: {rs['weighted_avg_discount']:.1f}%\n"
+                           f"  Expected margin: {rs['expected_margin']:.1f}%, "
+                           f"Realised margin: {rs['realised_margin']:.1f}%, "
+                           f"Completed margin: {rs['completed_margin']:.1f}%\n"
+                           f"  Fee yield: {rs['fee_yield']:.2f}%, "
+                           f"Completed loss rate: {rs['completed_loss_rate']:.1f}%")
+        except Exception:
+            pass
+
+    discount_ctx = ""
+    if ret and ret.get('discount_bands'):
+        try:
+            band_rows = []
+            for b in ret['discount_bands']:
+                band_rows.append(f"  {b['band']}: {b['deals']} deals, "
+                                 f"coll {b['collection_rate']}%, "
+                                 f"denial {b['denial_rate']}%, "
+                                 f"margin {b['margin']:.1f}%")
+            discount_ctx = "\nDISCOUNT BAND PERFORMANCE:\n" + "\n".join(band_rows)
+        except Exception:
+            pass
+
+    new_repeat_ctx = ""
+    if ret and ret.get('new_vs_repeat'):
+        try:
+            nr_rows = []
+            for seg in ret['new_vs_repeat']:
+                nr_rows.append(f"  {seg['type']}: {seg['deals']} deals, "
+                               f"coll {seg['collection_rate']}%, "
+                               f"denial {seg['denial_rate']}%, "
+                               f"margin {seg['margin']:.1f}%")
+            new_repeat_ctx = "\nNEW vs REPEAT BUSINESS:\n" + "\n".join(nr_rows)
+        except Exception:
+            pass
+
+    hhi_ctx = ""
+    try:
+        hhi = compute_hhi(df, mult)
+        parts = []
+        for key in ['group', 'product']:
+            if key in hhi:
+                h = hhi[key]
+                label = 'Provider' if key == 'group' else 'Product'
+                parts.append(f"  {label}: HHI={h['hhi']:.4f}, "
+                             f"Top1={h['top_1_pct']}%, Top5={h['top_5_pct']}% "
+                             f"({h['count']} unique)")
+        if parts:
+            hhi_ctx = "\nCONCENTRATION (HHI):\n" + "\n".join(parts)
+    except Exception:
+        pass
 
     system = f"""You are an expert credit analyst assistant for ACP Private Credit,
 analyzing the {company.upper()} - {product.replace('_', ' ').title()} loan portfolio.
 
-PORTFOLIO DATA (as of {aod or sel['date']}, currency: {disp}):
-- Total Deals: {s['total_deals']:,}
+PORTFOLIO SUMMARY (as of {aod or sel['date']}, currency: {disp}):
+- Total Deals: {s['total_deals']:,} ({s['active_deals']} active, {s['completed_deals']} completed)
 - Purchase Value: {disp} {s['total_purchase_value']/1e6:.2f}M
 - Collection Rate: {s['collection_rate']:.1f}%
 - Denial Rate: {s['denial_rate']:.1f}%
-- Pending Response: {disp} {s['total_pending']/1e6:.2f}M
-- Deal Status: {s['status_breakdown']}
+- Pending Response: {disp} {s['total_pending']/1e6:.2f}M ({s['pending_rate']:.1f}%)
 
 MONTHLY PERFORMANCE (last 12 months):
 {monthly.tail(12).to_string(index=False)}
-{group_ctx}
+{group_perf_ctx}{ageing_ctx}{dso_ctx}{returns_ctx}{discount_ctx}{new_repeat_ctx}{hhi_ctx}
 
-Answer questions precisely with specific numbers. Be concise but thorough."""
+INSTRUCTIONS:
+- Answer questions precisely with specific numbers from the data above. Be concise but thorough.
+- When a question requires deal-level detail, individual deal lookups, or data not available in your context, provide the best answer you can from what is available and note that for more granular detail the analyst should consult the full loan tape or reach out to the deal team.
+- Do not fabricate numbers. If a metric is not in your context, say so."""
 
     msgs = [{"role": ("assistant" if h.get('role') == 'ai' else h.get('role', 'user')),
              "content": h.get('content') or h.get('text', '')}
