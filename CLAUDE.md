@@ -242,6 +242,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Risk migration endpoint** — auto-selects the two most recent snapshots for comparison. Also bundles stress test + EL model results.
 - **Data Integrity tab** — two-step workflow: Run Checks (fast, no API cost) → Generate AI Report (Claude API call). Results, reports, and notes cached as JSON files in `reports/{company}_{product}/`. Auto-loads cached results on tab load. Notes saved with 500ms debounce.
 - **Data Chat history** — frontend sends `{role: 'ai', text: '...'}`, backend maps to Anthropic format `{role: 'assistant', content: '...'}`. Reads both `text` and `content` fields for compatibility.
+- **Data Chat enriched context** — system prompt includes 7 pre-computed data sections beyond basic KPIs: group performance (top 8 providers with collection/denial/DSO), active portfolio health (ageing buckets), DSO metrics, returns & margins, discount band performance, new vs repeat business, and HHI concentration. Fallback instruction directs analysts to the full tape or deal team for deal-level questions. Suggested questions are aligned to answerable context.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme implemented. See color palette:
@@ -288,7 +289,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ 12-tab React dashboard with dark theme
 - ✅ AI commentary (cached, clears on snapshot change)
 - ✅ Per-tab AI insights (TabInsight)
-- ✅ Data chat (natural language questions)
+- ✅ Data chat (enriched context: group performance, ageing, DSO, margins, discount bands, new vs repeat, HHI; fallback for deal-level questions; answerable suggested questions)
 - ✅ Currency toggle (local ↔ USD) across all charts and KPIs
 - ✅ Snapshot switching — reloads all charts and KPIs correctly
 - ✅ As-of Date picker — filters data across all views
