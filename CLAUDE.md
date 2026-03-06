@@ -173,7 +173,8 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/ai-commentary`             |AI portfolio commentary            |
 |`GET /companies/{co}/products/{p}/ai-tab-insight`            |Short AI insight for a specific tab|
 |`GET /companies/{co}/products/{p}/charts/deployment`         |Monthly deployment                 |
-|`GET /companies/{co}/products/{p}/charts/collection-velocity`|Collection timing                  |
+|`GET /companies/{co}/products/{p}/charts/deployment-by-product`|Monthly deployment by product type|
+|`GET /companies/{co}/products/{p}/charts/collection-velocity`|Collection timing + bucket breakdown|
 |`GET /companies/{co}/products/{p}/charts/denial-trend`       |Denial rate trend                  |
 |`GET /companies/{co}/products/{p}/charts/cohort`             |Vintage cohort analysis            |
 |`GET /companies/{co}/products/{p}/charts/actual-vs-expected` |Cumulative actual vs expected      |
@@ -203,13 +204,13 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
 |Overview          |10 KPI cards (incl DSO + HHI) + AI commentary + Data Chat       |
-|Actual vs Expected|Cumulative collected vs expected area chart + performance %     |
-|Deployment        |Monthly capital deployed (new vs repeat stacked bar)            |
-|Collection        |Monthly collection rate + completed deals by days outstanding   |
+|Actual vs Expected|Cumulative collected vs expected area chart + Today marker + 6 KPI cards (purchase price, discount, expected, collected/pending/denied with %)|
+|Deployment        |Monthly capital deployed: by business type (new vs repeat) + by product type (stacked bars)|
+|Collection        |Monthly collection rate + 3M avg + cash collection breakdown by deal age (horizontal bars + donut + avg days)|
 |Denial Trend      |Monthly denial rate bars + 3M rolling average                   |
-|Ageing            |Health donut (Healthy/Watch/Delayed/Poor) + ageing bucket bars  |
+|Ageing            |Monthly stacked bars by health status over time + cumulative donut + ageing bucket bars|
 |Revenue           |Realised/unrealised stacked bars + gross margin line + KPI tiles|
-|Portfolio         |Group + product concentration donuts + top 10 deals table       |
+|Portfolio         |Group concentration donut + HHI badges + portfolio health donut + ageing by purchase date donut + group perf table + top 10 deals|
 |Cohort Analysis   |Enhanced vintage table: 14 columns incl IRR, pending, loss rate, totals row|
 |Returns           |Margin KPIs, monthly returns chart, discount band analysis, new vs repeat|
 |Risk & Migration  |Roll-rate matrix, cure rates, EL model (PD×LGD×EAD), stress test scenarios|
@@ -266,7 +267,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Collection velocity: data in `res.monthly[]`
 - Revenue: data in `res.monthly[]`, totals in `res.totals{}`
 - Cohort: data in `res.cohorts[]`
-- Ageing: health in `res.health_summary[]`, buckets in `res.ageing_buckets[]`
+- Ageing: health in `res.health_summary[]`, buckets in `res.ageing_buckets[]`, monthly health breakdown in `res.monthly_health[]`, `res.total_active_value`
 - Concentration: groups in `res.group[]`, top deals in `res.top_deals[]`, HHI in `res.hhi{}`
 - Returns analysis: `res.summary{}`, `res.monthly[]`, `res.discount_bands[]`, `res.new_vs_repeat[]`
 - DSO: `res.weighted_dso`, `res.median_dso`, `res.p95_dso`, `res.by_vintage[]`
@@ -280,7 +281,9 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Integrity run: `res.validation_old{}`, `res.validation_new{}`, `res.consistency{}`, `res.snapshot_old`, `res.snapshot_new`, `res.ran_at`
 - Integrity report: `res.analysis_text`, `res.questions[]`, `res.pdf_path`, `res.generated_at`
 - Integrity notes: `res.notes{}` (keyed by question index)
-- Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`
+- Deployment by product: `res.monthly[]`, `res.products[]`
+- Collection velocity: also returns `res.buckets[]`, `res.avg_days`, `res.median_days`, `res.total_completed`
+- Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `total_expected`, `avg_discount`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`
 - Snapshots API returns objects `{filename, date}` — must extract `.filename`
 - Companies API may return objects — must extract `.name`
 -----
@@ -317,6 +320,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ Enhanced Concentration tab (HHI badges + group performance table)
 - ✅ Methodology page (`/company/:name/methodology`) — company-scoped reference with definitions, formulas, rationale for all analytics; back-to-dashboard navigation; accessed via book icon in tab bar
 - ✅ Data Integrity tab (12th tab) — pick two tapes to compare, per-tape validation + cross-tape consistency, cached results auto-load, AI report generation (separate button), per-question notes with debounced auto-save, PDF report saved to reports/
+- ✅ Enhanced Actual vs Expected — 6 KPI summary cards (purchase price, discount, expected total, collected/pending/denied with % badges) + Today reference line
+- ✅ Enhanced Deployment — dual charts: by business type (new/repeat) + by product type (new endpoint)
+- ✅ Enhanced Collection — collection rate with 3M avg + cash collection breakdown by deal age (horizontal bars + donut + avg days outstanding)
+- ✅ Enhanced Ageing — monthly stacked bars by health status (Healthy/Watch/Delayed/Poor) over time + cumulative donut, plus existing bucket bars
+- ✅ Enhanced Portfolio — portfolio health donut + ageing by purchase date donut (side-by-side) added between concentration and performance sections
 -----
 ## Known Gaps & Next Steps
 **Short term:**
