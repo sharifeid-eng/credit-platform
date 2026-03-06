@@ -9,7 +9,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.loader import get_companies, get_products, get_snapshots, load_snapshot
 from core.config import load_config, SUPPORTED_CURRENCIES
 from core.analysis import (
-    compute_summary, compute_deployment, compute_collection_velocity,
+    compute_summary, compute_deployment, compute_deployment_by_product,
+    compute_collection_velocity,
     compute_denial_trend, compute_cohorts, compute_actual_vs_expected,
     compute_ageing, compute_revenue, compute_concentration,
     compute_returns_analysis, apply_multiplier, filter_by_date,
@@ -154,6 +155,17 @@ def get_deployment_chart(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
     return {'data': compute_deployment(df, mult), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/deployment-by-product")
+def get_deployment_by_product(company: str, product: str,
+                               snapshot: Optional[str] = None,
+                               as_of_date: Optional[str] = None,
+                               currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_deployment_by_product(df, mult), 'currency': disp}
 
 @app.get("/companies/{company}/products/{product}/charts/collection-velocity")
 def get_collection_velocity(company: str, product: str,

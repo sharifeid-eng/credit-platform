@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import ChartPanel from '../ChartPanel'
-import { getConcentrationChart, getGroupPerformanceChart } from '../../services/api'
+import { getConcentrationChart, getGroupPerformanceChart, getAgeingChart } from '../../services/api'
 import { tooltipStyle, fmtMoney, fmtPct } from '../../styles/chartTheme'
 
 const SLICE_COLORS = [
@@ -10,9 +10,19 @@ const SLICE_COLORS = [
   '#60A5FA','#FBBF24',
 ]
 
+const HEALTH_COLORS = {
+  Healthy: '#2DD4BF',
+  Watch:   '#C9A84C',
+  Delayed: '#F06060',
+  Poor:    '#8B1A1A',
+}
+
+const AGEING_COLORS = ['#2DD4BF','#5B8DEF','#C9A84C','#F59E0B','#F06060','#A78BFA','#F472B6','#8B1A1A']
+
 export default function ConcentrationChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]               = useState(null)
   const [groupPerf, setGroupPerf]     = useState(null)
+  const [ageingData, setAgeingData]   = useState(null)
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
 
@@ -22,8 +32,9 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
     Promise.all([
       getConcentrationChart(company, product, snapshot, currency, asOfDate),
       getGroupPerformanceChart(company, product, snapshot, currency, asOfDate),
+      getAgeingChart(company, product, snapshot, currency, asOfDate),
     ])
-      .then(([concRes, perfRes]) => {
+      .then(([concRes, perfRes, ageRes]) => {
         const groupData = (concRes.group ?? []).map(d => ({
           name:  d.Group ?? d.name,
           value: d.purchase_value,
@@ -39,6 +50,22 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
         }))
         setData({ groupData, topDeals, hhi: concRes.hhi ?? {} })
         setGroupPerf(perfRes.groups ?? [])
+
+        // Portfolio health and ageing donuts from ageing endpoint
+        const healthDonut = (ageRes.health_summary ?? []).map(d => ({
+          name:  d.status,
+          value: d.value,
+          pct:   d.percentage,
+        }))
+        const ageingBuckets = (ageRes.ageing_buckets ?? [])
+          .filter(d => d.purchase_value > 0)
+          .map(d => ({
+            name:  d.bucket,
+            value: d.purchase_value,
+          }))
+        const totalActiveVal = ageRes.total_active_value ?? 0
+        setAgeingData({ healthDonut, ageingBuckets, totalActiveVal })
+
         setError(null)
       })
       .catch(() => setError('Failed to load concentration data.'))
@@ -48,6 +75,9 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
   const groupData = data?.groupData ?? []
   const topDeals  = data?.topDeals  ?? []
   const hhi       = data?.hhi ?? {}
+  const healthDonut   = ageingData?.healthDonut ?? []
+  const ageingBuckets = ageingData?.ageingBuckets ?? []
+  const totalActive   = ageingData?.totalActiveVal ?? 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -83,6 +113,86 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           </div>
         </div>
       </ChartPanel>
+
+      {/* ── Portfolio Health + Ageing by Purchase Date (side by side) ── */}
+      {healthDonut.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {/* Portfolio Health Donut */}
+          <ChartPanel title="Portfolio Health" subtitle="Active deal quality classification" loading={loading} error={error} minHeight={260}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={healthDonut} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={2}>
+                    {healthDonut.map((d, i) => <Cell key={i} fill={HEALTH_COLORS[d.name] ?? '#555'} />)}
+                  </Pie>
+                  <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
+                </PieChart>
+              </ResponsiveContainer>
+              {totalActive > 0 && (
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', marginTop: -8 }}>
+                  {fmtMoney(totalActive, currency)}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, width: '100%', paddingLeft: 8 }}>
+                {healthDonut.map((d, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: HEALTH_COLORS[d.name] ?? '#555', flexShrink: 0 }} />
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1 }}>{d.name}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: HEALTH_COLORS[d.name] ?? '#555', fontWeight: 600 }}>
+                      {fmtMoney(d.value, currency)}
+                    </div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', width: 36, textAlign: 'right' }}>
+                      {fmtPct(d.pct)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5, textAlign: 'left', width: '100%', paddingLeft: 8 }}>
+                <b>Healthy:</b> In-line with expectations<br />
+                <b>Watch:</b> Expected in past 30 days<br />
+                <b>Delayed:</b> Expected in past 60 days<br />
+                <b>Poor:</b> Over 60 days beyond expectations
+              </div>
+            </div>
+          </ChartPanel>
+
+          {/* Ageing by Purchase Date Donut */}
+          <ChartPanel title="Ageing by Purchase Date" subtitle="Active deals by days since purchase" loading={loading} error={error} minHeight={260}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={ageingBuckets} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={2}>
+                    {ageingBuckets.map((_, i) => <Cell key={i} fill={AGEING_COLORS[i % AGEING_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
+                </PieChart>
+              </ResponsiveContainer>
+              {totalActive > 0 && (
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', marginTop: -8 }}>
+                  {fmtMoney(totalActive, currency)}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, width: '100%', paddingLeft: 8 }}>
+                {ageingBuckets.map((d, i) => {
+                  const pct = totalActive > 0 ? (d.value / totalActive * 100) : 0
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: AGEING_COLORS[i % AGEING_COLORS.length], flexShrink: 0 }} />
+                      <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1 }}>{d.name}</div>
+                      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: AGEING_COLORS[i % AGEING_COLORS.length], fontWeight: 600 }}>
+                        {fmtMoney(d.value, currency)}
+                      </div>
+                      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', width: 36, textAlign: 'right' }}>
+                        {fmtPct(pct)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </ChartPanel>
+        </div>
+      )}
 
       {/* Group Performance Table */}
       {groupPerf && groupPerf.length > 0 && (

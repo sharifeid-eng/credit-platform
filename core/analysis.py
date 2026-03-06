@@ -60,6 +60,8 @@ def compute_summary(df, config, display_currency, snapshot_date, as_of_date):
     total_collected  = df['Collected till date'].sum() * mult
     total_denied     = df['Denied by insurance'].sum() * mult
     total_pending    = df['Pending insurance response'].sum() * mult
+    total_expected   = df['Expected total'].sum() * mult if 'Expected total' in df.columns else 0
+    avg_discount     = float(df['Discount'].mean()) if 'Discount' in df.columns and len(df) else 0
     status_counts    = df['Status'].value_counts().to_dict()
 
     min_date = max_date = None
@@ -87,6 +89,8 @@ def compute_summary(df, config, display_currency, snapshot_date, as_of_date):
         'active_deals':       int(status_counts.get('Executed', 0)),
         'status_breakdown':   status_counts,
         'date_range':         {'min': min_date, 'max': max_date},
+        'total_expected':     float(total_expected),
+        'avg_discount':       round(avg_discount, 4),
     }
 
 
@@ -112,6 +116,28 @@ def compute_deployment(df, mult):
         monthly['repeat_business'] = 0
 
     return monthly.to_dict(orient='records')
+
+
+def compute_deployment_by_product(df, mult):
+    """Monthly capital deployed split by product type."""
+    df = add_month_column(df)
+    if 'Product' not in df.columns:
+        return {'monthly': [], 'products': []}
+
+    products = sorted(df['Product'].dropna().unique().tolist())
+    monthly = df.groupby('Month').agg(total=('Purchase value', 'sum')).reset_index()
+    monthly['total'] *= mult
+
+    # Pivot by product
+    for prod in products:
+        sub = df[df['Product'] == prod].groupby('Month')['Purchase value'].sum() * mult
+        monthly = monthly.merge(
+            sub.rename(prod).reset_index(),
+            on='Month', how='left',
+        )
+        monthly[prod] = monthly[prod].fillna(0)
+
+    return {'monthly': monthly.to_dict(orient='records'), 'products': products}
 
 
 # ── Collection Velocity ───────────────────────────────────────────────────────
@@ -154,7 +180,24 @@ def compute_collection_velocity(df, mult, as_of_date=None):
         monthly['collected'] / monthly['purchase_value'] * 100
     ).round(1)
 
-    return {'buckets': buckets, 'monthly': monthly.to_dict(orient='records')}
+    # Summary stats for completed deals
+    avg_days = 0
+    median_days = 0
+    total_completed = len(completed)
+    if total_completed:
+        days = completed['days_outstanding']
+        collected_vals = completed['Collected till date'] * mult
+        total_coll = collected_vals.sum()
+        avg_days = float((days * collected_vals).sum() / total_coll) if total_coll else 0
+        median_days = float(days.median())
+
+    return {
+        'buckets': buckets,
+        'monthly': monthly.to_dict(orient='records'),
+        'avg_days': round(avg_days, 0),
+        'median_days': round(median_days, 0),
+        'total_completed': total_completed,
+    }
 
 
 # ── Denial Trend ──────────────────────────────────────────────────────────────
@@ -318,10 +361,21 @@ def compute_ageing(df, mult, as_of_date=None):
     monthly['purchase_value'] *= mult
     monthly['pending']        *= mult
 
+    # Monthly breakdown by health status (for stacked bar chart over time)
+    monthly_health = []
+    for month, grp in df2.groupby('Month'):
+        row = {'Month': month}
+        for status in ['Healthy', 'Watch', 'Delayed', 'Poor']:
+            sub = grp[grp['health'] == status]
+            row[status] = float(sub['Purchase value'].sum() * mult)
+        row['total'] = float(grp['Purchase value'].sum() * mult)
+        monthly_health.append(row)
+
     return {
         'ageing_buckets':    ageing,
         'health_summary':    health_summary,
         'monthly_active':    monthly.to_dict(orient='records'),
+        'monthly_health':    monthly_health,
         'total_active_deals':int(len(active)),
         'total_active_value':float(active['Purchase value'].sum() * mult),
     }

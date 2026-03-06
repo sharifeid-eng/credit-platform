@@ -54,6 +54,8 @@ export const getCohortChart             = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/cohort`,              { params: p(snap, cur, asOf) }).then(r => r.data);
 export const getReturnsAnalysisChart = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/returns-analysis`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getDeploymentByProductChart = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/deployment-by-product`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
 // ── New analytics endpoints ───────────────────────────────────────────────────
 export const getDSOChart              = (co, prod, snap, cur, asOf) =>
