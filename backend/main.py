@@ -17,6 +17,7 @@ from core.analysis import (
     compute_dso, compute_hhi, compute_denial_funnel,
     compute_stress_test, compute_expected_loss, compute_loss_triangle,
     compute_group_performance,
+    compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
 )
 from core.migration import compute_roll_rates
 from core.validation import validate_tape
@@ -136,6 +137,7 @@ def get_summary(company: str, product: str,
     # Enrich with DSO and HHI
     dso_data = compute_dso(df, mult, as_of_date)
     hhi_data = compute_hhi(df, mult)
+    summary['dso_available'] = dso_data.get('available', False)
     summary['dso']          = dso_data['weighted_dso']
     summary['median_dso']   = dso_data['median_dso']
     summary['hhi_group']    = hhi_data.get('group', {}).get('hhi', 0)
@@ -177,6 +179,17 @@ def get_collection_velocity(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
     return {**compute_collection_velocity(df, mult, as_of_date), 'currency': disp}
+
+@app.get("/companies/{company}/products/{product}/charts/collection-curves")
+def get_collection_curves(company: str, product: str,
+                           snapshot: Optional[str] = None,
+                           as_of_date: Optional[str] = None,
+                           currency: Optional[str] = None):
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_collection_curves(df, mult), 'currency': disp}
 
 @app.get("/companies/{company}/products/{product}/charts/denial-trend")
 def get_denial_trend(company: str, product: str,
@@ -231,7 +244,9 @@ def get_revenue(company: str, product: str,
     df       = filter_by_date(df, as_of_date)
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
-    return {**compute_revenue(df, mult), 'currency': disp}
+    result = compute_revenue(df, mult)
+    result['vat'] = compute_vat_summary(df, mult)
+    return {**result, 'currency': disp}
 
 @app.get("/companies/{company}/products/{product}/charts/concentration")
 def get_concentration(company: str, product: str,
@@ -243,8 +258,9 @@ def get_concentration(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
     result   = compute_concentration(df, mult)
-    # Enrich with HHI
-    result['hhi'] = compute_hhi(df, mult)
+    # Enrich with HHI and Owner breakdown
+    result['hhi']   = compute_hhi(df, mult)
+    result['owner'] = compute_owner_breakdown(df, mult)
     return {**result, 'currency': disp}
 
 @app.get("/companies/{company}/products/{product}/charts/returns-analysis")
@@ -760,6 +776,51 @@ def chat_with_data(company: str, product: str, request: dict,
     except Exception:
         pass
 
+    # ── New enrichment sections (collection curves, IRR, owner) ──
+
+    irr_ctx = ""
+    if ret and ret['summary'].get('has_irr'):
+        try:
+            rs = ret['summary']
+            irr_ctx = (f"\nIRR ANALYSIS:\n"
+                       f"  Avg Expected IRR: {rs['avg_expected_irr']:.1f}%, "
+                       f"Avg Actual IRR: {rs['avg_actual_irr']:.1f}%\n"
+                       f"  IRR Spread: {rs['irr_spread']:+.1f}%, "
+                       f"Median Actual IRR: {rs['median_actual_irr']:.1f}%")
+        except Exception:
+            pass
+
+    collection_speed_ctx = ""
+    try:
+        curves = compute_collection_curves(df, mult)
+        if curves.get('available'):
+            agg = curves['aggregate']['points']
+            speed_rows = []
+            for pt in agg:
+                if pt['days'] in [90, 180, 360]:
+                    speed_rows.append(f"  {pt['days']}d: Expected {pt['expected_pct']:.1f}%, "
+                                      f"Actual {pt['actual_pct']:.1f}%, "
+                                      f"Accuracy {pt['accuracy']:.0f}%")
+            if speed_rows:
+                collection_speed_ctx = "\nCOLLECTION SPEED (% of PV collected by interval):\n" + "\n".join(speed_rows)
+    except Exception:
+        pass
+
+    owner_ctx = ""
+    try:
+        owner_data = compute_owner_breakdown(df, mult)
+        if owner_data.get('available'):
+            owner_rows = []
+            for o in owner_data['owners']:
+                owner_rows.append(f"  {o['owner']}: {o['deal_count']} deals, "
+                                  f"{o['percentage']:.1f}% of portfolio, "
+                                  f"coll {o['collection_rate']:.1f}%, "
+                                  f"denial {o['denial_rate']:.1f}%")
+            if owner_rows:
+                owner_ctx = "\nOWNER/SPV BREAKDOWN:\n" + "\n".join(owner_rows)
+    except Exception:
+        pass
+
     system = f"""You are an expert credit analyst assistant for ACP Private Credit,
 analyzing the {company.upper()} - {product.replace('_', ' ').title()} loan portfolio.
 
@@ -772,7 +833,7 @@ PORTFOLIO SUMMARY (as of {aod or sel['date']}, currency: {disp}):
 
 MONTHLY PERFORMANCE (last 12 months):
 {monthly.tail(12).to_string(index=False)}
-{group_perf_ctx}{ageing_ctx}{dso_ctx}{returns_ctx}{discount_ctx}{new_repeat_ctx}{hhi_ctx}
+{group_perf_ctx}{ageing_ctx}{dso_ctx}{returns_ctx}{discount_ctx}{new_repeat_ctx}{hhi_ctx}{irr_ctx}{collection_speed_ctx}{owner_ctx}
 
 INSTRUCTIONS:
 - Answer questions precisely with specific numbers from the data above. Be concise but thorough.

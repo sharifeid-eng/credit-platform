@@ -48,7 +48,8 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           collected:     d['Collected till date'] ?? d.collected,
           denied:        d['Denied by insurance'] ?? d.denied,
         }))
-        setData({ groupData, topDeals, hhi: concRes.hhi ?? {} })
+        const ownerRaw = concRes.owner ?? {}
+        setData({ groupData, topDeals, hhi: concRes.hhi ?? {}, owner: ownerRaw })
         setGroupPerf(perfRes.groups ?? [])
 
         // Portfolio health and ageing donuts from ageing endpoint
@@ -75,6 +76,19 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
   const groupData = data?.groupData ?? []
   const topDeals  = data?.topDeals  ?? []
   const hhi       = data?.hhi ?? {}
+  const owner     = data?.owner ?? {}
+  const ownerAvailable = owner.available === true
+  const ownerList = (owner.owners ?? []).map(d => ({
+    name:            d.owner,
+    deal_count:      d.deal_count,
+    purchase_value:  d.purchase_value,
+    collected:       d.collected,
+    denied:          d.denied,
+    pending:         d.pending,
+    collection_rate: d.collection_rate,
+    denial_rate:     d.denial_rate,
+    pct:             d.percentage,
+  }))
   const healthDonut   = ageingData?.healthDonut ?? []
   const ageingBuckets = ageingData?.ageingBuckets ?? []
   const totalActive   = ageingData?.totalActiveVal ?? 0
@@ -113,6 +127,75 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           </div>
         </div>
       </ChartPanel>
+
+      {/* ── Owner / SPV Concentration ── */}
+      {ownerAvailable && ownerList.length > 0 && (
+        <ChartPanel title="Owner / SPV Concentration" subtitle="Capital deployment and performance by fund entity" loading={loading} error={error} minHeight={260}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {/* Owner Donut */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ position: 'relative', width: 180, height: 180, flexShrink: 0 }}>
+                <ResponsiveContainer width={180} height={180}>
+                  <PieChart>
+                    <Pie data={ownerList} dataKey="purchase_value" cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={2}>
+                      {ownerList.map((_, i) => <Cell key={i} fill={SLICE_COLORS[i % SLICE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                  textAlign: 'center', pointerEvents: 'none',
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{ownerList.length}</div>
+                  <div style={{ fontSize: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Owners</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                {ownerList.map((d, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: SLICE_COLORS[i % SLICE_COLORS.length], flexShrink: 0 }} />
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: SLICE_COLORS[i % SLICE_COLORS.length], fontWeight: 600, flexShrink: 0 }}>{fmtPct(d.pct)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Owner Performance Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    {['Owner', 'Deals', 'Exposure', 'Coll %', 'Denial %', 'Share %'].map(h => (
+                      <th key={h} style={{
+                        textAlign: 'left', padding: '6px 10px',
+                        fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
+                        color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ownerList.map((o, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border-faint)' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ padding: '7px 10px', color: 'var(--text-primary)', fontWeight: 500, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.name}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{o.deal_count}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--gold)' }}>{fmtMoney(o.purchase_value, currency)}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: o.collection_rate >= 90 ? 'var(--teal)' : 'var(--text-muted)' }}>{fmtPct(o.collection_rate)}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: o.denial_rate > 10 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtPct(o.denial_rate)}</td>
+                      <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{fmtPct(o.pct)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </ChartPanel>
+      )}
 
       {/* ── Portfolio Health + Ageing by Purchase Date (side by side) ── */}
       {healthDonut.length > 0 && (
