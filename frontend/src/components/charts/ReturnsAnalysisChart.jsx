@@ -47,6 +47,56 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
         <Tile label="Total Adjustments" value={fmtCcy(s.total_adjustments, ccy)} color="var(--text-muted)" />
       </div>
 
+      {/* ── IRR Analysis (only when tape has IRR data) ── */}
+      {s.has_irr && (
+        <>
+          {/* IRR KPI Tiles */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+            <Tile label="Avg Expected IRR" value={`${s.avg_expected_irr}%`} color="var(--blue)" />
+            <Tile label="Avg Actual IRR" value={`${s.avg_actual_irr}%`} color="var(--teal)" />
+            <Tile label="IRR Spread"
+              value={`${s.irr_spread > 0 ? '+' : ''}${s.irr_spread}%`}
+              color={s.irr_spread >= 0 ? 'var(--teal)' : 'var(--red)'}
+            />
+            <Tile label="Median Actual IRR" value={`${s.median_actual_irr}%`} color="var(--gold)" />
+          </div>
+
+          {/* IRR by Vintage */}
+          <ChartPanel title="IRR by Vintage" subtitle="Average expected vs actual IRR by origination month" minHeight={0}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={data.irr_by_vintage}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="month" {...xAxisProps} />
+                <YAxis {...yAxisProps} tickFormatter={v => `${v}%`} />
+                <Tooltip
+                  {...tooltipStyle}
+                  formatter={(v, name) => [`${v.toFixed(2)}%`, name]}
+                />
+                <Legend {...legendProps} />
+                <Bar dataKey="avg_expected_irr" name="Expected IRR" fill="#5B8DEF" radius={[3,3,0,0]} />
+                <Bar dataKey="avg_actual_irr" name="Actual IRR" fill="#2DD4BF" radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartPanel>
+
+          {/* IRR Distribution */}
+          <ChartPanel title="IRR Distribution" subtitle="Distribution of deal-level actual IRR" minHeight={0}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={data.irr_distribution}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="bucket" {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip
+                  {...tooltipStyle}
+                  formatter={(v, name) => [v, name]}
+                />
+                <Bar dataKey="count" name="Deals" fill="#C9A84C" radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartPanel>
+        </>
+      )}
+
       {/* ── Monthly Margin Chart ── */}
       <ChartPanel title="Monthly Returns" subtitle="Realised vs expected margin by origination month" minHeight={0}>
         <ResponsiveContainer width="100%" height={280}>

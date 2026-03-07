@@ -57,6 +57,9 @@ export const getReturnsAnalysisChart = (co, prod, snap, cur, asOf) =>
 export const getDeploymentByProductChart = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/deployment-by-product`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
+export const getCollectionCurvesChart  = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/collection-curves`, { params: p(snap, cur, asOf) }).then(r => r.data);
+
 // ── New analytics endpoints ───────────────────────────────────────────────────
 export const getDSOChart              = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/dso`,              { params: p(snap, cur, asOf) }).then(r => r.data);

@@ -262,6 +262,18 @@ def compute_cohorts(df, mult):
             irr = irr[irr < 10]  # filter outliers >1000%
             row['avg_actual_irr'] = round(float(irr.mean()) * 100, 1) if not irr.isna().all() else None
 
+        # Collection speed columns (from curve data)
+        if 'Actual in 90 days' in grp.columns:
+            pv_raw = grp['Purchase value'].sum()
+            if pv_raw > 0:
+                row['collected_90d_pct']  = round(grp['Actual in 90 days'].sum()  / pv_raw * 100, 1)
+                row['collected_180d_pct'] = round(grp['Actual in 180 days'].sum() / pv_raw * 100, 1)
+                row['collected_360d_pct'] = round(grp['Actual in 360 days'].sum() / pv_raw * 100, 1)
+            else:
+                row['collected_90d_pct']  = None
+                row['collected_180d_pct'] = None
+                row['collected_360d_pct'] = None
+
         cohorts.append(row)
 
     return cohorts
@@ -610,42 +622,147 @@ def compute_returns_analysis(df, mult):
             })
         df.drop(columns=['_biz_type'], inplace=True)
 
+    # ── IRR Analysis (only when tape has IRR columns) ──
+    has_irr = 'Expected IRR' in df.columns and 'Actual IRR' in df.columns
+    summary['has_irr'] = has_irr
+
+    irr_by_vintage = []
+    irr_distribution = []
+
+    if has_irr:
+        # Filter outliers: |Actual IRR| >= 10 (1000%)
+        valid_irr = df[df['Actual IRR'].between(-10, 10, inclusive='neither')].copy()
+
+        avg_exp_irr = float(valid_irr['Expected IRR'].mean() * 100)
+        avg_act_irr = float(valid_irr['Actual IRR'].mean() * 100)
+        med_act_irr = float(valid_irr['Actual IRR'].median() * 100)
+
+        summary['avg_expected_irr'] = round(avg_exp_irr, 2)
+        summary['avg_actual_irr']   = round(avg_act_irr, 2)
+        summary['irr_spread']       = round(avg_act_irr - avg_exp_irr, 2)
+        summary['median_actual_irr']= round(med_act_irr, 2)
+
+        # IRR by vintage
+        valid_irr = add_month_column(valid_irr)
+        for month, grp in valid_irr.groupby('Month'):
+            exp = float(grp['Expected IRR'].mean() * 100)
+            act = float(grp['Actual IRR'].mean() * 100)
+            irr_by_vintage.append({
+                'month':            month,
+                'avg_expected_irr': round(exp, 2),
+                'avg_actual_irr':   round(act, 2),
+                'spread':           round(act - exp, 2),
+                'deal_count':       int(len(grp)),
+            })
+
+        # IRR distribution histogram
+        act_irr_pct = valid_irr['Actual IRR'] * 100
+        bins = [0, 10, 20, 30, 40, 50, 60, 80, 100, 200, float('inf')]
+        labels = ['0-10%', '10-20%', '20-30%', '30-40%', '40-50%',
+                  '50-60%', '60-80%', '80-100%', '100-200%', '>200%']
+        binned = pd.cut(act_irr_pct, bins=bins, labels=labels, right=False)
+        for bucket, count in binned.value_counts().sort_index().items():
+            if count > 0:
+                irr_distribution.append({'bucket': str(bucket), 'count': int(count)})
+
     return {
-        'summary':        summary,
-        'monthly':        monthly_rows,
-        'discount_bands': discount_bands,
-        'new_vs_repeat':  new_repeat,
+        'summary':          summary,
+        'monthly':          monthly_rows,
+        'discount_bands':   discount_bands,
+        'new_vs_repeat':    new_repeat,
+        'irr_by_vintage':   irr_by_vintage,
+        'irr_distribution': irr_distribution,
     }
 
 
 # ── DSO (Days Sales Outstanding) ─────────────────────────────────────────────
 
+CURVE_INTERVALS = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390]
+
+
+def _estimate_dso_from_curves(row):
+    """Estimate true DSO for a single deal using collection curve columns.
+
+    Finds the first 30-day interval where actual collection reaches ≥90%
+    of the deal's total collected amount, then interpolates.
+    Returns NaN if data is insufficient.
+    """
+    total_collected = row.get('Collected till date', 0)
+    if total_collected <= 0:
+        return np.nan
+
+    target = total_collected * 0.90
+    prev_days = 0
+    prev_val = 0
+
+    for days in CURVE_INTERVALS:
+        col = f'Actual in {days} days'
+        val = row.get(col, 0) or 0
+        if val >= target:
+            # Interpolate between prev_days and days
+            if val == prev_val:
+                return float(days)
+            fraction = (target - prev_val) / (val - prev_val)
+            return float(prev_days + fraction * (days - prev_days))
+        prev_days = days
+        prev_val = val
+
+    # Never reached 90% within 390 days
+    return np.nan
+
+
 def compute_dso(df, mult, as_of_date=None):
-    """Weighted average days to collect on completed deals + DSO by vintage."""
-    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+    """Weighted average days to collect on completed deals + DSO by vintage.
+
+    Uses collection curve columns (Actual in X days) when available for
+    accurate DSO. Returns available=False when curves are missing so the
+    frontend can hide rather than show inaccurate estimates.
+    """
+    has_curves = 'Actual in 30 days' in df.columns
     completed = df[df['Status'] == 'Completed'].copy()
 
     if completed.empty:
         return {
+            'available': has_curves,
             'weighted_dso': 0, 'median_dso': 0, 'p95_dso': 0,
             'total_completed': 0, 'by_vintage': [],
         }
 
-    completed['days_outstanding'] = (today - completed['Deal date']).dt.days
-    collected = completed['Collected till date'] * mult
-    days = completed['days_outstanding']
+    if not has_curves:
+        # No curve data — return unavailable so frontend hides DSO
+        return {
+            'available': False,
+            'weighted_dso': 0, 'median_dso': 0, 'p95_dso': 0,
+            'total_completed': int(len(completed)),
+            'by_vintage': [],
+        }
 
-    total_collected = collected.sum()
-    weighted_dso = float((days * collected).sum() / total_collected) if total_collected else 0
-    median_dso = float(days.median())
-    p95_dso = float(days.quantile(0.95))
+    # Curve-based DSO — accurate measurement
+    completed['true_dso'] = completed.apply(_estimate_dso_from_curves, axis=1)
+    valid = completed.dropna(subset=['true_dso'])
+
+    if valid.empty:
+        return {
+            'available': True,
+            'weighted_dso': 0, 'median_dso': 0, 'p95_dso': 0,
+            'total_completed': int(len(completed)),
+            'by_vintage': [],
+        }
+
+    collected_vals = valid['Collected till date'] * mult
+    days_vals = valid['true_dso']
+    total_coll = collected_vals.sum()
+
+    weighted_dso = float((days_vals * collected_vals).sum() / total_coll) if total_coll else 0
+    median_dso = float(days_vals.median())
+    p95_dso = float(days_vals.quantile(0.95))
 
     # DSO by vintage month
-    completed = add_month_column(completed)
+    valid = add_month_column(valid)
     by_vintage = []
-    for month, grp in completed.groupby('Month'):
+    for month, grp in valid.groupby('Month'):
         g_coll = grp['Collected till date'] * mult
-        g_days = (today - grp['Deal date']).dt.days
+        g_days = grp['true_dso']
         g_total = g_coll.sum()
         by_vintage.append({
             'month':        month,
@@ -656,6 +773,7 @@ def compute_dso(df, mult, as_of_date=None):
         })
 
     return {
+        'available':       True,
         'weighted_dso':    round(weighted_dso, 1),
         'median_dso':      round(median_dso, 1),
         'p95_dso':         round(p95_dso, 1),
@@ -938,3 +1056,134 @@ def compute_group_performance(df, mult, as_of_date=None):
     groups.sort(key=lambda x: x['purchase_value'], reverse=True)
 
     return {'groups': groups}
+
+
+# ── Collection Curves ────────────────────────────────────────────────────────
+
+def compute_collection_curves(df, mult):
+    """Expected vs actual collection curves at 30-day intervals by vintage.
+
+    Uses 'Expected in X days' and 'Actual in X days' columns (cumulative amounts).
+    Returns available=False when columns are missing.
+    """
+    if 'Expected in 30 days' not in df.columns:
+        return {'available': False, 'curves': [], 'aggregate': {'points': []}}
+
+    df = add_month_column(df)
+    intervals = CURVE_INTERVALS
+
+    # Per-vintage curves
+    curves = []
+    for month, grp in df.groupby('Month'):
+        total_pv = grp['Purchase value'].sum()
+        if total_pv <= 0:
+            continue
+
+        points = []
+        for days in intervals:
+            exp_col = f'Expected in {days} days'
+            act_col = f'Actual in {days} days'
+            exp_val = grp[exp_col].sum() if exp_col in grp.columns else 0
+            act_val = grp[act_col].sum() if act_col in grp.columns else 0
+
+            points.append({
+                'days':         days,
+                'expected_pct': round(exp_val / total_pv * 100, 1),
+                'actual_pct':   round(act_val / total_pv * 100, 1),
+            })
+
+        curves.append({
+            'month':          month,
+            'total_deals':    int(len(grp)),
+            'purchase_value': round(total_pv * mult, 2),
+            'points':         points,
+        })
+
+    # Portfolio-wide aggregate curve
+    total_pv = df['Purchase value'].sum()
+    agg_points = []
+    for days in intervals:
+        exp_col = f'Expected in {days} days'
+        act_col = f'Actual in {days} days'
+        exp_val = df[exp_col].sum() if exp_col in df.columns else 0
+        act_val = df[act_col].sum() if act_col in df.columns else 0
+
+        accuracy = round(act_val / exp_val * 100, 1) if exp_val > 0 else 0
+
+        agg_points.append({
+            'days':         days,
+            'expected_pct': round(exp_val / total_pv * 100, 1) if total_pv else 0,
+            'actual_pct':   round(act_val / total_pv * 100, 1) if total_pv else 0,
+            'accuracy':     accuracy,
+        })
+
+    return {
+        'available':  True,
+        'curves':     curves,
+        'aggregate':  {'points': agg_points},
+    }
+
+
+# ── Owner / SPV Breakdown ───────────────────────────────────────────────────
+
+def compute_owner_breakdown(df, mult):
+    """Capital deployment and performance by Owner (SPV entity).
+
+    Uses 'Collected till date by owner' when available for accurate
+    per-owner attribution, falling back to 'Collected till date'.
+    """
+    if 'Owner' not in df.columns:
+        return {'available': False, 'owners': []}
+
+    has_owner_collected = 'Collected till date by owner' in df.columns
+    coll_col = 'Collected till date by owner' if has_owner_collected else 'Collected till date'
+    total_pv = df['Purchase value'].sum() * mult
+
+    owners = []
+    for name, grp in df.groupby('Owner'):
+        pv        = grp['Purchase value'].sum() * mult
+        collected = grp[coll_col].sum() * mult
+        denied    = grp['Denied by insurance'].sum() * mult
+        pending   = grp['Pending insurance response'].sum() * mult
+
+        owners.append({
+            'owner':           str(name),
+            'deal_count':      int(len(grp)),
+            'purchase_value':  round(pv, 2),
+            'collected':       round(collected, 2),
+            'denied':          round(denied, 2),
+            'pending':         round(pending, 2),
+            'collection_rate': round(collected / pv * 100, 1) if pv else 0,
+            'denial_rate':     round(denied / pv * 100, 1) if pv else 0,
+            'percentage':      round(pv / total_pv * 100, 1) if total_pv else 0,
+        })
+
+    owners.sort(key=lambda x: x['purchase_value'], reverse=True)
+
+    return {
+        'available': True,
+        'owners':    owners,
+        'uses_owner_collected': has_owner_collected,
+    }
+
+
+# ── VAT Analysis ─────────────────────────────────────────────────────────────
+
+def compute_vat_summary(df, mult):
+    """VAT summary for revenue tab enrichment."""
+    has_vat_assets = 'VAT on purchased assets' in df.columns
+    has_vat_fees   = 'VAT on fees' in df.columns
+
+    if not has_vat_assets and not has_vat_fees:
+        return {'available': False}
+
+    vat_assets = df['VAT on purchased assets'].sum() * mult if has_vat_assets else 0
+    vat_fees   = df['VAT on fees'].sum() * mult if has_vat_fees else 0
+    total_vat  = vat_assets + vat_fees
+
+    return {
+        'available':  True,
+        'vat_assets': round(vat_assets, 2),
+        'vat_fees':   round(vat_fees, 2),
+        'total_vat':  round(total_vat, 2),
+    }

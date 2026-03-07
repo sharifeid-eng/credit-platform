@@ -22,6 +22,7 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
   }, [company, product, snapshot, currency, asOfDate])
 
   const hasIrr = data.some(r => r.avg_expected_irr != null || r.avg_actual_irr != null)
+  const hasSpeed = data.some(r => r.collected_90d_pct != null)
 
   // Summary row
   const totals = data.length ? {
@@ -45,11 +46,25 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
     totals.avgActualIrr = irrVals.length ? irrVals.reduce((s, r) => s + r.avg_actual_irr, 0) / irrVals.length : null
     const eirrVals = data.filter(r => r.avg_expected_irr != null)
     totals.avgExpectedIrr = eirrVals.length ? eirrVals.reduce((s, r) => s + r.avg_expected_irr, 0) / eirrVals.length : null
+    // Collection speed weighted averages
+    const s90 = data.filter(r => r.collected_90d_pct != null)
+    const s90w = s90.reduce((s, r) => s + (r.collected_90d_pct * (r.purchase_value ?? 0)), 0)
+    const s90d = s90.reduce((s, r) => s + (r.purchase_value ?? 0), 0)
+    totals.speed90 = s90d ? s90w / s90d : null
+    const s180 = data.filter(r => r.collected_180d_pct != null)
+    const s180w = s180.reduce((s, r) => s + (r.collected_180d_pct * (r.purchase_value ?? 0)), 0)
+    const s180d = s180.reduce((s, r) => s + (r.purchase_value ?? 0), 0)
+    totals.speed180 = s180d ? s180w / s180d : null
+    const s360 = data.filter(r => r.collected_360d_pct != null)
+    const s360w = s360.reduce((s, r) => s + (r.collected_360d_pct * (r.purchase_value ?? 0)), 0)
+    const s360d = s360.reduce((s, r) => s + (r.purchase_value ?? 0), 0)
+    totals.speed360 = s360d ? s360w / s360d : null
   }
 
   const columns = [
     'Vintage', 'Deals', 'Done', 'Deployed', 'Collected', 'Denied', 'Pending',
     'Coll %', 'Denial %', 'Pend %', 'Done %',
+    ...(hasSpeed ? ['90d %', '180d %', '360d %'] : []),
     'Exp Margin', 'Act Margin', 'Δ Margin',
     ...(hasIrr ? ['Exp IRR', 'Act IRR', 'Spread'] : []),
   ]
@@ -63,7 +78,7 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
       minHeight={0}
     >
       <div style={{ overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: hasIrr ? 1200 : 1000 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: (hasIrr ? 1200 : 1000) + (hasSpeed ? 200 : 0) }}>
           <thead>
             <tr>
               {columns.map(h => (
@@ -100,6 +115,12 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
                   <Cell><Heat v={row.denial_rate} good={v => v <= 10} goodC="var(--text-secondary)" badC="var(--red)" /></Cell>
                   <Cell><Heat v={pendingRate} good={v => v <= 20} goodC="var(--text-secondary)" badC="var(--blue)" /></Cell>
                   <Cell><Heat v={row.completion_rate} good={v => v >= 70} goodC="var(--teal)" badC="var(--red)" /></Cell>
+                  {/* Collection speed — only shown when tape has speed data */}
+                  {hasSpeed && <>
+                    <Cell><SpeedHeat v={row.collected_90d_pct} /></Cell>
+                    <Cell><SpeedHeat v={row.collected_180d_pct} /></Cell>
+                    <Cell><SpeedHeat v={row.collected_360d_pct} /></Cell>
+                  </>}
                   {/* Margins — always shown */}
                   <Cell mono color="var(--text-secondary)">{row.expected_margin != null ? `${row.expected_margin.toFixed(2)}%` : '–'}</Cell>
                   <Cell>
@@ -149,6 +170,12 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
                 <Cell bold><Heat v={totals.denialRate} good={v => v <= 10} goodC="var(--text-secondary)" badC="var(--red)" /></Cell>
                 <Cell bold><Heat v={totals.pendingRate} good={v => v <= 20} goodC="var(--text-secondary)" badC="var(--blue)" /></Cell>
                 <Cell bold><Heat v={totals.completionRate} good={v => v >= 70} goodC="var(--teal)" badC="var(--red)" /></Cell>
+                {/* Collection speed totals */}
+                {hasSpeed && <>
+                  <Cell bold><SpeedHeat v={totals.speed90} /></Cell>
+                  <Cell bold><SpeedHeat v={totals.speed180} /></Cell>
+                  <Cell bold><SpeedHeat v={totals.speed360} /></Cell>
+                </>}
                 {/* Margin totals */}
                 <Cell mono bold color="var(--text-secondary)">{totals.expectedMargin.toFixed(2)}%</Cell>
                 <Cell bold>
@@ -215,6 +242,20 @@ function Heat({ v, good, goodC, badC }) {
       fontFamily: 'var(--font-mono)',
       fontWeight: 600,
       color: isGood ? goodC : badC,
+    }}>
+      {v.toFixed(1)}%
+    </span>
+  )
+}
+
+function SpeedHeat({ v }) {
+  if (v == null) return <span style={{ color: 'var(--text-faint)' }}>–</span>
+  const color = v >= 80 ? 'var(--teal)' : v >= 50 ? 'var(--gold)' : 'var(--red)'
+  return (
+    <span style={{
+      fontFamily: 'var(--font-mono)',
+      fontWeight: 600,
+      color,
     }}>
       {v.toFixed(1)}%
     </span>
