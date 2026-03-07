@@ -76,16 +76,21 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
   }))
 
   // Prepare curves chart data
+  const ACCURACY_CAP = 200
   const curvePoints = curvesAvailable
-    ? curves.aggregate.points.map(pt => ({
-        days: pt.days,
-        label: `${pt.days}d`,
-        actual_pct: pt.actual_pct != null ? parseFloat(pt.actual_pct.toFixed(1)) : null,
-        expected_pct: pt.expected_pct != null ? parseFloat(pt.expected_pct.toFixed(1)) : null,
-        accuracy: pt.expected_pct > 0
+    ? curves.aggregate.points.map(pt => {
+        const rawAccuracy = pt.expected_pct > 0
           ? parseFloat(((pt.actual_pct / pt.expected_pct) * 100).toFixed(1))
-          : null,
-      }))
+          : null
+        return {
+          days: pt.days,
+          label: `${pt.days}d`,
+          actual_pct: pt.actual_pct != null ? parseFloat(pt.actual_pct.toFixed(1)) : null,
+          expected_pct: pt.expected_pct != null ? parseFloat(pt.expected_pct.toFixed(1)) : null,
+          accuracy: rawAccuracy != null ? Math.min(rawAccuracy, ACCURACY_CAP) : null,
+          rawAccuracy,
+        }
+      })
     : []
 
   return (
@@ -230,10 +235,13 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
               <GradientDefs />
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="label" {...xAxisProps} />
-              <YAxis {...yAxisProps} tickFormatter={v => `${v}%`} />
+              <YAxis {...yAxisProps} tickFormatter={v => `${v}%`} domain={[0, ACCURACY_CAP]} />
               <Tooltip
                 {...tooltipStyle}
-                formatter={(v) => [`${v}%`, 'Accuracy']}
+                formatter={(v, name, props) => {
+                  const real = props.payload.rawAccuracy
+                  return [`${real != null ? real : v}%`, 'Accuracy']
+                }}
                 labelFormatter={label => `Day ${label}`}
               />
               <ReferenceLine y={100} stroke={COLORS.text} strokeDasharray="4 2" label={{
@@ -243,9 +251,20 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
                 fontSize: 10,
                 fontFamily: 'IBM Plex Mono',
               }} />
-              <Bar dataKey="accuracy" name="Accuracy" radius={[3,3,0,0]}>
+              <Bar dataKey="accuracy" name="Accuracy" radius={[3,3,0,0]}
+                label={({ x, y, width, index }) => {
+                  const pt = curvePoints[index]
+                  if (!pt || pt.rawAccuracy == null || pt.rawAccuracy <= ACCURACY_CAP) return null
+                  return (
+                    <text x={x + width / 2} y={y - 4} textAnchor="middle"
+                      fill={COLORS.red} fontSize={9} fontFamily="IBM Plex Mono">
+                      {pt.rawAccuracy}%
+                    </text>
+                  )
+                }}
+              >
                 {curvePoints.map((pt, i) => (
-                  <Cell key={i} fill={getAccuracyColor(pt.accuracy)} fillOpacity={0.75} />
+                  <Cell key={i} fill={getAccuracyColor(pt.rawAccuracy)} fillOpacity={0.75} />
                 ))}
               </Bar>
             </BarChart>
