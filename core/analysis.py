@@ -152,14 +152,24 @@ AGEING_BUCKETS = [
 ]
 
 def compute_collection_velocity(df, mult, as_of_date=None):
-    """Collection breakdown by days outstanding + monthly rates."""
+    """Collection breakdown by days to collect + monthly rates."""
     today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
     completed = df[df['Status'] == 'Completed'].copy()
-    completed['days_outstanding'] = (today - completed['Deal date']).dt.days
+
+    # Use curve-based collection time when available (accurate),
+    # else fall back to deal age from today (less accurate).
+    has_curves = 'Actual in 30 days' in completed.columns
+    if has_curves and len(completed) > 0:
+        completed['days_to_collect'] = completed.apply(_estimate_dso_from_curves, axis=1)
+        # For deals where curve-based DSO couldn't be computed, fall back to deal age
+        fallback = completed['days_to_collect'].isna()
+        completed.loc[fallback, 'days_to_collect'] = (today - completed.loc[fallback, 'Deal date']).dt.days
+    else:
+        completed['days_to_collect'] = (today - completed['Deal date']).dt.days
 
     buckets = []
     for label, lo, hi in AGEING_BUCKETS:
-        sub = completed[(completed['days_outstanding'] >= lo) & (completed['days_outstanding'] <= hi)]
+        sub = completed[(completed['days_to_collect'] >= lo) & (completed['days_to_collect'] <= hi)]
         buckets.append({
             'bucket':         label,
             'deal_count':     int(len(sub)),
@@ -185,7 +195,7 @@ def compute_collection_velocity(df, mult, as_of_date=None):
     median_days = 0
     total_completed = len(completed)
     if total_completed:
-        days = completed['days_outstanding']
+        days = completed['days_to_collect']
         collected_vals = completed['Collected till date'] * mult
         total_coll = collected_vals.sum()
         avg_days = float((days * collected_vals).sum() / total_coll) if total_coll else 0
@@ -197,6 +207,7 @@ def compute_collection_velocity(df, mult, as_of_date=None):
         'avg_days': round(avg_days, 0),
         'median_days': round(median_days, 0),
         'total_completed': total_completed,
+        'curve_based': has_curves,
     }
 
 

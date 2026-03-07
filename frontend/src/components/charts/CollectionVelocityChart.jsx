@@ -31,6 +31,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
   const [buckets, setBuckets]       = useState([])
   const [avgDays, setAvgDays]       = useState(0)
   const [totalCompleted, setTotal]  = useState(0)
+  const [curveBased, setCurveBased] = useState(false)
   const [curves, setCurves]         = useState(null)
   const [curvesAvailable, setCurvesAvailable] = useState(false)
   const [loading, setLoading]       = useState(true)
@@ -54,6 +55,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
         setBuckets((res.buckets ?? []).filter(b => b.deal_count > 0))
         setAvgDays(res.avg_days ?? 0)
         setTotal(res.total_completed ?? 0)
+        setCurveBased(res.curve_based ?? false)
         setError(null)
 
         // Collection curves data
@@ -118,7 +120,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
       {buckets.length > 0 && (
         <ChartPanel
           title="Cash Collection — Breakdown by Deal Age"
-          subtitle={`Completed deals (${totalCompleted.toLocaleString()}) grouped by days since purchase`}
+          subtitle={`Completed deals (${totalCompleted.toLocaleString()}) grouped by ${curveBased ? 'days to collect (curve-based)' : 'days since purchase'}`}
           loading={loading}
           error={error}
         >
@@ -173,7 +175,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
                 {Math.round(avgDays)}
               </div>
               <div style={{ fontFamily: 'Inter', color: '#8494A7', fontSize: 11, marginTop: 2 }}>
-                Avg Days Outstanding
+                {curveBased ? 'Avg Days to Collect' : 'Avg Days Outstanding'}
               </div>
             </div>
           </div>
