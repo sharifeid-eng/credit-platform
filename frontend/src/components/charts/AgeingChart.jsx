@@ -37,7 +37,7 @@ export default function AgeingChart({ company, product, snapshot, currency, asOf
         }))
         const buckets = (res.ageing_buckets ?? []).map(d => ({
           bucket: d.bucket,
-          value:  d.purchase_value,
+          value:  d.outstanding ?? d.purchase_value,
         }))
         // Monthly health breakdown for stacked bars
         const monthlyHealth = (res.monthly_health ?? []).map(d => ({
@@ -49,17 +49,19 @@ export default function AgeingChart({ company, product, snapshot, currency, asOf
           total:   d.total ?? 0,
         }))
         const totalActiveValue = res.total_active_value ?? 0
-        setData({ donut, buckets, monthlyHealth, totalActiveValue })
+        const totalOutstanding = res.total_outstanding ?? 0
+        setData({ donut, buckets, monthlyHealth, totalActiveValue, totalOutstanding })
         setError(null)
       })
       .catch(() => setError('Failed to load ageing data.'))
       .finally(() => setLoading(false))
   }, [company, product, snapshot, currency, asOfDate])
 
-  const donut         = data?.donut ?? []
-  const buckets       = data?.buckets ?? []
-  const monthlyHealth = data?.monthlyHealth ?? []
-  const totalActive   = data?.totalActiveValue ?? 0
+  const donut          = data?.donut ?? []
+  const buckets        = data?.buckets ?? []
+  const monthlyHealth  = data?.monthlyHealth ?? []
+  const totalActive    = data?.totalActiveValue ?? 0
+  const totalOutstanding = data?.totalOutstanding ?? 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -68,7 +70,7 @@ export default function AgeingChart({ company, product, snapshot, currency, asOf
       {monthlyHealth.length > 0 && (
         <ChartPanel
           title="Active Portfolio — Health Over Time"
-          subtitle="Face value of active (Executed) deals by health classification — does not deduct amounts already collected"
+          subtitle="Outstanding amount (face value minus collected and denied) of active deals by health classification — reflects actual risk exposure"
           loading={loading} error={error}
         >
           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
@@ -115,18 +117,18 @@ export default function AgeingChart({ company, product, snapshot, currency, asOf
                   <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
                 </PieChart>
               </ResponsiveContainer>
-              {totalActive > 0 && (
+              {totalOutstanding > 0 && (
                 <div style={{ marginTop: -8, marginBottom: 10, textAlign: 'center' }}>
                   <div style={{
                     fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)',
                     color: 'var(--text-primary)',
                   }}>
-                    {fmtMoney(totalActive, currency)}
+                    {fmtMoney(totalOutstanding, currency)}
                   </div>
                   <div style={{
                     fontSize: 9, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2,
                   }}>
-                    Active Deal Face Value
+                    Total Outstanding
                   </div>
                 </div>
               )}

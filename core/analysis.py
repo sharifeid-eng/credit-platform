@@ -374,11 +374,23 @@ def classify_health(days):
     return 'Poor'
 
 def compute_ageing(df, mult, as_of_date=None):
-    """Active deal health + ageing bucket breakdown."""
+    """Active deal health + ageing bucket breakdown.
+
+    Uses outstanding amount (Purchase value - Collected - Denied) as the
+    primary size metric rather than face value, so the chart reflects
+    actual risk exposure not total deal size.
+    """
     today  = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
     active = df[df['Status'] == 'Executed'].copy()
     active['days_outstanding'] = (today - active['Deal date']).dt.days
     active['health']           = active['days_outstanding'].apply(classify_health)
+
+    # Outstanding = face value minus what's already been collected or denied
+    active['outstanding'] = (
+        active['Purchase value']
+        - active['Collected till date'].fillna(0)
+        - active['Denied by insurance'].fillna(0)
+    ).clip(lower=0)
 
     ageing = []
     for label, lo, hi in EXTENDED_AGEING_BUCKETS:
@@ -386,29 +398,26 @@ def compute_ageing(df, mult, as_of_date=None):
         ageing.append({
             'bucket':         label,
             'deal_count':     int(len(sub)),
-            'pending_value':  float(sub['Pending insurance response'].sum() * mult),
+            'outstanding':    float(sub['outstanding'].sum() * mult),
             'purchase_value': float(sub['Purchase value'].sum() * mult),
         })
+
+    total_outstanding = float(active['outstanding'].sum() * mult)
 
     health_summary = []
     for status, color in HEALTH_COLORS.items():
         sub = active[active['health'] == status]
+        out = float(sub['outstanding'].sum() * mult)
         health_summary.append({
             'status':     status,
             'deal_count': int(len(sub)),
-            'value':      float(sub['Purchase value'].sum() * mult),
-            'percentage': round(len(sub) / len(active) * 100, 1) if len(active) else 0,
+            'value':      out,
+            'face_value': float(sub['Purchase value'].sum() * mult),
+            'percentage': round(out / total_outstanding * 100, 1) if total_outstanding else 0,
             'color':      color,
         })
 
     df2 = add_month_column(active)
-    monthly = df2.groupby('Month').agg(
-        deal_count     = ('Purchase value', 'count'),
-        purchase_value = ('Purchase value', 'sum'),
-        pending        = ('Pending insurance response', 'sum'),
-    ).reset_index()
-    monthly['purchase_value'] *= mult
-    monthly['pending']        *= mult
 
     # Monthly breakdown by health status (for stacked bar chart over time)
     monthly_health = []
@@ -416,17 +425,17 @@ def compute_ageing(df, mult, as_of_date=None):
         row = {'Month': month}
         for status in ['Healthy', 'Watch', 'Delayed', 'Poor']:
             sub = grp[grp['health'] == status]
-            row[status] = float(sub['Purchase value'].sum() * mult)
-        row['total'] = float(grp['Purchase value'].sum() * mult)
+            row[status] = float(sub['outstanding'].sum() * mult)
+        row['total'] = float(grp['outstanding'].sum() * mult)
         monthly_health.append(row)
 
     return {
-        'ageing_buckets':    ageing,
-        'health_summary':    health_summary,
-        'monthly_active':    monthly.to_dict(orient='records'),
-        'monthly_health':    monthly_health,
-        'total_active_deals':int(len(active)),
-        'total_active_value':float(active['Purchase value'].sum() * mult),
+        'ageing_buckets':     ageing,
+        'health_summary':     health_summary,
+        'monthly_health':     monthly_health,
+        'total_active_deals': int(len(active)),
+        'total_active_value': float(active['Purchase value'].sum() * mult),
+        'total_outstanding':  total_outstanding,
     }
 
 
