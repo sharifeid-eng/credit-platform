@@ -293,31 +293,57 @@ def compute_cohorts(df, mult):
 # ── Actual vs Expected ────────────────────────────────────────────────────────
 
 def compute_actual_vs_expected(df, mult):
-    """Cumulative collected vs expected with performance ratio."""
+    """Cumulative collected vs forecast vs expected total.
+
+    Three lines:
+    - Collected: actual collections to date
+    - Forecast: expected collections by now (Expected till date) — pacing metric
+    - Expected Total: full lifetime expected — ceiling reference
+    """
+    has_forecast = 'Expected till date' in df.columns
     df = add_month_column(df)
-    monthly = df.groupby('Month').agg(
-        collected      = ('Collected till date', 'sum'),
-        expected       = ('Expected total', 'sum'),
-        purchase_value = ('Purchase value', 'sum'),
-    ).reset_index()
-    for col in ['collected', 'expected', 'purchase_value']:
+
+    agg_dict = {
+        'collected':      ('Collected till date', 'sum'),
+        'expected':       ('Expected total', 'sum'),
+        'purchase_value': ('Purchase value', 'sum'),
+    }
+    if has_forecast:
+        agg_dict['forecast'] = ('Expected till date', 'sum')
+
+    monthly = df.groupby('Month').agg(**agg_dict).reset_index()
+
+    apply_cols = ['collected', 'expected', 'purchase_value']
+    if has_forecast:
+        apply_cols.append('forecast')
+    for col in apply_cols:
         monthly[col] *= mult
 
     monthly['cumulative_collected'] = monthly['collected'].cumsum()
     monthly['cumulative_expected']  = monthly['expected'].cumsum()
     monthly['cumulative_purchase']  = monthly['purchase_value'].cumsum()
-    monthly['performance_ratio']    = (
+    if has_forecast:
+        monthly['cumulative_forecast'] = monthly['forecast'].cumsum()
+
+    monthly['performance_ratio'] = (
         monthly['cumulative_collected'] / monthly['cumulative_expected'] * 100
     ).round(1)
 
     total_collected = float(df['Collected till date'].sum() * mult)
     total_expected  = float(df['Expected total'].sum() * mult)
+    total_forecast  = float(df['Expected till date'].sum() * mult) if has_forecast else None
+
+    # Pacing = collected vs forecast (time-based); recovery = collected vs expected total
+    pacing_pct = round(total_collected / total_forecast * 100, 1) if total_forecast else None
 
     return {
         'data':                monthly.to_dict(orient='records'),
         'total_collected':     total_collected,
         'total_expected':      total_expected,
+        'total_forecast':      total_forecast,
+        'has_forecast':        has_forecast,
         'overall_performance': round(total_collected / total_expected * 100, 1) if total_expected else 0,
+        'pacing_pct':          pacing_pct,
     }
 
 

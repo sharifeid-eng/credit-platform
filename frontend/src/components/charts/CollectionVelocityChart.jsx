@@ -120,7 +120,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
       {buckets.length > 0 && (
         <ChartPanel
           title="Cash Collection — Breakdown by Deal Age"
-          subtitle={`Completed deals (${totalCompleted.toLocaleString()}) grouped by ${curveBased ? 'days to collect (curve-based)' : 'days since purchase'}`}
+          subtitle={`${totalCompleted.toLocaleString()} completed deals grouped by ${curveBased ? 'days to collect (curve-based)' : 'days since purchase'} — excludes active deals still collecting`}
           loading={loading}
           error={error}
         >

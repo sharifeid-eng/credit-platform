@@ -11,12 +11,14 @@ import {
 } from '../../styles/chartTheme'
 
 export default function ActualVsExpectedChart({ company, product, snapshot, currency, asOfDate }) {
-  const [data, setData]       = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
-  const [perfPct, setPerfPct] = useState(null)
-  const [kpis, setKpis]       = useState(null)
-  const [todayLabel, setTodayLabel] = useState(null)
+  const [data, setData]               = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
+  const [perfPct, setPerfPct]         = useState(null)
+  const [pacingPct, setPacingPct]     = useState(null)
+  const [hasForecast, setHasForecast] = useState(false)
+  const [kpis, setKpis]               = useState(null)
+  const [todayLabel, setTodayLabel]   = useState(null)
 
   useEffect(() => {
     if (!product || !snapshot) return
@@ -26,21 +28,29 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
       getSummary(company, product, snapshot, currency, asOfDate),
     ])
       .then(([res, summary]) => {
-        // normalise field names from backend
         const raw = res.data ?? res
-        const normalised = raw.map(d => ({
-          month:    d.Month ?? d.month,
-          actual:   d.cumulative_collected ?? d.actual,
-          expected: d.cumulative_expected  ?? d.expected,
-        }))
+        const forecast = res.has_forecast ?? false
+        setHasForecast(forecast)
+
+        const normalised = raw.map(d => {
+          const row = {
+            month:         d.Month ?? d.month,
+            actual:        d.cumulative_collected ?? d.actual,
+            expectedTotal: d.cumulative_expected  ?? d.expected,
+          }
+          if (forecast) {
+            row.forecast = d.cumulative_forecast ?? null
+          }
+          return row
+        })
         setData(normalised)
-        setPerfPct(res.overall_performance ?? res.performance_pct ?? null)
+        setPerfPct(res.overall_performance ?? null)
+        setPacingPct(res.pacing_pct ?? null)
 
         // Find today's month label for reference line
         const now = new Date()
-        const todayMonth = now.toISOString().slice(0, 7) // "YYYY-MM"
+        const todayMonth = now.toISOString().slice(0, 7)
         const months = normalised.map(d => d.month)
-        // Find closest month to today
         if (months.length > 0) {
           let closest = months[0]
           for (const m of months) {
@@ -49,7 +59,7 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
           setTodayLabel(closest)
         }
 
-        // Build KPI data from summary
+        // Build KPI data from summary + chart response
         const pv = summary.total_purchase_value ?? 0
         const total_expected = summary.total_expected ?? pv
         const collected = summary.total_collected ?? 0
@@ -63,10 +73,12 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
         setKpis({
           receivable_value: total_expected,
           purchase_price: pv,
-          discount: discount * 100, // backend sends 0-1 decimal, we need 0-100 for fmtPct
+          discount: discount * 100,
           collected, collected_pct: collRate,
           pending, pending_pct: pendingRate,
           denied, denied_pct: denialRate,
+          forecast: res.total_forecast ?? null,
+          pacing_pct: res.pacing_pct ?? null,
         })
 
         setError(null)
@@ -75,23 +87,30 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
       .finally(() => setLoading(false))
   }, [company, product, snapshot, currency, asOfDate])
 
-  const action = perfPct != null && (
+  // Badge: show pacing when forecast available, else recovery
+  const badgePct = hasForecast ? pacingPct : perfPct
+  const badgeLabel = hasForecast ? 'of forecast collected' : 'of expected collected'
+  const action = badgePct != null && (
     <div style={{
       fontSize: 11, fontWeight: 700,
       fontFamily: 'var(--font-mono)',
-      color: perfPct >= 100 ? 'var(--teal)' : 'var(--red)',
-      background: perfPct >= 100 ? 'var(--teal-muted)' : 'var(--red-muted)',
+      color: badgePct >= 100 ? 'var(--teal)' : 'var(--red)',
+      background: badgePct >= 100 ? 'var(--teal-muted)' : 'var(--red-muted)',
       padding: '3px 10px', borderRadius: 20,
     }}>
-      {fmtPct(perfPct)} of expected collected
+      {fmtPct(badgePct)} {badgeLabel}
     </div>
   )
+
+  const subtitle = hasForecast
+    ? 'Collected vs Forecast (expected by now) vs Expected Total (lifetime) — pacing shows whether collections are on schedule'
+    : 'Cumulative collected amount vs expected total — measures recovery performance'
 
   return (
     <>
       <ChartPanel
-        title="Actual vs Expected Collections"
-        subtitle="Cumulative collected amount vs expected total — measures recovery performance"
+        title="Collection Performance"
+        subtitle={subtitle}
         loading={loading}
         error={error}
         action={action}
@@ -107,11 +126,21 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
               formatter={(v, name) => [fmtMoney(v, currency), name]}
             />
             <Legend {...legendProps} />
+            {/* Expected Total — ceiling reference (dashed, no fill) */}
             <Area
-              type="monotone" dataKey="expected"
-              name="Expected" stroke={COLORS.blue} strokeWidth={1.5}
-              fill="url(#grad-blue)" strokeDasharray="5 3"
+              type="monotone" dataKey="expectedTotal"
+              name="Expected Total" stroke={COLORS.blue} strokeWidth={1.5}
+              fill="none" strokeDasharray="5 3"
             />
+            {/* Forecast — primary comparison (solid gold line, no fill) */}
+            {hasForecast && (
+              <Area
+                type="monotone" dataKey="forecast"
+                name="Forecast (expected by now)" stroke={COLORS.gold} strokeWidth={2}
+                fill="none"
+              />
+            )}
+            {/* Collected — actual collections (teal area) */}
             <Area
               type="monotone" dataKey="actual"
               name="Collected" stroke={COLORS.teal} strokeWidth={2}
@@ -144,9 +173,11 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
           gap: 12,
           marginTop: 2,
         }}>
+          {/* Row 1 */}
           <KpiTile label="Purchase Price" value={fmtMoney(kpis.purchase_price, currency)} color="var(--gold)" />
           <KpiTile label="Avg Discount" value={fmtPct(kpis.discount)} color="var(--text-primary)" />
           <KpiTile label="Expected Total" value={fmtMoney(kpis.receivable_value, currency)} color="var(--blue)" />
+          {/* Row 2 */}
           <KpiTile
             label="Collected So Far"
             value={fmtMoney(kpis.collected, currency)}
@@ -154,13 +185,23 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
             badgeColor="var(--teal)"
             color="var(--teal)"
           />
-          <KpiTile
-            label="Pending Response"
-            value={fmtMoney(kpis.pending, currency)}
-            badge={fmtPct(kpis.pending_pct)}
-            badgeColor="var(--blue)"
-            color="var(--blue)"
-          />
+          {kpis.forecast != null ? (
+            <KpiTile
+              label="Forecast (Expected by Now)"
+              value={fmtMoney(kpis.forecast, currency)}
+              badge={kpis.pacing_pct != null ? fmtPct(kpis.pacing_pct) + ' collected' : null}
+              badgeColor={kpis.pacing_pct >= 100 ? 'var(--teal)' : 'var(--red)'}
+              color="var(--gold)"
+            />
+          ) : (
+            <KpiTile
+              label="Pending Response"
+              value={fmtMoney(kpis.pending, currency)}
+              badge={fmtPct(kpis.pending_pct)}
+              badgeColor="var(--blue)"
+              color="var(--blue)"
+            />
+          )}
           <KpiTile
             label="Denied So Far"
             value={fmtMoney(kpis.denied, currency)}
@@ -168,6 +209,16 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
             badgeColor="var(--red)"
             color="var(--red)"
           />
+          {/* Row 3 — show pending when forecast is available (since it displaced pending above) */}
+          {kpis.forecast != null && (
+            <KpiTile
+              label="Pending Response"
+              value={fmtMoney(kpis.pending, currency)}
+              badge={fmtPct(kpis.pending_pct)}
+              badgeColor="var(--blue)"
+              color="var(--blue)"
+            />
+          )}
         </div>
       )}
     </>

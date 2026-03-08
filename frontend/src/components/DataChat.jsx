@@ -97,7 +97,7 @@ export default function DataChat({ company, product, snapshot, currency }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder="e.g. What's the denial rate trend for Daman?"
+          placeholder="Ask a question about the portfolio..."
           rows={1}
           style={{
             flex: 1, resize: 'none', overflow: 'hidden',
