@@ -67,8 +67,8 @@ export default function AgeingChart({ company, product, snapshot, currency, asOf
       {/* ── Monthly Health Stacked Bars + Cumulative Donut ── */}
       {monthlyHealth.length > 0 && (
         <ChartPanel
-          title="Pending Collection — Breakdown by Health"
-          subtitle="Monthly active deal value by health classification — tracks portfolio quality over time"
+          title="Active Portfolio — Health Over Time"
+          subtitle="Face value of active (Executed) deals by health classification — does not deduct amounts already collected"
           loading={loading} error={error}
         >
           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
@@ -116,11 +116,18 @@ export default function AgeingChart({ company, product, snapshot, currency, asOf
                 </PieChart>
               </ResponsiveContainer>
               {totalActive > 0 && (
-                <div style={{
-                  fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-primary)', marginTop: -8, marginBottom: 10,
-                }}>
-                  {fmtMoney(totalActive, currency)}
+                <div style={{ marginTop: -8, marginBottom: 10, textAlign: 'center' }}>
+                  <div style={{
+                    fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-primary)',
+                  }}>
+                    {fmtMoney(totalActive, currency)}
+                  </div>
+                  <div style={{
+                    fontSize: 9, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2,
+                  }}>
+                    Active Deal Face Value
+                  </div>
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', paddingLeft: 12 }}>
