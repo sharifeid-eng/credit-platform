@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 
 const SECTIONS = [
   { id: 'overview', title: 'Portfolio Overview Metrics' },
+  { id: 'collection-perf', title: 'Collection Performance' },
+  { id: 'collection-analysis', title: 'Collection Analysis' },
   { id: 'health', title: 'Health Classification' },
   { id: 'cohort', title: 'Cohort Analysis' },
   { id: 'returns', title: 'Returns Analysis' },
@@ -142,16 +144,16 @@ export default function Methodology() {
           <Metric
             name="Weighted DSO (Days Sales Outstanding)"
             formula={<>DSO<sub>w</sub> = &Sigma;(Days<sub>i</sub> &times; Collected<sub>i</sub>) / &Sigma;Collected<sub>i</sub></>}
-            rationale="Measures the average time to collect cash, weighted by collection amount. Larger collections carry proportionally more influence. Calculated on completed deals only. Critical for sizing financing tenor and projecting liquidity."
+            rationale="Measures the average time to collect cash, weighted by collection amount. Larger collections carry proportionally more influence. Calculated on completed deals only. When collection curve data is available (30-day interval columns), DSO is estimated by finding when 90% of the deal's total collection arrived (curve-based). Otherwise falls back to deal age (today minus deal date). Critical for sizing financing tenor and projecting liquidity."
           />
           <Metric
             name="Median DSO"
-            formula="Median of days outstanding across all completed deals"
-            rationale="Robust measure of typical collection timing, unaffected by outliers. The 50th percentile of days to resolution."
+            formula="Median of days to collect across all completed deals"
+            rationale="Robust measure of typical collection timing, unaffected by outliers. The 50th percentile of days to collect. Uses curve-based estimation when available."
           />
           <Metric
             name="P95 DSO"
-            formula="95th percentile of days outstanding on completed deals"
+            formula="95th percentile of days to collect on completed deals"
             rationale="Tail-risk measure: 95% of deals resolve within this timeframe. Used to set maximum expected tenor for facility structuring."
           />
           <Metric
@@ -164,7 +166,82 @@ export default function Methodology() {
           </Note>
         </Section>
 
-        {/* 2 — Health Classification */}
+        {/* 2 — Collection Performance */}
+        <Section id="collection-perf" title="Collection Performance">
+          <p style={styles.body}>
+            The Collection Performance chart (Actual vs Expected tab) displays three cumulative lines
+            to assess whether the portfolio is collecting on schedule and how much lifetime value remains outstanding.
+          </p>
+          <Subsection title="Three Lines">
+            <Table
+              headers={['Line', 'Data Source', 'What It Answers']}
+              rows={[
+                ['Collected', 'Cumulative Collected till date by deal month', 'How much cash has actually been received?'],
+                ['Forecast (expected by now)', 'Cumulative Expected till date by deal month', 'How much should have been collected by now based on payment schedules?'],
+                ['Expected Total', 'Cumulative Expected total by deal month', 'What is the full lifetime expected collection (ceiling)?'],
+              ]}
+            />
+          </Subsection>
+          <Subsection title="Key Metrics">
+            <Metric
+              name="Pacing %"
+              formula="Collected till date / Expected till date"
+              rationale={<>Primary performance indicator. A value above 100% means collections are <em>ahead</em> of the time-based forecast.
+                Below 100% signals delays relative to expected payment schedules. This is the badge shown on the chart.</>}
+            />
+            <Metric
+              name="Recovery %"
+              formula="Collected till date / Expected total"
+              rationale="Measures how much of the full lifetime expected has been recovered so far. Will always be below 100% for a live portfolio with active deals. Converges toward 100% as deals complete."
+            />
+          </Subsection>
+          <Note>
+            Forecast requires the &ldquo;Expected till date&rdquo; column in the tape. When this column is unavailable, the chart
+            falls back to a two-line view (Collected vs Expected Total) using recovery % as the badge.
+          </Note>
+        </Section>
+
+        {/* 3 — Collection Analysis */}
+        <Section id="collection-analysis" title="Collection Analysis">
+          <p style={styles.body}>
+            The Collection tab tracks how quickly cash is received and how collection patterns evolve over time.
+          </p>
+          <Subsection title="Monthly Collection Rate">
+            <Metric
+              name="Collection Rate"
+              formula="Collected till date / Purchase value (per month)"
+              rationale="Monthly collection rate with a 3-month rolling average overlay. Shows the trend of cash recovery efficiency across deal origination months."
+            />
+          </Subsection>
+          <Subsection title="Cash Collection Breakdown">
+            <p style={styles.body}>
+              Completed deals are grouped by <strong>how long they took to collect</strong> into six time buckets
+              (0{'\u2013'}30d, 31{'\u2013'}60d, 61{'\u2013'}90d, 91{'\u2013'}120d, 121{'\u2013'}180d, 181+d).
+              This chart only includes completed deals; active deals still collecting are excluded.
+            </p>
+            <Metric
+              name="Curve-Based Collection Time"
+              formula="Interpolated days when actual collections reach 90% of total collected (from 30-day interval curve data)"
+              rationale={<>When the tape includes collection curve columns (Actual in 30 days, Actual in 60 days, etc.),
+                the system estimates true collection time by finding the interval where 90% of the deal&rsquo;s total
+                was received, then interpolates. This is far more accurate than using deal age (today minus deal date),
+                which conflates how old a deal is with how fast it collected. Falls back to deal age on tapes without curve data.</>}
+            />
+          </Subsection>
+          <Subsection title="Collection Curves (Expected vs Actual)">
+            <p style={styles.body}>
+              When curve columns are available (30-day intervals up to 390 days), the platform plots expected vs actual
+              cumulative collection as a percentage of purchase value. Available at both portfolio aggregate and per-vintage levels.
+            </p>
+            <Metric
+              name="Model Accuracy"
+              formula="Actual collection % / Expected collection % (per interval)"
+              rationale="Measures how well Klaim's expected collection schedule matches reality at each 30-day checkpoint. Values above 100% indicate faster-than-expected collection; below 100% indicates delays. Chart Y-axis is capped at 200% for readability, with real values shown in tooltips."
+            />
+          </Subsection>
+        </Section>
+
+        {/* 4 — Health Classification */}
         <Section id="health" title="Health Classification">
           <p style={styles.body}>
             Active deals (Status = &ldquo;Executed&rdquo;) are classified by days outstanding from deal origination to the as-of date.
@@ -191,7 +268,7 @@ export default function Methodology() {
             Deals are grouped into monthly vintages by origination date (Deal date).
             Each cohort is analyzed independently to identify trends across origination periods.
           </p>
-          <Subsection title="Metrics per Cohort (14 columns)">
+          <Subsection title="Metrics per Cohort (up to 17 columns)">
             <Table
               headers={['Metric', 'Formula / Source']}
               rows={[
@@ -209,8 +286,19 @@ export default function Methodology() {
                 ['Realised Margin', '(Collected \u2212 Purchase Price) / Purchase Price'],
                 ['Avg Expected IRR', 'Mean of Expected IRR column (when available)'],
                 ['Avg Actual IRR', 'Mean of Actual IRR column (filtered: outliers >1000% excluded)'],
+                ['90D %', '% of purchase value collected within 90 days (curve-based, when available)'],
+                ['180D %', '% of purchase value collected within 180 days (curve-based, when available)'],
+                ['360D %', '% of purchase value collected within 360 days (curve-based, when available)'],
               ]}
             />
+          </Subsection>
+          <Subsection title="Collection Speed (90D / 180D / 360D)">
+            <p style={styles.body}>
+              When collection curve data is available, three additional columns show the percentage of purchase value
+              collected within 90, 180, and 360 days respectively. These are color-coded for quick assessment:
+              green for high collection speed, yellow for moderate, red for slow. These columns are hidden entirely
+              on tapes that lack curve data.
+            </p>
           </Subsection>
           <Subsection title="IRR Derivation">
             <p style={styles.body}>
