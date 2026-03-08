@@ -34,6 +34,7 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
   const [curveBased, setCurveBased] = useState(false)
   const [curves, setCurves]         = useState(null)
   const [curvesAvailable, setCurvesAvailable] = useState(false)
+  const [hasForecast, setHasForecast] = useState(false)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
 
@@ -47,9 +48,12 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
       .then(([res, curvesRes]) => {
         // Collection velocity data
         const raw = res.monthly ?? res.data ?? res
+        const forecast = res.has_forecast ?? false
+        setHasForecast(forecast)
         const normalised = raw.map(d => ({
           month:           d.Month ?? d.month,
           collection_rate: d.collection_rate,
+          ...(forecast && d.expected_rate != null ? { expected_rate: d.expected_rate } : {}),
         }))
         setData(rolling3m(normalised, 'collection_rate'))
         setBuckets((res.buckets ?? []).filter(b => b.deal_count > 0))
@@ -99,7 +103,10 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
     <>
       <ChartPanel
         title="Collection Rate"
-        subtitle="Monthly collection rate % with 3-month rolling average overlay"
+        subtitle={hasForecast
+          ? "Monthly collection rate by origination vintage — expected rate shows forecast benchmark per vintage"
+          : "Monthly collection rate % with 3-month rolling average overlay"
+        }
         loading={loading}
         error={error}
       >
@@ -113,6 +120,9 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
             <Legend {...legendProps} />
             <Bar dataKey="collection_rate" name="Collection Rate" fill="url(#grad-teal)" stroke={COLORS.teal} strokeWidth={0} radius={[3,3,0,0]} />
             <Line type="monotone" dataKey="rolling_avg" name="3M Avg" stroke={COLORS.gold} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+            {hasForecast && (
+              <Line type="monotone" dataKey="expected_rate" name="Expected Rate" stroke={COLORS.blue} strokeWidth={2} dot={false} strokeDasharray="6 3" />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </ChartPanel>

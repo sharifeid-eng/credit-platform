@@ -177,18 +177,31 @@ def compute_collection_velocity(df, mult, as_of_date=None):
             'purchase_value': float(sub['Purchase value'].sum() * mult),
         })
 
+    has_forecast = 'Expected till date' in df.columns
+
     df = add_month_column(df)
-    monthly = df.groupby('Month').agg(
-        collected      = ('Collected till date', 'sum'),
-        purchase_value = ('Purchase value', 'sum'),
-        denied         = ('Denied by insurance', 'sum'),
-        pending        = ('Pending insurance response', 'sum'),
-    ).reset_index()
-    for col in ['collected', 'purchase_value', 'denied', 'pending']:
+    agg_dict = {
+        'collected':      ('Collected till date', 'sum'),
+        'purchase_value': ('Purchase value', 'sum'),
+        'denied':         ('Denied by insurance', 'sum'),
+        'pending':        ('Pending insurance response', 'sum'),
+    }
+    if has_forecast:
+        agg_dict['expected_till_date'] = ('Expected till date', 'sum')
+
+    monthly = df.groupby('Month').agg(**agg_dict).reset_index()
+    mult_cols = ['collected', 'purchase_value', 'denied', 'pending']
+    if has_forecast:
+        mult_cols.append('expected_till_date')
+    for col in mult_cols:
         monthly[col] *= mult
     monthly['collection_rate'] = (
         monthly['collected'] / monthly['purchase_value'] * 100
     ).round(1)
+    if has_forecast:
+        monthly['expected_rate'] = (
+            monthly['expected_till_date'] / monthly['purchase_value'] * 100
+        ).round(1)
 
     # Summary stats for completed deals
     avg_days = 0
@@ -208,6 +221,7 @@ def compute_collection_velocity(df, mult, as_of_date=None):
         'median_days': round(median_days, 0),
         'total_completed': total_completed,
         'curve_based': has_curves,
+        'has_forecast': has_forecast,
     }
 
 
