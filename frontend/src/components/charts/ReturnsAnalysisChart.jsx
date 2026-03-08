@@ -39,8 +39,9 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
         <Tile label="Total Deployed" value={fmtCcy(s.total_deployed, ccy)} color="var(--gold)" />
         <Tile label="Wtd Avg Discount" value={`${s.weighted_avg_discount}%`} color="var(--blue)" />
         <Tile label="Realised Margin" value={`${s.realised_margin}%`} sub={`Expected: ${s.expected_margin}%`}
-          color={s.realised_margin >= s.expected_margin ? 'var(--teal)' : 'var(--red)'} />
-        <Tile label="Completed Margin" value={`${s.completed_margin}%`} sub={`Loss rate: ${s.completed_loss_rate}%`} color="var(--teal)" />
+          color={s.realised_margin >= 0 ? 'var(--teal)' : 'var(--red)'} />
+        <Tile label="Capital Recovery" value={`${s.capital_recovery}%`} sub={`Loss rate: ${s.completed_loss_rate}%`}
+          color={s.capital_recovery >= 100 ? 'var(--teal)' : 'var(--gold)'} />
         <Tile label="Fee Yield" value={`${s.fee_yield}%`} sub={fmtCcy(s.total_fees, ccy)} color="var(--gold)" />
         <Tile label="Provision Coverage" value={`${s.provision_coverage}%`} sub={fmtCcy(s.total_provisions, ccy)} color="var(--blue)" />
         <Tile label="Completed Loss Rate" value={`${s.completed_loss_rate}%`} color={s.completed_loss_rate > 5 ? 'var(--red)' : 'var(--teal)'} />

@@ -562,14 +562,14 @@ def compute_returns_analysis(df, mult):
     total_prov      = df['Provisions'].sum() * mult if has_prov else 0
     total_adj       = df['Adjustments'].sum() * mult if has_adj else 0
 
-    realised_margin = (total_collected - total_pp) / total_pp * 100 if total_pp else 0
-    expected_margin = (total_pv - total_pp) / total_pp * 100 if total_pp else 0
-    fee_yield       = (total_setup + total_other) / total_pv * 100 if total_pv else 0
+    expected_margin  = (total_pv - total_pp) / total_pp * 100 if total_pp else 0
+    capital_recovery = total_collected / total_pp * 100 if total_pp else 0
+    fee_yield        = (total_setup + total_other) / total_pv * 100 if total_pv else 0
 
-    completed = df[df['Status'] == 'Completed']
-    comp_pv   = completed['Purchase value'].sum() * mult
-    comp_pp   = completed['Purchase price'].sum() * mult
-    comp_coll = completed['Collected till date'].sum() * mult
+    completed   = df[df['Status'] == 'Completed']
+    comp_pv     = completed['Purchase value'].sum() * mult
+    comp_pp     = completed['Purchase price'].sum() * mult
+    comp_coll   = completed['Collected till date'].sum() * mult
     comp_denied = completed['Denied by insurance'].sum() * mult
     comp_margin = (comp_coll - comp_pp) / comp_pp * 100 if comp_pp else 0
     comp_loss   = comp_denied / comp_pv * 100 if comp_pv else 0
@@ -580,7 +580,8 @@ def compute_returns_analysis(df, mult):
         'avg_discount':         round(float(df['Discount'].mean()) * 100, 2),
         'weighted_avg_discount': round(float((df['Discount'] * df['Purchase value']).sum() / total_pv * mult * 100), 2) if total_pv else 0,
         'expected_margin':      round(expected_margin, 2),
-        'realised_margin':      round(realised_margin, 2),
+        'realised_margin':      round(comp_margin, 2),
+        'capital_recovery':     round(capital_recovery, 2),
         'completed_margin':     round(comp_margin, 2),
         'completed_loss_rate':  round(comp_loss, 2),
         'fee_yield':            round(fee_yield, 2),
@@ -590,7 +591,7 @@ def compute_returns_analysis(df, mult):
         'total_adjustments':    round(total_adj, 2),
     }
 
-    # ── Monthly returns ──
+    # ── Monthly returns (margin based on completed deals per vintage) ──
     monthly_rows = []
     for month, grp in df.groupby('Month'):
         pv   = grp['Purchase value'].sum() * mult
@@ -602,6 +603,12 @@ def compute_returns_analysis(df, mult):
         of_  = grp['Other fee'].sum() * mult if has_other else 0
         prov = grp['Provisions'].sum() * mult if has_prov else 0
 
+        # Margin on completed deals only (avoids penalising vintages still collecting)
+        comp_grp  = grp[grp['Status'] == 'Completed']
+        c_pp      = comp_grp['Purchase price'].sum() * mult
+        c_coll    = comp_grp['Collected till date'].sum() * mult
+        comp_pct  = round(len(comp_grp) / len(grp) * 100, 1) if len(grp) else 0
+
         monthly_rows.append({
             'month':             month,
             'deployed':          round(pp, 2),
@@ -609,10 +616,11 @@ def compute_returns_analysis(df, mult):
             'collected':         round(coll, 2),
             'denied':            round(den, 2),
             'gross_revenue':     round(gr, 2),
-            'realised_margin':   round((coll - pp) / pp * 100, 2) if pp else 0,
+            'realised_margin':   round((c_coll - c_pp) / c_pp * 100, 2) if c_pp else 0,
             'expected_margin':   round((pv - pp) / pp * 100, 2) if pp else 0,
             'avg_discount':      round(float(grp['Discount'].mean()) * 100, 2),
             'collection_rate':   round(coll / pv * 100, 1) if pv else 0,
+            'completion_pct':    comp_pct,
             'fee_income':        round(sf + of_, 2),
             'provisions':        round(prov, 2),
         })
@@ -630,6 +638,10 @@ def compute_returns_analysis(df, mult):
         pp   = grp['Purchase price'].sum() * mult
         coll = grp['Collected till date'].sum() * mult
         den  = grp['Denied by insurance'].sum() * mult
+        # Margin on completed deals only
+        comp_grp = grp[grp['Status'] == 'Completed']
+        c_pp     = comp_grp['Purchase price'].sum() * mult
+        c_coll   = comp_grp['Collected till date'].sum() * mult
         discount_bands.append({
             'band':            str(band),
             'deals':           len(grp),
@@ -638,7 +650,7 @@ def compute_returns_analysis(df, mult):
             'collected':       round(coll, 2),
             'collection_rate': round(coll / pv * 100, 1) if pv else 0,
             'denial_rate':     round(den / pv * 100, 1) if pv else 0,
-            'margin':          round((coll - pp) / pp * 100, 2) if pp else 0,
+            'margin':          round((c_coll - c_pp) / c_pp * 100, 2) if c_pp else 0,
             'avg_discount':    round(float(grp['Discount'].mean()) * 100, 2),
         })
 
@@ -655,6 +667,9 @@ def compute_returns_analysis(df, mult):
             coll = grp['Collected till date'].sum() * mult
             den  = grp['Denied by insurance'].sum() * mult
             comp = grp[grp['Status'] == 'Completed']
+            # Margin on completed deals only
+            c_pp   = comp['Purchase price'].sum() * mult
+            c_coll = comp['Collected till date'].sum() * mult
             new_repeat.append({
                 'type':            biz_type,
                 'deals':           len(grp),
@@ -663,7 +678,7 @@ def compute_returns_analysis(df, mult):
                 'collected':       round(coll, 2),
                 'collection_rate': round(coll / pv * 100, 1) if pv else 0,
                 'denial_rate':     round(den / pv * 100, 1) if pv else 0,
-                'margin':          round((coll - pp) / pp * 100, 2) if pp else 0,
+                'margin':          round((c_coll - c_pp) / c_pp * 100, 2) if c_pp else 0,
                 'completion_rate': round(len(comp) / len(grp) * 100, 1) if len(grp) else 0,
             })
         df.drop(columns=['_biz_type'], inplace=True)
