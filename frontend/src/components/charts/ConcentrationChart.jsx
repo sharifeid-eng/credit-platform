@@ -59,13 +59,13 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           pct:   d.percentage,
         }))
         const ageingBuckets = (ageRes.ageing_buckets ?? [])
-          .filter(d => d.purchase_value > 0)
+          .filter(d => (d.outstanding ?? d.purchase_value) > 0)
           .map(d => ({
             name:  d.bucket,
-            value: d.purchase_value,
+            value: d.outstanding ?? d.purchase_value,
           }))
-        const totalActiveVal = ageRes.total_active_value ?? 0
-        setAgeingData({ healthDonut, ageingBuckets, totalActiveVal })
+        const totalOutstandingVal = ageRes.total_outstanding ?? ageRes.total_active_value ?? 0
+        setAgeingData({ healthDonut, ageingBuckets, totalOutstandingVal })
 
         setError(null)
       })
@@ -89,9 +89,9 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
     denial_rate:     d.denial_rate,
     pct:             d.percentage,
   }))
-  const healthDonut   = ageingData?.healthDonut ?? []
-  const ageingBuckets = ageingData?.ageingBuckets ?? []
-  const totalActive   = ageingData?.totalActiveVal ?? 0
+  const healthDonut      = ageingData?.healthDonut ?? []
+  const ageingBuckets    = ageingData?.ageingBuckets ?? []
+  const totalOutstanding = ageingData?.totalOutstandingVal ?? 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -201,7 +201,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
       {healthDonut.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           {/* Portfolio Health Donut */}
-          <ChartPanel title="Portfolio Health" subtitle="Active deal quality classification" loading={loading} error={error} minHeight={260}>
+          <ChartPanel title="Portfolio Health" subtitle="Outstanding amount by health classification" loading={loading} error={error} minHeight={260}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
@@ -211,9 +211,9 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
                   <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
                 </PieChart>
               </ResponsiveContainer>
-              {totalActive > 0 && (
+              {totalOutstanding > 0 && (
                 <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', marginTop: -8 }}>
-                  {fmtMoney(totalActive, currency)}
+                  {fmtMoney(totalOutstanding, currency)}
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, width: '100%', paddingLeft: 8 }}>
@@ -240,7 +240,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           </ChartPanel>
 
           {/* Ageing by Purchase Date Donut */}
-          <ChartPanel title="Ageing by Purchase Date" subtitle="Active deals by days since purchase" loading={loading} error={error} minHeight={260}>
+          <ChartPanel title="Ageing by Purchase Date" subtitle="Outstanding amount by days since purchase" loading={loading} error={error} minHeight={260}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
@@ -250,14 +250,14 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
                   <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
                 </PieChart>
               </ResponsiveContainer>
-              {totalActive > 0 && (
+              {totalOutstanding > 0 && (
                 <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', marginTop: -8 }}>
-                  {fmtMoney(totalActive, currency)}
+                  {fmtMoney(totalOutstanding, currency)}
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, width: '100%', paddingLeft: 8 }}>
                 {ageingBuckets.map((d, i) => {
-                  const pct = totalActive > 0 ? (d.value / totalActive * 100) : 0
+                  const pct = totalOutstanding > 0 ? (d.value / totalOutstanding * 100) : 0
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: AGEING_COLORS[i % AGEING_COLORS.length], flexShrink: 0 }} />
