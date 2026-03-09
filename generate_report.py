@@ -62,11 +62,12 @@ def _wait_for_charts(page, tab_name: str, max_wait: int = 30000):
     # to mount and "Loading..." spinners to appear.
     page.wait_for_timeout(4000)
 
-    # Phase 2: Poll until zero "Loading..." spinners remain (max 20s)
+    # Phase 2: Poll until zero loading spinners remain (max 20s)
+    # Note: ChartPanel uses "Loading…" (Unicode ellipsis), so match substring "Loading"
     deadline = time.time() + 20
     polls = 0
     while time.time() < deadline:
-        loading_count = page.locator("text=Loading...").count()
+        loading_count = page.locator("text=Loading").count()
         polls += 1
         if loading_count == 0 and polls >= 2:
             # Confirm zero on two consecutive checks
