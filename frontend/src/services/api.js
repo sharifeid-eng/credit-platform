@@ -92,6 +92,10 @@ export const saveIntegrityNotes = (co, prod, snapOld, snapNew, notes) =>
 export const getIntegrityNotes = (co, prod, snapOld, snapNew) =>
   api.get(`/companies/${co}/products/${prod}/integrity/notes`, { params: { snapshot_old: snapOld, snapshot_new: snapNew } }).then(r => r.data);
 
+// ── PDF Report Generation ───────────────────────────────────────────────────
+export const generatePDFReport = (co, prod, snap, cur) =>
+  api.post(`/companies/${co}/products/${prod}/generate-report`, { snapshot: snap, currency: cur }, { timeout: 180_000 }).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

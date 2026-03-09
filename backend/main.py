@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from typing import Optional
-import sys, os, json, re, pandas as pd
+import sys, os, json, re, subprocess, pandas as pd
 from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -850,3 +851,56 @@ INSTRUCTIONS:
         system=system, messages=msgs
     )
     return {'answer': resp.content[0].text, 'question': request.get('question', '')}
+
+
+# ── PDF Report Generation ─────────────────────────────────────────────────────
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+@app.post("/companies/{company}/products/{product}/generate-report")
+def generate_pdf_report(company: str, product: str, request: dict = {}):
+    """Generate a full dashboard PDF report using Playwright screenshots."""
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    output_dir = os.path.join(PROJECT_ROOT, 'reports', f'{company}_{product}')
+    os.makedirs(output_dir, exist_ok=True)
+
+    filename = f"Laith_{company.upper()}_Report_{timestamp}.pdf"
+    output_path = os.path.join(output_dir, filename)
+
+    script_path = os.path.join(PROJECT_ROOT, 'generate_report.py')
+    if not os.path.exists(script_path):
+        raise HTTPException(status_code=500, detail="Report generator script not found")
+
+    cmd = [
+        sys.executable, script_path,
+        '--company', company,
+        '--product', product,
+        '--output', output_path,
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=180, cwd=PROJECT_ROOT,
+        )
+        if result.returncode != 0:
+            detail = result.stderr[:2000] if result.stderr else "Report generation failed"
+            raise HTTPException(status_code=500, detail=detail)
+        if not os.path.exists(output_path):
+            raise HTTPException(status_code=500, detail="Report file was not created")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Report generation timed out (>3 min)")
+
+    relative_path = f"{company}_{product}/{filename}"
+    return {
+        "pdf_url": f"/reports/{relative_path}",
+        "filename": filename,
+        "generated_at": datetime.now().isoformat(),
+    }
+
+
+# ── Static file serving for reports ───────────────────────────────────────────
+
+_reports_dir = os.path.join(PROJECT_ROOT, 'reports')
+os.makedirs(_reports_dir, exist_ok=True)
+app.mount("/reports", StaticFiles(directory=_reports_dir), name="reports")

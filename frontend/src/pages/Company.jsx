@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   getProducts, getSnapshots, getConfig,
-  getSummary, getDateRange,
+  getSummary, getDateRange, generatePDFReport,
 } from '../services/api'
 
 import KpiCard       from '../components/KpiCard'
@@ -46,6 +46,8 @@ export default function Company() {
   const [aiCache, setAiCache]       = useState(null)
   const [asOfDate, setAsOfDate]     = useState('')
   const [dateRange, setDateRange]   = useState({ min: '', max: '' })
+  const [reportGenerating, setReportGenerating] = useState(false)
+  const [reportError, setReportError] = useState(null)
 
   // Load products
   useEffect(() => {
@@ -160,6 +162,66 @@ export default function Company() {
                 onChange={setCurrency}
               />
             </ControlGroup>
+
+            {/* Divider */}
+            <div style={{ width: 1, height: 32, background: 'var(--border)', alignSelf: 'flex-end', marginBottom: 2 }} />
+
+            {/* PDF Report button */}
+            <div style={{ alignSelf: 'flex-end' }}>
+              <button
+                disabled={reportGenerating || !product || !snapshot}
+                onClick={() => {
+                  setReportGenerating(true)
+                  setReportError(null)
+                  generatePDFReport(company, product, snapshot, currency)
+                    .then(res => {
+                      window.open(`http://localhost:8000${res.pdf_url}`, '_blank')
+                    })
+                    .catch(err => {
+                      const msg = err?.response?.data?.detail || 'Report generation failed'
+                      setReportError(msg)
+                      setTimeout(() => setReportError(null), 8000)
+                    })
+                    .finally(() => setReportGenerating(false))
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 11, fontWeight: 600, padding: '6px 14px',
+                  borderRadius: 7, cursor: reportGenerating ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                  ...(reportError
+                    ? { background: 'transparent', border: '1px solid var(--accent-red)', color: 'var(--accent-red)' }
+                    : reportGenerating
+                    ? { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }
+                    : { background: 'transparent', border: '1px solid var(--gold)', color: 'var(--gold)' }
+                  ),
+                }}
+              >
+                {reportGenerating ? (
+                  <>
+                    <SpinnerIcon />
+                    Generating…
+                  </>
+                ) : reportError ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    Retry
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+                    </svg>
+                    PDF Report
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -409,6 +471,21 @@ function DarkSelect({ value, onChange, children }) {
     >
       {children}
     </select>
+  )
+}
+
+function SpinnerIcon() {
+  return (
+    <>
+      <div style={{
+        width: 12, height: 12,
+        border: '2px solid var(--border)',
+        borderTopColor: 'var(--gold)',
+        borderRadius: '50%',
+        animation: 'reportSpin 0.8s linear infinite',
+      }} />
+      <style>{`@keyframes reportSpin { to { transform: rotate(360deg); } }`}</style>
+    </>
   )
 }
 
