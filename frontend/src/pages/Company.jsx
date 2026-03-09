@@ -174,9 +174,7 @@ export default function Company() {
                   setReportGenerating(true)
                   setReportError(null)
                   generatePDFReport(company, product, snapshot, currency)
-                    .then(res => {
-                      window.open(`http://localhost:8000${res.pdf_url}`, '_blank')
-                    })
+                    .then(() => {})
                     .catch(err => {
                       const msg = err?.response?.data?.detail || 'Report generation failed'
                       setReportError(msg)

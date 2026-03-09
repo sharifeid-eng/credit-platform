@@ -94,7 +94,16 @@ export const getIntegrityNotes = (co, prod, snapOld, snapNew) =>
 
 // ── PDF Report Generation ───────────────────────────────────────────────────
 export const generatePDFReport = (co, prod, snap, cur) =>
-  api.post(`/companies/${co}/products/${prod}/generate-report`, { snapshot: snap, currency: cur }, { timeout: 180_000 }).then(r => r.data);
+  api.post(
+    `/companies/${co}/products/${prod}/generate-report`,
+    { snapshot: snap, currency: cur },
+    { timeout: 180_000, responseType: 'blob' },
+  ).then(r => {
+    const blob = new Blob([r.data], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
 
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
