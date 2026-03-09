@@ -211,13 +211,13 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 |Overview          |10 KPI cards (incl curve-based DSO + HHI; DSO hidden on older tapes) + AI commentary + Data Chat|
 |Actual vs Expected|Cumulative collected vs expected area chart + Today marker + 6 KPI cards (purchase price, discount, expected, collected/pending/denied with %)|
 |Deployment        |Monthly capital deployed: by business type (new vs repeat) + by product type (stacked bars)|
-|Collection        |Monthly collection rate + 3M avg + cash collection breakdown by deal age + collection curves (expected vs actual) + model accuracy panel (Mar 2026+ only)|
+|Collection        |Monthly collection rate + 3M avg + expected rate line (forecast benchmark) + cash collection breakdown by deal age + collection curves (expected vs actual) + model accuracy panel (Mar 2026+ only)|
 |Denial Trend      |Monthly denial rate bars + 3M rolling average                   |
-|Ageing            |Monthly stacked bars by health status over time + cumulative donut + ageing bucket bars|
+|Ageing            |Monthly stacked bars by outstanding amount (PV − Collected − Denied) per health status + cumulative donut + ageing bucket bars — all based on outstanding, not face value|
 |Revenue           |Realised/unrealised stacked bars + gross margin line + KPI tiles|
 |Portfolio         |Group concentration donut + HHI badges + portfolio health donut + ageing by purchase date donut + group perf table + top 10 deals + Owner/SPV donut + owner perf table (Mar 2026+ only)|
 |Cohort Analysis   |Enhanced vintage table: up to 17 columns incl IRR, pending, loss rate, totals row, collection speed (90d/180d/360d %, Mar 2026+ only)|
-|Returns           |Margin KPIs, monthly returns chart, discount band analysis, new vs repeat + IRR KPIs, vintage chart, distribution histogram (when tape has IRR)|
+|Returns           |Margin KPIs (realised margin = completed deals only, capital recovery), monthly returns chart, discount band analysis, new vs repeat + IRR KPIs, vintage chart, distribution histogram (when tape has IRR)|
 |Risk & Migration  |Roll-rate matrix, cure rates, EL model (PD×LGD×EAD), stress test scenarios|
 |Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency, AI report + per-question notes|
 Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
@@ -254,6 +254,9 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Collection curves** — `compute_collection_curves()` aggregates expected/actual at 30-day intervals. Per-vintage and portfolio aggregate. Model accuracy chart caps Y-axis at 200% with real values in tooltips.
 - **Owner/SPV breakdown** — `compute_owner_breakdown()` groups by `Owner` column, uses `Collected till date by owner` when available (450 deals differ from standard `Collected till date`).
 - **`Actual IRR for owner`** — **excluded** from all analysis. Column has garbage data (mean ~2.56e44, likely parsing errors in source data).
+- **Outstanding amount pattern** — Ageing and Portfolio health charts use `outstanding = PV - Collected - Denied` (clipped at 0) instead of face value. Shows actual risk exposure. Health `percentage` based on outstanding share.
+- **Completed-only margins** — All margin calculations in Returns use completed deals only to avoid penalising vintages still collecting. `realised_margin` = `completed_margin`. Discount band, new vs repeat, and monthly margins also filtered to completed.
+- **Expected collection rate** — Collection velocity endpoint returns `expected_rate = Expected till date / Purchase value` per month when column available (`has_forecast` flag). Frontend renders as blue dashed line alongside actual rate bars.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme implemented. See color palette:
@@ -277,9 +280,9 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Collection velocity: data in `res.monthly[]`
 - Revenue: data in `res.monthly[]`, totals in `res.totals{}`
 - Cohort: data in `res.cohorts[]`
-- Ageing: health in `res.health_summary[]`, buckets in `res.ageing_buckets[]`, monthly health breakdown in `res.monthly_health[]`, `res.total_active_value`
+- Ageing: health in `res.health_summary[]` (`value` = outstanding, `face_value` = reference), buckets in `res.ageing_buckets[]` (`outstanding`, `purchase_value`), monthly health in `res.monthly_health[]`, `res.total_outstanding`, `res.total_active_value`
 - Concentration: groups in `res.group[]`, top deals in `res.top_deals[]`, HHI in `res.hhi{}`, owner in `res.owner{}` (`available`, `owners[]`, `uses_owner_collected`)
-- Returns analysis: `res.summary{}` (incl `has_irr`, IRR fields), `res.monthly[]`, `res.discount_bands[]`, `res.new_vs_repeat[]`, `res.irr_by_vintage[]`, `res.irr_distribution[]`
+- Returns analysis: `res.summary{}` (incl `has_irr`, IRR fields, `capital_recovery`, margins = completed deals only), `res.monthly[]` (margin = completed only, `completion_pct`), `res.discount_bands[]`, `res.new_vs_repeat[]`, `res.irr_by_vintage[]`, `res.irr_distribution[]`
 - Collection curves: `res.available`, `res.curves[]` (per-vintage), `res.aggregate{points[]}` (portfolio)
 - DSO: `res.available`, `res.weighted_dso`, `res.median_dso`, `res.p95_dso`, `res.by_vintage[]` (curve-based when available)
 - Denial funnel: `res.stages[]`, `res.net_loss`, `res.recovery_rate`
@@ -293,7 +296,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Integrity report: `res.analysis_text`, `res.questions[]`, `res.pdf_path`, `res.generated_at`
 - Integrity notes: `res.notes{}` (keyed by question index)
 - Deployment by product: `res.monthly[]`, `res.products[]`
-- Collection velocity: also returns `res.buckets[]`, `res.avg_days`, `res.median_days`, `res.total_completed`
+- Collection velocity: also returns `res.buckets[]`, `res.avg_days`, `res.median_days`, `res.total_completed`, `res.has_forecast`; monthly records include `expected_rate` when `Expected till date` column available
 - Revenue: also returns `res.vat{}` (`available`, `vat_assets`, `vat_fees`, `total_vat`)
 - Cohort: `res.cohorts[]` may include `collected_90d_pct`, `collected_180d_pct`, `collected_360d_pct` (when curve data available)
 - Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `total_expected`, `avg_discount`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`, `dso_available`
@@ -347,6 +350,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - VAT summary in revenue endpoint (vat_assets + vat_fees)
   - Enriched Data Chat context with IRR, collection speed, owner sections
 - ✅ March 2026 data tape added: `2026-03-03_uae_healthcare.csv` (7,697 deals, 60 columns)
+- ✅ **Metric accuracy fixes** (completed-only margins, outstanding-based health):
+  - Ageing tab: switched from face value to outstanding (PV − Collected − Denied) — AED 50.4M actual risk vs misleading AED 198.6M face value
+  - Portfolio tab: health + ageing donuts aligned to outstanding metric
+  - Returns tab: all margins (portfolio, monthly, discount bands, new vs repeat) now computed on completed deals only — Realised Margin 5.27% (was −4.16%). Added Capital Recovery KPI (95.84%)
+  - Collection tab: added Expected Rate line (blue dashed) showing `Expected till date / Purchase value` per vintage — contextualises the rate cliff for recent months
 -----
 ## Known Gaps & Next Steps
 **Short term:**

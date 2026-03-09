@@ -210,7 +210,12 @@ export default function Methodology() {
             <Metric
               name="Collection Rate"
               formula="Collected till date / Purchase value (per month)"
-              rationale="Monthly collection rate with a 3-month rolling average overlay. Shows the trend of cash recovery efficiency across deal origination months."
+              rationale="Monthly collection rate with a 3-month rolling average overlay. Shows the trend of cash recovery efficiency across deal origination months. Note: recent vintages will naturally show low rates because active deals are still collecting — this does not indicate underperformance."
+            />
+            <Metric
+              name="Expected Collection Rate"
+              formula="Expected till date / Purchase value (per month)"
+              rationale="Forecast benchmark showing what the portfolio model expects to have collected by now for each vintage. Rendered as a blue dashed line alongside the actual rate bars. The gap between actual and expected isolates true underperformance from normal deal seasoning — if actual tracks at or above expected, the vintage is on track regardless of absolute rate level. Available on all tapes."
             />
           </Subsection>
           <Subsection title="Cash Collection Breakdown">
@@ -260,6 +265,12 @@ export default function Methodology() {
             The thresholds are calibrated to healthcare receivables, where typical collection cycles are 30&ndash;90 days.
             Deals aging beyond 120 days have historically lower recovery rates.
           </p>
+          <Note>
+            Health classification is measured by <strong>outstanding amount</strong> (Purchase Value &minus; Collected &minus; Denied),
+            not face value. This reflects true residual risk exposure — a deal with AED 100K face value but AED 95K already
+            collected has only AED 5K outstanding, correctly contributing minimal weight to the &ldquo;Poor&rdquo; bucket even
+            if it is aged beyond 120 days. The Ageing and Portfolio Health charts both use this metric.
+          </Note>
         </Section>
 
         {/* 3 — Cohort Analysis */}
@@ -283,7 +294,7 @@ export default function Methodology() {
                 ['Collection Rate', 'Collected / Purchase Value'],
                 ['Denial Rate', 'Denied / Purchase Value'],
                 ['Expected Margin', '(Purchase Value \u2212 Purchase Price) / Purchase Price'],
-                ['Realised Margin', '(Collected \u2212 Purchase Price) / Purchase Price'],
+                ['Realised Margin', '(Collected \u2212 Purchase Price) / Purchase Price (completed deals only)'],
                 ['Avg Expected IRR', 'Mean of Expected IRR column (when available)'],
                 ['Avg Actual IRR', 'Mean of Actual IRR column (filtered: outliers >1000% excluded)'],
                 ['90D %', '% of purchase value collected within 90 days (curve-based, when available)'],
@@ -325,13 +336,13 @@ export default function Methodology() {
             />
             <Metric
               name="Realised Margin"
-              formula="(Collected \u2212 Purchase Price) / Purchase Price"
-              rationale="Actual return earned to date. Divergence from expected margin signals collection shortfalls or over-performance."
+              formula="(Collected \u2212 Purchase Price) / Purchase Price — on completed deals only"
+              rationale="True outcome-based return computed exclusively on deals that have fully resolved (Status = 'Completed'). Active deals are excluded because they are still collecting and would artificially depress the margin. This applies to portfolio-level, monthly, discount band, and new vs repeat margin calculations. Divergence from expected margin signals collection shortfalls or over-performance."
             />
             <Metric
-              name="Completed Margin"
-              formula="Realised margin on completed deals only"
-              rationale="True outcome-based return, excluding deals still in progress. Best indicator of actual fund performance."
+              name="Capital Recovery"
+              formula="Total Collected / Total Purchase Price \u00d7 100"
+              rationale="Percentage of total deployed capital that has been returned as cash collections across all deals (active and completed). A rate below 100% indicates deployed capital is still outstanding; rates above 100% indicate profitable recovery. Complements Realised Margin by showing absolute capital return rather than just completed-deal profitability."
             />
             <Metric
               name="Fee Yield"
@@ -354,7 +365,9 @@ export default function Methodology() {
             />
             <p style={styles.body}>
               For each band: deal count, face value, cost, collected, collection rate, denial rate, and margin.
-              Higher discount bands should theoretically compensate for higher risk; this analysis tests that relationship.
+              Margins are computed on completed deals within each band to reflect true outcomes rather than
+              in-progress deal distortion. Higher discount bands should theoretically compensate for higher risk;
+              this analysis tests that relationship.
             </p>
           </Subsection>
           <Subsection title="New vs. Repeat Business">
@@ -362,6 +375,7 @@ export default function Methodology() {
               Deals are classified based on the &ldquo;New business&rdquo; column. Any non-null, non-zero, non-empty value
               indicates a new relationship; otherwise the deal is classified as repeat business.
               Performance is compared across both groups to assess whether repeat clients perform differently.
+              Margins are computed on completed deals within each group for accuracy.
             </p>
           </Subsection>
         </Section>
