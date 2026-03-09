@@ -61,6 +61,7 @@ The platform allows analysts and investment committee members to:
 - **Backend:** Python, FastAPI (`localhost:8000`), Pandas, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
 - **Frontend:** React (Vite), Tailwind CSS, Recharts, React Router, Axios (`localhost:5173`)
 - **AI:** Anthropic API — portfolio commentary, per-tab insights, data chat, PDF integrity reports
+- **PDF Reports:** Playwright (headless Chrome) for dashboard screenshots + ReportLab for PDF composition
 - **Data:** CSV/Excel files stored locally under `data/`
 -----
 ## How to Start the App (Every Session)
@@ -82,6 +83,7 @@ Then open `http://localhost:5173` in the browser.
 ```
 credit-platform/
 ├── analyze.py              # Legacy CLI analysis tool (still functional)
+├── generate_report.py      # Playwright + ReportLab PDF report generator (CLI + backend)
 ├── .env                    # API key — NEVER committed to GitHub
 ├── .env.example            # Placeholder showing required env vars
 ├── .gitignore              # Must include: .env, node_modules/, venv/, __pycache__/, reports/
@@ -202,6 +204,7 @@ Key columns in loan tape files:
 |`POST /companies/{co}/products/{p}/integrity/notes`          |Save analyst notes for questions     |
 |`GET /companies/{co}/products/{p}/integrity/notes`           |Get saved analyst notes              |
 |`POST /companies/{co}/products/{p}/chat`                     |AI data chat (multi-turn)          |
+|`POST /companies/{co}/products/{p}/generate-report`          |Generate PDF report (streams bytes) |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 -----
@@ -221,7 +224,7 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 |Risk & Migration  |Roll-rate matrix, cure rates, EL model (PD×LGD×EAD), stress test scenarios|
 |Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency, AI report + per-question notes|
 Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
-Dashboard controls: Product selector, Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD).
+Dashboard controls: Product selector, Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
 -----
 ## Currency System
 Supported: `AED (0.2723)`, `USD (1.0)`, `EUR (1.08)`, `GBP (1.27)`, `SAR (0.2667)`, `KWD (3.26)`.
@@ -257,6 +260,8 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Outstanding amount pattern** — Ageing and Portfolio health charts use `outstanding = PV - Collected - Denied` (clipped at 0) instead of face value. Shows actual risk exposure. Health `percentage` based on outstanding share.
 - **Completed-only margins** — All margin calculations in Returns use completed deals only to avoid penalising vintages still collecting. `realised_margin` = `completed_margin`. Discount band, new vs repeat, and monthly margins also filtered to completed.
 - **Expected collection rate** — Collection velocity endpoint returns `expected_rate = Expected till date / Purchase value` per month when column available (`has_forecast` flag). Frontend renders as blue dashed line alongside actual rate bars.
+- **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 dashboard tabs (excluding Data Integrity), then ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
+- **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme implemented. See color palette:
@@ -355,6 +360,12 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Portfolio tab: health + ageing donuts aligned to outstanding metric
   - Returns tab: all margins (portfolio, monthly, discount bands, new vs repeat) now computed on completed deals only — Realised Margin 5.27% (was −4.16%). Added Capital Recovery KPI (95.84%)
   - Collection tab: added Expected Rate line (blue dashed) showing `Expected till date / Purchase value` per vintage — contextualises the rate cliff for recent months
+- ✅ **One-click PDF Report** — gold "PDF Report" button in dashboard controls bar:
+  - Playwright headless Chrome screenshots all 11 tabs (excl. Data Integrity)
+  - ReportLab composes professional PDF: dark cover page (LAITH branding), TOC, tab pages with headers/footers
+  - Streaming response — no files saved to disk; PDF opens in new browser tab as blob URL
+  - Button states: idle (gold outline), generating (grey + spinner), error (red + retry)
+  - ~70s generation time, 13-page ~2MB PDF
 -----
 ## Known Gaps & Next Steps
 **Short term:**
