@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
-  ComposedChart, BarChart, Bar, Line, LineChart, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine,
+  ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie,
 } from 'recharts'
 import ChartPanel from '../ChartPanel'
-import { getCollectionVelocityChart, getCollectionCurvesChart } from '../../services/api'
+import { getCollectionVelocityChart } from '../../services/api'
 import {
   gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
   GradientDefs, fmtPct, fmtMoney, COLORS,
@@ -20,20 +20,12 @@ function rolling3m(arr, key) {
   })
 }
 
-function getAccuracyColor(accuracy) {
-  if (accuracy >= 90 && accuracy <= 110) return COLORS.teal
-  if ((accuracy >= 80 && accuracy < 90) || (accuracy > 110 && accuracy <= 130)) return COLORS.gold
-  return COLORS.red
-}
-
 export default function CollectionVelocityChart({ company, product, snapshot, currency, asOfDate }) {
   const [data, setData]             = useState([])
   const [buckets, setBuckets]       = useState([])
   const [avgDays, setAvgDays]       = useState(0)
   const [totalCompleted, setTotal]  = useState(0)
   const [curveBased, setCurveBased] = useState(false)
-  const [curves, setCurves]         = useState(null)
-  const [curvesAvailable, setCurvesAvailable] = useState(false)
   const [hasForecast, setHasForecast] = useState(false)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
@@ -41,12 +33,8 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
   useEffect(() => {
     if (!product || !snapshot) return
     setLoading(true)
-    Promise.all([
-      getCollectionVelocityChart(company, product, snapshot, currency, asOfDate),
-      getCollectionCurvesChart(company, product, snapshot, currency, asOfDate).catch(() => null),
-    ])
-      .then(([res, curvesRes]) => {
-        // Collection velocity data
+    getCollectionVelocityChart(company, product, snapshot, currency, asOfDate)
+      .then(res => {
         const raw = res.monthly ?? res.data ?? res
         const forecast = res.has_forecast ?? false
         setHasForecast(forecast)
@@ -61,15 +49,6 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
         setTotal(res.total_completed ?? 0)
         setCurveBased(res.curve_based ?? false)
         setError(null)
-
-        // Collection curves data
-        if (curvesRes && curvesRes.aggregate && curvesRes.aggregate.points && curvesRes.aggregate.points.length > 0) {
-          setCurves(curvesRes)
-          setCurvesAvailable(true)
-        } else {
-          setCurves(null)
-          setCurvesAvailable(false)
-        }
       })
       .catch(() => setError('Failed to load collection data.'))
       .finally(() => setLoading(false))
@@ -80,24 +59,6 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
     name: b.bucket,
     value: b.deal_count,
   }))
-
-  // Prepare curves chart data
-  const ACCURACY_CAP = 200
-  const curvePoints = curvesAvailable
-    ? curves.aggregate.points.map(pt => {
-        const rawAccuracy = pt.expected_pct > 0
-          ? parseFloat(((pt.actual_pct / pt.expected_pct) * 100).toFixed(1))
-          : null
-        return {
-          days: pt.days,
-          label: `${pt.days}d`,
-          actual_pct: pt.actual_pct != null ? parseFloat(pt.actual_pct.toFixed(1)) : null,
-          expected_pct: pt.expected_pct != null ? parseFloat(pt.expected_pct.toFixed(1)) : null,
-          accuracy: rawAccuracy != null ? Math.min(rawAccuracy, ACCURACY_CAP) : null,
-          rawAccuracy,
-        }
-      })
-    : []
 
   return (
     <>
@@ -189,98 +150,6 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
               </div>
             </div>
           </div>
-        </ChartPanel>
-      )}
-
-      {curvesAvailable === true && (
-        <ChartPanel
-          title="Collection Curves — Expected vs Actual"
-          subtitle="Cumulative % of purchase value collected at 30-day intervals (portfolio aggregate)"
-          loading={loading}
-          error={error}
-        >
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={curvePoints}>
-              <GradientDefs />
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="label" {...xAxisProps} />
-              <YAxis {...yAxisProps} tickFormatter={v => fmtPct(v)} domain={[0, 100]} />
-              <Tooltip
-                {...tooltipStyle}
-                formatter={(v, name) => [fmtPct(v), name]}
-                labelFormatter={label => `Day ${label}`}
-              />
-              <Legend {...legendProps} />
-              <Line
-                type="monotone"
-                dataKey="actual_pct"
-                name="Actual"
-                stroke={COLORS.teal}
-                strokeWidth={2}
-                dot={{ r: 3, fill: COLORS.teal }}
-                activeDot={{ r: 5 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="expected_pct"
-                name="Expected"
-                stroke={COLORS.blue}
-                strokeWidth={2}
-                strokeDasharray="6 3"
-                dot={{ r: 3, fill: COLORS.blue }}
-                activeDot={{ r: 5 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </ChartPanel>
-      )}
-
-      {curvesAvailable === true && (
-        <ChartPanel
-          title="Model Accuracy by Interval"
-          subtitle="Actual collection as % of expected at each milestone"
-          loading={loading}
-          error={error}
-        >
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={curvePoints} barCategoryGap="25%">
-              <GradientDefs />
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="label" {...xAxisProps} />
-              <YAxis {...yAxisProps} tickFormatter={v => `${v}%`} domain={[0, ACCURACY_CAP]} />
-              <Tooltip
-                {...tooltipStyle}
-                formatter={(v, name, props) => {
-                  const real = props.payload.rawAccuracy
-                  return [`${real != null ? real : v}%`, 'Accuracy']
-                }}
-                labelFormatter={label => `Day ${label}`}
-              />
-              <ReferenceLine y={100} stroke={COLORS.text} strokeDasharray="4 2" label={{
-                value: '100%',
-                position: 'right',
-                fill: COLORS.text,
-                fontSize: 10,
-                fontFamily: 'IBM Plex Mono',
-              }} />
-              <Bar dataKey="accuracy" name="Accuracy" radius={[3,3,0,0]}
-                label={({ x, y, width, index }) => {
-                  const pt = curvePoints[index]
-                  if (!pt || pt.rawAccuracy == null || pt.rawAccuracy <= ACCURACY_CAP) return null
-                  return (
-                    <text x={x + width / 2} y={y - 4} textAnchor="middle"
-                      fill={COLORS.red} fontSize={9} fontFamily="IBM Plex Mono">
-                      {pt.rawAccuracy}%
-                    </text>
-                  )
-                }}
-              >
-                {curvePoints.map((pt, i) => (
-                  <Cell key={i} fill={getAccuracyColor(pt.rawAccuracy)} fillOpacity={0.75} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
         </ChartPanel>
       )}
     </>
