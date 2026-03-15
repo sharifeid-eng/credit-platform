@@ -19,7 +19,7 @@ The platform allows analysts and investment committee members to:
 - **Platform name:** Laith (لَيث — Arabic for "lion"; the AI in L-**AI**-th is intentional)
 - **Logo:** Styled text logo built into components (gold "AI" highlight in "LAITH" + 🦁 icon mark)
 - **Logo component:** `LaithLogo` exported from `Navbar.jsx`, used in both Navbar and Home page
-- **Page title:** `Laith — Portfolio Analytics` (set in `frontend/index.html`)
+- **Page title:** `Laith — Data Analytics` (set in `frontend/index.html` and Navbar)
 - **Note:** Original SVG at `frontend/public/logo.svg` has white background, not suitable for dark theme. Using styled component instead.
 -----
 ## Business Context
