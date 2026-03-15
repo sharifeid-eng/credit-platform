@@ -65,19 +65,17 @@ The platform allows analysts and investment committee members to:
 - **Data:** CSV/Excel files stored locally under `data/`
 -----
 ## How to Start the App (Every Session)
-**Terminal 1 — Backend:**
-```bash
+**One command (recommended):**
+```powershell
 cd C:\Users\SharifEid\credit-platform
-venv\Scripts\activate
-cd backend
-python -m uvicorn main:app --reload
+.\start.ps1
 ```
-**Terminal 2 — Frontend (no venv needed):**
-```bash
-cd C:\Users\SharifEid\credit-platform\frontend
-npm run dev
-```
-Then open `http://localhost:5173` in the browser.
+Opens two terminal windows (backend + frontend) and launches the browser automatically.
+
+**Manual start (if needed):**
+- Terminal 1 — Backend: `cd credit-platform && venv\Scripts\activate && cd backend && python -m uvicorn main:app --reload`
+- Terminal 2 — Frontend: `cd credit-platform\frontend && npm run dev`
+- Then open `http://localhost:5173`
 -----
 ## Project Structure
 ```
@@ -429,7 +427,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Onboard SILQ — POS lending asset class
 - [ ] Add `core/analysis.py` unit tests
 - [ ] Replace hardcoded FX rates with live API
-- [ ] Startup script — single command to boot both servers
+- [x] Startup script — `start.ps1` boots both servers + opens browser
 **Phase 2 (Borrowing Base Monitoring) — UI scaffolded with mock data, needs real data:**
 - [ ] Backend API endpoints for borrowing base, concentration limits, covenants
 - [ ] Replace mock data with real calculations from loan tape data
