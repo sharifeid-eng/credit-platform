@@ -15,18 +15,19 @@ FRONTEND_URL = "http://localhost:5173"
 BACKEND_URL  = "http://localhost:8000"
 
 # Tabs to include in the report (skip Data Integrity — internal only)
+# Each entry: (label for display, URL slug for sidebar navigation)
 REPORT_TABS = [
-    "Overview",
-    "Actual vs Expected",
-    "Deployment",
-    "Collection",
-    "Denial Trend",
-    "Ageing",
-    "Revenue",
-    "Portfolio",
-    "Cohort Analysis",
-    "Returns",
-    "Risk & Migration",
+    ("Overview",           "overview"),
+    ("Actual vs Expected", "actual-vs-expected"),
+    ("Deployment",         "deployment"),
+    ("Collection",         "collection"),
+    ("Denial Trend",       "denial-trend"),
+    ("Ageing",             "ageing"),
+    ("Revenue",            "revenue"),
+    ("Portfolio",          "portfolio-tab"),
+    ("Cohort Analysis",    "cohort-analysis"),
+    ("Returns",            "returns"),
+    ("Risk & Migration",   "risk-migration"),
 ]
 
 # ── Brand colours ───────────────────────────────────────────────────
@@ -86,7 +87,8 @@ def capture_tabs(company: str, product: str, tmp_dir: str) -> list[dict]:
     from playwright.sync_api import sync_playwright
 
     screenshots = []
-    url = f"{FRONTEND_URL}/company/{company}"
+    # Navigate directly to the first tab — sidebar navigation handles the rest
+    url = f"{FRONTEND_URL}/company/{company}/{product}/tape/overview"
 
     with sync_playwright() as p:
         try:
@@ -113,12 +115,13 @@ def capture_tabs(company: str, product: str, tmp_dir: str) -> list[dict]:
             document.head.appendChild(style);
         }""")
 
-        for i, tab_name in enumerate(REPORT_TABS):
+        for i, (tab_name, tab_slug) in enumerate(REPORT_TABS):
             print(f"  [{i+1}/{len(REPORT_TABS)}] Capturing: {tab_name} ", end="", flush=True)
 
-            # Click the tab button by its exact text
-            tab_btn = page.locator(f"button:text-is('{tab_name}')").first
-            tab_btn.click()
+            # Navigate via sidebar link (now <a> elements, not buttons)
+            tab_url = f"/company/{company}/{product}/tape/{tab_slug}"
+            tab_link = page.locator(f"nav a[href='{tab_url}']").first
+            tab_link.click()
 
             # Wait for all loading spinners to disappear
             wait_ms = _wait_for_charts(page, tab_name)

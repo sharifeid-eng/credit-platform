@@ -32,7 +32,7 @@ export default function Methodology() {
         const first = SECTIONS.find(s => visibleIds.has(s.id))
         if (first) setActive(first.id)
       },
-      { rootMargin: '-104px 0px -40% 0px', threshold: 0 },
+      { rootMargin: '-56px 0px -40% 0px', threshold: 0 },
     )
     for (const s of SECTIONS) {
       const el = document.getElementById(s.id)
@@ -46,14 +46,14 @@ export default function Methodology() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 104px)' }}>
+    <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
       {/* Sidebar TOC */}
       <nav style={{
         width: 220,
         flexShrink: 0,
         position: 'sticky',
         top: 104,
-        height: 'calc(100vh - 104px)',
+        height: 'calc(100vh - 56px)',
         overflowY: 'auto',
         padding: '28px 0 28px 28px',
         borderRight: '1px solid var(--border)',

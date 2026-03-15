@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCompanies } from '../services/api'
-import { LaithLogo } from '../components/Navbar'
 
 export default function Home() {
   const [companies, setCompanies] = useState([])
@@ -9,17 +8,22 @@ export default function Home() {
 
   useEffect(() => {
     getCompanies().then(data => {
-      setCompanies(data.map(c => (typeof c === 'string' ? c : c.name ?? c.id ?? String(c))))
+      // API returns objects with {name, products, total_snapshots} or strings
+      setCompanies(data.map(c => {
+        if (typeof c === 'string') return { name: c, products: [], total_snapshots: 0 }
+        return {
+          name: c.name ?? c.id ?? String(c),
+          products: c.products ?? [],
+          total_snapshots: c.total_snapshots ?? 0,
+        }
+      }))
     })
   }, [])
 
   return (
     <div style={{ padding: '36px 28px' }}>
-      {/* Page header with logo */}
+      {/* Page header — no logo (Navbar already shows it) */}
       <div style={{ marginBottom: 28 }}>
-        <div style={{ marginBottom: 16 }}>
-          <LaithLogo size="home" />
-        </div>
         <h1 style={{
           fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em',
           color: 'var(--text-primary)', margin: 0,
@@ -34,11 +38,22 @@ export default function Home() {
       {/* Company grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
         gap: 14,
       }}>
         {companies.map(co => (
-          <CompanyCard key={co} name={co} onClick={() => navigate(`/company/${co}`)} />
+          <CompanyCard
+            key={co.name}
+            company={co}
+            onClick={() => {
+              const defaultProduct = co.products?.[0] ?? ''
+              if (defaultProduct) {
+                navigate(`/company/${co.name}/${defaultProduct}/tape/overview`)
+              } else {
+                navigate(`/company/${co.name}`)
+              }
+            }}
+          />
         ))}
         {companies.length === 0 && <EmptyState />}
       </div>
@@ -46,9 +61,9 @@ export default function Home() {
   )
 }
 
-function CompanyCard({ name, onClick }) {
+function CompanyCard({ company, onClick }) {
   const [hovered, setHovered] = useState(false)
-  const safeName = typeof name === 'string' ? name : String(name ?? '')
+  const safeName = typeof company.name === 'string' ? company.name : String(company.name ?? '')
   const initials = safeName.slice(0, 2).toUpperCase()
 
   return (
@@ -96,12 +111,39 @@ function CompanyCard({ name, onClick }) {
         </div>
       </div>
 
+      {/* Product tags */}
+      {company.products && company.products.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+          {company.products.map(p => (
+            <span key={p} style={{
+              fontSize: 10,
+              padding: '2px 8px',
+              borderRadius: 12,
+              background: 'rgba(45, 212, 191, 0.1)',
+              color: 'var(--accent-teal)',
+              border: '1px solid rgba(45, 212, 191, 0.2)',
+              fontWeight: 500,
+            }}>
+              {p.replace(/_/g, ' ')}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Footer */}
       <div style={{
         fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.55,
         paddingTop: 12, borderTop: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span>Open Dashboard</span>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <span>Open Dashboard</span>
+          {company.total_snapshots > 0 && (
+            <span style={{ color: 'var(--text-faint)' }}>
+              {company.total_snapshots} snapshot{company.total_snapshots !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
         <span style={{ color: hovered ? 'var(--gold)' : 'var(--text-faint)', transition: 'color 0.15s', fontSize: 13 }}>→</span>
       </div>
     </div>

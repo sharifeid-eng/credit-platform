@@ -18,7 +18,7 @@ The platform allows analysts and investment committee members to:
 ## Branding
 - **Platform name:** Laith (لَيث — Arabic for "lion"; the AI in L-**AI**-th is intentional)
 - **Logo:** Styled text logo built into components (gold "AI" highlight in "LAITH" + 🦁 icon mark)
-- **Logo component:** `LaithLogo` exported from `Navbar.jsx`, used in both Navbar and Home page
+- **Logo component:** `LaithLogo` exported from `Navbar.jsx`, used in Navbar (Home page removed duplicate)
 - **Page title:** `Laith — Data Analytics` (set in `frontend/index.html` and Navbar)
 - **Note:** Original SVG at `frontend/public/logo.svg` has white background, not suitable for dark theme. Using styled component instead.
 -----
@@ -106,32 +106,46 @@ credit-platform/
 │   ├── public/
 │   │   └── logo.svg        # Original logo (white bg — not used in dark theme)
 │   ├── src/
-│   │   ├── App.jsx
+│   │   ├── App.jsx                  # Nested routes with CompanyLayout
+│   │   ├── contexts/
+│   │   │   └── CompanyContext.jsx    # Shared state provider (company, product, snapshots, config)
+│   │   ├── layouts/
+│   │   │   └── CompanyLayout.jsx    # Sidebar + <Outlet> wrapper with CompanyProvider
 │   │   ├── pages/
-│   │   │   ├── Home.jsx
-│   │   │   ├── Company.jsx
-│   │   │   └── Methodology.jsx    # Definitions, formulas, rationale for all analytics
+│   │   │   ├── Home.jsx             # Landing page — company grid
+│   │   │   ├── TapeAnalytics.jsx    # 12-tab tape dashboard (extracted from old Company.jsx)
+│   │   │   ├── PortfolioAnalytics.jsx  # 3-tab portfolio view (mock data)
+│   │   │   └── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   ├── components/
-│   │   │   ├── CompanyCard.jsx
+│   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
 │   │   │   ├── KpiCard.jsx
-│   │   │   ├── Navbar.jsx          # Contains LaithLogo component (exported)
+│   │   │   ├── Navbar.jsx           # Contains LaithLogo component (exported)
 │   │   │   ├── AICommentary.jsx
 │   │   │   ├── DataChat.jsx
 │   │   │   ├── TabInsight.jsx
 │   │   │   ├── ChartPanel.jsx
-│   │   │   └── charts/
-│   │   │       ├── ActualVsExpectedChart.jsx
-│   │   │       ├── AgeingChart.jsx
-│   │   │       ├── CohortTable.jsx           # Enhanced: IRR, pending, loss rate, totals row
-│   │   │       ├── CollectionVelocityChart.jsx
-│   │   │       ├── ConcentrationChart.jsx
-│   │   │       ├── DenialTrendChart.jsx
-│   │   │       ├── DeploymentChart.jsx
-│   │   │       ├── RevenueChart.jsx
-│   │   │       ├── ReturnsAnalysisChart.jsx  # Discount bands, margins, new vs repeat
-│   │   │       ├── RiskMigrationChart.jsx   # Roll-rates, cure rates, EL model, stress test
-│   │   │       ├── DenialFunnelChart.jsx    # Resolution pipeline funnel visualization
-│   │   │       └── DataIntegrityChart.jsx   # Two-tape comparison, validation, AI report + notes
+│   │   │   ├── charts/
+│   │   │   │   ├── ActualVsExpectedChart.jsx
+│   │   │   │   ├── AgeingChart.jsx
+│   │   │   │   ├── CohortTable.jsx           # Enhanced: IRR, pending, loss rate, totals row
+│   │   │   │   ├── CollectionVelocityChart.jsx
+│   │   │   │   ├── ConcentrationChart.jsx
+│   │   │   │   ├── DenialTrendChart.jsx
+│   │   │   │   ├── DeploymentChart.jsx
+│   │   │   │   ├── RevenueChart.jsx
+│   │   │   │   ├── ReturnsAnalysisChart.jsx  # Discount bands, margins, new vs repeat
+│   │   │   │   ├── RiskMigrationChart.jsx    # Roll-rates, cure rates, EL model, stress test
+│   │   │   │   ├── DenialFunnelChart.jsx     # Resolution pipeline funnel visualization
+│   │   │   │   └── DataIntegrityChart.jsx    # Two-tape comparison, validation, AI report + notes
+│   │   │   └── portfolio/
+│   │   │       ├── BorrowingBase.jsx         # Waterfall, KPIs, advance rates, facility capacity
+│   │   │       ├── ConcentrationLimits.jsx   # Limit cards with compliance badges
+│   │   │       ├── Covenants.jsx             # Covenant cards with threshold bars
+│   │   │       ├── WaterfallTable.jsx        # Borrowing base waterfall table
+│   │   │       ├── LimitCard.jsx             # Concentration limit card component
+│   │   │       ├── CovenantCard.jsx          # Covenant card with threshold visualization
+│   │   │       ├── ComplianceBadge.jsx       # Shared Compliant/Breach badge
+│   │   │       └── mockData.js               # All mock data for portfolio tabs
 │   │   ├── styles/
 │   │   │   ├── chartTheme.js
 │   │   │   └── tokens.css
@@ -208,7 +222,27 @@ Key columns in loan tape files:
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 -----
-## Dashboard Tabs (12)
+## Navigation Architecture
+**Hierarchy:** Company → Product → (Tape Analytics | Portfolio Analytics)
+
+**Route structure:**
+| Route | Component | Description |
+|---|---|---|
+| `/` | `Home` | Landing page — company grid |
+| `/company/:co/:product/tape/:tab` | `TapeAnalytics` | 12-tab dashboard (tab slug in URL) |
+| `/company/:co/:product/portfolio/:tab` | `PortfolioAnalytics` | 3-tab portfolio view (mock data) |
+| `/company/:co/:product/methodology` | `Methodology` | Definitions & formulas reference |
+
+**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Tape Analytics (12 links), Portfolio Analytics (3 links), Methodology. Active state: gold left border + gold text.
+
+**URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `borrowing-base`, `concentration-limits`, `covenants`.
+
+**Backward compat:** `/company/:co` and `/company/:co/:product` redirect to `tape/overview`.
+
+**State management:** `CompanyContext` provides shared state (company, products, snapshots, config, currency, summary, etc.) consumed by both TapeAnalytics and PortfolioAnalytics.
+
+-----
+## Tape Analytics Tabs (12)
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
 |Overview          |10 KPI cards (incl curve-based DSO + HHI; DSO hidden on older tapes) + AI commentary + Data Chat|
@@ -224,7 +258,17 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 |Risk & Migration  |Roll-rate matrix, cure rates, EL model (PD×LGD×EAD), stress test scenarios|
 |Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency, AI report + per-question notes|
 Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
-Dashboard controls: Product selector, Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
+Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
+
+-----
+## Portfolio Analytics Tabs (3) — Mock Data
+|Tab                  |What It Shows                                                |
+|---------------------|-------------------------------------------------------------|
+|Borrowing Base       |4 KPI cards, waterfall table (gross → eligible → BB), advance rates by region, facility capacity bar|
+|Concentration Limits |Summary bar (compliant/breach counts), 2-column grid of limit cards with progress bars|
+|Covenants            |Covenant cards with threshold bars, calculation breakdowns, compliance badges|
+
+**Note:** All portfolio data is mock (hardcoded in `mockData.js`). No backend endpoints yet — Phase 2 will add real data APIs.
 -----
 ## Currency System
 Supported: `AED (0.2723)`, `USD (1.0)`, `EUR (1.08)`, `GBP (1.27)`, `SAR (0.2667)`, `KWD (3.26)`.
@@ -241,7 +285,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Snapshot naming** — files must start with `YYYY-MM-DD_` for date parsing.
 - **`filter_by_date()`** — filters deals to `Deal date <= as_of_date`.
 - **`_load()` in main.py** — matches snapshots by `filename` or `date` field (fixed Feb 2026).
-- **AICommentary caching** — stored in `Company.jsx` state, survives tab switches, clears on snapshot change.
+- **AICommentary caching** — stored in `CompanyContext` state, survives tab switches, clears on snapshot change.
 - **API response extraction** — `api.js` extracts: `.commentary` for AI commentary, `.insight` for tab insights, `.answer` for chat responses.
 - **Text contrast** — `--text-muted` updated from `#4A5568` to `#8494A7` for readability on dark theme.
 - **IRR derivation** — backend calculates IRR for tapes that lack IRR columns (derived from purchase price, collected, deal dates).
@@ -260,7 +304,12 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Outstanding amount pattern** — Ageing and Portfolio health charts use `outstanding = PV - Collected - Denied` (clipped at 0) instead of face value. Shows actual risk exposure. Health `percentage` based on outstanding share.
 - **Completed-only margins** — All margin calculations in Returns use completed deals only to avoid penalising vintages still collecting. `realised_margin` = `completed_margin`. Discount band, new vs repeat, and monthly margins also filtered to completed.
 - **Expected collection rate** — Collection velocity endpoint returns `expected_rate = Expected till date / Purchase value` per month when column available (`has_forecast` flag). Frontend renders as blue dashed line alongside actual rate bars.
-- **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 dashboard tabs (excluding Data Integrity), then ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
+- **Sidebar navigation architecture** — Company pages use a persistent 240px sidebar (`Sidebar.jsx`) within `CompanyLayout`. Tabs are `<Link>` elements (not buttons). Active state: gold left border + text. Sidebar follows Methodology page's original pattern.
+- **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
+- **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
+- **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
+- **Portfolio Analytics mock data** — All 3 portfolio tabs use hardcoded data from `components/portfolio/mockData.js`. Phase 2 will replace with real backend APIs.
+- **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 tape tabs (excluding Data Integrity) via sidebar link navigation. Navigates to `/company/:co/:product/tape/:slug` URLs. ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
 -----
 ## Design System — Dark Theme ✅
@@ -366,6 +415,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Streaming response — no files saved to disk; PDF opens in new browser tab as blob URL
   - Button states: idle (gold outline), generating (grey + spinner), error (red + retry)
   - ~70s generation time, 13-page ~2MB PDF
+- ✅ **Sidebar navigation + URL-based routing** — Company pages use persistent sidebar with Tape Analytics (12 tabs) + Portfolio Analytics (3 tabs) + Methodology. Tabs are URL-driven (`/tape/:slug`, `/portfolio/:slug`), bookmarkable. Old horizontal tab bar replaced.
+- ✅ **CompanyContext + CompanyLayout** — Shared state provider (`CompanyContext.jsx`) consumed by all company pages. `CompanyLayout.jsx` renders sidebar + `<Outlet>`. Extracted from old `Company.jsx` (deleted).
+- ✅ **Landing page cleanup** — Removed duplicate logo (Navbar already shows it). Enriched company cards with product chips and snapshot counts. Companies API returns `{name, products, total_snapshots}`.
+- ✅ **Portfolio Analytics UI (mock data):**
+  - Borrowing Base — 4 KPI cards, waterfall table, advance rates by region, facility capacity bar
+  - Concentration Limits — summary bar, 2-column grid of limit cards with progress bars + compliance badges
+  - Covenants — covenant cards with threshold bars, calculation breakdowns, compliance distance warnings
+  - All data from `mockData.js` — no backend endpoints yet
 -----
 ## Known Gaps & Next Steps
 **Short term:**
@@ -373,11 +430,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Add `core/analysis.py` unit tests
 - [ ] Replace hardcoded FX rates with live API
 - [ ] Startup script — single command to boot both servers
-**Phase 2 (Borrowing Base Monitoring):**
+**Phase 2 (Borrowing Base Monitoring) — UI scaffolded with mock data, needs real data:**
+- [ ] Backend API endpoints for borrowing base, concentration limits, covenants
+- [ ] Replace mock data with real calculations from loan tape data
 - [ ] Eligibility criteria testing per deal
-- [ ] Concentration limit tracking
-- [ ] Advance rate calculations
-- [ ] Covenant monitoring and breach alerts
+- [ ] Automated concentration limit tracking
+- [ ] Advance rate calculations from actual portfolio data
+- [ ] Covenant monitoring and breach alerts with notifications
 **Phase 3 (Team & Deployment):**
 - [ ] Cloud deployment
 - [ ] Role-based access
