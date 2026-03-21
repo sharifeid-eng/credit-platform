@@ -12,7 +12,7 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 The platform allows analysts and investment committee members to:
 - Upload loan tape snapshots (CSV/Excel) and explore portfolio performance
 - Run automated data integrity checks across snapshots
-- View interactive dashboards with 12 analysis tabs (including institutional risk analytics and data integrity)
+- View interactive dashboards with per-company analysis tabs (Klaim: 12 tabs, SILQ: 8 tabs — bespoke per asset class)
 - Generate AI-powered portfolio commentary and ask natural language questions about the data
 -----
 ## Branding
@@ -26,7 +26,7 @@ The platform allows analysts and investment committee members to:
 **Who uses it:** Sharif (fund analyst/PM) and eventually the broader investment committee.
 **Current portfolio companies:**
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
-- **SILQ** — POS lending. Not yet onboarded into the platform.
+- **SILQ** — POS lending (BNPL & RBF), KSA. Data in SAR. Live dataset: `data/SILQ/KSA/`
 **Asset classes:** Receivables (insurance claims factoring) and short-term consumer/POS loans.
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`.
 **Data notes:**
@@ -39,6 +39,17 @@ The platform allows analysts and investment committee members to:
 - Fee columns: `Setup fee`, `Other fee`, `Adjustments`
 - Loss tracking: `Provisions`, `Denied by insurance`
 - **Column availability drives feature visibility** — features gracefully degrade (hidden, not estimated) on older tapes
+
+**SILQ data notes:**
+- **Tape available:** Jan 2026 (xlsx, 2 sheets — "Portfolio Commentary" + "BNPL+RBF_NE")
+- 972 loans, 19 columns, SAR currency
+- Column names include currency suffix: `Disbursed_Amount (SAR)`, `Outstanding_Amount (SAR)`, etc.
+- 3 statuses: `Closed`, `CURRENT`, `OVERDUE`
+- 2 products: `BNPL` (969 loans), `RBF_NE` (3 loans)
+- 220 shops, HHI 0.031 (low concentration)
+- Key columns: `Deal ID`, `Disbursed_Amount (SAR)`, `Outstanding_Amount (SAR)`, `Overdue_Amount (SAR)`, `Total_Collectable_Amount (SAR)`, `Tenure`, `Shop_ID`, `Product`, `Loan_Status`, `Disbursement_Date`, `Repayment_Deadline`, `Amt_Repaid`, `Margin Collected`, `Principal Collected`
+- DPD computed as `max(0, ref_date - Repayment_Deadline)`, 0 for Closed loans
+- `Outstanding_Amount` can exceed `Disbursed_Amount` (includes accrued margin) — not a data error
 -----
 ## Long-Term Vision (3 Phases)
 ### Phase 1 — Loan Tape Analysis & Dashboards ✅ (current)
@@ -88,12 +99,14 @@ credit-platform/
 ├── backend/
 │   └── main.py             # FastAPI app — all REST endpoints
 ├── core/
-│   ├── analysis.py         # All pure data computation functions (no I/O)
-│   ├── loader.py           # File discovery, snapshot loading
-│   ├── config.py           # Per-product config (currency, description) via config.json
+│   ├── analysis.py         # Klaim pure data computation functions (no I/O)
+│   ├── analysis_silq.py    # SILQ pure data computation functions (no I/O)
+│   ├── loader.py           # File discovery, snapshot loading (multi-sheet Excel, malformed headers)
+│   ├── config.py           # Per-product config (currency, description, analysis_type) via config.json
 │   ├── consistency.py      # Snapshot-to-snapshot data integrity checks
 │   ├── migration.py        # Multi-snapshot roll-rate & cure-rate analysis
-│   ├── validation.py       # Single-tape data quality checks
+│   ├── validation.py       # Klaim single-tape data quality checks
+│   ├── validation_silq.py  # SILQ single-tape data quality checks
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── data/
 │   └── {company}/
@@ -111,7 +124,7 @@ credit-platform/
 │   │   │   └── CompanyLayout.jsx    # Sidebar + <Outlet> wrapper with CompanyProvider
 │   │   ├── pages/
 │   │   │   ├── Home.jsx             # Landing page — company grid
-│   │   │   ├── TapeAnalytics.jsx    # 12-tab tape dashboard (extracted from old Company.jsx)
+│   │   │   ├── TapeAnalytics.jsx    # Multi-company tape dashboard (Klaim 12 tabs, SILQ 8 tabs)
 │   │   │   ├── PortfolioAnalytics.jsx  # 3-tab portfolio view (mock data)
 │   │   │   └── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   ├── components/
@@ -133,8 +146,15 @@ credit-platform/
 │   │   │   │   ├── RevenueChart.jsx
 │   │   │   │   ├── ReturnsAnalysisChart.jsx  # Discount bands, margins, new vs repeat
 │   │   │   │   ├── RiskMigrationChart.jsx    # Roll-rates, cure rates, EL model, stress test
-│   │   │   │   ├── DenialFunnelChart.jsx     # Resolution pipeline funnel visualization
+│   │   │   │   │   ├── DenialFunnelChart.jsx     # Resolution pipeline funnel visualization
 │   │   │   │   └── DataIntegrityChart.jsx    # Two-tape comparison, validation, AI report + notes
+│   │   │   ├── silq/                        # SILQ-specific chart components
+│   │   │   │   ├── DelinquencyChart.jsx     # DPD buckets, top overdue shops, monthly trend
+│   │   │   │   ├── SilqCollectionsChart.jsx # Monthly collections, product comparison
+│   │   │   │   ├── SilqConcentrationChart.jsx # Shop/product concentration, utilization
+│   │   │   │   ├── SilqCohortTable.jsx      # Vintage table with heat-coded metrics
+│   │   │   │   ├── YieldMarginsChart.jsx    # Margin trends, by product/tenure
+│   │   │   │   └── TenureAnalysisChart.jsx  # Distribution, performance by band
 │   │   │   └── portfolio/
 │   │   │       ├── BorrowingBase.jsx         # Waterfall, KPIs, advance rates, facility capacity
 │   │   │       ├── ConcentrationLimits.jsx   # Limit cards with compliance badges
@@ -217,8 +237,19 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/integrity/notes`           |Get saved analyst notes              |
 |`POST /companies/{co}/products/{p}/chat`                     |AI data chat (multi-turn)          |
 |`POST /companies/{co}/products/{p}/generate-report`          |Generate PDF report (streams bytes) |
+**SILQ-specific chart endpoints** (dispatched via `analysis_type` in config.json):
+|Endpoint                                                     |Description                        |
+|-------------------------------------------------------------|-----------------------------------|
+|`GET /companies/{co}/products/{p}/charts/silq/delinquency`   |DPD buckets, top overdue shops, monthly trend|
+|`GET /companies/{co}/products/{p}/charts/silq/collections`   |Monthly collections, product comparison|
+|`GET /companies/{co}/products/{p}/charts/silq/concentration` |Shop/product concentration, utilization|
+|`GET /companies/{co}/products/{p}/charts/silq/cohort`        |Vintage cohort table               |
+|`GET /companies/{co}/products/{p}/charts/silq/yield-margins` |Margin trends, by product/tenure   |
+|`GET /companies/{co}/products/{p}/charts/silq/tenure`        |Tenure distribution, performance   |
+|`GET /companies/{co}/products/{p}/charts/silq/borrowing-base`|Waterfall, eligible amount         |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
+Summary, validate, AI commentary, AI tab insight, and chat endpoints auto-dispatch to SILQ-specific logic when `config.analysis_type == 'silq'`.
 -----
 ## Navigation Architecture
 **Hierarchy:** Company → Product → (Tape Analytics | Portfolio Analytics)
@@ -240,7 +271,7 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 **State management:** `CompanyContext` provides shared state (company, products, snapshots, config, currency, summary, etc.) consumed by both TapeAnalytics and PortfolioAnalytics.
 
 -----
-## Tape Analytics Tabs (12)
+## Klaim Tape Analytics Tabs (12)
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
 |Overview          |10 KPI cards (incl curve-based DSO + HHI; DSO hidden on older tapes) + AI commentary + Data Chat|
@@ -257,6 +288,21 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 |Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency, AI report + per-question notes|
 Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
 Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
+
+-----
+## SILQ Tape Analytics Tabs (8)
+|Tab               |What It Shows                                                   |
+|------------------|----------------------------------------------------------------|
+|Overview          |10 KPI cards (Disbursed, Outstanding, Overdue, Collection Rate, PAR30, PAR90, Active, Avg Tenure, HHI Shop, Total Repaid) + AI commentary + Data Chat|
+|Delinquency       |3 PAR KPI cards + DPD bucket distribution chart + Top 10 overdue shops + Monthly delinquency trend (overdue rate + PAR30)|
+|Collections       |4 KPI cards (repaid, rate, margin, principal) + Monthly collections ComposedChart (stacked principal+margin + rate line) + Product comparison|
+|Concentration     |3 KPI cards (HHI, top shop, total shops) + Shop concentration pie + Product mix pie + Credit utilization bars + Loan size distribution|
+|Cohort Analysis   |Vintage table: deals, disbursed, repaid, outstanding, overdue, collection %, overdue %, PAR30 %, avg tenure — heat-coded cells + totals row|
+|Yield & Margins   |3 KPI cards (margin rate, realised margin, total margin) + Monthly margin trend + By product + By tenure band|
+|Tenure Analysis   |2 KPI cards (avg/median tenure) + Distribution histogram + Performance by tenure band (grouped bars) + By product|
+|Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency (reuses Klaim Data Integrity infrastructure)|
+Each non-overview tab has a **TabInsight** component with one-click AI insight.
+Dashboard controls: Snapshot selector, As-of Date picker, Currency toggle (SAR ↔ USD). PDF Report button hidden for SILQ.
 
 -----
 ## Portfolio Analytics Tabs (3) — Mock Data
@@ -278,8 +324,13 @@ Each company/product has its own configured dashboard. The platform shares a com
 **Current implementation:** Built around Klaim's healthcare receivables. Not yet abstracted for multi-asset-class use.
 -----
 ## Key Architectural Decisions
-- **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.
-- **`core/config.py`** — per-product `config.json` stores currency and description.
+- **Multi-company dispatch** — `config.json` has `analysis_type` field (`"klaim"` or `"silq"`) that routes endpoints to the correct analysis module. `_get_analysis_type()` helper in `main.py`. Each company has its own `core/analysis_*.py` and `core/validation_*.py`.
+- **Per-product tab config** — `config.json` has `tabs` array driving `Sidebar.jsx` dynamically. Falls back to `DEFAULT_TAPE_TABS` (Klaim's 12 tabs) when no `tabs` in config.
+- **SILQ chart routing** — Generic `/charts/silq/{chart_name}` endpoint dispatches via `SILQ_CHART_MAP` dict to the correct compute function.
+- **Multi-sheet Excel loading** — `core/loader.py` picks the sheet with most data rows. Detects malformed headers (all numeric/Unnamed columns) and reloads with `header=1`.
+- **`core/analysis.py`** — Klaim pure data computation. No FastAPI, no I/O.
+- **`core/analysis_silq.py`** — SILQ pure data computation. Column aliases map short names to actual names with currency suffix (e.g., `C_DISBURSED = 'Disbursed_Amount (SAR)'`). `_safe()` converts numpy types for JSON serialization.
+- **`core/config.py`** — per-product `config.json` stores currency, description, analysis_type, and tabs.
 - **Snapshot naming** — files must start with `YYYY-MM-DD_` for date parsing.
 - **`filter_by_date()`** — filters deals to `Deal date <= as_of_date`.
 - **`_load()` in main.py** — matches snapshots by `filename` or `date` field (fixed Feb 2026).
@@ -421,10 +472,23 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Concentration Limits — summary bar, 2-column grid of limit cards with progress bars + compliance badges
   - Covenants — covenant cards with threshold bars, calculation breakdowns, compliance distance warnings
   - All data from `mockData.js` — no backend endpoints yet
+- ✅ **SILQ onboarded** — full multi-company architecture:
+  - `core/analysis_silq.py` — 8 compute functions (summary, delinquency, collections, concentration, cohorts, yield, tenure, borrowing base)
+  - `core/validation_silq.py` — SILQ-specific data quality checks
+  - `core/loader.py` — multi-sheet Excel support, malformed header detection
+  - Backend dispatch via `analysis_type` in config.json → SILQ-specific logic for summary, charts, validation, AI commentary, AI tab insight, chat
+  - 7 SILQ chart endpoints under `/charts/silq/{chart_name}`
+  - 6 frontend chart components in `components/charts/silq/`
+  - Dynamic sidebar tabs from config.json (8 SILQ tabs vs 12 Klaim tabs)
+  - `TapeAnalytics.jsx` dispatches to `SilqTabContent` or `KlaimTabContent` based on `analysisType`
+  - SILQ Overview with 10 bespoke KPIs (PAR30/60/90, HHI shop, avg tenure, etc.)
+  - AI commentary and Data Chat with SILQ-specific prompts and enriched context
+  - Currency toggle SAR ↔ USD working
+  - Jan 2026 tape: 972 loans, 19 columns, 220 shops, BNPL + RBF products
 -----
 ## Known Gaps & Next Steps
 **Short term:**
-- [ ] Onboard SILQ — POS lending asset class
+- [x] Onboard SILQ — POS lending asset class
 - [ ] Add `core/analysis.py` unit tests
 - [ ] Replace hardcoded FX rates with live API
 - [x] Startup script — `start.ps1` boots both servers + opens browser

@@ -1,7 +1,8 @@
 import { Link, useParams, useLocation } from 'react-router-dom'
 import { useCompany } from '../contexts/CompanyContext'
 
-const TAPE_TABS = [
+// Default Klaim tabs (fallback when config has no tabs array)
+const DEFAULT_TAPE_TABS = [
   { slug: 'overview',           label: 'Overview' },
   { slug: 'actual-vs-expected', label: 'Actual vs Expected' },
   { slug: 'deployment',         label: 'Deployment' },
@@ -23,9 +24,10 @@ const PORTFOLIO_TABS = [
 ]
 
 export default function Sidebar() {
-  const { company, products, product } = useCompany()
+  const { company, products, product, tapeTabs } = useCompany()
   const { tab } = useParams()
   const location = useLocation()
+  const TAPE_TABS = tapeTabs || DEFAULT_TAPE_TABS
 
   const isTape = location.pathname.includes('/tape/')
   const isPortfolio = location.pathname.includes('/portfolio/')
@@ -161,4 +163,4 @@ function Divider() {
   return <div style={{ height: 1, background: 'var(--border)', margin: '10px 20px' }} />
 }
 
-export { TAPE_TABS, PORTFOLIO_TABS }
+export { DEFAULT_TAPE_TABS as TAPE_TABS, PORTFOLIO_TABS }

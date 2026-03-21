@@ -24,6 +24,12 @@ from core.migration import compute_roll_rates
 from core.validation import validate_tape
 from core.consistency import run_consistency_check
 from core.reporter import generate_ai_analysis, save_pdf_report
+from core.analysis_silq import (
+    compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
+    compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
+    compute_silq_tenure, compute_silq_borrowing_base, filter_silq_by_date,
+)
+from core.validation_silq import validate_silq_tape
 app = FastAPI(title="ACP Private Credit API")
 
 app.add_middleware(
@@ -78,6 +84,19 @@ def _extract_questions(text):
                 questions.append(m.group(1).strip())
     return questions
 
+def _get_analysis_type(company, product):
+    """Return the analysis_type from config, defaulting to 'klaim'."""
+    config = load_config(company, product)
+    return (config or {}).get('analysis_type', 'klaim')
+
+def _silq_load(company, product, snapshot, as_of_date, currency):
+    """Load SILQ data with currency multiplier applied."""
+    df, sel = _load(company, product, snapshot)
+    df = filter_silq_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return df, sel, config, disp, mult
+
 # ── Company / Product / Snapshot endpoints ────────────────────────────────────
 
 @app.get("/companies")
@@ -111,13 +130,15 @@ def get_product_config(company: str, product: str):
 @app.get("/companies/{company}/products/{product}/date-range")
 def get_date_range(company: str, product: str, snapshot: Optional[str] = None):
     df, sel = _load(company, product, snapshot)
-    if 'Deal date' not in df.columns:
-        raise HTTPException(status_code=400, detail="No Deal date column found")
-    df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
-    df = df.dropna(subset=['Deal date'])
+    at = _get_analysis_type(company, product)
+    date_col = 'Disbursement_Date' if at == 'silq' else 'Deal date'
+    if date_col not in df.columns:
+        raise HTTPException(status_code=400, detail=f"No {date_col} column found")
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    df = df.dropna(subset=[date_col])
     return {
-        'min_date':      df['Deal date'].min().strftime('%Y-%m-%d'),
-        'max_date':      df['Deal date'].max().strftime('%Y-%m-%d'),
+        'min_date':      df[date_col].min().strftime('%Y-%m-%d'),
+        'max_date':      df[date_col].max().strftime('%Y-%m-%d'),
         'snapshot_date': sel['date'],
     }
 
@@ -128,6 +149,14 @@ def get_summary(company: str, product: str,
                 snapshot: Optional[str] = None,
                 as_of_date: Optional[str] = None,
                 currency: Optional[str] = None):
+    at = _get_analysis_type(company, product)
+    if at == 'silq':
+        df, sel, config, disp, mult = _silq_load(company, product, snapshot, as_of_date, currency)
+        if not len(df):
+            raise HTTPException(status_code=400, detail="No deals found for selected date range")
+        summary = compute_silq_summary(df, mult)
+        return {'company': company, 'product': product, 'display_currency': disp, **summary}
+
     df, sel  = _load(company, product, snapshot)
     df       = filter_by_date(df, as_of_date)
     if not len(df):
@@ -392,12 +421,37 @@ def get_risk_migration(company: str, product: str,
 
     return result
 
+# ── SILQ chart endpoints ─────────────────────────────────────────────────────
+
+SILQ_CHART_MAP = {
+    'delinquency':   compute_silq_delinquency,
+    'collections':   compute_silq_collections,
+    'concentration': compute_silq_concentration,
+    'cohort':        compute_silq_cohorts,
+    'yield-margins': compute_silq_yield,
+    'tenure':        compute_silq_tenure,
+    'borrowing-base': compute_silq_borrowing_base,
+}
+
+@app.get("/companies/{company}/products/{product}/charts/silq/{chart_name}")
+def get_silq_chart(company: str, product: str, chart_name: str,
+                   snapshot: Optional[str] = None,
+                   as_of_date: Optional[str] = None,
+                   currency: Optional[str] = None):
+    """Generic SILQ chart endpoint — dispatches to the right compute function."""
+    fn = SILQ_CHART_MAP.get(chart_name)
+    if not fn:
+        raise HTTPException(status_code=404, detail=f"Unknown SILQ chart: {chart_name}")
+    df, sel, config, disp, mult = _silq_load(company, product, snapshot, as_of_date, currency)
+    return {**fn(df, mult), 'currency': disp}
+
 @app.get("/companies/{company}/products/{product}/validate")
 def validate_snapshot(company: str, product: str,
                       snapshot: Optional[str] = None):
     """Run data quality checks on a single tape."""
     df, sel = _load(company, product, snapshot)
-    result  = validate_tape(df)
+    at = _get_analysis_type(company, product)
+    result = validate_silq_tape(df) if at == 'silq' else validate_tape(df)
     result['snapshot'] = sel['date']
     result['filename'] = sel['filename']
     return result
@@ -531,20 +585,54 @@ def get_ai_commentary(company: str, product: str,
                       snapshot: Optional[str] = None,
                       as_of_date: Optional[str] = None,
                       currency: Optional[str] = None):
-    df, sel  = _load(company, product, snapshot)
-    df       = filter_by_date(df, as_of_date)
-    config, disp = _currency(company, product, currency)
-    mult     = apply_multiplier(config, disp)
-    s        = compute_summary(df, config, disp, sel['date'], as_of_date)
+    at = _get_analysis_type(company, product)
 
-    from core.analysis import add_month_column
-    monthly  = add_month_column(df).groupby('Month').agg(
-        purchase_value = ('Purchase value', 'sum'),
-        collected      = ('Collected till date', 'sum'),
-        denied         = ('Denied by insurance', 'sum'),
-    ).reset_index().tail(6).to_dict(orient='records')
+    if at == 'silq':
+        df, sel, config, disp, mult = _silq_load(company, product, snapshot, as_of_date, currency)
+        s = compute_silq_summary(df, mult)
+        d = compute_silq_delinquency(df, mult)
+        c = compute_silq_collections(df, mult)
 
-    prompt = f"""You are a senior analyst at ACP Private Credit, a private credit fund specializing in asset-backed lending.
+        prompt = f"""You are a senior analyst at ACP Private Credit, analyzing SILQ's POS lending portfolio (BNPL & RBF loans) in KSA.
+Data as of: {as_of_date or sel['date']}  |  Currency: {disp}
+
+PORTFOLIO SNAPSHOT:
+- Total Loans: {s['total_deals']:,} ({s['active_deals']} active, {s['completed_deals']} closed)
+- Total Disbursed: {disp} {s['total_disbursed']/1e6:.1f}M
+- Outstanding: {disp} {s['total_outstanding']/1e6:.1f}M
+- Collection Rate: {s['collection_rate']:.1f}% (repaid vs collectable)
+- Overdue Rate: {s['overdue_rate']:.1f}% of outstanding
+- PAR30: {s['par30']:.1f}%, PAR60: {s['par60']:.1f}%, PAR90: {s['par90']:.1f}%
+- Product Mix: {s['product_mix']}
+- Avg Tenure: {s['avg_tenure']:.0f} weeks
+
+DPD BUCKETS:
+{[f"{b['label']}: {b['count']} loans ({b['pct']:.1f}%), {disp} {b['amount']/1e6:.2f}M" for b in d['buckets']]}
+
+COLLECTION BY PRODUCT:
+{[f"{p['product']}: {p['rate']:.1f}% collection rate, {p['deals']} deals" for p in c['by_product']]}
+
+Write a concise portfolio commentary in 3 sections:
+1. PORTFOLIO HEALTH (2-3 sentences) — overall collection and delinquency performance.
+2. KEY OBSERVATIONS (3-4 bullets) — most important data points for an investment committee.
+3. WATCH ITEMS (2-3 bullets) — areas that warrant monitoring. Be direct about concerns.
+
+Professional tone, suitable for an investment committee memo. Be specific and data-driven."""
+    else:
+        df, sel  = _load(company, product, snapshot)
+        df       = filter_by_date(df, as_of_date)
+        config, disp = _currency(company, product, currency)
+        mult     = apply_multiplier(config, disp)
+        s        = compute_summary(df, config, disp, sel['date'], as_of_date)
+
+        from core.analysis import add_month_column
+        monthly  = add_month_column(df).groupby('Month').agg(
+            purchase_value = ('Purchase value', 'sum'),
+            collected      = ('Collected till date', 'sum'),
+            denied         = ('Denied by insurance', 'sum'),
+        ).reset_index().tail(6).to_dict(orient='records')
+
+        prompt = f"""You are a senior analyst at ACP Private Credit, a private credit fund specializing in asset-backed lending.
 
 You are analyzing the loan portfolio for {company.upper()} - {product.replace('_', ' ').title()}.
 Data as of: {as_of_date or sel['date']}  |  Currency: {disp}
@@ -575,7 +663,7 @@ Professional tone, suitable for an investment committee memo. Be specific and da
     return {
         'commentary':   msg.content[0].text,
         'generated_at': datetime.now().isoformat(),
-        'as_of_date':   as_of_date or sel['date'],
+        'as_of_date':   as_of_date or sel.get('date', ''),
     }
 
 @app.get("/companies/{company}/products/{product}/ai-tab-insight")
@@ -590,43 +678,62 @@ def get_tab_insight(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult     = apply_multiplier(config, disp)
 
+    at = _get_analysis_type(company, product)
+
     # Build tab-specific data context
     tab_data = {}
-    if tab == 'deployment':
-        tab_data = {'monthly_deployment': compute_deployment(df, mult)[-12:]}
-    elif tab == 'collection':
-        cv = compute_collection_velocity(df, mult, as_of_date)
-        tab_data = {'buckets': cv['buckets'], 'recent_monthly': cv['monthly'][-12:]}
-    elif tab == 'denial-trend':
-        tab_data = {'denial_trend': compute_denial_trend(df, mult)[-12:]}
-    elif tab == 'ageing':
-        ag = compute_ageing(df, mult, as_of_date)
-        tab_data = {'health_summary': ag['health_summary'], 'ageing_buckets': ag['ageing_buckets']}
-    elif tab == 'revenue':
-        rev = compute_revenue(df, mult)
-        tab_data = {'totals': rev['totals'], 'recent_monthly': rev['monthly'][-12:]}
-    elif tab == 'concentration':
-        conc = compute_concentration(df, mult)
-        tab_data = {'top_groups': conc.get('group', [])[:5], 'top_deals': conc.get('top_deals', [])[:5]}
-    elif tab == 'cohort':
-        tab_data = {'cohorts': compute_cohorts(df, mult)[-12:]}
-    elif tab == 'actual-vs-expected':
-        ave = compute_actual_vs_expected(df, mult)
-        tab_data = {'overall_performance': ave['overall_performance'],
-                    'total_collected': ave['total_collected'],
-                    'total_expected': ave['total_expected'],
-                    'recent': ave['data'][-6:]}
-    elif tab == 'returns':
-        ret = compute_returns_analysis(df, mult)
-        tab_data = {'summary': ret['summary'], 'recent_monthly': ret['monthly'][-12:]}
-    elif tab == 'risk-migration':
-        el = compute_expected_loss(df, mult)
-        st = compute_stress_test(df, mult)
-        tab_data = {'expected_loss': el['portfolio'], 'stress_scenarios': st['scenarios']}
+    if at == 'silq':
+        df = filter_silq_by_date(df, as_of_date)
+        if tab == 'delinquency':
+            tab_data = compute_silq_delinquency(df, mult)
+        elif tab == 'collections':
+            tab_data = compute_silq_collections(df, mult)
+        elif tab == 'concentration':
+            conc = compute_silq_concentration(df, mult)
+            tab_data = {'top_shops': conc['shops'][:5], 'hhi': conc['hhi'], 'product_mix': conc['product_mix']}
+        elif tab == 'cohort':
+            tab_data = compute_silq_cohorts(df, mult)
+        elif tab == 'yield-margins':
+            tab_data = compute_silq_yield(df, mult)
+        elif tab == 'tenure':
+            tab_data = compute_silq_tenure(df, mult)
+    else:
+        if tab == 'deployment':
+            tab_data = {'monthly_deployment': compute_deployment(df, mult)[-12:]}
+        elif tab == 'collection':
+            cv = compute_collection_velocity(df, mult, as_of_date)
+            tab_data = {'buckets': cv['buckets'], 'recent_monthly': cv['monthly'][-12:]}
+        elif tab == 'denial-trend':
+            tab_data = {'denial_trend': compute_denial_trend(df, mult)[-12:]}
+        elif tab == 'ageing':
+            ag = compute_ageing(df, mult, as_of_date)
+            tab_data = {'health_summary': ag['health_summary'], 'ageing_buckets': ag['ageing_buckets']}
+        elif tab == 'revenue':
+            rev = compute_revenue(df, mult)
+            tab_data = {'totals': rev['totals'], 'recent_monthly': rev['monthly'][-12:]}
+        elif tab == 'concentration':
+            conc = compute_concentration(df, mult)
+            tab_data = {'top_groups': conc.get('group', [])[:5], 'top_deals': conc.get('top_deals', [])[:5]}
+        elif tab == 'cohort':
+            tab_data = {'cohorts': compute_cohorts(df, mult)[-12:]}
+        elif tab == 'actual-vs-expected':
+            ave = compute_actual_vs_expected(df, mult)
+            tab_data = {'overall_performance': ave['overall_performance'],
+                        'total_collected': ave['total_collected'],
+                        'total_expected': ave['total_expected'],
+                        'recent': ave['data'][-6:]}
+        elif tab == 'returns':
+            ret = compute_returns_analysis(df, mult)
+            tab_data = {'summary': ret['summary'], 'recent_monthly': ret['monthly'][-12:]}
+        elif tab == 'risk-migration':
+            el = compute_expected_loss(df, mult)
+            st = compute_stress_test(df, mult)
+            tab_data = {'expected_loss': el['portfolio'], 'stress_scenarios': st['scenarios']}
 
     tab_labels = {
         'deployment':          'Capital Deployment',
         'collection':          'Collection Velocity',
+        'collection-velocity': 'Collection Velocity',
         'denial-trend':        'Denial Rate Trend',
         'ageing':              'Portfolio Ageing & Health',
         'revenue':             'Revenue Analysis',
@@ -635,6 +742,10 @@ def get_tab_insight(company: str, product: str,
         'actual-vs-expected':  'Actual vs Expected',
         'returns':             'Returns Analysis',
         'risk-migration':      'Risk & Migration Analysis',
+        'delinquency':         'Delinquency Analysis',
+        'collections':         'Collections Analysis',
+        'yield-margins':       'Yield & Margins',
+        'tenure':              'Tenure Analysis',
     }
 
     prompt = f"""You are a senior credit analyst at ACP Private Credit reviewing the {tab_labels.get(tab, tab)} view for {company.upper()} ({product.replace('_', ' ').title()}) as of {as_of_date or sel['date']}.
@@ -661,6 +772,10 @@ def chat_with_data(company: str, product: str, request: dict,
     snap = snapshot or request.get('snapshot')
     cur  = currency or request.get('currency')
     aod  = as_of_date or request.get('as_of_date')
+    at = _get_analysis_type(company, product)
+
+    if at == 'silq':
+        return _silq_chat(company, product, request, snap, aod, cur)
 
     df, sel  = _load(company, product, snap)
     df       = filter_by_date(df, aod)
@@ -844,6 +959,67 @@ INSTRUCTIONS:
     msgs = [{"role": ("assistant" if h.get('role') == 'ai' else h.get('role', 'user')),
              "content": h.get('content') or h.get('text', '')}
             for h in request.get('history', [])[-6:]]
+    msgs.append({"role": "user", "content": request.get('question', '')})
+
+    resp = _ai_client().messages.create(
+        model="claude-opus-4-6", max_tokens=1000,
+        system=system, messages=msgs
+    )
+    return {'answer': resp.content[0].text, 'question': request.get('question', '')}
+
+
+def _silq_chat(company, product, request, snap, aod, cur):
+    """SILQ-specific data chat with enriched context."""
+    df, sel, config, disp, mult = _silq_load(company, product, snap, aod, cur)
+    s = compute_silq_summary(df, mult)
+    d = compute_silq_delinquency(df, mult)
+    c = compute_silq_collections(df, mult)
+    conc = compute_silq_concentration(df, mult)
+    y = compute_silq_yield(df, mult)
+    t = compute_silq_tenure(df, mult)
+
+    system = f"""You are an expert credit analyst assistant for ACP Private Credit,
+analyzing the SILQ POS lending portfolio (BNPL & RBF loans) in KSA.
+
+PORTFOLIO SUMMARY (as of {aod or sel['date']}, currency: {disp}):
+- Total Loans: {s['total_deals']:,} ({s['active_deals']} active, {s['completed_deals']} closed)
+- Total Disbursed: {disp} {s['total_disbursed']/1e6:.2f}M
+- Outstanding: {disp} {s['total_outstanding']/1e6:.2f}M
+- Total Overdue: {disp} {s['total_overdue']/1e6:.2f}M
+- Collection Rate: {s['collection_rate']:.1f}%
+- PAR30: {s['par30']:.1f}%, PAR60: {s['par60']:.1f}%, PAR90: {s['par90']:.1f}%
+- Product Mix: {s['product_mix']}
+- Avg Tenure: {s['avg_tenure']:.0f} weeks
+
+DPD BUCKETS:
+{chr(10).join(f"  {b['label']}: {b['count']} loans ({b['pct']:.1f}%), {disp} {b['amount']/1e6:.2f}M" for b in d['buckets'])}
+
+COLLECTION BY PRODUCT:
+{chr(10).join(f"  {p['product']}: {p['rate']:.1f}% rate, {p['deals']} deals, {disp} {p['repaid']/1e6:.2f}M repaid" for p in c['by_product'])}
+
+TOP SHOPS BY DISBURSEMENT:
+{chr(10).join(f"  Shop {sh['shop_id']}: {sh['share']:.1f}% share, {sh['deals']} deals" for sh in conc['shops'][:8])}
+
+SHOP CONCENTRATION: HHI = {conc['hhi']:.4f}
+
+YIELD & MARGINS:
+  Portfolio margin rate: {y['margin_rate']:.2f}%
+  Realised margin (closed only): {y['realised_margin_rate']:.2f}%
+  By product: {[f"{p['product']}: {p['margin_rate']:.2f}%" for p in y['by_product']]}
+
+TENURE ANALYSIS:
+  Avg: {t['avg_tenure']:.0f} weeks, Median: {t['median_tenure']:.0f} weeks
+  By product: {[f"{p['product']}: avg {p['avg_tenure']:.0f}w" for p in t['by_product']]}
+
+INSTRUCTIONS:
+- Answer questions precisely with specific numbers from the data above. Be concise but thorough.
+- When a question requires deal-level detail or data not in your context, provide the best answer you can and note limitations.
+- Do not fabricate numbers. If a metric is not in your context, say so."""
+
+    msgs = [{
+        "role": ("assistant" if h.get('role') == 'ai' else h.get('role', 'user')),
+        "content": h.get('content') or h.get('text', '')
+    } for h in request.get('history', [])[-6:]]
     msgs.append({"role": "user", "content": request.get('question', '')})
 
     resp = _ai_client().messages.create(
