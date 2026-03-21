@@ -3,5 +3,20 @@
   "description": "Medical insurance claims factoring",
   "company": "klaim",
   "product": "UAE_healthcare",
-  "usd_rate": 0.2723
+  "usd_rate": 0.2723,
+  "analysis_type": "klaim",
+  "tabs": [
+    { "slug": "overview",           "label": "Overview" },
+    { "slug": "actual-vs-expected", "label": "Actual vs Expected" },
+    { "slug": "deployment",         "label": "Deployment" },
+    { "slug": "collection",         "label": "Collection" },
+    { "slug": "denial-trend",       "label": "Denial Trend" },
+    { "slug": "ageing",             "label": "Ageing" },
+    { "slug": "revenue",            "label": "Revenue" },
+    { "slug": "portfolio-tab",      "label": "Portfolio" },
+    { "slug": "cohort-analysis",    "label": "Cohort Analysis" },
+    { "slug": "returns",            "label": "Returns" },
+    { "slug": "risk-migration",     "label": "Risk & Migration" },
+    { "slug": "data-integrity",     "label": "Data Integrity" }
+  ]
 }

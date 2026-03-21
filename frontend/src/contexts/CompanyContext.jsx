@@ -111,6 +111,8 @@ export function CompanyProvider({ children }) {
       asOfDate, setAsOfDate, dateRange,
       reportGenerating, reportError, handleGenerateReport,
       navigate,
+      analysisType: config.analysis_type || 'klaim',
+      tapeTabs: config.tabs || null,
     }}>
       {children}
     </CompanyContext.Provider>

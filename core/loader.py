@@ -51,17 +51,45 @@ def extract_date_from_filename(filename):
     return None
 
 def load_snapshot(filepath):
-    """Load a single snapshot file into a dataframe"""
+    """Load a single snapshot file into a dataframe.
+
+    Handles malformed Excel files where the first row contains summary totals
+    instead of headers (detected by checking if column names are numeric).
+    """
     if filepath.endswith('.csv'):
         df = pd.read_csv(filepath)
     else:
-        df = pd.read_excel(filepath)
-    
+        # For multi-sheet Excel files, pick the largest sheet (most data rows)
+        xls = pd.ExcelFile(filepath)
+        best_sheet = None
+        if len(xls.sheet_names) > 1:
+            best_sheet, best_rows = xls.sheet_names[0], -1
+            for sn in xls.sheet_names:
+                nrows = pd.read_excel(xls, sheet_name=sn).shape[0]
+                if nrows > best_rows:
+                    best_sheet, best_rows = sn, nrows
+        sheet = best_sheet or xls.sheet_names[0]
+        df = pd.read_excel(filepath, sheet_name=sheet)
+        # Detect malformed headers: if most column names are numeric (not strings),
+        # the real headers are in the first data row
+        named_cols = sum(1 for c in df.columns
+                         if isinstance(c, str) and not c.startswith('Unnamed'))
+        if named_cols == 0 and len(df) > 0:
+            # First row likely contains real headers — reload with header=1
+            df = pd.read_excel(filepath, sheet_name=sheet, header=1)
+
     df.columns = df.columns.str.strip()
-    
+
+    # Parse date columns if they exist (column-agnostic)
     if 'Deal date' in df.columns:
         df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
-    
+    if 'Disbursement_Date' in df.columns:
+        df['Disbursement_Date'] = pd.to_datetime(df['Disbursement_Date'], errors='coerce')
+    if 'Repayment_Deadline' in df.columns:
+        df['Repayment_Deadline'] = pd.to_datetime(df['Repayment_Deadline'], errors='coerce')
+    if 'Last_Collection_Date' in df.columns:
+        df['Last_Collection_Date'] = pd.to_datetime(df['Last_Collection_Date'], errors='coerce')
+
     return df
 
 def select_company():
