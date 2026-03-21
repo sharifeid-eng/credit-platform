@@ -1,3 +1,4 @@
+import React from 'react'
 import { useParams } from 'react-router-dom'
 import { useCompany } from '../contexts/CompanyContext'
 import { generatePDFReport } from '../services/api'
@@ -5,7 +6,8 @@ import { generatePDFReport } from '../services/api'
 import KpiCard       from '../components/KpiCard'
 import AICommentary  from '../components/AICommentary'
 import DataChat      from '../components/DataChat'
-import TabInsight    from '../components/TabInsight'
+import TabInsight       from '../components/TabInsight'
+import BackdatedBanner  from '../components/BackdatedBanner'
 
 // Klaim Charts
 import DeploymentChart         from '../components/charts/DeploymentChart'
@@ -41,7 +43,7 @@ export default function TapeAnalytics() {
     config, currency, setCurrency, localCcy,
     summary, summaryLoading,
     aiCache, setAiCache,
-    asOfDate, setAsOfDate, dateRange,
+    asOfDate, setAsOfDate, dateRange, snapshotDate, isBackdated,
     reportGenerating, reportError, handleGenerateReport,
     analysisType, tapeTabs,
   } = useCompany()
@@ -137,6 +139,7 @@ export default function TapeAnalytics() {
 
       {/* Tab content */}
       <div style={{ padding: '20px 28px 40px' }}>
+        {isBackdated && <BackdatedBanner asOfDate={asOfDate} snapshotDate={snapshotDate} />}
         {analysisType === 'silq' ? (
           <SilqTabContent
             tab={tab} activeTab={activeTab}
@@ -145,6 +148,7 @@ export default function TapeAnalytics() {
             currency={currency} asOfDate={asOfDate}
             summary={summary} summaryLoading={summaryLoading}
             aiCache={aiCache} onAiCache={setAiCache}
+            isBackdated={isBackdated}
           />
         ) : (
           <KlaimTabContent
@@ -154,6 +158,7 @@ export default function TapeAnalytics() {
             currency={currency} asOfDate={asOfDate}
             summary={summary} summaryLoading={summaryLoading}
             aiCache={aiCache} onAiCache={setAiCache}
+            isBackdated={isBackdated}
           />
         )}
       </div>
@@ -162,7 +167,7 @@ export default function TapeAnalytics() {
 }
 
 /* ── SILQ Tab Content ── */
-function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots, currency, asOfDate, summary, summaryLoading, aiCache, onAiCache }) {
+function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots, currency, asOfDate, summary, summaryLoading, aiCache, onAiCache, isBackdated }) {
   const chartProps = { company, product, snapshot, currency, asOfDate }
 
   if (tab === 'overview') {
@@ -172,6 +177,7 @@ function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots,
         company={company} product={product}
         snapshot={snapshot} currency={currency} asOfDate={asOfDate}
         aiCache={aiCache} onAiCache={onAiCache}
+        isBackdated={isBackdated}
       />
     )
   }
@@ -191,7 +197,7 @@ function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots,
 }
 
 /* ── Klaim Tab Content ── */
-function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, currency, asOfDate, summary, summaryLoading, aiCache, onAiCache }) {
+function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, currency, asOfDate, summary, summaryLoading, aiCache, onAiCache, isBackdated }) {
   return (
     <>
       {activeTab === 'Overview' && (
@@ -200,6 +206,7 @@ function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, cur
           company={company} product={product}
           snapshot={snapshot} currency={currency} asOfDate={asOfDate}
           aiCache={aiCache} onAiCache={onAiCache}
+          isBackdated={isBackdated}
         />
       )}
       {activeTab === 'Actual vs Expected' && (
@@ -261,22 +268,23 @@ function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, cur
 }
 
 /* ── SILQ Overview Tab ── */
-function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, currency, asOfDate, aiCache, onAiCache }) {
+function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, currency, asOfDate, aiCache, onAiCache, isBackdated }) {
   const ccy = summary?.display_currency ?? 'SAR'
   const fmt  = (v) => v == null ? '—' : v >= 1_000_000 ? `${ccy} ${(v/1_000_000).toFixed(1)}M` : `${ccy} ${(v/1_000).toFixed(0)}K`
   const pct  = (v) => v == null ? '—' : `${v.toFixed(1)}%`
 
+  const bd = isBackdated  // shorthand
   const kpis = summary ? [
     { label: 'Total Disbursed',  value: fmt(summary.total_disbursed),  sub: `${summary.total_deals} loans`,        color: 'gold' },
-    { label: 'Outstanding',      value: fmt(summary.total_outstanding),sub: 'current exposure',                     color: 'blue' },
-    { label: 'Total Overdue',    value: fmt(summary.total_overdue),    sub: pct(summary.overdue_rate) + ' of outst.',color: 'red'  },
-    { label: 'Collection Rate',  value: pct(summary.collection_rate),  sub: 'repaid vs collectable',                color: 'teal' },
-    { label: 'PAR30',            value: pct(summary.par30),            sub: `PAR60: ${pct(summary.par60)}`,          color: summary.par30 > 20 ? 'red' : 'gold' },
-    { label: 'PAR90',            value: pct(summary.par90),            sub: 'serious delinquency',                   color: summary.par90 > 5 ? 'red' : 'teal' },
+    { label: 'Outstanding',      value: fmt(summary.total_outstanding),sub: 'current exposure',                     color: 'blue', stale: bd },
+    { label: 'Total Overdue',    value: fmt(summary.total_overdue),    sub: pct(summary.overdue_rate) + ' of outst.',color: 'red', stale: bd },
+    { label: 'Collection Rate',  value: pct(summary.collection_rate),  sub: 'repaid vs collectable',                color: 'teal', stale: bd },
+    { label: 'PAR30',            value: pct(summary.par30),            sub: `PAR60: ${pct(summary.par60)}`,          color: summary.par30 > 20 ? 'red' : 'gold', stale: bd },
+    { label: 'PAR90',            value: pct(summary.par90),            sub: 'serious delinquency',                   color: summary.par90 > 5 ? 'red' : 'teal', stale: bd },
     { label: 'Active Loans',     value: String(summary.active_deals),  sub: `${summary.completed_deals} closed`,    color: 'blue' },
     { label: 'Avg Tenure',       value: `${summary.avg_tenure?.toFixed(0) ?? '—'}w`, sub: 'weeks',                  color: 'gold' },
     { label: 'HHI (Shop)',       value: summary.hhi_shop?.toFixed(4) ?? '—', sub: `Top shop: ${pct(summary.top_1_shop_pct)}`, color: summary.hhi_shop > 0.15 ? 'red' : 'teal' },
-    { label: 'Total Repaid',     value: fmt(summary.total_repaid),     sub: 'cumulative collections',               color: 'teal' },
+    { label: 'Total Repaid',     value: fmt(summary.total_repaid),     sub: 'cumulative collections',               color: 'teal', stale: bd },
   ] : Array(10).fill(null)
 
   const showSkeleton = summaryLoading || !summary
@@ -290,6 +298,9 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
           : kpis.map((k, i) => <KpiCard key={i} {...k} />)
         }
       </div>
+      {summary?.portfolio_commentary && (
+        <PortfolioCommentaryPanel text={summary.portfolio_commentary} />
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} />
         <DataChat company={company} product={product} snapshot={snapshot} currency={currency} />
@@ -298,23 +309,54 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
   )
 }
 
+/* ── Portfolio Commentary Panel ── */
+function PortfolioCommentaryPanel({ text }) {
+  const [expanded, setExpanded] = React.useState(false)
+  const preview = text.length > 280 ? text.slice(0, 280) + '...' : text
+
+  return (
+    <div style={{
+      background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8,
+      padding: '12px 16px', borderLeft: '3px solid var(--accent-gold)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-gold)' }}>Portfolio Commentary</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>from tape</span>
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+        {expanded ? text : preview}
+      </div>
+      {text.length > 280 && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            marginTop: 6, background: 'none', border: 'none', color: 'var(--accent-gold)',
+            fontSize: 12, cursor: 'pointer', padding: 0,
+          }}
+        >{expanded ? 'Show less' : 'Read more'}</button>
+      )}
+    </div>
+  )
+}
+
 /* ── Klaim Overview Tab ── */
-function OverviewTab({ summary, summaryLoading, company, product, snapshot, currency, asOfDate, aiCache, onAiCache }) {
+function OverviewTab({ summary, summaryLoading, company, product, snapshot, currency, asOfDate, aiCache, onAiCache, isBackdated }) {
   const ccy = summary?.display_currency ?? 'AED'
   const fmt  = (v) => v == null ? '—' : v >= 1_000_000 ? `${ccy} ${(v/1_000_000).toFixed(1)}M` : `${ccy} ${(v/1_000).toFixed(0)}K`
   const pct  = (v) => v == null ? '—' : `${v.toFixed(1)}%`
   const hhiFmt = (v) => v == null ? '—' : v.toFixed(4)
+  const bd = isBackdated
 
   const kpis = summary ? [
     { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold' },
-    { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal' },
-    { label: 'Denial Rate',     value: pct(summary.denial_rate),          sub: 'vs Purchase Value',               color: 'red'  },
-    { label: 'Pending Exposure',value: fmt(summary.total_pending),        sub: pct(summary.pending_rate),         color: 'blue' },
+    { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal', stale: bd },
+    { label: 'Denial Rate',     value: pct(summary.denial_rate),          sub: 'vs Purchase Value',               color: 'red',  stale: bd },
+    { label: 'Pending Exposure',value: fmt(summary.total_pending),        sub: pct(summary.pending_rate),         color: 'blue', stale: bd },
     { label: 'Active Deals',    value: String(summary.active_deals),      sub: 'currently executing',             color: 'blue' },
     { label: 'Completed Deals', value: String(summary.completed_deals),   sub: 'fully collected',                 color: 'teal' },
-    { label: 'Total Collected', value: fmt(summary.total_collected),      sub: 'cumulative collections',          color: 'teal' },
-    { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red'  },
-    ...(summary.dso_available ? [{ label: 'Wtd Avg DSO', value: summary.dso != null ? `${summary.dso.toFixed(0)}d` : '—', sub: `Median: ${summary.median_dso != null ? summary.median_dso.toFixed(0) + 'd' : '—'}`, color: 'gold' }] : []),
+    { label: 'Total Collected', value: fmt(summary.total_collected),      sub: 'cumulative collections',          color: 'teal', stale: bd },
+    { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red',  stale: bd },
+    ...(summary.dso_available ? [{ label: 'Wtd Avg DSO', value: summary.dso != null ? `${summary.dso.toFixed(0)}d` : '—', sub: `Median: ${summary.median_dso != null ? summary.median_dso.toFixed(0) + 'd' : '—'}`, color: 'gold', stale: bd }] : []),
     { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top provider: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal' },
   ] : Array(10).fill(null)
 
