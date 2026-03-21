@@ -41,15 +41,18 @@ The platform allows analysts and investment committee members to:
 - **Column availability drives feature visibility** — features gracefully degrade (hidden, not estimated) on older tapes
 
 **SILQ data notes:**
-- **Tape available:** Jan 2026 (xlsx, 2 sheets — "Portfolio Commentary" + "BNPL+RBF_NE")
-- 972 loans, 19 columns, SAR currency
+- **Tape available:** Jan 2026 (xlsx, 3 sheets — "Portfolio Commentary" + "BNPL+RBF_NE" + "RBF_LT")
+- **1,915 loans total** (multi-sheet), 19 columns per sheet, SAR currency
+- 3 products: `BNPL` (969 loans), `RBF_Exc` (943 loans from RBF_LT sheet), `RBF_NE` (3 loans)
 - Column names include currency suffix: `Disbursed_Amount (SAR)`, `Outstanding_Amount (SAR)`, etc.
-- 3 statuses: `Closed`, `CURRENT`, `OVERDUE`
-- 2 products: `BNPL` (969 loans), `RBF_NE` (3 loans)
-- 220 shops, HHI 0.031 (low concentration)
-- Key columns: `Deal ID`, `Disbursed_Amount (SAR)`, `Outstanding_Amount (SAR)`, `Overdue_Amount (SAR)`, `Total_Collectable_Amount (SAR)`, `Tenure`, `Shop_ID`, `Product`, `Loan_Status`, `Disbursement_Date`, `Repayment_Deadline`, `Amt_Repaid`, `Margin Collected`, `Principal Collected`
-- DPD computed as `max(0, ref_date - Repayment_Deadline)`, 0 for Closed loans
+- 3 statuses: `Closed`, `CURRENT`, `OVERDUE` (normalised to title case by loader)
+- Total disbursed: SAR 325.2M, Outstanding: SAR 76.2M
+- **RBF_LT sheet lacks `Margin Collected` column** — revenue is structured differently in RBF (baked into repayment). Loader fills with 0.0 and marks `_margin_synthetic = True`. Yield tab shows info note.
+- Portfolio Commentary sheet contains company-written narrative — displayed in Overview tab
+- DPD computed as `max(0, ref_date - Repayment_Deadline)`, 0 for Closed loans. **ref_date = tape date or as-of date** (not today's date)
 - `Outstanding_Amount` can exceed `Disbursed_Amount` (includes accrued margin) — not a data error
+- **PAR methodology:** GBV-weighted (Outstanding of DPD>X loans / Total Outstanding of active loans), NOT count-based
+- **Backward-date caveat:** When as-of date < tape date, balance columns (outstanding, collected, overdue, margins) still reflect tape date. Only deal selection is filtered. Dashboard shows warning banner + per-KPI ⚠ markers on stale metrics.
 -----
 ## Long-Term Vision (3 Phases)
 ### Phase 1 — Loan Tape Analysis & Dashboards ✅ (current)
@@ -327,7 +330,10 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Multi-company dispatch** — `config.json` has `analysis_type` field (`"klaim"` or `"silq"`) that routes endpoints to the correct analysis module. `_get_analysis_type()` helper in `main.py`. Each company has its own `core/analysis_*.py` and `core/validation_*.py`.
 - **Per-product tab config** — `config.json` has `tabs` array driving `Sidebar.jsx` dynamically. Falls back to `DEFAULT_TAPE_TABS` (Klaim's 12 tabs) when no `tabs` in config.
 - **SILQ chart routing** — Generic `/charts/silq/{chart_name}` endpoint dispatches via `SILQ_CHART_MAP` dict to the correct compute function.
-- **Multi-sheet Excel loading** — `core/loader.py` picks the sheet with most data rows. Detects malformed headers (all numeric/Unnamed columns) and reloads with `header=1`.
+- **Multi-sheet Excel loading** — `core/loader.py` has `load_silq_snapshot()` for SILQ: loads all data sheets, separates Portfolio Commentary, normalises columns (Loan_Type→Product, status to title case, Shop_ID to str), fills missing `Margin Collected` with 0.0 + `_margin_synthetic` flag, and `pd.concat`s into one DataFrame. Original `load_snapshot()` for Klaim picks the sheet with most data rows. Both detect malformed headers (all numeric/Unnamed columns) and reload with `header=1`.
+- **DPD ref_date** — `_dpd(df, ref_date)` uses tape date or as-of date, not today. All compute functions pass `ref_date` through. This ensures PAR/DPD metrics reflect the correct point in time.
+- **PAR methodology** — All SILQ PAR ratios are GBV-weighted: `Outstanding of DPD>X / Total Outstanding of active loans`. Klaim uses GBV-weighted collection/denial/pending rates. Klaim PD (Expected Loss) is intentionally count-based (probability metric).
+- **Backward-date caveat system** — `CompanyContext` stores `snapshotDate` from date-range API and derives `isBackdated = asOfDate < snapshotDate`. When true: `BackdatedBanner.jsx` renders a gold warning bar below controls; `KpiCard.jsx` accepts `stale` prop showing ⚠ icon on balance-derived KPIs. Overview tabs (both Klaim and SILQ) mark stale vs accurate KPIs.
 - **`core/analysis.py`** — Klaim pure data computation. No FastAPI, no I/O.
 - **`core/analysis_silq.py`** — SILQ pure data computation. Column aliases map short names to actual names with currency suffix (e.g., `C_DISBURSED = 'Disbursed_Amount (SAR)'`). `_safe()` converts numpy types for JSON serialization.
 - **`core/config.py`** — per-product `config.json` stores currency, description, analysis_type, and tabs.
@@ -484,7 +490,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - SILQ Overview with 10 bespoke KPIs (PAR30/60/90, HHI shop, avg tenure, etc.)
   - AI commentary and Data Chat with SILQ-specific prompts and enriched context
   - Currency toggle SAR ↔ USD working
-  - Jan 2026 tape: 972 loans, 19 columns, 220 shops, BNPL + RBF products
+  - Jan 2026 tape: 1,915 loans (3 sheets), 3 products (BNPL + RBF_Exc + RBF_NE), SAR 325.2M disbursed
+- ✅ **Multi-sheet SILQ loader** — loads all data sheets from Excel, normalises columns across BNPL and RBF_LT sheets, extracts Portfolio Commentary text
+- ✅ **Portfolio Commentary panel** — company-written narrative from tape's Commentary sheet displayed in SILQ Overview
+- ✅ **GBV-weighted PAR** — all SILQ PAR ratios (6 calculation sites) corrected from count-based to Outstanding Amount-weighted
+- ✅ **DPD ref-date fix** — `_dpd()` uses tape/as-of date instead of today; PAR90 now matches Commentary's SAR 1.10M exactly
+- ✅ **RBF margin note** — info note on Yield tab explaining RBF_Exc 0% margin (source sheet lacks Margin Collected column)
+- ✅ **Backward-date caveat system** — gold warning banner + per-KPI ⚠ stale indicators when as-of date < tape date. Marks balance-derived metrics (outstanding, collected, overdue, rates, margins) while leaving accurate metrics (disbursed, counts, tenure, discount) unmarked
+- ✅ **Compliance certificate reconciliation** — verified dashboard data aligns with company Commentary (Jan 31) and Dec 2025 compliance cert (methodology differences documented)
 -----
 ## Known Gaps & Next Steps
 **Short term:**
