@@ -58,6 +58,13 @@ def _dpd(df, ref_date=None):
     return dpd
 
 
+def _ensure_str_shop_id(df):
+    """Ensure Shop_ID is string type for safe groupby operations."""
+    if C_SHOP_ID in df.columns:
+        df[C_SHOP_ID] = df[C_SHOP_ID].astype(str)
+    return df
+
+
 def _safe(val):
     """Convert numpy types to Python natives for JSON serialization."""
     if isinstance(val, (np.integer,)):
@@ -71,7 +78,8 @@ def _safe(val):
 
 # ── 1. Summary ────────────────────────────────────────────────────────────────
 
-def compute_silq_summary(df, mult=1):
+def compute_silq_summary(df, mult=1, ref_date=None):
+    df = _ensure_str_shop_id(df)
     total_disbursed = df[C_DISBURSED].sum() * mult if C_DISBURSED in df.columns else 0
     total_outstanding = df[C_OUTSTANDING].sum() * mult if C_OUTSTANDING in df.columns else 0
     total_overdue = df[C_OVERDUE].sum() * mult if C_OVERDUE in df.columns else 0
@@ -85,10 +93,14 @@ def compute_silq_summary(df, mult=1):
     collection_rate = (total_repaid / total_collectable * 100) if total_collectable else 0
     overdue_rate = (total_overdue / total_outstanding * 100) if total_outstanding else 0
 
-    dpd = _dpd(df)
-    par30 = float((dpd > 30).sum() / max(active, 1) * 100)
-    par60 = float((dpd > 60).sum() / max(active, 1) * 100)
-    par90 = float((dpd > 90).sum() / max(active, 1) * 100)
+    # GBV-weighted PAR: Outstanding of DPD>X / Total Outstanding of active loans
+    active_mask = df[C_STATUS] != 'Closed' if C_STATUS in df.columns else pd.Series(True, index=df.index)
+    active_df = df[active_mask]
+    active_dpd = _dpd(active_df, ref_date)
+    total_active_out = active_df[C_OUTSTANDING].sum() if C_OUTSTANDING in active_df.columns else 0
+    par30 = float(active_df.loc[active_dpd > 30, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
+    par60 = float(active_df.loc[active_dpd > 60, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
+    par90 = float(active_df.loc[active_dpd > 90, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
 
     avg_tenure = float(df[C_TENURE].mean()) if C_TENURE in df.columns else 0
 
@@ -131,10 +143,11 @@ def compute_silq_summary(df, mult=1):
 
 # ── 2. Delinquency ───────────────────────────────────────────────────────────
 
-def compute_silq_delinquency(df, mult=1):
-    dpd = _dpd(df)
+def compute_silq_delinquency(df, mult=1, ref_date=None):
+    df = _ensure_str_shop_id(df)
+    dpd = _dpd(df, ref_date)
     active = df[df[C_STATUS] != 'Closed'] if C_STATUS in df.columns else df
-    active_dpd = _dpd(active)
+    active_dpd = _dpd(active, ref_date)
 
     # DPD buckets
     buckets = [
@@ -144,6 +157,7 @@ def compute_silq_delinquency(df, mult=1):
         {'label': '61-90 DPD', 'min': 61, 'max': 90},
         {'label': '90+ DPD',   'min': 91, 'max': 99999},
     ]
+    total_active_out = active[C_OUTSTANDING].sum() if C_OUTSTANDING in active.columns else 0
     bucket_data = []
     for b in buckets:
         mask = (active_dpd >= b['min']) & (active_dpd <= b['max'])
@@ -153,14 +167,13 @@ def compute_silq_delinquency(df, mult=1):
             'label': b['label'],
             'count': count,
             'amount': _safe(amount),
-            'pct': _safe(count / max(len(active), 1) * 100),
+            'pct': _safe(amount / max(total_active_out * mult, 1) * 100) if total_active_out else 0,
         })
 
-    # PAR metrics
-    n_active = max(len(active), 1)
-    par30 = float((active_dpd > 30).sum() / n_active * 100)
-    par60 = float((active_dpd > 60).sum() / n_active * 100)
-    par90 = float((active_dpd > 90).sum() / n_active * 100)
+    # GBV-weighted PAR metrics
+    par30 = float(active.loc[active_dpd > 30, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
+    par60 = float(active.loc[active_dpd > 60, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
+    par90 = float(active.loc[active_dpd > 90, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
 
     # Monthly delinquency trend (by disbursement month)
     monthly = []
@@ -172,12 +185,13 @@ def compute_silq_delinquency(df, mult=1):
             act = grp[grp[C_STATUS] != 'Closed']
             if len(act) == 0:
                 continue
+            act_out = act[C_OUTSTANDING].sum() if C_OUTSTANDING in act.columns else 0
             monthly.append({
                 'Month': str(period),
                 'total': int(len(grp)),
                 'overdue_count': int((act['_dpd'] > 0).sum()),
-                'overdue_rate': _safe((act['_dpd'] > 0).sum() / len(act) * 100),
-                'par30_rate': _safe((act['_dpd'] > 30).sum() / len(act) * 100),
+                'overdue_rate': _safe(act.loc[act['_dpd'] > 0, C_OUTSTANDING].sum() / max(act_out, 1) * 100) if act_out else 0,
+                'par30_rate': _safe(act.loc[act['_dpd'] > 30, C_OUTSTANDING].sum() / max(act_out, 1) * 100) if act_out else 0,
             })
 
     # Top overdue shops
@@ -262,6 +276,7 @@ def compute_silq_collections(df, mult=1):
 # ── 4. Concentration ─────────────────────────────────────────────────────────
 
 def compute_silq_concentration(df, mult=1):
+    df = _ensure_str_shop_id(df)
     # Shop concentration
     shops = []
     hhi = 0
@@ -335,14 +350,14 @@ def compute_silq_concentration(df, mult=1):
 
 # ── 5. Cohorts ────────────────────────────────────────────────────────────────
 
-def compute_silq_cohorts(df, mult=1):
+def compute_silq_cohorts(df, mult=1, ref_date=None):
     cohorts = []
     if C_DISB_DATE not in df.columns:
         return {'cohorts': cohorts}
 
     df2 = df.copy()
     df2['_month'] = df2[C_DISB_DATE].dt.to_period('M')
-    df2['_dpd'] = _dpd(df2)
+    df2['_dpd'] = _dpd(df2, ref_date)
 
     for period, grp in df2.groupby('_month'):
         disbursed = grp[C_DISBURSED].sum() * mult if C_DISBURSED in grp.columns else 0
@@ -369,7 +384,7 @@ def compute_silq_cohorts(df, mult=1):
             'overdue_pct': _safe(overdue / outstanding * 100 if outstanding else 0),
             'active': n_active,
             'closed': n - n_active,
-            'par30_pct': _safe((dpd_active > 30).sum() / max(n_active, 1) * 100),
+            'par30_pct': _safe(active.loc[dpd_active > 30, C_OUTSTANDING].sum() / max(active[C_OUTSTANDING].sum(), 1) * 100 if C_OUTSTANDING in active.columns and active[C_OUTSTANDING].sum() > 0 else 0),
             'avg_tenure': _safe(grp[C_TENURE].mean() if C_TENURE in grp.columns else 0),
         })
 
@@ -389,7 +404,12 @@ def compute_silq_cohorts(df, mult=1):
         totals['overdue_pct'] = _safe(totals['overdue'] / totals['outstanding'] * 100 if totals['outstanding'] else 0)
         totals['active'] = sum(c['active'] for c in cohorts)
         totals['closed'] = sum(c['closed'] for c in cohorts)
-        totals['par30_pct'] = _safe(df2.loc[df2[C_STATUS] != 'Closed', '_dpd'].gt(30).sum() / max(totals['active'], 1) * 100 if C_STATUS in df2.columns else 0)
+        if C_STATUS in df2.columns and C_OUTSTANDING in df2.columns:
+            total_active_df = df2[df2[C_STATUS] != 'Closed']
+            total_active_out = total_active_df[C_OUTSTANDING].sum()
+            totals['par30_pct'] = _safe(total_active_df.loc[total_active_df['_dpd'] > 30, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100 if total_active_out else 0)
+        else:
+            totals['par30_pct'] = 0
         totals['avg_tenure'] = _safe(df[C_TENURE].mean() if C_TENURE in df.columns else 0)
         cohorts.append(totals)
 
@@ -456,6 +476,13 @@ def compute_silq_yield(df, mult=1):
                 'margin_rate': _safe(m / d * 100 if d else 0),
             })
 
+    # Detect products where margin data is synthetic (sheet lacked Margin Collected)
+    margin_not_available = []
+    if '_margin_synthetic' in df.columns and C_PRODUCT in df.columns:
+        for prod, grp in df.groupby(C_PRODUCT):
+            if grp['_margin_synthetic'].all():
+                margin_not_available.append(str(prod))
+
     return {
         'total_margin': _safe(total_margin),
         'total_disbursed': _safe(total_disbursed),
@@ -464,12 +491,13 @@ def compute_silq_yield(df, mult=1):
         'by_product': by_product,
         'by_tenure': by_tenure,
         'monthly': monthly,
+        'margin_not_available': margin_not_available,
     }
 
 
 # ── 7. Tenure Analysis ───────────────────────────────────────────────────────
 
-def compute_silq_tenure(df, mult=1):
+def compute_silq_tenure(df, mult=1, ref_date=None):
     # Tenure distribution
     distribution = []
     if C_TENURE in df.columns:
@@ -477,7 +505,7 @@ def compute_silq_tenure(df, mult=1):
         labels = ['1-4w', '5-9w', '10-14w', '15-19w', '20-29w', '30w+']
         df2 = df.copy()
         df2['_tband'] = pd.cut(df2[C_TENURE], bins=bins, labels=labels, right=False)
-        df2['_dpd'] = _dpd(df2)
+        df2['_dpd'] = _dpd(df2, ref_date)
         for label, grp in df2.groupby('_tband', observed=True):
             disbursed = grp[C_DISBURSED].sum() * mult if C_DISBURSED in grp.columns else 0
             repaid = grp[C_REPAID].sum() * mult if C_REPAID in grp.columns else 0
@@ -490,8 +518,8 @@ def compute_silq_tenure(df, mult=1):
                 'count': int(len(grp)),
                 'disbursed': _safe(disbursed),
                 'collection_rate': _safe(repaid / collectable * 100 if collectable else 0),
-                'dpd_rate': _safe((dpd_active > 0).sum() / max(len(active), 1) * 100),
-                'par30_rate': _safe((dpd_active > 30).sum() / max(len(active), 1) * 100),
+                'dpd_rate': _safe(active.loc[dpd_active > 0, C_OUTSTANDING].sum() / max(active[C_OUTSTANDING].sum(), 1) * 100 if C_OUTSTANDING in active.columns and active[C_OUTSTANDING].sum() > 0 else 0),
+                'par30_rate': _safe(active.loc[dpd_active > 30, C_OUTSTANDING].sum() / max(active[C_OUTSTANDING].sum(), 1) * 100 if C_OUTSTANDING in active.columns and active[C_OUTSTANDING].sum() > 0 else 0),
                 'margin_rate': _safe(margin / disbursed * 100 if disbursed else 0),
                 'avg_tenure': _safe(grp[C_TENURE].mean()),
             })
@@ -522,11 +550,11 @@ def compute_silq_tenure(df, mult=1):
 
 # ── 8. Borrowing Base ────────────────────────────────────────────────────────
 
-def compute_silq_borrowing_base(df, mult=1):
+def compute_silq_borrowing_base(df, mult=1, ref_date=None):
     """Compute borrowing base eligibility waterfall."""
-    dpd = _dpd(df)
+    dpd = _dpd(df, ref_date)
     active = df[df[C_STATUS] != 'Closed'].copy() if C_STATUS in df.columns else df.copy()
-    active['_dpd'] = _dpd(active)
+    active['_dpd'] = _dpd(active, ref_date)
 
     total_ar = active[C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
 

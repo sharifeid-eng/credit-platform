@@ -28,6 +28,7 @@ export function CompanyProvider({ children }) {
   const [aiCache, setAiCache]       = useState(null)
   const [asOfDate, setAsOfDate]     = useState('')
   const [dateRange, setDateRange]   = useState({ min: '', max: '' })
+  const [snapshotDate, setSnapshotDate] = useState('')
   const [reportGenerating, setReportGenerating] = useState(false)
   const [reportError, setReportError] = useState(null)
 
@@ -70,9 +71,11 @@ export function CompanyProvider({ children }) {
     getDateRange(company, product, snapshot).then(dr => {
       setDateRange({ min: dr.min_date ?? '', max: dr.max_date ?? '' })
       setAsOfDate(dr.max_date ?? '')
+      setSnapshotDate(dr.snapshot_date ?? '')
     }).catch(() => {
       setDateRange({ min: '', max: '' })
       setAsOfDate('')
+      setSnapshotDate('')
     })
   }, [product, snapshot])
 
@@ -87,6 +90,7 @@ export function CompanyProvider({ children }) {
   }, [product, snapshot, currency, asOfDate])
 
   const localCcy = config.currency ?? 'AED'
+  const isBackdated = !!(snapshotDate && asOfDate && asOfDate < snapshotDate)
 
   const handleGenerateReport = () => {
     setReportGenerating(true)
@@ -108,7 +112,7 @@ export function CompanyProvider({ children }) {
       config, currency, setCurrency, localCcy,
       summary, summaryLoading,
       aiCache, setAiCache,
-      asOfDate, setAsOfDate, dateRange,
+      asOfDate, setAsOfDate, dateRange, snapshotDate, isBackdated,
       reportGenerating, reportError, handleGenerateReport,
       navigate,
       analysisType: config.analysis_type || 'klaim',

@@ -7,7 +7,7 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.loader import get_companies, get_products, get_snapshots, load_snapshot
+from core.loader import get_companies, get_products, get_snapshots, load_snapshot, load_silq_snapshot
 from core.config import load_config, SUPPORTED_CURRENCIES
 from core.analysis import (
     compute_summary, compute_deployment, compute_deployment_by_product,
@@ -89,13 +89,24 @@ def _get_analysis_type(company, product):
     config = load_config(company, product)
     return (config or {}).get('analysis_type', 'klaim')
 
+def _resolve_snapshot(company, product, snapshot):
+    """Resolve the selected snapshot metadata dict."""
+    snaps = get_snapshots(company, product)
+    if not snaps:
+        raise HTTPException(status_code=404, detail="No snapshots found")
+    return next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
+
 def _silq_load(company, product, snapshot, as_of_date, currency):
-    """Load SILQ data with currency multiplier applied."""
-    df, sel = _load(company, product, snapshot)
+    """Load SILQ data (multi-sheet) with currency multiplier applied.
+    Returns (df, sel, config, disp, mult, commentary_text, ref_date)."""
+    sel = _resolve_snapshot(company, product, snapshot)
+    df, commentary_text = load_silq_snapshot(sel['filepath'])
     df = filter_silq_by_date(df, as_of_date)
     config, disp = _currency(company, product, currency)
     mult = apply_multiplier(config, disp)
-    return df, sel, config, disp, mult
+    # DPD reference date: as-of date if set, otherwise snapshot date
+    ref_date = pd.to_datetime(as_of_date) if as_of_date else pd.to_datetime(sel['date'])
+    return df, sel, config, disp, mult, commentary_text, ref_date
 
 # ── Company / Product / Snapshot endpoints ────────────────────────────────────
 
@@ -129,8 +140,12 @@ def get_product_config(company: str, product: str):
 
 @app.get("/companies/{company}/products/{product}/date-range")
 def get_date_range(company: str, product: str, snapshot: Optional[str] = None):
-    df, sel = _load(company, product, snapshot)
     at = _get_analysis_type(company, product)
+    if at == 'silq':
+        sel = _resolve_snapshot(company, product, snapshot)
+        df, _ = load_silq_snapshot(sel['filepath'])
+    else:
+        df, sel = _load(company, product, snapshot)
     date_col = 'Disbursement_Date' if at == 'silq' else 'Deal date'
     if date_col not in df.columns:
         raise HTTPException(status_code=400, detail=f"No {date_col} column found")
@@ -151,11 +166,12 @@ def get_summary(company: str, product: str,
                 currency: Optional[str] = None):
     at = _get_analysis_type(company, product)
     if at == 'silq':
-        df, sel, config, disp, mult = _silq_load(company, product, snapshot, as_of_date, currency)
+        df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
             raise HTTPException(status_code=400, detail="No deals found for selected date range")
-        summary = compute_silq_summary(df, mult)
-        return {'company': company, 'product': product, 'display_currency': disp, **summary}
+        summary = compute_silq_summary(df, mult, ref_date=ref_date)
+        return {'company': company, 'product': product, 'display_currency': disp,
+                'portfolio_commentary': commentary_text, **summary}
 
     df, sel  = _load(company, product, snapshot)
     df       = filter_by_date(df, as_of_date)
@@ -442,15 +458,25 @@ def get_silq_chart(company: str, product: str, chart_name: str,
     fn = SILQ_CHART_MAP.get(chart_name)
     if not fn:
         raise HTTPException(status_code=404, detail=f"Unknown SILQ chart: {chart_name}")
-    df, sel, config, disp, mult = _silq_load(company, product, snapshot, as_of_date, currency)
-    return {**fn(df, mult), 'currency': disp}
+    df, sel, config, disp, mult, _, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
+    # Pass ref_date to functions that accept it (for DPD calculations)
+    import inspect
+    if 'ref_date' in inspect.signature(fn).parameters:
+        result = fn(df, mult, ref_date=ref_date)
+    else:
+        result = fn(df, mult)
+    return {**result, 'currency': disp}
 
 @app.get("/companies/{company}/products/{product}/validate")
 def validate_snapshot(company: str, product: str,
                       snapshot: Optional[str] = None):
     """Run data quality checks on a single tape."""
-    df, sel = _load(company, product, snapshot)
     at = _get_analysis_type(company, product)
+    if at == 'silq':
+        sel = _resolve_snapshot(company, product, snapshot)
+        df, _ = load_silq_snapshot(sel['filepath'])
+    else:
+        df, sel = _load(company, product, snapshot)
     result = validate_silq_tape(df) if at == 'silq' else validate_tape(df)
     result['snapshot'] = sel['date']
     result['filename'] = sel['filename']
@@ -472,11 +498,19 @@ def get_integrity_cached(company: str, product: str,
 def run_integrity_checks(company: str, product: str,
                          snapshot_old: str, snapshot_new: str):
     """Run validation + consistency checks on two snapshots."""
-    old_df, old_sel = _load(company, product, snapshot_old)
-    new_df, new_sel = _load(company, product, snapshot_new)
+    at = _get_analysis_type(company, product)
+    if at == 'silq':
+        old_sel = _resolve_snapshot(company, product, snapshot_old)
+        new_sel = _resolve_snapshot(company, product, snapshot_new)
+        old_df, _ = load_silq_snapshot(old_sel['filepath'])
+        new_df, _ = load_silq_snapshot(new_sel['filepath'])
+    else:
+        old_df, old_sel = _load(company, product, snapshot_old)
+        new_df, new_sel = _load(company, product, snapshot_new)
 
-    validation_old = validate_tape(old_df)
-    validation_new = validate_tape(new_df)
+    validate_fn = validate_silq_tape if at == 'silq' else validate_tape
+    validation_old = validate_fn(old_df)
+    validation_new = validate_fn(new_df)
     consistency    = run_consistency_check(old_df, new_df, old_sel['date'], new_sel['date'])
 
     result = {
@@ -588,12 +622,16 @@ def get_ai_commentary(company: str, product: str,
     at = _get_analysis_type(company, product)
 
     if at == 'silq':
-        df, sel, config, disp, mult = _silq_load(company, product, snapshot, as_of_date, currency)
-        s = compute_silq_summary(df, mult)
-        d = compute_silq_delinquency(df, mult)
+        df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
+        s = compute_silq_summary(df, mult, ref_date=ref_date)
+        d = compute_silq_delinquency(df, mult, ref_date=ref_date)
         c = compute_silq_collections(df, mult)
 
-        prompt = f"""You are a senior analyst at ACP Private Credit, analyzing SILQ's POS lending portfolio (BNPL & RBF loans) in KSA.
+        commentary_ctx = ''
+        if commentary_text:
+            commentary_ctx = f"\nANALYST PORTFOLIO COMMENTARY (from tape):\n{commentary_text}\n"
+
+        prompt = f"""You are a senior analyst at ACP Private Credit, analyzing SILQ's POS lending portfolio (BNPL, RBF_NE & RBF_Exc loans) in KSA.
 Data as of: {as_of_date or sel['date']}  |  Currency: {disp}
 
 PORTFOLIO SNAPSHOT:
@@ -611,7 +649,7 @@ DPD BUCKETS:
 
 COLLECTION BY PRODUCT:
 {[f"{p['product']}: {p['rate']:.1f}% collection rate, {p['deals']} deals" for p in c['by_product']]}
-
+{commentary_ctx}
 Write a concise portfolio commentary in 3 sections:
 1. PORTFOLIO HEALTH (2-3 sentences) — overall collection and delinquency performance.
 2. KEY OBSERVATIONS (3-4 bullets) — most important data points for an investment committee.
@@ -673,30 +711,33 @@ def get_tab_insight(company: str, product: str,
                     as_of_date: Optional[str] = None,
                     currency: Optional[str] = None):
     """Generate a short AI insight for a specific dashboard tab."""
-    df, sel  = _load(company, product, snapshot)
-    df       = filter_by_date(df, as_of_date)
-    config, disp = _currency(company, product, currency)
-    mult     = apply_multiplier(config, disp)
-
     at = _get_analysis_type(company, product)
+
+    if at == 'silq':
+        df, sel, config, disp, mult, _, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
+    else:
+        df, sel  = _load(company, product, snapshot)
+        df       = filter_by_date(df, as_of_date)
+        config, disp = _currency(company, product, currency)
+        mult     = apply_multiplier(config, disp)
+        ref_date = None
 
     # Build tab-specific data context
     tab_data = {}
     if at == 'silq':
-        df = filter_silq_by_date(df, as_of_date)
         if tab == 'delinquency':
-            tab_data = compute_silq_delinquency(df, mult)
+            tab_data = compute_silq_delinquency(df, mult, ref_date=ref_date)
         elif tab == 'collections':
             tab_data = compute_silq_collections(df, mult)
         elif tab == 'concentration':
             conc = compute_silq_concentration(df, mult)
             tab_data = {'top_shops': conc['shops'][:5], 'hhi': conc['hhi'], 'product_mix': conc['product_mix']}
         elif tab == 'cohort':
-            tab_data = compute_silq_cohorts(df, mult)
+            tab_data = compute_silq_cohorts(df, mult, ref_date=ref_date)
         elif tab == 'yield-margins':
             tab_data = compute_silq_yield(df, mult)
         elif tab == 'tenure':
-            tab_data = compute_silq_tenure(df, mult)
+            tab_data = compute_silq_tenure(df, mult, ref_date=ref_date)
     else:
         if tab == 'deployment':
             tab_data = {'monthly_deployment': compute_deployment(df, mult)[-12:]}
@@ -970,16 +1011,20 @@ INSTRUCTIONS:
 
 def _silq_chat(company, product, request, snap, aod, cur):
     """SILQ-specific data chat with enriched context."""
-    df, sel, config, disp, mult = _silq_load(company, product, snap, aod, cur)
-    s = compute_silq_summary(df, mult)
-    d = compute_silq_delinquency(df, mult)
+    df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snap, aod, cur)
+    s = compute_silq_summary(df, mult, ref_date=ref_date)
+    d = compute_silq_delinquency(df, mult, ref_date=ref_date)
     c = compute_silq_collections(df, mult)
     conc = compute_silq_concentration(df, mult)
     y = compute_silq_yield(df, mult)
     t = compute_silq_tenure(df, mult)
 
+    commentary_ctx = ''
+    if commentary_text:
+        commentary_ctx = f"\nANALYST PORTFOLIO COMMENTARY (from tape):\n{commentary_text}\n"
+
     system = f"""You are an expert credit analyst assistant for ACP Private Credit,
-analyzing the SILQ POS lending portfolio (BNPL & RBF loans) in KSA.
+analyzing the SILQ POS lending portfolio (BNPL, RBF_NE & RBF_Exc loans) in KSA.
 
 PORTFOLIO SUMMARY (as of {aod or sel['date']}, currency: {disp}):
 - Total Loans: {s['total_deals']:,} ({s['active_deals']} active, {s['completed_deals']} closed)
@@ -1010,7 +1055,7 @@ YIELD & MARGINS:
 TENURE ANALYSIS:
   Avg: {t['avg_tenure']:.0f} weeks, Median: {t['median_tenure']:.0f} weeks
   By product: {[f"{p['product']}: avg {p['avg_tenure']:.0f}w" for p in t['by_product']]}
-
+{commentary_ctx}
 INSTRUCTIONS:
 - Answer questions precisely with specific numbers from the data above. Be concise but thorough.
 - When a question requires deal-level detail or data not in your context, provide the best answer you can and note limitations.

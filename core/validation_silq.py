@@ -103,6 +103,22 @@ def validate_silq_tape(df):
         for prod, count in dist.items():
             info.append(f'{prod}: {int(count)} loans')
 
+    # 13. Multi-sheet source info
+    if '_source_sheet' in df.columns:
+        sheet_dist = df['_source_sheet'].value_counts()
+        info.append(f'Multi-sheet tape: {len(sheet_dist)} data sheet(s) loaded')
+        for sheet, count in sheet_dist.items():
+            info.append(f'  Sheet "{sheet}": {int(count)} loans')
+
+    # 14. Cross-sheet Deal ID uniqueness
+    if '_source_sheet' in df.columns and 'Deal ID' in df.columns:
+        cross = df.groupby('Deal ID')['_source_sheet'].nunique()
+        cross_dupes = int((cross > 1).sum())
+        if cross_dupes > 0:
+            critical.append(f'{cross_dupes} Deal IDs appear in multiple sheets')
+        else:
+            info.append('No cross-sheet Deal ID overlaps')
+
     passed = len(critical) == 0
     return {
         'critical': critical,

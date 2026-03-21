@@ -9,7 +9,7 @@
  *   trendLabel string   — optional suffix e.g. "vs prev month"
  *   color      string   — 'gold' | 'teal' | 'red' | 'blue'  (default 'gold')
  */
-export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold' }) {
+export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false }) {
   const palette = {
     gold: { accent: 'var(--gold)',  muted: 'var(--gold-muted)' },
     teal: { accent: 'var(--teal)',  muted: 'var(--teal-muted)' },
@@ -55,6 +55,18 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         }}>
           {isUp ? '↑' : isDown ? '↓' : '–'} {Math.abs(trend).toFixed(1)}%
         </div>
+      )}
+
+      {/* Stale data indicator */}
+      {stale && (
+        <div
+          title="This metric reflects tape snapshot balances, not the as-of date"
+          style={{
+            position: 'absolute', top: 8, right: 10,
+            fontSize: 11, opacity: 0.55, cursor: 'help',
+            color: 'var(--accent-gold)',
+          }}
+        >&#x26A0;</div>
       )}
 
       {/* Label */}

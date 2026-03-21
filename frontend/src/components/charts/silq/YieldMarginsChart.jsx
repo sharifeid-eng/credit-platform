@@ -145,10 +145,22 @@ export default function YieldMarginsChart({ company, product, snapshot, currency
                   {fmtMoney(p.margin, cur)}
                 </div>
                 <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {p.deals} deals \u00b7 {fmtMoney(p.disbursed, cur)} deployed
+                  {p.deals} deals &middot; {fmtMoney(p.disbursed, cur)} deployed
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {data?.margin_not_available?.length > 0 && (
+          <div style={{
+            marginTop: 12, padding: '8px 12px',
+            background: 'rgba(201,168,76,0.06)',
+            border: '1px solid rgba(201,168,76,0.2)',
+            borderRadius: 6, fontSize: 11,
+            color: 'var(--text-muted)', lineHeight: 1.5,
+          }}>
+            <span style={{ color: 'var(--accent-gold)', marginRight: 6 }}>&#x2139;</span>
+            <strong>{data.margin_not_available.join(', ')}</strong> &mdash; RBF revenue structure does not break out margin separately. 0% margin reflects missing source data, not zero earnings.
           </div>
         )}
       </ChartPanel>
