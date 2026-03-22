@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useCompany } from '../contexts/CompanyContext'
 
-const SECTIONS = [
+const KLAIM_SECTIONS = [
   { id: 'overview', title: 'Portfolio Overview Metrics' },
   { id: 'collection-perf', title: 'Collection Performance' },
   { id: 'collection-analysis', title: 'Collection Analysis' },
@@ -16,8 +17,25 @@ const SECTIONS = [
   { id: 'currency', title: 'Currency Conversion' },
 ]
 
+const SILQ_SECTIONS = [
+  { id: 'overview', title: 'Portfolio Overview' },
+  { id: 'delinquency', title: 'Delinquency & PAR' },
+  { id: 'collections', title: 'Collections' },
+  { id: 'concentration', title: 'Concentration' },
+  { id: 'cohort', title: 'Cohort Analysis' },
+  { id: 'yield', title: 'Yield & Margins' },
+  { id: 'tenure', title: 'Tenure Analysis' },
+  { id: 'covenants', title: 'Covenant Monitoring' },
+  { id: 'products', title: 'Product Types' },
+  { id: 'backward-date', title: 'Backward-Date Caveat' },
+  { id: 'currency', title: 'Currency Conversion' },
+]
+
 export default function Methodology() {
   const { companyName } = useParams()
+  const { analysisType } = useCompany()
+  const isSilq = analysisType === 'silq'
+  const SECTIONS = isSilq ? SILQ_SECTIONS : KLAIM_SECTIONS
   const [active, setActive] = useState('overview')
 
   useEffect(() => {
@@ -124,6 +142,7 @@ export default function Methodology() {
           This page documents <em>how</em> metrics are calculated and <em>why</em> they matter for credit analysis.
         </p>
 
+        {isSilq ? <SilqMethodologyContent /> : <>
         {/* 1 — Portfolio Overview */}
         <Section id="overview" title="Portfolio Overview Metrics">
           <Metric
@@ -581,9 +600,10 @@ export default function Methodology() {
             days, counts) are unaffected by currency conversion.
           </p>
           <Note>
-            Exchange rates are currently static. A future enhancement will replace these with live FX rates.
+            Exchange rates are fetched live from open.er-api.com and cached for 1 hour. Falls back to static rates if the API is unavailable.
           </Note>
         </Section>
+        </>}
       </main>
     </div>
   )
@@ -757,6 +777,235 @@ function Code({ children }) {
     }}>
       {children}
     </code>
+  )
+}
+
+
+/* ── SILQ Methodology Content ────────────────────────────────── */
+
+function SilqMethodologyContent() {
+  const styles = {
+    body: { fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, margin: '0 0 10px' },
+  }
+
+  return (
+    <>
+      <Section id="overview" title="Portfolio Overview">
+        <Metric
+          name="Total Disbursed"
+          formula="sum(Disbursed_Amount) across all loans"
+          rationale="Total capital deployed into the market. Includes all products (BNPL, RBF). This is the principal amount lent, not including accrued margin."
+        />
+        <Metric
+          name="Outstanding Amount"
+          formula="sum(Outstanding_Amount) for active loans"
+          rationale="Current exposure at risk. Can exceed Disbursed Amount because it includes accrued margin — this is expected, not a data error."
+        />
+        <Metric
+          name="Collection Rate"
+          formula="sum(Amt_Repaid) / sum(Total_Collectable_Amount)"
+          rationale="Proportion of collectable amount actually recovered. Denominator includes principal plus expected margin. Tracks overall portfolio recovery effectiveness."
+        />
+        <Metric
+          name="HHI (Shop)"
+          formula="sum((shop_disbursed / total_disbursed)^2) for each shop"
+          rationale="Herfindahl-Hirschman Index measuring shop concentration. Ranges from 0 (perfectly diversified) to 1 (single counterparty). Values below 0.15 indicate low concentration."
+        />
+      </Section>
+
+      <Section id="delinquency" title="Delinquency & PAR">
+        <Metric
+          name="Days Past Due (DPD)"
+          formula="max(0, ref_date - Repayment_Deadline)"
+          rationale="Number of days a loan is overdue. Closed loans always have DPD = 0 regardless of deadline. The reference date is the tape date or as-of date — never today's date. This ensures point-in-time accuracy."
+        />
+        <Metric
+          name="PAR30 / PAR60 / PAR90"
+          formula="Outstanding of loans with DPD > X / Total Outstanding of active loans"
+          rationale="Portfolio at Risk — GBV-weighted, not count-based. This means a single large overdue loan contributes more to PAR than many small ones. GBV weighting reflects actual risk exposure and aligns with the compliance certificate methodology."
+        />
+        <Note>
+          <strong>Why GBV-weighted, not count-based?</strong> Count-based PAR treats every loan equally regardless of size.
+          A SAR 10M overdue loan counts the same as a SAR 1K one. GBV weighting reflects the actual capital at risk,
+          which is what matters for credit decisions and covenant compliance.
+        </Note>
+        <Metric
+          name="DPD Buckets"
+          formula="Current (0), 1-30, 31-60, 61-90, 90+"
+          rationale="Distribution of active loans by days past due. Amount shown is Outstanding Amount per bucket, giving a view of where delinquent capital is concentrated."
+        />
+      </Section>
+
+      <Section id="collections" title="Collections">
+        <Metric
+          name="Repayment Rate"
+          formula="sum(Amt_Repaid) / sum(Total_Collectable_Amount)"
+          rationale="Overall collection effectiveness. Shown at portfolio level and broken down by product (BNPL vs RBF). Monthly trend shows collections momentum."
+        />
+        <Metric
+          name="Margin Collected"
+          formula="sum(Margin Collected)"
+          rationale="Revenue component of collections (interest/fees earned). Only available for BNPL products — RBF revenue is structured differently (baked into repayment, not separated as a distinct column)."
+        />
+        <Metric
+          name="Principal Collected"
+          formula="sum(Principal Collected)"
+          rationale="Capital return component. Principal + Margin = Total Repaid."
+        />
+      </Section>
+
+      <Section id="concentration" title="Concentration">
+        <Metric
+          name="Shop Concentration"
+          formula="Top N shops by disbursed amount / total disbursed"
+          rationale="Measures counterparty risk. High concentration in a single shop means a default there would materially impact the portfolio."
+        />
+        <Metric
+          name="Credit Utilization"
+          formula="Outstanding_Amount / Shop_Credit_Limit per shop"
+          rationale="How much of each shop's approved credit line is currently drawn. High utilization may signal stress or upcoming capacity limits."
+        />
+        <Metric
+          name="Loan Size Distribution"
+          formula="Count of loans in size bands: <50K, 50-100K, 100-250K, 250-500K, 500K-1M, >1M"
+          rationale="Shows the granularity of the book. A portfolio concentrated in large tickets has different risk characteristics than one with many small loans."
+        />
+      </Section>
+
+      <Section id="cohort" title="Cohort Analysis">
+        <Metric
+          name="Vintage Cohort"
+          formula="Group loans by Disbursement_Date month"
+          rationale="Track each origination vintage's performance independently. Newer vintages have less time to collect, so lower collection rates are expected. PAR30 by vintage reveals whether delinquency is improving or deteriorating with each batch."
+        />
+        <p style={styles.body}>
+          Heat-coded cells highlight outliers: green for high collection rates, red for high PAR.
+          The totals row aggregates across all vintages for a portfolio-level view.
+        </p>
+      </Section>
+
+      <Section id="yield" title="Yield & Margins">
+        <Metric
+          name="Portfolio Margin Rate"
+          formula="sum(Margin Collected) / sum(Disbursed_Amount)"
+          rationale="Revenue yield on deployed capital. Measured on all loans (active + closed)."
+        />
+        <Metric
+          name="Realised Margin Rate"
+          formula="sum(Margin Collected) / sum(Disbursed_Amount) — closed loans only"
+          rationale="Margin on fully matured loans. Excludes active loans still collecting, giving a cleaner view of actual return."
+        />
+        <Note>
+          <strong>RBF Margin = 0%:</strong> The RBF_LT (RBF Exclusive) data sheet does not include a separate
+          Margin Collected column. RBF revenue is structured as part of the total repayment amount, not broken out.
+          This does not mean RBF earns zero revenue — it means margin is not separately trackable from the tape.
+        </Note>
+      </Section>
+
+      <Section id="tenure" title="Tenure Analysis">
+        <Metric
+          name="Tenure"
+          formula="Tenure column (weeks) from loan tape"
+          rationale="Contractual loan duration. BNPL tenures range from 4-90 weeks. RBF loans are typically 90 weeks. Shorter tenures turn over faster, generating more fee income per unit of capital."
+        />
+        <Metric
+          name="Performance by Tenure Band"
+          formula="Collection rate, DPD rate, margin rate per tenure band"
+          rationale="Reveals whether shorter or longer loans perform better. Bands: 1-4w, 5-9w, 10-14w, 15-19w, 20-29w, 30w+."
+        />
+      </Section>
+
+      <Section id="covenants" title="Covenant Monitoring">
+        <p style={styles.body}>
+          Covenants are contractual financial tests defined in the SILQ KSA facility agreement.
+          The platform auto-checks compliance from loan tape data, using the exact formulas from the compliance certificate.
+        </p>
+        <Metric
+          name="PAR 30 Ratio"
+          formula="Outstanding of DPD > 30 loans / Total Outstanding of active loans  ≤  10%"
+          rationale="Portfolio quality gate. Ensures delinquency by exposure remains controlled. Uses GBV-weighted methodology matching the compliance certificate."
+        />
+        <Metric
+          name="PAR 90 Ratio"
+          formula="Outstanding of DPD > 90 loans / Total Outstanding of active loans  ≤  5%"
+          rationale="Serious delinquency threshold. Loans past 90 days are at elevated loss risk."
+        />
+        <Metric
+          name="Collection Ratio (3-Month Average)"
+          formula="Average of (Amt_Repaid / Total_Collectable_Amount) for loans maturing in each of the prior 3 months  >  33%"
+          rationale="Measures whether maturing loans are being collected. Each month looks at loans whose Repayment_Deadline fell in that month. The 3-month rolling average smooths seasonal variation."
+        />
+        <Metric
+          name="Repayment at Term"
+          formula="Total collections / Total GBV for loans reaching maturity + 3 months  >  95%"
+          rationale="Tests whether loans that had enough time to fully collect actually did. Looks at loans whose Repayment_Deadline was 3-6 months before the test date, giving them a 3-month grace period."
+        />
+        <Metric
+          name="Loan-to-Value Ratio"
+          formula="Facility Amount / (Receivables + Cash Balances)  ≤  75%"
+          rationale="Leverage test. Partially computable from tape (receivables = total outstanding). Facility amount and cash balances are corporate-level data not in the loan tape — shown as partial."
+        />
+      </Section>
+
+      <Section id="products" title="Product Types">
+        <Subsection title="BNPL (Buy Now Pay Later)">
+          <p style={styles.body}>
+            Short-term consumer loans originated through merchant POS terminals. 969 loans in the current tape.
+            Tenures range from 4-90 weeks. Margin is explicitly tracked via the Margin Collected column.
+          </p>
+        </Subsection>
+        <Subsection title="RBF Exclusive (Revenue-Based Financing)">
+          <p style={styles.body}>
+            Longer-term merchant financing. 943 loans from the RBF_LT sheet. Fixed 90-week tenure.
+            Revenue structure differs from BNPL — margin is baked into the repayment schedule rather than
+            separated as a distinct column. The loader fills Margin Collected with 0.0 and flags these rows
+            as synthetic.
+          </p>
+        </Subsection>
+        <Subsection title="RBF NE (New Entry)">
+          <p style={styles.body}>
+            Small cohort (3 loans, SAR 15M disbursed). Same structure as BNPL with explicit margin tracking.
+            Low collection rate (29.2%) reflects that these loans are still actively collecting, not distressed.
+          </p>
+        </Subsection>
+      </Section>
+
+      <Section id="backward-date" title="Backward-Date Caveat">
+        <p style={styles.body}>
+          When the as-of date is set before the tape date (e.g., viewing Dec 31 on a Jan 31 tape),
+          the dashboard applies deal-level filtering — only loans disbursed by that date are included.
+          However, <strong>balance columns</strong> (outstanding, collected, overdue, margins) still reflect
+          the tape snapshot date, not the as-of date.
+        </p>
+        <p style={styles.body}>
+          This means DPD-based metrics (PAR, delinquency buckets) are recalculated correctly using the
+          as-of date as the reference. But balance-derived metrics are stale. The dashboard shows a gold
+          warning banner and marks affected KPIs with a ⚠ indicator.
+        </p>
+        <Table
+          headers={['Metric Type', 'Accurate?', 'Examples']}
+          rows={[
+            ['Deal selection / counts', 'Yes', 'Total deals, active loans, product mix'],
+            ['Disbursement amounts', 'Yes', 'Total disbursed (only includes filtered deals)'],
+            ['DPD / PAR ratios', 'Yes', 'Recalculated with as-of date as reference'],
+            ['Balance columns', 'Stale ⚠', 'Outstanding, collected, overdue, margins, rates'],
+            ['Tenure / HHI', 'Yes', 'Based on deal attributes, not balances'],
+          ]}
+        />
+      </Section>
+
+      <Section id="currency" title="Currency Conversion">
+        <p style={styles.body}>
+          SILQ data is reported in Saudi Riyal (SAR). The dashboard supports toggling between SAR and USD.
+          When USD is selected, all monetary amounts are multiplied by the live FX rate.
+          Non-monetary metrics (rates, percentages, days, counts) are unaffected.
+        </p>
+        <Note>
+          Exchange rates are fetched live from open.er-api.com and cached for 1 hour.
+          Falls back to static rates (SAR 0.2667) if the API is unavailable.
+        </Note>
+      </Section>
+    </>
   )
 }
 
