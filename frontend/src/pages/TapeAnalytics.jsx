@@ -30,6 +30,7 @@ import SilqConcentrationChart  from '../components/charts/silq/SilqConcentration
 import SilqCohortTable         from '../components/charts/silq/SilqCohortTable'
 import YieldMarginsChart       from '../components/charts/silq/YieldMarginsChart'
 import TenureAnalysisChart     from '../components/charts/silq/TenureAnalysisChart'
+import SilqCovenantsChart      from '../components/charts/silq/SilqCovenantsChart'
 
 import { TAPE_TABS } from '../components/Sidebar'
 
@@ -192,6 +193,7 @@ function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots,
     'cohort-analysis': <ChartTab tab="cohort" {...chartProps}><SilqCohortTable {...chartProps} /></ChartTab>,
     'yield-margins':   <ChartTab tab="yield-margins" {...chartProps}><YieldMarginsChart {...chartProps} /></ChartTab>,
     'tenure':          <ChartTab tab="tenure" {...chartProps}><TenureAnalysisChart {...chartProps} /></ChartTab>,
+    'covenants':       <ChartTab tab="covenants" {...chartProps}><SilqCovenantsChart {...chartProps} /></ChartTab>,
   }
   return SILQ_TABS[tab] || <div style={{ color: 'var(--text-muted)' }}>Tab not found</div>
 }

@@ -23,6 +23,7 @@ from core.analysis_silq import (
     C_DISB_DATE, C_REPAY_DEADLINE, C_REPAID, C_TENURE, C_SHOP_ID,
     C_COLLECTABLE, C_MARGIN,
 )
+from core.analysis_silq import compute_silq_covenants
 from core.loader import load_silq_snapshot
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -355,3 +356,88 @@ class TestComplianceReconciliation:
         result = compute_silq_summary(df_dec, mult=1, ref_date=dec31_ref)
         # Our methodology differs (simple ratio vs 3-month avg), but should be > 33% (covenant)
         assert result['collection_rate'] > 33.0
+
+
+# ── Covenant monitoring tests ─────────────────────────────────────────────────
+
+class TestCovenants:
+    def test_returns_5_covenants(self, full_df, jan31_ref):
+        result = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        assert len(result['covenants']) == 5
+
+    def test_par30_matches_delinquency(self, full_df, jan31_ref):
+        """PAR30 covenant should match the delinquency tab value."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        delin = compute_silq_delinquency(full_df, mult=1, ref_date=jan31_ref)
+        par30_cov = cov['covenants'][0]  # First covenant is PAR30
+        assert par30_cov['name'] == 'PAR 30 Ratio'
+        assert par30_cov['current'] * 100 == pytest.approx(delin['par30'], abs=0.1)
+
+    def test_par90_matches_delinquency(self, full_df, jan31_ref):
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        delin = compute_silq_delinquency(full_df, mult=1, ref_date=jan31_ref)
+        par90_cov = cov['covenants'][1]
+        assert par90_cov['name'] == 'PAR 90 Ratio'
+        assert par90_cov['current'] * 100 == pytest.approx(delin['par90'], abs=0.1)
+
+    def test_par30_compliant_jan31(self, full_df, jan31_ref):
+        """PAR30 should be compliant (< 10%) as of Jan 31."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        par30 = cov['covenants'][0]
+        assert par30['compliant'] is True
+        assert par30['current'] < 0.10
+
+    def test_par90_compliant_jan31(self, full_df, jan31_ref):
+        """PAR90 should be compliant (< 5%) as of Jan 31."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        par90 = cov['covenants'][1]
+        assert par90['compliant'] is True
+        assert par90['current'] < 0.05
+
+    def test_collection_ratio_above_covenant(self, full_df, jan31_ref):
+        """3-month collection ratio should exceed the 33% covenant minimum."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        coll = cov['covenants'][2]
+        assert coll['name'] == 'Collection Ratio (3M Avg)'
+        assert coll['current'] > 0.33
+        assert coll['compliant'] is True
+
+    def test_repayment_at_term(self, full_df, jan31_ref):
+        """Repayment at Term should be available and > 95%."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        rat = cov['covenants'][3]
+        assert rat['name'] == 'Repayment at Term'
+        if rat['available']:
+            assert rat['current'] > 0.90  # Should be close to cert's 97.33%
+
+    def test_ltv_partial(self, full_df, jan31_ref):
+        """LTV should be marked as partial (off-tape data needed)."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        ltv = cov['covenants'][4]
+        assert ltv['name'] == 'Loan-to-Value Ratio'
+        assert ltv['partial'] is True
+        assert ltv['note'] is not None
+
+    def test_compliant_count(self, full_df, jan31_ref):
+        """All computable covenants should be compliant as of Jan 31."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        assert cov['breach_count'] == 0
+        assert cov['compliant_count'] >= 3  # At least PAR30, PAR90, Collection
+
+    def test_covenant_structure(self, full_df, jan31_ref):
+        """Each covenant must have required fields for CovenantCard."""
+        cov = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        for c in cov['covenants']:
+            assert 'name' in c
+            assert 'current' in c
+            assert 'threshold' in c
+            assert 'compliant' in c
+            assert 'operator' in c
+            assert 'format' in c
+            assert 'breakdown' in c
+            assert isinstance(c['breakdown'], list)
+
+    def test_json_serializable(self, full_df, jan31_ref):
+        import json
+        result = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
+        json.dumps(result)  # Should not raise
