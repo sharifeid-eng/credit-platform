@@ -525,11 +525,35 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 **Short term:**
 - [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
 **Phase 2 (Portfolio Analytics — Borrowing Base Monitoring):**
-- [ ] Real borrowing base calculations from tape data (compliance cert has exact formulas)
+- [ ] Build `core/portfolio.py` computation engine — reusable for both tape and future API data
+- [ ] Wire computation engine to SILQ Portfolio Analytics tabs (replace mock data)
+- [ ] Extend to Klaim once Creditit parameters extracted
 - [ ] Eligibility criteria testing per deal
 - [ ] Automated concentration limit tracking
-- [ ] Advance rate calculations from actual portfolio data
-- [ ] Replace mock data in Portfolio Analytics tabs with real calculations
+
+**SILQ Compliance Certificate — Extracted Formulas (Dec 2025 cert, reconciliation Excel at `Downloads/SILQ_KSA_Compliance_Reconciliation.xlsx`):**
+
+| # | Covenant | Formula | Threshold | Cert Value | Computable from tape? |
+|---|----------|---------|-----------|------------|----------------------|
+| 1 | Debt/Equity | Corporate-level | ≤ 3.0x | 1.2x | ❌ Off-tape |
+| 2 | Min Cash Balance | Cash / max(month burn, 3m avg) | b > a | 57.8M > 21.1M | ❌ Off-tape |
+| 3 | PAR 30 | GBV >30 DPD / GBV outstanding (active) | ≤ 10% | 1.6% | ✅ Already live |
+| 4 | Collection Ratio | 3-month avg of (Repaid / Collectable) by maturity month | > 33% | 95.53% | ✅ Already live |
+| 5 | Repayment at Term | Collections / GBV for loans maturing 3-6 months prior | > 95% | 97.33% | ✅ Already live |
+| 6 | LTV | Facility outstanding / (Receivables + Cash) | ≤ 75% | 74.85% | ⚠️ Partial (receivables yes, facility/cash no) |
+
+**Borrowing base waterfall (from cert):**
+1. Total A/R = sum of outstanding for active loans (SAR 69.3M at Dec 31)
+2. Ineligible = DPD>90 + concentration excess + age violations
+3. Eligible = Total A/R − Ineligible
+4. Advance rate discount (SILQ-specific rates TBD from facility agreement)
+5. Borrowing Base = Eligible × Advance Rate
+
+**Key reconciliation findings:**
+- PAR30: Cert 1.6% (Dec 31) vs tape 5.5% (Jan 31) — increase due to one month aging, directionally consistent
+- Collection Ratio: Cert 95.53% 3M avg — tape rates higher because extra month of collections occurred
+- Repayment at Term: Cert 97.33% vs tape 96.86% — Δ 0.47pp, within expected tolerance
+- LTV: 74.85%, only 15bps below 75% limit — tightest covenant, depends on cash injection
 **Phase 3 (Deployment & Live Monitoring):**
 - [ ] Cloud deployment — Railway (~$5/mo), deploys from GitHub, auto-HTTPS. Data files committed to repo (small enough). Add simple auth before exposing.
 - [ ] Role-based access (analyst vs IC vs read-only)
