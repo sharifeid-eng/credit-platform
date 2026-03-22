@@ -1,19 +1,19 @@
 import ComplianceBadge from './ComplianceBadge'
 
-export default function CovenantCard({ covenant }) {
+export default function CovenantCard({ covenant, currency = 'AED' }) {
   const { name, current, threshold, compliant, operator, format, period, breakdown } = covenant
 
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
-    if (format === 'money') return `AED ${(v / 1_000_000).toFixed(1)}M`
+    if (format === 'money') return `${currency} ${(v / 1_000_000).toFixed(1)}M`
     return String(v)
   }
 
   const fmtBreakdownValue = (v) => {
     if (typeof v !== 'number') return String(v)
-    if (v >= 1_000_000) return `AED ${(v / 1_000_000).toFixed(1)}M`
-    if (v >= 1_000) return `AED ${(v / 1_000).toFixed(0)}K`
-    if (v < 1) return `${(v * 100).toFixed(1)}%`
+    if (v >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(1)}M`
+    if (v >= 1_000) return `${currency} ${(v / 1_000).toFixed(0)}K`
+    if (v < 1 && v > 0) return `${(v * 100).toFixed(1)}%`
     return String(v)
   }
 

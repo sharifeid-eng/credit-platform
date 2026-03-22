@@ -606,3 +606,187 @@ def compute_silq_borrowing_base(df, mult=1, ref_date=None):
         'advance_rate': advance_rate,
         'by_product': by_product,
     }
+
+
+# ── 9. Covenants ────────────────────────────────────────────────────────────
+
+def compute_silq_covenants(df, mult=1, ref_date=None):
+    """Compute covenant compliance tests from loan tape data.
+
+    Implements covenants from the SILQ KSA facility compliance certificate:
+    1. PAR30 ≤ 10% (GBV-weighted)
+    2. PAR90 ≤ 5% (GBV-weighted)
+    3. Collection Ratio > 33% (3-month rolling average)
+    4. Repayment at Term > 95%
+    5. LTV ≤ 75% (partial — facility/cash data off-tape)
+    """
+    if ref_date is None:
+        ref_date = pd.Timestamp.now().normalize()
+    else:
+        ref_date = pd.to_datetime(ref_date)
+
+    test_date_str = ref_date.strftime('%Y-%m-%d')
+    covenants = []
+
+    # ── Active loan base for PAR calculations ────────────────────────────
+    active = df[df[C_STATUS] != 'Closed'] if C_STATUS in df.columns else df
+    active_dpd = _dpd(active, ref_date)
+    total_outstanding_active = active[C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
+
+    # ── Covenant 1: PAR30 ≤ 10% ──────────────────────────────────────────
+    outstanding_gt30 = active.loc[active_dpd > 30, C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
+    par30_ratio = outstanding_gt30 / total_outstanding_active if total_outstanding_active > 0 else 0
+    covenants.append({
+        'name': 'PAR 30 Ratio',
+        'current': _safe(par30_ratio),
+        'threshold': 0.10,
+        'compliant': bool(par30_ratio <= 0.10),
+        'operator': '<=',
+        'format': 'pct',
+        'period': test_date_str,
+        'available': True,
+        'partial': False,
+        'note': None,
+        'breakdown': [
+            {'label': 'Outstanding >30 DPD', 'value': _safe(outstanding_gt30)},
+            {'label': 'Total Outstanding (active)', 'value': _safe(total_outstanding_active)},
+            {'label': 'PAR 30 Ratio', 'value': _safe(par30_ratio), 'bold': True},
+        ],
+    })
+
+    # ── Covenant 2: PAR90 ≤ 5% ───────────────────────────────────────────
+    outstanding_gt90 = active.loc[active_dpd > 90, C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
+    par90_ratio = outstanding_gt90 / total_outstanding_active if total_outstanding_active > 0 else 0
+    covenants.append({
+        'name': 'PAR 90 Ratio',
+        'current': _safe(par90_ratio),
+        'threshold': 0.05,
+        'compliant': bool(par90_ratio <= 0.05),
+        'operator': '<=',
+        'format': 'pct',
+        'period': test_date_str,
+        'available': True,
+        'partial': False,
+        'note': None,
+        'breakdown': [
+            {'label': 'Outstanding >90 DPD', 'value': _safe(outstanding_gt90)},
+            {'label': 'Total Outstanding (active)', 'value': _safe(total_outstanding_active)},
+            {'label': 'PAR 90 Ratio', 'value': _safe(par90_ratio), 'bold': True},
+        ],
+    })
+
+    # ── Covenant 3: Collection Ratio > 33% (3-month rolling avg) ─────────
+    monthly_ratios = []
+    month_labels = []
+    if C_REPAY_DEADLINE in df.columns and C_REPAID in df.columns and C_COLLECTABLE in df.columns:
+        for i in range(1, 4):  # 1, 2, 3 months back
+            month_start = (ref_date - pd.DateOffset(months=i)).replace(day=1)
+            month_end = (ref_date - pd.DateOffset(months=i-1)).replace(day=1) - pd.Timedelta(days=1)
+            mask = (df[C_REPAY_DEADLINE] >= month_start) & (df[C_REPAY_DEADLINE] <= month_end)
+            maturing = df[mask]
+            if len(maturing) > 0:
+                repaid = maturing[C_REPAID].sum()
+                collectable = maturing[C_COLLECTABLE].sum()
+                ratio = repaid / collectable if collectable > 0 else 0
+                monthly_ratios.append(ratio)
+                month_labels.append(month_start.strftime('%b %Y'))
+            else:
+                monthly_ratios.append(None)
+                month_labels.append(month_start.strftime('%b %Y'))
+
+    valid_ratios = [r for r in monthly_ratios if r is not None]
+    avg_collection = sum(valid_ratios) / len(valid_ratios) if valid_ratios else 0
+
+    breakdown_coll = []
+    for label, ratio in zip(month_labels, monthly_ratios):
+        if ratio is not None:
+            breakdown_coll.append({'label': f'{label} Collection Ratio', 'value': _safe(ratio)})
+        else:
+            breakdown_coll.append({'label': f'{label} (no maturing loans)', 'value': 0})
+    breakdown_coll.append({'label': '3-Month Average', 'value': _safe(avg_collection), 'bold': True})
+
+    covenants.append({
+        'name': 'Collection Ratio (3M Avg)',
+        'current': _safe(avg_collection),
+        'threshold': 0.33,
+        'compliant': bool(avg_collection > 0.33),
+        'operator': '>=',
+        'format': 'pct',
+        'period': f'{month_labels[-1] if month_labels else "N/A"} — {month_labels[0] if month_labels else "N/A"}',
+        'available': len(valid_ratios) > 0,
+        'partial': False,
+        'note': f'{len(valid_ratios)} of 3 months have maturing loans' if len(valid_ratios) < 3 else None,
+        'breakdown': breakdown_coll,
+    })
+
+    # ── Covenant 4: Repayment at Term > 95% ──────────────────────────────
+    # Loans whose original term + 3 months ended in the 3 months before ref_date
+    # i.e., Repayment_Deadline between ref_date-6mo and ref_date-3mo
+    rat_available = False
+    rat_ratio = 0
+    rat_breakdown = []
+    if C_REPAY_DEADLINE in df.columns and C_REPAID in df.columns and C_COLLECTABLE in df.columns:
+        window_start = ref_date - pd.DateOffset(months=6)
+        window_end = ref_date - pd.DateOffset(months=3)
+        mask = (df[C_REPAY_DEADLINE] >= window_start) & (df[C_REPAY_DEADLINE] < window_end)
+        qualifying = df[mask]
+        if len(qualifying) > 0:
+            rat_available = True
+            total_repaid = qualifying[C_REPAID].sum() * mult
+            total_gbv = qualifying[C_COLLECTABLE].sum() * mult
+            rat_ratio = total_repaid / total_gbv if total_gbv > 0 else 0
+            rat_breakdown = [
+                {'label': f'Qualifying loans ({len(qualifying)})', 'value': _safe(len(qualifying))},
+                {'label': 'Total Collections', 'value': _safe(total_repaid)},
+                {'label': 'Total GBV (matured)', 'value': _safe(total_gbv)},
+                {'label': 'Repayment at Term', 'value': _safe(rat_ratio), 'bold': True},
+            ]
+
+    covenants.append({
+        'name': 'Repayment at Term',
+        'current': _safe(rat_ratio),
+        'threshold': 0.95,
+        'compliant': bool(rat_ratio >= 0.95) if rat_available else True,
+        'operator': '>=',
+        'format': 'pct',
+        'period': f'{(ref_date - pd.DateOffset(months=6)).strftime("%b %Y")} — {(ref_date - pd.DateOffset(months=3)).strftime("%b %Y")}',
+        'available': rat_available,
+        'partial': False,
+        'note': 'No qualifying loans in the measurement window' if not rat_available else None,
+        'breakdown': rat_breakdown if rat_breakdown else [{'label': 'No qualifying loans', 'value': 0}],
+    })
+
+    # ── Covenant 5: LTV ≤ 75% (partial) ──────────────────────────────────
+    total_receivables = df[C_OUTSTANDING].sum() * mult if C_OUTSTANDING in df.columns else 0
+    covenants.append({
+        'name': 'Loan-to-Value Ratio',
+        'current': 0,
+        'threshold': 0.75,
+        'compliant': True,  # Can't determine without facility data
+        'operator': '<=',
+        'format': 'pct',
+        'period': test_date_str,
+        'available': False,
+        'partial': True,
+        'note': 'Requires facility amount and cash balances (corporate-level data not in loan tape)',
+        'breakdown': [
+            {'label': 'Portfolio Receivables (from tape)', 'value': _safe(total_receivables)},
+            {'label': 'Facility Amount', 'value': 0, 'note': 'Off-tape'},
+            {'label': 'Cash Balances', 'value': 0, 'note': 'Off-tape'},
+            {'label': 'LTV Ratio', 'value': 0, 'bold': True, 'note': 'Incomplete'},
+        ],
+    })
+
+    # ── Summary ───────────────────────────────────────────────────────────
+    computable = [c for c in covenants if c['available'] and not c['partial']]
+    compliant_count = sum(1 for c in computable if c['compliant'])
+    breach_count = sum(1 for c in computable if not c['compliant'])
+    partial_count = sum(1 for c in covenants if c['partial'] or not c['available'])
+
+    return {
+        'covenants': covenants,
+        'compliant_count': compliant_count,
+        'breach_count': breach_count,
+        'partial_count': partial_count,
+        'test_date': test_date_str,
+    }

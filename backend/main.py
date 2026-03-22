@@ -27,7 +27,8 @@ from core.reporter import generate_ai_analysis, save_pdf_report
 from core.analysis_silq import (
     compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
-    compute_silq_tenure, compute_silq_borrowing_base, filter_silq_by_date,
+    compute_silq_tenure, compute_silq_borrowing_base, compute_silq_covenants,
+    filter_silq_by_date,
 )
 from core.validation_silq import validate_silq_tape
 app = FastAPI(title="ACP Private Credit API")
@@ -455,6 +456,7 @@ SILQ_CHART_MAP = {
     'yield-margins': compute_silq_yield,
     'tenure':        compute_silq_tenure,
     'borrowing-base': compute_silq_borrowing_base,
+    'covenants':      compute_silq_covenants,
 }
 
 @app.get("/companies/{company}/products/{product}/charts/silq/{chart_name}")
