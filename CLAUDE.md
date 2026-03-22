@@ -250,6 +250,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/silq/yield-margins` |Margin trends, by product/tenure   |
 |`GET /companies/{co}/products/{p}/charts/silq/tenure`        |Tenure distribution, performance   |
 |`GET /companies/{co}/products/{p}/charts/silq/borrowing-base`|Waterfall, eligible amount         |
+|`GET /companies/{co}/products/{p}/charts/silq/covenants`     |5 covenant compliance tests        |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 Summary, validate, AI commentary, AI tab insight, and chat endpoints auto-dispatch to SILQ-specific logic when `config.analysis_type == 'silq'`.
@@ -293,7 +294,7 @@ Each non-overview tab (except Data Integrity) has a **TabInsight** component —
 Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
 
 -----
-## SILQ Tape Analytics Tabs (8)
+## SILQ Tape Analytics Tabs (9)
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
 |Overview          |10 KPI cards (Disbursed, Outstanding, Overdue, Collection Rate, PAR30, PAR90, Active, Avg Tenure, HHI Shop, Total Repaid) + AI commentary + Data Chat|
@@ -303,6 +304,7 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 |Cohort Analysis   |Vintage table: deals, disbursed, repaid, outstanding, overdue, collection %, overdue %, PAR30 %, avg tenure — heat-coded cells + totals row|
 |Yield & Margins   |3 KPI cards (margin rate, realised margin, total margin) + Monthly margin trend + By product + By tenure band|
 |Tenure Analysis   |2 KPI cards (avg/median tenure) + Distribution histogram + Performance by tenure band (grouped bars) + By product|
+|Covenants         |5 covenant cards: PAR30 ≤ 10%, PAR90 ≤ 5%, Collection Ratio > 33% (3M avg), Repayment at Term > 95%, LTV ≤ 75% (partial). Compliance badges, threshold bars, calculation breakdowns. Values reconcile with Dec 2025 compliance certificate.|
 |Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency (reuses Klaim Data Integrity infrastructure)|
 Each non-overview tab has a **TabInsight** component with one-click AI insight.
 Dashboard controls: Snapshot selector, As-of Date picker, Currency toggle (SAR ↔ USD). PDF Report button hidden for SILQ.
@@ -498,19 +500,20 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ **RBF margin note** — info note on Yield tab explaining RBF_Exc 0% margin (source sheet lacks Margin Collected column)
 - ✅ **Backward-date caveat system** — gold warning banner + per-KPI ⚠ stale indicators when as-of date < tape date. Marks balance-derived metrics (outstanding, collected, overdue, rates, margins) while leaving accurate metrics (disbursed, counts, tenure, discount) unmarked
 - ✅ **Compliance certificate reconciliation** — verified dashboard data aligns with company Commentary (Jan 31) and Dec 2025 compliance cert (methodology differences documented)
-- ✅ **Unit tests** — 88 tests across `tests/test_analysis_silq.py` (48) and `tests/test_analysis_klaim.py` (40). Covers all compute functions, DPD logic, GBV-weighted PAR, compliance cert reconciliation, Commentary alignment. Run: `python -m pytest tests/ -v`
+- ✅ **Unit tests** — 99 tests across `tests/test_analysis_silq.py` (59) and `tests/test_analysis_klaim.py` (40). Covers all compute functions, DPD logic, GBV-weighted PAR, compliance cert reconciliation, Commentary alignment, covenant monitoring. Run: `python -m pytest tests/ -v`
 - ✅ **Live FX rates** — `core/config.py` fetches from `open.er-api.com` (free, no key). 1-hour cache, automatic fallback to hardcoded rates. `GET /fx-rates` endpoint returns rates + source (`live` or `fallback`). EUR/GBP rates now current.
+- ✅ **SILQ Covenant monitoring** — 9th SILQ tab. Auto-checks 5 facility covenants from tape data: PAR30 ≤ 10% (5.5%), PAR90 ≤ 5% (1.4%), Collection Ratio > 33% (96.4% 3M avg), Repayment at Term > 95% (97.2%), LTV ≤ 75% (partial — needs corporate data). Values reconcile with Dec 2025 compliance certificate. Reuses `CovenantCard` + `ComplianceBadge` components.
 -----
 ## Known Gaps & Next Steps
 **Short term:**
 - [x] Onboard SILQ — POS lending asset class
-- [x] Add `core/analysis.py` unit tests (88 tests passing)
+- [x] Add `core/analysis.py` unit tests (99 tests passing)
 - [x] Replace hardcoded FX rates with live API
 - [x] Startup script — `start.ps1` boots both servers + opens browser
+- [x] Covenant monitoring alerts — auto-check PAR30, PAR90, Collection Ratio, Repayment at Term, LTV
 - [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
 **Phase 2 (Borrowing Base Monitoring) — UI scaffolded with mock data, needs real data:**
 - [ ] Real borrowing base calculations from tape data (compliance cert has exact formulas)
-- [ ] Covenant monitoring alerts — auto-check PAR30 < 10%, PAR90 < 5%, 3m collection > 33%, Repayment at Term > 95%, LTV ≤ 75%
 - [ ] Eligibility criteria testing per deal
 - [ ] Automated concentration limit tracking
 - [ ] Advance rate calculations from actual portfolio data
