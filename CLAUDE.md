@@ -26,7 +26,7 @@ The platform allows analysts and investment committee members to:
 **Who uses it:** Sharif (fund analyst/PM) and eventually the broader investment committee.
 **Current portfolio companies:**
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
-- **SILQ** — POS lending. Not yet onboarded into the platform.
+- **SILQ** — POS lending, KSA (Saudi Arabia). Data in SAR. Live dataset: `data/SILQ/KSA/` (1 tape: Jan 2026, 1,915 loans across 2 sheets: BNPL+RBF_NE + RBF_LT). Config: `analysis_type: "silq"`.
 **Asset classes:** Receivables (insurance claims factoring) and short-term consumer/POS loans.
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`.
 **Data notes:**
@@ -46,11 +46,12 @@ The platform allows analysts and investment committee members to:
 - AI-powered dashboards per company/product
 - Consistency checks across snapshots
 - Investment committee-ready commentary
-### Phase 2 — Borrowing Base Monitoring
-- Automated eligibility testing against lending criteria
-- Concentration limit tracking
-- Advance rate calculations
-- Covenant monitoring and breach alerts
+### Phase 2 — Borrowing Base Monitoring (backend ✅, frontend in progress)
+- ✅ Backend computation engine for BB, concentration limits, covenants (both Klaim + SILQ)
+- ✅ API endpoints with auto-dispatch by company type
+- ✅ Facility params persistence (user-entered corporate-level data)
+- Frontend wiring needed: connect portfolio components to real API, facility params input panel
+- Covenant monitoring and breach alerts with notifications
 ### Phase 3 — Team & IC Viewing Layer
 - Role-based access (analyst vs IC vs read-only)
 - Scheduled report delivery
@@ -88,12 +89,15 @@ credit-platform/
 ├── backend/
 │   └── main.py             # FastAPI app — all REST endpoints
 ├── core/
-│   ├── analysis.py         # All pure data computation functions (no I/O)
-│   ├── loader.py           # File discovery, snapshot loading
+│   ├── analysis.py         # Klaim pure data computation functions (no I/O)
+│   ├── analysis_silq.py    # SILQ tape analytics (8 compute functions, DPD/PAR-based)
+│   ├── portfolio.py        # Portfolio Analytics engine — BB, concentration, covenants (both companies)
+│   ├── loader.py           # File discovery, snapshot loading (incl. load_silq_snapshot multi-sheet)
 │   ├── config.py           # Per-product config (currency, description) via config.json
 │   ├── consistency.py      # Snapshot-to-snapshot data integrity checks
 │   ├── migration.py        # Multi-snapshot roll-rate & cure-rate analysis
-│   ├── validation.py       # Single-tape data quality checks
+│   ├── validation.py       # Single-tape data quality checks (Klaim)
+│   ├── validation_silq.py  # SILQ-specific tape validation (14 checks)
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── data/
 │   └── {company}/
@@ -143,7 +147,7 @@ credit-platform/
 │   │   │       ├── LimitCard.jsx             # Concentration limit card component
 │   │   │       ├── CovenantCard.jsx          # Covenant card with threshold visualization
 │   │   │       ├── ComplianceBadge.jsx       # Shared Compliant/Breach badge
-│   │   │       └── mockData.js               # All mock data for portfolio tabs
+│   │   │       └── mockData.js               # Fallback mock data (to be replaced by API calls)
 │   │   ├── styles/
 │   │   │   ├── chartTheme.js
 │   │   │   └── tokens.css
@@ -217,7 +221,14 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/integrity/notes`           |Get saved analyst notes              |
 |`POST /companies/{co}/products/{p}/chat`                     |AI data chat (multi-turn)          |
 |`POST /companies/{co}/products/{p}/generate-report`          |Generate PDF report (streams bytes) |
+|`GET /companies/{co}/products/{p}/portfolio/borrowing-base`  |BB waterfall, KPIs, advance rates, facility|
+|`GET /companies/{co}/products/{p}/portfolio/concentration-limits`|Concentration limits with compliance  |
+|`GET /companies/{co}/products/{p}/portfolio/covenants`       |Covenant compliance tests              |
+|`GET /companies/{co}/products/{p}/portfolio/flow`            |Monthly origination waterfall (SILQ)   |
+|`GET /companies/{co}/products/{p}/portfolio/facility-params` |Load saved facility parameters         |
+|`POST /companies/{co}/products/{p}/portfolio/facility-params`|Save facility parameters               |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
+Portfolio endpoints auto-dispatch to SILQ or Klaim functions based on `config.json` `analysis_type`.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 -----
 ## Navigation Architecture
@@ -259,14 +270,31 @@ Each non-overview tab (except Data Integrity) has a **TabInsight** component —
 Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
 
 -----
-## Portfolio Analytics Tabs (3) — Mock Data
+## Portfolio Analytics Tabs (3) — Backend Ready, Frontend Mock
 |Tab                  |What It Shows                                                |
 |---------------------|-------------------------------------------------------------|
-|Borrowing Base       |4 KPI cards, waterfall table (gross → eligible → BB), advance rates by region, facility capacity bar|
-|Concentration Limits |Summary bar (compliant/breach counts), 2-column grid of limit cards with progress bars|
+|Borrowing Base       |KPI cards, waterfall (Total AR → Ineligible → Eligible → Conc Adj → Advance Rate → BB), advance rates by region/product, facility capacity|
+|Concentration Limits |Summary bar (compliant/breach counts), limit cards with compliance badges, breach details|
 |Covenants            |Covenant cards with threshold bars, calculation breakdowns, compliance badges|
 
-**Note:** All portfolio data is mock (hardcoded in `mockData.js`). No backend endpoints yet — Phase 2 will add real data APIs.
+**Backend:** `core/portfolio.py` has full computation functions for both companies. API endpoints live at `/portfolio/*`. Auto-dispatches by `analysis_type` in config.json.
+**Frontend:** Still uses mock data (`mockData.js`). Next step: connect components to real API endpoints.
+
+### SILQ Portfolio Analytics (computed from tape)
+- **Borrowing Base:** Outstanding A/R → Ineligible (DPD>60, concentration excess) → Eligible → 80% advance → BB. Per-product breakdown (BNPL/RBF). Facility capacity with user-entered params.
+- **Concentration Limits (from loan docs):** Tiered single-borrower limit (≤$10M→20%, $10-20M→15%, >$20M→10%; Approved Recipients→15%). Top-5 shop, product mix, weighted avg tenure.
+- **Covenants (5, validated vs Dec 2025 cert):** PAR30 ≤10%, PAR90 ≤5%, Collection Ratio >33% (3M avg), Repayment at Term >95%, LTV ≤75% (needs facility_params).
+- **Validation results:** PAR30 5.53% (cert 1.6% timing gap), Collection Ratio Oct 99.3%/Nov 92.9%/Dec 96.9% (exact match), Repayment at Term 97.18% (cert 97.33%).
+
+### Klaim Portfolio Analytics (matching Creditit platform)
+- **Borrowing Base:** Total A/R (outstanding of active deals) → Ineligible (age>365d, denied>50%) → Eligible → Concentration Adjustments (payer excess) → Advance Rate Discount (UAE 90%, Non-UAE 85%) → Adjusted Pool Balance + Cash = BB.
+- **Concentration Limits (5):** Single receivable (0.5%), Top-10 receivables (50%), Single customer/Group (10%), Single payer (10% — with breach list + adjustment amount), Extended Age Receivables (5% — with WAL calculation).
+- **Covenants (6):** Min Cash Balance (≥3.0x ratio, off-tape), WAL (<60 days), PAR30 (<7%), PAR60 (<5%), Collection Ratio (≥25%), Paid vs Due (≥95%).
+
+### Facility Parameters (user-entered, stored per product)
+Stored in `data/{company}/{product}/facility_params.json`. Editable via `POST /portfolio/facility-params`.
+- **SILQ:** `facility_limit`, `facility_drawn`, `cash_balance`, `equity_injection`, `advance_rate`, `approved_recipients`
+- **Klaim:** `facility_limit`, `facility_drawn`, `cash_balance`, `net_cash_burn`, `net_cash_burn_3m_avg`, `advance_rate`, `advance_rates_by_region`, `single_payer_limit`
 -----
 ## Currency System
 Supported: `AED (0.2723)`, `USD (1.0)`, `EUR (1.08)`, `GBP (1.27)`, `SAR (0.2667)`, `KWD (3.26)`.
@@ -275,7 +303,7 @@ Each product has a `config.json` with its reported currency. Frontend shows togg
 -----
 ## Dashboard Customization Philosophy
 Each company/product has its own configured dashboard. The platform shares a common shell but specific views, metrics, and AI prompts are driven by asset class and available columns. Onboarding a new company requires designing the right views for that asset class.
-**Current implementation:** Built around Klaim's healthcare receivables. Not yet abstracted for multi-asset-class use.
+**Current implementation:** Two asset classes supported: Klaim (insurance receivables) and SILQ (POS lending). Backend auto-dispatches by `analysis_type` in config.json. Portfolio Analytics engine (`core/portfolio.py`) has company-specific functions for both.
 -----
 ## Key Architectural Decisions
 - **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.
@@ -305,6 +333,13 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Sidebar navigation architecture** — Company pages use a persistent 240px sidebar (`Sidebar.jsx`) within `CompanyLayout`. Tabs are `<Link>` elements (not buttons). Active state: gold left border + text. Sidebar follows Methodology page's original pattern.
 - **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
 - **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
+- **`core/portfolio.py`** — Standalone portfolio analytics module. SILQ functions import helpers from `analysis_silq.py` (`_dpd`, `_safe`, column aliases). Klaim functions use Klaim column names directly (`Purchase value`, `Group`, `Collected till date`). No cross-dependency between company-specific functions.
+- **Portfolio auto-dispatch** — `_portfolio_load()` in `main.py` reads `analysis_type` from config.json. Returns 8-tuple `(df, sel, config, disp, mult, ref_date, facility_params, analysis_type)`. Endpoints use `if atype == 'silq'` to route to the right compute function.
+- **SILQ concentration tiers (from loan docs)** — Single financing recipient limit scales with facility drawn: ≤$10M→20%, $10-20M→15%, >$20M→10%. Approved Recipients always 15%. Facility drawn converted to USD via `usd_rate` from config for tier lookup.
+- **Facility params persistence** — Stored as `facility_params.json` in the product data directory. Allowed keys whitelisted in `save_facility_params()`. `usd_rate` auto-injected from config.json. Off-tape data (cash balance, facility drawn, net cash burn) enables covenants that can't be computed from tape alone (LTV, Min Cash Balance).
+- **SILQ multi-sheet loader** — `load_silq_snapshot()` reads all Excel sheets, skips commentary sheets, detects malformed headers (summary-row-as-header), normalises `Loan_Type→Product`, fills missing `Margin Collected`, casts `Shop_ID` to string, normalises `Loan_Status` to title case. Returns `(df, commentary_text)`.
+- **Klaim outstanding pattern** — Portfolio functions use `outstanding = Purchase value - Collected - Denied` (clipped at 0), same pattern as Ageing/Portfolio health in tape analytics. Consistent with Creditit's Total A/R definition.
+- **SILQ covenant validation** — Validated against SILQ KSA Dec 2025 compliance certificate reconciliation Excel. Collection Ratio monthly breakdown matches exactly (Oct 99.3%, Nov 92.9%, Dec 96.9%). PAR30 timing gap expected (cert at Dec 31 vs tape at Jan 31). Repayment at Term within 0.15pp.
 - **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
 - **Portfolio Analytics mock data** — All 3 portfolio tabs use hardcoded data from `components/portfolio/mockData.js`. Phase 2 will replace with real backend APIs.
 - **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 tape tabs (excluding Data Integrity) via sidebar link navigation. Navigates to `/company/:co/:product/tape/:slug` URLs. ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
@@ -354,6 +389,10 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `total_expected`, `avg_discount`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`, `dso_available`
 - Snapshots API returns objects `{filename, date}` — must extract `.filename`
 - Companies API may return objects — must extract `.name`
+- Portfolio borrowing-base: `res.waterfall[]`, `res.kpis{}` (total_ar, eligible_ar, borrowing_base, available_to_draw), `res.advance_rates[]`, `res.facility{}` (limit, outstanding, available, headroom_pct)
+- Portfolio concentration-limits: `res.limits[]` (name, current, threshold, compliant, breakdown[], breaches[], conc_adjustment), `res.compliant_count`, `res.breach_count`
+- Portfolio covenants: `res.covenants[]` (name, current, threshold, compliant, operator, format, period, available, partial, note, breakdown[]), `res.compliant_count`, `res.breach_count`, `res.partial_count`, `res.test_date`
+- Portfolio facility-params: `res.facility_limit`, `res.facility_drawn`, `res.cash_balance`, etc. — user-entered, stored as JSON
 -----
 ## What's Working
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
@@ -420,21 +459,30 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Borrowing Base — 4 KPI cards, waterfall table, advance rates by region, facility capacity bar
   - Concentration Limits — summary bar, 2-column grid of limit cards with progress bars + compliance badges
   - Covenants — covenant cards with threshold bars, calculation breakdowns, compliance distance warnings
-  - All data from `mockData.js` — no backend endpoints yet
+  - Frontend still uses `mockData.js` — next step: connect to real API endpoints
+- ✅ **Portfolio Analytics Backend (`core/portfolio.py`)** — computation engine for both companies:
+  - **SILQ:** `compute_borrowing_base()` (DPD + tiered concentration ineligibility, 80% advance), `compute_concentration_limits()` (4 limits from loan docs, tiered by facility size), `compute_covenants()` (5 covenants: PAR30/90, Collection Ratio 3M avg, Repayment at Term, LTV), `compute_portfolio_flow()` (monthly origination waterfall)
+  - **Klaim:** `compute_klaim_borrowing_base()` (Creditit-matching waterfall: Total AR → Ineligible → Eligible → Conc Adj → Advance Rate → Adjusted Pool + Cash), `compute_klaim_concentration_limits()` (5 limits: single receivable, top-10, customer, payer with breach list, extended age/WAL), `compute_klaim_covenants()` (6 covenants: cash balance ratio, WAL, PAR30/60, collection ratio, paid vs due)
+  - Validated SILQ covenants against Dec 2025 compliance cert (Collection Ratio monthly breakdown exact match)
+  - Validated Klaim structure against Creditit platform (same waterfall steps, limit names, covenant formulas)
+  - Auto-dispatch in `main.py`: `_portfolio_load()` detects `analysis_type` from config, routes to correct functions
+  - Facility params persistence: `GET/POST /portfolio/facility-params` saves to `data/{co}/{product}/facility_params.json`
+- ✅ **SILQ onboarded:** `data/SILQ/KSA/` with config.json (`analysis_type: "silq"`, currency SAR), `core/analysis_silq.py` (8 compute functions), `core/validation_silq.py` (14 checks), `load_silq_snapshot()` multi-sheet loader in `core/loader.py`
 -----
 ## Known Gaps & Next Steps
 **Short term:**
-- [ ] Onboard SILQ — POS lending asset class
+- [x] Onboard SILQ — POS lending asset class (data + config + analysis_silq.py + validation_silq.py + loader)
 - [ ] Add `core/analysis.py` unit tests
 - [ ] Replace hardcoded FX rates with live API
 - [x] Startup script — `start.ps1` boots both servers + opens browser
-**Phase 2 (Borrowing Base Monitoring) — UI scaffolded with mock data, needs real data:**
-- [ ] Backend API endpoints for borrowing base, concentration limits, covenants
-- [ ] Replace mock data with real calculations from loan tape data
-- [ ] Eligibility criteria testing per deal
-- [ ] Automated concentration limit tracking
-- [ ] Advance rate calculations from actual portfolio data
-- [ ] Covenant monitoring and breach alerts with notifications
+**Phase 2 (Borrowing Base Monitoring) — Backend done, frontend needs wiring:**
+- [x] Backend API endpoints for borrowing base, concentration limits, covenants (both companies)
+- [x] Core computation functions validated against reconciliation data and Creditit platform
+- [x] Facility params save/load API for user-entered corporate-level data
+- [ ] **Connect frontend Portfolio Analytics components to real API** (replace `mockData.js` imports with API calls in BorrowingBase.jsx, ConcentrationLimits.jsx, Covenants.jsx)
+- [ ] **Facility params input panel** — UI for entering cash balance, facility drawn, net cash burn, etc.
+- [ ] SILQ tape analytics frontend (9 tabs defined in config.json, 7 chart components exist in pedantic-swirles worktree)
+- [ ] Covenant monitoring historical tracking and breach alerts
 **Phase 3 (Team & Deployment):**
 - [ ] Cloud deployment
 - [ ] Role-based access

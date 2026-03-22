@@ -51,18 +51,145 @@ def extract_date_from_filename(filename):
     return None
 
 def load_snapshot(filepath):
-    """Load a single snapshot file into a dataframe"""
+    """Load a single snapshot file into a dataframe.
+
+    Handles malformed Excel files where the first row contains summary totals
+    instead of headers (detected by checking if column names are numeric).
+    """
     if filepath.endswith('.csv'):
         df = pd.read_csv(filepath)
     else:
-        df = pd.read_excel(filepath)
-    
+        # For multi-sheet Excel files, pick the largest sheet (most data rows)
+        xls = pd.ExcelFile(filepath)
+        best_sheet = None
+        if len(xls.sheet_names) > 1:
+            best_sheet, best_rows = xls.sheet_names[0], -1
+            for sn in xls.sheet_names:
+                nrows = pd.read_excel(xls, sheet_name=sn).shape[0]
+                if nrows > best_rows:
+                    best_sheet, best_rows = sn, nrows
+        sheet = best_sheet or xls.sheet_names[0]
+        df = pd.read_excel(filepath, sheet_name=sheet)
+        # Detect malformed headers: if most column names are numeric (not strings),
+        # the real headers are in the first data row
+        named_cols = sum(1 for c in df.columns
+                         if isinstance(c, str) and not c.startswith('Unnamed'))
+        if named_cols == 0 and len(df) > 0:
+            df = pd.read_excel(filepath, sheet_name=sheet, header=1)
+
     df.columns = df.columns.str.strip()
-    
+
+    # Parse date columns if they exist (column-agnostic)
     if 'Deal date' in df.columns:
         df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
-    
+    if 'Disbursement_Date' in df.columns:
+        df['Disbursement_Date'] = pd.to_datetime(df['Disbursement_Date'], errors='coerce')
+    if 'Repayment_Deadline' in df.columns:
+        df['Repayment_Deadline'] = pd.to_datetime(df['Repayment_Deadline'], errors='coerce')
+    if 'Last_Collection_Date' in df.columns:
+        df['Last_Collection_Date'] = pd.to_datetime(df['Last_Collection_Date'], errors='coerce')
+
     return df
+
+
+def load_silq_snapshot(filepath):
+    """Load a SILQ snapshot that may contain multiple data sheets.
+
+    Returns (combined_df, commentary_text).
+    - Reads all data sheets (skips 'Portfolio Commentary')
+    - Normalises Loan_Type → Product, fills missing Margin Collected with 0
+    - Casts Shop_ID to string, normalises Loan_Status to title case
+    - Extracts portfolio commentary text if sheet exists
+    """
+    if filepath.endswith('.csv'):
+        df = pd.read_csv(filepath)
+        df.columns = df.columns.str.strip()
+        for col in ('Disbursement_Date', 'Repayment_Deadline',
+                     'Last_Collection_Date'):
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+        return df, None
+
+    xls = pd.ExcelFile(filepath)
+    commentary_text = None
+    data_frames = []
+
+    for sn in xls.sheet_names:
+        # Commentary sheet → extract text
+        if 'commentary' in sn.lower():
+            try:
+                cdf = pd.read_excel(xls, sheet_name=sn)
+                if len(cdf) > 0:
+                    commentary_text = str(cdf.iloc[0, 0])
+            except Exception:
+                pass
+            continue
+
+        # Data sheet
+        df = pd.read_excel(xls, sheet_name=sn)
+        # Malformed header detection (summary-row-as-header)
+        def _is_real_header(c):
+            if not isinstance(c, str):
+                return False
+            if c.startswith('Unnamed'):
+                return False
+            try:
+                float(c.replace('.1', '').replace('.2', ''))
+                return False
+            except ValueError:
+                return True
+        real_named = sum(1 for c in df.columns if _is_real_header(c))
+        if real_named == 0 and len(df) > 0:
+            df = pd.read_excel(xls, sheet_name=sn, header=1)
+
+        # Drop unnamed index columns
+        df = df.drop(columns=[c for c in df.columns
+                               if str(c).startswith('Unnamed')], errors='ignore')
+        df.columns = df.columns.str.strip()
+
+        # Skip tiny/empty sheets
+        if len(df) < 2:
+            continue
+
+        # Normalise product column: Loan_Type → Product
+        if 'Loan_Type' in df.columns and 'Product' not in df.columns:
+            df = df.rename(columns={'Loan_Type': 'Product'})
+
+        # Fill missing columns that exist in other sheets
+        if 'Margin Collected' not in df.columns:
+            df['Margin Collected'] = 0.0
+            df['_margin_synthetic'] = True
+        else:
+            df['_margin_synthetic'] = False
+        if 'Comment' not in df.columns:
+            df['Comment'] = ''
+
+        # Source sheet metadata
+        df['_source_sheet'] = sn
+
+        data_frames.append(df)
+
+    if not data_frames:
+        raise ValueError(f"No data sheets found in {filepath}")
+
+    combined = pd.concat(data_frames, ignore_index=True)
+
+    # Normalise Shop_ID to string (BNPL=numeric, RBF=text codes)
+    if 'Shop_ID' in combined.columns:
+        combined['Shop_ID'] = combined['Shop_ID'].astype(str)
+
+    # Normalise Loan_Status to title case (CURRENT → Current, OVERDUE → Overdue)
+    if 'Loan_Status' in combined.columns:
+        combined['Loan_Status'] = (combined['Loan_Status']
+                                   .astype(str).str.strip().str.title())
+
+    # Parse date columns
+    for col in ('Disbursement_Date', 'Repayment_Deadline',
+                 'Last_Collection_Date'):
+        if col in combined.columns:
+            combined[col] = pd.to_datetime(combined[col], errors='coerce')
+
+    return combined, commentary_text
 
 def select_company():
     """Interactive prompt to select a company"""
