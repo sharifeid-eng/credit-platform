@@ -1,0 +1,292 @@
+"""
+Tests for core/analysis.py — Klaim healthcare claims factoring analytics.
+
+Uses real Klaim tape data (Mar 2026 tape — 60 columns) for integration-level tests.
+"""
+import sys, os
+import pytest
+import pandas as pd
+import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from core.analysis import (
+    filter_by_date, add_month_column, apply_multiplier, fmt_m,
+    compute_summary, compute_deployment, compute_deployment_by_product,
+    compute_collection_velocity, compute_denial_trend, compute_cohorts,
+    compute_actual_vs_expected, compute_ageing, compute_revenue,
+    compute_concentration, compute_returns_analysis, compute_dso,
+    compute_hhi, compute_denial_funnel, compute_stress_test,
+    compute_expected_loss, compute_group_performance,
+)
+from core.loader import load_snapshot
+from core.config import load_config
+
+# ── Fixtures ──────────────────────────────────────────────────────────────────
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'klaim', 'UAE_healthcare')
+
+def _find_latest_tape():
+    """Find the latest tape file (by date prefix)."""
+    files = sorted([f for f in os.listdir(DATA_DIR) if f.endswith(('.csv', '.xlsx'))])
+    return os.path.join(DATA_DIR, files[-1]) if files else None
+
+@pytest.fixture(scope='module')
+def full_df():
+    path = _find_latest_tape()
+    assert path is not None, "No Klaim tape found"
+    return load_snapshot(path)
+
+@pytest.fixture(scope='module')
+def config():
+    return load_config('klaim', 'UAE_healthcare') or {'currency': 'AED', 'usd_rate': 0.2723}
+
+
+# ── Helper tests ──────────────────────────────────────────────────────────────
+
+class TestHelpers:
+    def test_fmt_m_millions(self):
+        assert fmt_m(5_000_000) == '5.0M'
+
+    def test_fmt_m_thousands(self):
+        assert fmt_m(500_000) == '500K'
+
+    def test_fmt_m_small(self):
+        assert fmt_m(500) == '500'
+
+    def test_apply_multiplier_local(self, config):
+        mult = apply_multiplier(config, config['currency'])
+        assert mult == 1.0
+
+    def test_apply_multiplier_usd(self, config):
+        mult = apply_multiplier(config, 'USD')
+        assert mult == pytest.approx(config['usd_rate'], rel=0.01)
+
+    def test_filter_by_date_none(self, full_df):
+        result = filter_by_date(full_df, None)
+        assert len(result) == len(full_df)
+
+    def test_filter_by_date_cutoff(self, full_df):
+        result = filter_by_date(full_df, '2025-12-31')
+        assert len(result) < len(full_df)
+        assert all(result['Deal date'] <= pd.Timestamp('2025-12-31'))
+
+    def test_add_month_column(self, full_df):
+        df = add_month_column(full_df.copy())
+        assert 'Month' in df.columns
+
+
+# ── Summary tests ─────────────────────────────────────────────────────────────
+
+class TestSummary:
+    def test_total_deals(self, full_df, config):
+        result = compute_summary(full_df, config, 'AED', '2026-03-03', None)
+        assert result['total_deals'] == len(full_df)
+
+    def test_collection_rate_bounded(self, full_df, config):
+        result = compute_summary(full_df, config, 'AED', '2026-03-03', None)
+        assert 0 <= result['collection_rate'] <= 100
+
+    def test_rates_sum_roughly(self, full_df, config):
+        """Collection + denial + pending should roughly sum to ~100%."""
+        result = compute_summary(full_df, config, 'AED', '2026-03-03', None)
+        total = result['collection_rate'] + result['denial_rate'] + result['pending_rate']
+        # Allow some tolerance for rounding / partial collections
+        assert 90 < total < 110
+
+    def test_active_plus_completed(self, full_df, config):
+        result = compute_summary(full_df, config, 'AED', '2026-03-03', None)
+        assert result['active_deals'] + result['completed_deals'] == result['total_deals']
+
+    def test_json_serializable(self, full_df, config):
+        import json
+        result = compute_summary(full_df, config, 'AED', '2026-03-03', None)
+        json.dumps(result, default=str)  # Should not raise
+
+
+# ── Deployment tests ──────────────────────────────────────────────────────────
+
+class TestDeployment:
+    def test_monthly_data(self, full_df):
+        result = compute_deployment(full_df, 1)
+        assert len(result) > 0
+        assert all('Month' in r for r in result)
+        assert all('purchase_value' in r for r in result)
+
+    def test_deployment_by_product(self, full_df):
+        result = compute_deployment_by_product(full_df, 1)
+        assert 'monthly' in result
+        assert 'products' in result
+        assert len(result['monthly']) > 0
+
+
+# ── Collection velocity tests ─────────────────────────────────────────────────
+
+class TestCollectionVelocity:
+    def test_monthly_rates(self, full_df):
+        result = compute_collection_velocity(full_df, 1)
+        assert 'monthly' in result
+        assert len(result['monthly']) > 0
+
+    def test_buckets_exist(self, full_df):
+        result = compute_collection_velocity(full_df, 1)
+        assert 'buckets' in result
+
+    def test_avg_days_positive(self, full_df):
+        result = compute_collection_velocity(full_df, 1)
+        if result['total_completed'] > 0:
+            assert result['avg_days'] > 0
+
+
+# ── Denial trend tests ───────────────────────────────────────────────────────
+
+class TestDenialTrend:
+    def test_monthly_data(self, full_df):
+        result = compute_denial_trend(full_df, 1)
+        assert len(result) > 0
+        assert all('denial_rate' in r for r in result)
+
+    def test_denial_rate_bounded(self, full_df):
+        result = compute_denial_trend(full_df, 1)
+        for r in result:
+            assert 0 <= r['denial_rate'] <= 100
+
+
+# ── Cohort tests ──────────────────────────────────────────────────────────────
+
+class TestCohorts:
+    def test_has_vintages(self, full_df):
+        result = compute_cohorts(full_df, 1)
+        assert len(result) > 0
+        assert all('month' in c for c in result)
+
+    def test_vintages_sorted(self, full_df):
+        result = compute_cohorts(full_df, 1)
+        months = [c['month'] for c in result]
+        assert months == sorted(months)
+
+    def test_collection_rate_bounded(self, full_df):
+        result = compute_cohorts(full_df, 1)
+        for c in result:
+            assert 0 <= c['collection_rate'] <= 200
+
+
+# ── Ageing tests ──────────────────────────────────────────────────────────────
+
+class TestAgeing:
+    def test_health_summary(self, full_df):
+        result = compute_ageing(full_df, 1)
+        assert 'health_summary' in result
+        assert len(result['health_summary']) > 0
+
+    def test_outstanding_not_face_value(self, full_df):
+        """Ageing should use outstanding (PV - Collected - Denied), not face value."""
+        result = compute_ageing(full_df, 1)
+        assert result['total_outstanding'] < result['total_active_value']
+
+
+# ── Revenue tests ─────────────────────────────────────────────────────────────
+
+class TestRevenue:
+    def test_monthly_data(self, full_df):
+        result = compute_revenue(full_df, 1)
+        assert 'monthly' in result
+        assert 'totals' in result
+        assert len(result['monthly']) > 0
+
+    def test_gross_margin_bounded(self, full_df):
+        result = compute_revenue(full_df, 1)
+        assert -100 <= result['totals']['gross_margin'] <= 100
+
+
+# ── Concentration tests ───────────────────────────────────────────────────────
+
+class TestConcentration:
+    def test_group_data(self, full_df):
+        result = compute_concentration(full_df, 1)
+        assert 'group' in result
+        assert len(result['group']) > 0
+
+    def test_top_deals(self, full_df):
+        result = compute_concentration(full_df, 1)
+        assert 'top_deals' in result
+        assert len(result['top_deals']) <= 10
+
+
+# ── Returns analysis tests ────────────────────────────────────────────────────
+
+class TestReturns:
+    def test_summary_keys(self, full_df):
+        result = compute_returns_analysis(full_df, 1)
+        assert 'summary' in result
+        assert 'capital_recovery' in result['summary']
+
+    def test_completed_only_margins(self, full_df):
+        """Margins should be calculated on completed deals only."""
+        result = compute_returns_analysis(full_df, 1)
+        # Capital recovery should be a meaningful percentage
+        assert 80 < result['summary']['capital_recovery'] < 110
+
+
+# ── HHI tests ─────────────────────────────────────────────────────────────────
+
+class TestHHI:
+    def test_hhi_bounded(self, full_df):
+        result = compute_hhi(full_df, 1)
+        assert 0 < result['group']['hhi'] < 1
+        assert 0 < result['product']['hhi'] <= 1
+
+
+# ── Denial funnel tests ──────────────────────────────────────────────────────
+
+class TestDenialFunnel:
+    def test_stages(self, full_df):
+        result = compute_denial_funnel(full_df, 1)
+        assert 'stages' in result
+        assert len(result['stages']) > 0
+
+    def test_recovery_rate(self, full_df):
+        result = compute_denial_funnel(full_df, 1)
+        assert 0 <= result['recovery_rate'] <= 100
+
+
+# ── Stress test ───────────────────────────────────────────────────────────────
+
+class TestStressTest:
+    def test_scenarios(self, full_df):
+        result = compute_stress_test(full_df, 1)
+        assert 'scenarios' in result
+        assert len(result['scenarios']) > 0
+
+    def test_base_collection_rate(self, full_df):
+        result = compute_stress_test(full_df, 1)
+        assert 0 < result['base_collection_rate'] < 100
+
+
+# ── Expected loss tests ──────────────────────────────────────────────────────
+
+class TestExpectedLoss:
+    def test_portfolio_el(self, full_df):
+        result = compute_expected_loss(full_df, 1)
+        assert 'portfolio' in result
+        assert 'pd' in result['portfolio']
+        assert 'lgd' in result['portfolio']
+        assert 'el_rate' in result['portfolio']
+
+    def test_el_rate_bounded(self, full_df):
+        result = compute_expected_loss(full_df, 1)
+        assert 0 <= result['portfolio']['el_rate'] <= 100
+
+
+# ── Group performance tests ───────────────────────────────────────────────────
+
+class TestGroupPerformance:
+    def test_groups_exist(self, full_df):
+        result = compute_group_performance(full_df, 1)
+        assert 'groups' in result
+        assert len(result['groups']) > 0
+
+    def test_groups_sorted_by_size(self, full_df):
+        result = compute_group_performance(full_df, 1)
+        values = [g['purchase_value'] for g in result['groups']]
+        assert values == sorted(values, reverse=True)

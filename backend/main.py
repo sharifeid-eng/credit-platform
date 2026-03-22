@@ -108,6 +108,14 @@ def _silq_load(company, product, snapshot, as_of_date, currency):
     ref_date = pd.to_datetime(as_of_date) if as_of_date else pd.to_datetime(sel['date'])
     return df, sel, config, disp, mult, commentary_text, ref_date
 
+# ── FX rates endpoint ──────────────────────────────────────────────────────────
+
+@app.get("/fx-rates")
+def get_fx_rates_endpoint():
+    """Return current FX rates and source (live or fallback)."""
+    from core.config import get_fx_rates, get_fx_source
+    return {'rates': get_fx_rates(), 'source': get_fx_source()}
+
 # ── Company / Product / Snapshot endpoints ────────────────────────────────────
 
 @app.get("/companies")
