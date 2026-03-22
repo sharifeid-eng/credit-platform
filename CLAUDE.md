@@ -498,23 +498,25 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ **RBF margin note** — info note on Yield tab explaining RBF_Exc 0% margin (source sheet lacks Margin Collected column)
 - ✅ **Backward-date caveat system** — gold warning banner + per-KPI ⚠ stale indicators when as-of date < tape date. Marks balance-derived metrics (outstanding, collected, overdue, rates, margins) while leaving accurate metrics (disbursed, counts, tenure, discount) unmarked
 - ✅ **Compliance certificate reconciliation** — verified dashboard data aligns with company Commentary (Jan 31) and Dec 2025 compliance cert (methodology differences documented)
+- ✅ **Unit tests** — 88 tests across `tests/test_analysis_silq.py` (48) and `tests/test_analysis_klaim.py` (40). Covers all compute functions, DPD logic, GBV-weighted PAR, compliance cert reconciliation, Commentary alignment. Run: `python -m pytest tests/ -v`
+- ✅ **Live FX rates** — `core/config.py` fetches from `open.er-api.com` (free, no key). 1-hour cache, automatic fallback to hardcoded rates. `GET /fx-rates` endpoint returns rates + source (`live` or `fallback`). EUR/GBP rates now current.
 -----
 ## Known Gaps & Next Steps
 **Short term:**
 - [x] Onboard SILQ — POS lending asset class
-- [ ] Add `core/analysis.py` unit tests
-- [ ] Replace hardcoded FX rates with live API
+- [x] Add `core/analysis.py` unit tests (88 tests passing)
+- [x] Replace hardcoded FX rates with live API
 - [x] Startup script — `start.ps1` boots both servers + opens browser
+- [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
 **Phase 2 (Borrowing Base Monitoring) — UI scaffolded with mock data, needs real data:**
-- [ ] Backend API endpoints for borrowing base, concentration limits, covenants
-- [ ] Replace mock data with real calculations from loan tape data
+- [ ] Real borrowing base calculations from tape data (compliance cert has exact formulas)
+- [ ] Covenant monitoring alerts — auto-check PAR30 < 10%, PAR90 < 5%, 3m collection > 33%, Repayment at Term > 95%, LTV ≤ 75%
 - [ ] Eligibility criteria testing per deal
 - [ ] Automated concentration limit tracking
 - [ ] Advance rate calculations from actual portfolio data
-- [ ] Covenant monitoring and breach alerts with notifications
 **Phase 3 (Team & Deployment):**
-- [ ] Cloud deployment
-- [ ] Role-based access
+- [ ] Cloud deployment — Railway (~$5/mo), deploys from GitHub, auto-HTTPS. Data files committed to repo (small enough). Add simple auth before exposing.
+- [ ] Role-based access (analyst vs IC vs read-only)
 - [ ] Scheduled report delivery
 - [ ] Direct API integrations with portfolio companies
 -----
