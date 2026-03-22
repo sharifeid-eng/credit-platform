@@ -55,21 +55,29 @@ The platform allows analysts and investment committee members to:
 - **Backward-date caveat:** When as-of date < tape date, balance columns (outstanding, collected, overdue, margins) still reflect tape date. Only deal selection is filtered. Dashboard shows warning banner + per-KPI ⚠ markers on stale metrics.
 -----
 ## Long-Term Vision (3 Phases)
-### Phase 1 — Loan Tape Analysis & Dashboards ✅ (current)
-- Manual file upload workflow
-- AI-powered dashboards per company/product
+**Two distinct modes in one platform:**
+- **Tape Analytics** — manual tape uploads, backward-looking deep analysis, bespoke per asset class. Analyst-driven. This is the proprietary edge.
+- **Portfolio Analytics** — live facility monitoring via API integrations. Operational, real-time. Competes with / replaces Cascade Debt and Creditit for ACP's specific needs.
+
+### Phase 1 — Tape Analytics ✅ (current)
+- Manual file upload workflow (CSV/Excel loan tapes)
+- AI-powered dashboards per company/product (Klaim: 12 tabs, SILQ: 9 tabs)
 - Consistency checks across snapshots
 - Investment committee-ready commentary
-### Phase 2 — Borrowing Base Monitoring
+- Bespoke analysis per asset class (receivables factoring vs POS lending)
+### Phase 2 — Portfolio Analytics (Borrowing Base Monitoring)
+- Real borrowing base calculations from tape data (compliance cert formulas)
 - Automated eligibility testing against lending criteria
-- Concentration limit tracking
-- Advance rate calculations
-- Covenant monitoring and breach alerts
-### Phase 3 — Team & IC Viewing Layer
+- Concentration limit tracking with live thresholds
+- Advance rate calculations from actual portfolio data
+- Covenant monitoring and breach alerts (auto-check from tape)
+- **Future:** Live API connections to portfolio company databases (replace mock data with real-time feeds)
+### Phase 3 — Deployment & Team Access
+- Cloud deployment on Railway (~$5/mo) — always-on, no laptop dependency
 - Role-based access (analyst vs IC vs read-only)
 - Scheduled report delivery
-- Direct API integrations with portfolio companies' accounting or loan management systems
-- Cloud deployment so the app runs 24/7
+- Direct API integrations with portfolio companies' loan management systems (like Cascade's native DB connectors)
+- Real-time covenant monitoring with automated alerts
 -----
 ## Tech Stack
 - **Backend:** Python, FastAPI (`localhost:8000`), Pandas, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
@@ -505,23 +513,28 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ **SILQ Covenant monitoring** — 9th SILQ tab. Auto-checks 5 facility covenants from tape data: PAR30 ≤ 10% (5.5%), PAR90 ≤ 5% (1.4%), Collection Ratio > 33% (96.4% 3M avg), Repayment at Term > 95% (97.2%), LTV ≤ 75% (partial — needs corporate data). Values reconcile with Dec 2025 compliance certificate. Reuses `CovenantCard` + `ComplianceBadge` components.
 -----
 ## Known Gaps & Next Steps
-**Short term:**
-- [x] Onboard SILQ — POS lending asset class
+**Completed:**
+- [x] Onboard SILQ — POS lending asset class (3 products, multi-sheet loader, 9 tabs)
 - [x] Add `core/analysis.py` unit tests (99 tests passing)
 - [x] Replace hardcoded FX rates with live API
 - [x] Startup script — `start.ps1` boots both servers + opens browser
 - [x] Covenant monitoring alerts — auto-check PAR30, PAR90, Collection Ratio, Repayment at Term, LTV
+- [x] Compliance cert reconciliation — verified against Dec 2025 cert and Jan 2026 Commentary
+- [x] GBV-weighted PAR, DPD ref-date fix, backward-date caveat system
+- [x] SILQ-specific Methodology page
+**Short term:**
 - [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
-**Phase 2 (Borrowing Base Monitoring) — UI scaffolded with mock data, needs real data:**
+**Phase 2 (Portfolio Analytics — Borrowing Base Monitoring):**
 - [ ] Real borrowing base calculations from tape data (compliance cert has exact formulas)
 - [ ] Eligibility criteria testing per deal
 - [ ] Automated concentration limit tracking
 - [ ] Advance rate calculations from actual portfolio data
-**Phase 3 (Team & Deployment):**
+- [ ] Replace mock data in Portfolio Analytics tabs with real calculations
+**Phase 3 (Deployment & Live Monitoring):**
 - [ ] Cloud deployment — Railway (~$5/mo), deploys from GitHub, auto-HTTPS. Data files committed to repo (small enough). Add simple auth before exposing.
 - [ ] Role-based access (analyst vs IC vs read-only)
 - [ ] Scheduled report delivery
-- [ ] Direct API integrations with portfolio companies
+- [ ] Live API integrations — connect to portfolio company databases for real-time Portfolio Analytics (Cascade Debt / Creditit alternative). Tape Analytics stays manual.
 -----
 ## Environment
 - **Machine:** Windows (PowerShell)
