@@ -20,11 +20,12 @@ def fmt_m(v):
 
 def apply_multiplier(config, display_currency):
     """Return the USD conversion multiplier if needed, else 1.0."""
-    from core.config import SUPPORTED_CURRENCIES
+    from core.config import get_fx_rates
     if not config:
         return 1.0
     reported = config.get('currency', 'USD')
-    rate = SUPPORTED_CURRENCIES.get(reported, 1.0)
+    rates = get_fx_rates()
+    rate = rates.get(reported, 1.0)
     if display_currency == 'USD' and reported != 'USD':
         return rate
     return 1.0
@@ -53,8 +54,8 @@ def compute_summary(df, config, display_currency, snapshot_date, as_of_date):
     """Compute portfolio-level KPIs."""
     mult = apply_multiplier(config, display_currency)
     reported_currency = config['currency'] if config else 'USD'
-    from core.config import SUPPORTED_CURRENCIES
-    usd_rate = SUPPORTED_CURRENCIES.get(reported_currency, 1.0)
+    from core.config import get_fx_rates
+    usd_rate = get_fx_rates().get(reported_currency, 1.0)
 
     total_purchase   = df['Purchase value'].sum() * mult
     total_collected  = df['Collected till date'].sum() * mult
