@@ -26,7 +26,7 @@ The platform allows analysts and investment committee members to:
 **Who uses it:** Sharif (fund analyst/PM) and eventually the broader investment committee.
 **Current portfolio companies:**
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
-- **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (1 tape: Jan 2026). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
+- **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (2 tapes: Jan 2026, Feb 2026). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests. Feb 2026 tape introduced product renames: RBF (Exclusive) → RCL (Revolving Credit Line), RBF (Non-Exclusive) → RBF. Loader handles both old and new sheet/product names.
 **Asset classes:** Receivables (insurance claims factoring) and short-term consumer/POS loans.
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`.
 **Data notes:**
@@ -60,7 +60,7 @@ The platform allows analysts and investment committee members to:
 ## Tech Stack
 - **Backend:** Python, FastAPI (`localhost:8000`), Pandas, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
 - **Database:** PostgreSQL 18.3, SQLAlchemy 2.0 (async-ready), Alembic (migrations), psycopg2
-- **Frontend:** React (Vite), Tailwind CSS, Recharts, React Router, Axios (`localhost:5173`)
+- **Frontend:** React (Vite), Tailwind CSS, Recharts, Framer Motion, React Router, Axios (`localhost:5173`)
 - **AI:** Anthropic API — portfolio commentary, per-tab insights, data chat, PDF integrity reports
 - **PDF Reports:** Playwright (headless Chrome) for dashboard screenshots + ReportLab for PDF composition
 - **Data sources:**
@@ -128,16 +128,16 @@ credit-platform/
 │   │   ├── pages/
 │   │   │   ├── Home.jsx             # Landing page — company grid
 │   │   │   ├── TapeAnalytics.jsx    # 12-tab tape dashboard (extracted from old Company.jsx)
-│   │   │   ├── PortfolioAnalytics.jsx  # 3-tab portfolio view (mock data)
+│   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
 │   │   │   └── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   ├── components/
 │   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
-│   │   │   ├── KpiCard.jsx
+│   │   │   ├── KpiCard.jsx          # Framer Motion stagger + hover effects
 │   │   │   ├── Navbar.jsx           # Contains LaithLogo component (exported)
-│   │   │   ├── AICommentary.jsx
+│   │   │   ├── AICommentary.jsx     # Slide-up animation on commentary
 │   │   │   ├── DataChat.jsx
-│   │   │   ├── TabInsight.jsx
-│   │   │   ├── ChartPanel.jsx
+│   │   │   ├── TabInsight.jsx       # Smooth expand/collapse with AnimatePresence
+│   │   │   ├── ChartPanel.jsx       # Fade-in + skeleton chart loading
 │   │   │   ├── charts/
 │   │   │   │   ├── ActualVsExpectedChart.jsx
 │   │   │   │   ├── AgeingChart.jsx
@@ -150,7 +150,15 @@ credit-platform/
 │   │   │   │   ├── ReturnsAnalysisChart.jsx  # Discount bands, margins, new vs repeat
 │   │   │   │   ├── RiskMigrationChart.jsx    # Roll-rates, cure rates, EL model, stress test
 │   │   │   │   ├── DenialFunnelChart.jsx     # Resolution pipeline funnel visualization
-│   │   │   │   └── DataIntegrityChart.jsx    # Two-tape comparison, validation, AI report + notes
+│   │   │   │   ├── DataIntegrityChart.jsx    # Two-tape comparison, validation, AI report + notes
+│   │   │   │   └── silq/                    # SILQ-specific chart components
+│   │   │   │       ├── DelinquencyChart.jsx
+│   │   │   │       ├── SilqCollectionsChart.jsx
+│   │   │   │       ├── SilqConcentrationChart.jsx
+│   │   │   │       ├── SilqCohortTable.jsx
+│   │   │   │       ├── YieldMarginsChart.jsx
+│   │   │   │       ├── TenureAnalysisChart.jsx
+│   │   │   │       └── SilqCovenantsChart.jsx
 │   │   │   └── portfolio/
 │   │   │       ├── BorrowingBase.jsx         # Waterfall, KPIs, advance rates, facility capacity
 │   │   │       ├── ConcentrationLimits.jsx   # Limit cards with compliance badges + breaching items
@@ -162,6 +170,7 @@ credit-platform/
 │   │   │       ├── InvoicesTable.jsx         # Paginated invoice table (eligible/ineligible tabs, search)
 │   │   │       ├── PaymentsTable.jsx         # Payment ledger (ADVANCE/PARTIAL/FINAL badges, filters)
 │   │   │       ├── BankStatementsView.jsx    # Cash position KPIs + statement history
+│   │   │       ├── FacilityParamsPanel.jsx    # Slide-out panel to edit facility parameters
 │   │   │       └── mockData.js               # Legacy mock data (retained for reference)
 │   │   ├── styles/
 │   │   │   ├── chartTheme.js
@@ -361,11 +370,11 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 ## Currency System
 Supported: `AED (0.2723)`, `USD (1.0)`, `EUR (1.08)`, `GBP (1.27)`, `SAR (0.2667)`, `KWD (3.26)`.
 Each product has a `config.json` with its reported currency. Frontend shows toggle between reported currency and USD. Backend applies multiplier via `apply_multiplier()` in `core/analysis.py`.
-> TODO: Replace hardcoded FX rates with a live FX API call.
+> FX rates fetched live from exchangerate-api.com with hardcoded fallback. Backend endpoint: `GET /fx-rates`.
 -----
 ## Dashboard Customization Philosophy
 Each company/product has its own configured dashboard. The platform shares a common shell but specific views, metrics, and AI prompts are driven by asset class and available columns. Onboarding a new company requires designing the right views for that asset class.
-**Current implementation:** Built around Klaim's healthcare receivables. Not yet abstracted for multi-asset-class use.
+**Current implementation:** Klaim (healthcare receivables) and SILQ (POS lending) both onboarded. SILQ has a dedicated analysis module (`core/analysis_silq.py`) and custom dashboard tabs configured via `config.json`. The `analysisType` field in config determines which chart components render.
 -----
 ## Key Architectural Decisions
 - **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.
@@ -405,24 +414,38 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Facility config as JSONB** — `FacilityConfig` model stores advance_rates, concentration_limits, covenants as flexible JSON for per-facility customization.
 - **Portfolio computation engine** — `core/portfolio.py` contains pure functions: `compute_borrowing_base()` (waterfall + eligibility), `compute_concentration_limits()` (4 limits with breach drill-down), `compute_covenants()` (5-6 per asset class), `compute_portfolio_flow()` (cash waterfall). Supports both Klaim and SILQ asset classes.
 - **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 tape tabs (excluding Data Integrity) via sidebar link navigation. Navigates to `/company/:co/:product/tape/:slug` URLs. ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
+- **SILQ multi-sheet Excel loader** — `core/loader.py` handles both old (Jan 2026: `BNPL+RBF_NE`, `RBF_LT`) and new (Feb 2026: `BNPL + RBF`, `RCL_LT`) sheet names. Product values normalized: `RBF_Exc` → `RCL`, `RBF_NE` → `RBF`. Row 1 is header (row 0 has formulas). `Loan_Type` column in RCL sheet mapped to `Product`.
+- **As-of date default** — `date-range` endpoint returns `snapshot_date` extracted from filename. Frontend uses `max(data_max_date, snapshot_date)` as calendar upper bound and default.
+- **Framer Motion integration** — Uses `motion.div` wrappers with `initial`/`animate`/`exit` props. `AnimatePresence mode="wait"` for tab transitions and chart loading states. KPI stagger via `index * 0.04s` delay. All animations use `transform`/`opacity` for GPU acceleration.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
 -----
 ## Design System — Dark Theme ✅
-Full dark theme implemented. See color palette:
+Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
 |Token           |Value    |Usage                                      |
 |----------------|---------|-------------------------------------------|
-|`--bg-base`     |`#0C1018`|Page background                            |
-|`--bg-surface`  |`#111620`|Cards, panels                              |
-|`--bg-nav`      |`#080B12`|Navbar                                     |
-|`--border`      |`#1E2736`|All borders                                |
+|`--bg-base`     |`#121C27`|Page background (ACP navy)                 |
+|`--bg-surface`  |`#172231`|Cards, panels                              |
+|`--bg-nav`      |`#0D1520`|Navbar                                     |
+|`--bg-deep`     |`#0A1119`|Deeper backgrounds (inputs, AI panels)     |
+|`--border`      |`#243040`|All borders                                |
+|`--border-hover`|`#304058`|Border on hover state                      |
 |`--accent-gold` |`#C9A84C`|Primary brand, active tab, AI panel        |
 |`--accent-teal` |`#2DD4BF`|Collection rate, positive metrics, live dot|
 |`--accent-red`  |`#F06060`|Denial rate, negative metrics              |
 |`--accent-blue` |`#5B8DEF`|Pending/neutral metrics, deployment bars   |
 |`--text-primary`|`#E8EAF0`|Main text                                  |
 |`--text-muted`  |`#8494A7`|Secondary text (updated for contrast)      |
-|`--text-faint`  |`#2A3548`|Labels, borders                            |
+|`--text-faint`  |`#304050`|Labels, borders                            |
 Typography: Inter for UI, IBM Plex Mono for numbers/data.
+
+**Animations (Framer Motion):**
+- KPI cards: stagger fade-in (50ms per card), hover lift + shadow + border brighten
+- Tab content: fade-in/slide on tab switch (`opacity 0→1, y 8→0`, 250ms)
+- ChartPanel: fade-in on mount, skeleton bar chart during loading
+- TabInsight: smooth expand/collapse with AnimatePresence
+- AICommentary: slide-up when commentary generates
+- Sidebar: hover text brighten + subtle indent, active tint background
+- Transition tokens: `--transition-fast: 150ms`, `--transition-normal: 250ms`
 -----
 ## Key Backend Field Name Notes
 - All chart endpoints return `Month` with capital M
@@ -537,14 +560,39 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `core/portfolio.py` — borrowing base waterfall, concentration limits (4 types, tiered thresholds), covenants (5-6 per asset class), portfolio cash flow
   - Supports both Klaim (receivables factoring) and SILQ (POS lending) asset classes
   - `_portfolio_load()` auto-selects data source (DB → tape fallback)
+- ✅ **SILQ Feb 2026 tape onboarded:**
+  - Product renames: RBF (Exclusive) → RCL, RBF (Non-Exclusive) → RBF, BNPL unchanged
+  - Sheet names: `BNPL+RBF_NE` → `BNPL + RBF`, `RBF_LT` → `RCL_LT`
+  - Loader handles both old and new naming conventions seamlessly
+  - Portfolio commentary from tape displayed in Overview tab
+- ✅ **Unit test coverage complete:**
+  - 120 tests total (61 Klaim + 59 SILQ), all passing
+  - Klaim: 23 test classes covering all 28 `core/analysis.py` functions
+  - SILQ: tests for summary, deployment, collections, concentration, cohort, delinquency, yield/margins, tenure, covenants
+- ✅ **Design elevation (Framer Motion):**
+  - KPI cards: stagger fade-in on mount, hover lift + shadow + border brighten
+  - Tab content: smooth fade-in/slide transitions on tab switch (Tape + Portfolio)
+  - ChartPanel: fade-in animation, skeleton chart bars during loading
+  - TabInsight: smooth expand/collapse with AnimatePresence
+  - AICommentary: slide-up animation when commentary generates
+  - Sidebar: hover effects (text brighten, subtle indent), active background tint
+  - Navbar: chip hover transitions
+- ✅ **Color scheme aligned to ACP brand:**
+  - Base background shifted from `#0C1018` to `#121C27` (ACP navy)
+  - All surfaces, borders, and hardcoded colors updated proportionally
+  - Warmer, more institutional feel while preserving gold/teal/red/blue semantic palette
+- ✅ **As-of date fix:** Defaults to snapshot date (from filename), not max deal date in data
 -----
 ## Known Gaps & Next Steps
 **Short term:**
-- [x] Onboard SILQ — POS lending asset class (analysis module, validation, tests, 1 tape live)
-- [ ] SILQ — add more tapes + expand dashboard coverage
-- [ ] Add `core/analysis.py` unit tests
+- [x] Onboard SILQ — POS lending asset class (analysis module, validation, tests, 2 tapes live)
+- [x] SILQ Feb 2026 tape — product renames (RBF Exc → RCL, RBF NE → RBF), loader handles both conventions
+- [x] Add `core/analysis.py` unit tests — 120 tests (61 Klaim + 59 SILQ), full coverage of all 28 analysis functions
 - [x] Replace hardcoded FX rates with live API (exchangerate-api.com, fallback to hardcoded)
 - [x] Startup script — `start.ps1` boots both servers + opens browser
+- [x] Design elevation — Framer Motion animations, card hover effects, skeleton loading, micro-interactions
+- [x] Color scheme — shifted to ACP-aligned warmer navy (`#121C27` base)
+- [x] As-of date fix — defaults to snapshot date, not max deal date
 **Phase 2 — Borrowing Base Monitoring ✅ COMPLETE:**
 - [x] PostgreSQL 18.3 database + SQLAlchemy ORM + Alembic migrations
 - [x] Integration API (12 endpoints) with X-API-Key auth
