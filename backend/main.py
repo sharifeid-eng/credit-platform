@@ -678,7 +678,7 @@ def get_ai_commentary(company: str, product: str,
         if commentary_text:
             commentary_ctx = f"\nANALYST PORTFOLIO COMMENTARY (from tape):\n{commentary_text}\n"
 
-        prompt = f"""You are a senior analyst at ACP Private Credit, analyzing SILQ's POS lending portfolio (BNPL, RBF_NE & RBF_Exc loans) in KSA.
+        prompt = f"""You are a senior analyst at ACP Private Credit, analyzing SILQ's POS lending portfolio (BNPL, RBF & RCL loans) in KSA.
 Data as of: {as_of_date or sel['date']}  |  Currency: {disp}
 
 PORTFOLIO SNAPSHOT:
