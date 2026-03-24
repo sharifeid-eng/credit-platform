@@ -12,12 +12,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from core.analysis import (
     filter_by_date, add_month_column, apply_multiplier, fmt_m,
+    classify_health,
     compute_summary, compute_deployment, compute_deployment_by_product,
     compute_collection_velocity, compute_denial_trend, compute_cohorts,
     compute_actual_vs_expected, compute_ageing, compute_revenue,
     compute_concentration, compute_returns_analysis, compute_dso,
     compute_hhi, compute_denial_funnel, compute_stress_test,
-    compute_expected_loss, compute_group_performance,
+    compute_expected_loss, compute_loss_triangle, compute_group_performance,
+    compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
 )
 from core.loader import load_snapshot
 from core.config import load_config
@@ -290,3 +292,170 @@ class TestGroupPerformance:
         result = compute_group_performance(full_df, 1)
         values = [g['purchase_value'] for g in result['groups']]
         assert values == sorted(values, reverse=True)
+
+
+# ── Actual vs Expected tests ─────────────────────────────────────────────────
+
+class TestActualVsExpected:
+    def test_data_structure(self, full_df):
+        result = compute_actual_vs_expected(full_df, 1)
+        assert 'data' in result
+        assert len(result['data']) > 0
+        row = result['data'][0]
+        assert 'Month' in row
+        assert 'cumulative_collected' in row
+        assert 'cumulative_expected' in row
+
+    def test_cumulative_increases(self, full_df):
+        result = compute_actual_vs_expected(full_df, 1)
+        collected = [m['cumulative_collected'] for m in result['data']]
+        # Cumulative should be non-decreasing
+        for i in range(1, len(collected)):
+            assert collected[i] >= collected[i-1]
+
+    def test_overall_performance(self, full_df):
+        result = compute_actual_vs_expected(full_df, 1)
+        assert 'overall_performance' in result
+        assert result['overall_performance'] > 0
+
+
+# ── Deployment by Product tests ──────────────────────────────────────────────
+
+class TestDeploymentByProduct:
+    def test_has_monthly_and_products(self, full_df):
+        result = compute_deployment_by_product(full_df, 1)
+        assert 'monthly' in result
+        assert 'products' in result
+        assert len(result['monthly']) > 0
+        assert len(result['products']) > 0
+
+    def test_monthly_has_product_keys(self, full_df):
+        result = compute_deployment_by_product(full_df, 1)
+        products = result['products']
+        row = result['monthly'][0]
+        assert 'Month' in row
+        for p in products:
+            assert p in row
+
+
+# ── classify_health tests ────────────────────────────────────────────────────
+
+class TestClassifyHealth:
+    def test_healthy(self):
+        assert classify_health(0) == 'Healthy'
+        assert classify_health(30) == 'Healthy'
+        assert classify_health(60) == 'Healthy'
+
+    def test_watch(self):
+        assert classify_health(61) == 'Watch'
+        assert classify_health(90) == 'Watch'
+
+    def test_delayed(self):
+        assert classify_health(91) == 'Delayed'
+        assert classify_health(120) == 'Delayed'
+
+    def test_poor(self):
+        assert classify_health(121) == 'Poor'
+        assert classify_health(365) == 'Poor'
+
+    def test_unknown(self):
+        assert classify_health(np.nan) == 'Unknown'
+
+
+# ── DSO tests ────────────────────────────────────────────────────────────────
+
+class TestDSO:
+    def test_available_flag(self, full_df):
+        result = compute_dso(full_df, 1)
+        assert 'available' in result
+        # Mar 2026 tape has curve columns → should be available
+        if result['available']:
+            assert result['weighted_dso'] > 0
+            assert result['median_dso'] > 0
+            assert result['p95_dso'] > 0
+            assert result['p95_dso'] >= result['median_dso']
+
+    def test_by_vintage(self, full_df):
+        result = compute_dso(full_df, 1)
+        if result['available']:
+            assert 'by_vintage' in result
+            assert len(result['by_vintage']) > 0
+            v = result['by_vintage'][0]
+            assert 'month' in v
+            assert 'median_dso' in v
+
+
+# ── Loss Triangle tests ─────────────────────────────────────────────────────
+
+class TestLossTriangle:
+    def test_triangle_returned(self, full_df):
+        result = compute_loss_triangle(full_df, 1)
+        assert 'triangle' in result
+        assert len(result['triangle']) > 0
+
+    def test_triangle_structure(self, full_df):
+        result = compute_loss_triangle(full_df, 1)
+        v = result['triangle'][0]
+        assert 'denial_rate' in v
+        assert 'deal_count' in v
+        assert 'avg_age_months' in v
+
+    def test_values_non_negative(self, full_df):
+        result = compute_loss_triangle(full_df, 1)
+        for v in result['triangle']:
+            for key, val in v.items():
+                if key != 'month' and isinstance(val, (int, float)):
+                    assert val >= 0, f"Negative value {val} for {key} in {v['month']}"
+
+
+# ── Collection Curves tests ──────────────────────────────────────────────────
+
+class TestCollectionCurves:
+    def test_available_flag(self, full_df):
+        result = compute_collection_curves(full_df, 1)
+        assert 'available' in result
+
+    def test_curves_structure(self, full_df):
+        result = compute_collection_curves(full_df, 1)
+        if result['available']:
+            assert 'curves' in result
+            assert len(result['curves']) > 0
+            curve = result['curves'][0]
+            assert 'month' in curve
+            assert 'points' in curve
+            assert len(curve['points']) > 0
+
+
+# ── Owner Breakdown tests ────────────────────────────────────────────────────
+
+class TestOwnerBreakdown:
+    def test_available_flag(self, full_df):
+        result = compute_owner_breakdown(full_df, 1)
+        assert 'available' in result
+
+    def test_owners_when_available(self, full_df):
+        result = compute_owner_breakdown(full_df, 1)
+        if result['available']:
+            assert 'owners' in result
+            assert len(result['owners']) > 0
+            owner = result['owners'][0]
+            assert 'owner' in owner
+            assert 'purchase_value' in owner
+
+
+# ── VAT Summary tests ────────────────────────────────────────────────────────
+
+class TestVatSummary:
+    def test_available_flag(self, full_df):
+        result = compute_vat_summary(full_df, 1)
+        assert 'available' in result
+
+    def test_values_when_available(self, full_df):
+        result = compute_vat_summary(full_df, 1)
+        if result['available']:
+            assert isinstance(result['vat_assets'], (int, float))
+            assert isinstance(result['vat_fees'], (int, float))
+            assert isinstance(result['total_vat'], (int, float))
+            assert result['total_vat'] == pytest.approx(
+                result['vat_assets'] + result['vat_fees'], rel=0.01
+            )
