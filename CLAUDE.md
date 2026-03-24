@@ -55,9 +55,13 @@ The platform allows analysts and investment committee members to:
 - **Backward-date caveat:** When as-of date < tape date, balance columns (outstanding, collected, overdue, margins) still reflect tape date. Only deal selection is filtered. Dashboard shows warning banner + per-KPI ⚠ markers on stale metrics.
 -----
 ## Long-Term Vision (3 Phases)
-**Two distinct modes in one platform:**
-- **Tape Analytics** — manual tape uploads, backward-looking deep analysis, bespoke per asset class. Analyst-driven. This is the proprietary edge.
-- **Portfolio Analytics** — live facility monitoring via API integrations. Operational, real-time. Competes with / replaces Cascade Debt and Creditit for ACP's specific needs.
+**Two distinct modes in one platform, each with its own data source:**
+- **Tape Analytics** — data from CSV/Excel loan tapes uploaded manually by the analyst. Backward-looking, point-in-time deep analysis. Bespoke per asset class. Analyst-driven. This is the proprietary edge.
+- **Portfolio Analytics** — data from a persistent database fed by inbound API from portfolio companies (invoices, payments, bank statements pushed in real-time). Forward-looking, continuous facility monitoring. Competes with / replaces Cascade Debt and Creditit for ACP's specific needs.
+
+Both systems coexist on the same sidebar. A company can have both: historical tapes for trend analysis AND live API data for borrowing base monitoring. Tape snapshots also serve as a reconciliation source to validate API-fed data.
+
+**Current state:** Computation engine + dashboard are built and working. Currently reads from tape data as a stopgap. The database (Phase 2A) and integration API (Phase 2B) are needed to unlock the real-time, API-driven architecture.
 
 ### Phase 1 — Tape Analytics ✅ (current)
 - Manual file upload workflow (CSV/Excel loan tapes)
@@ -65,21 +69,24 @@ The platform allows analysts and investment committee members to:
 - Consistency checks across snapshots
 - Investment committee-ready commentary
 - Bespoke analysis per asset class (receivables factoring vs POS lending)
-### Phase 2 — Portfolio Analytics (Borrowing Base Monitoring) ✅
-- Real borrowing base calculations from tape data (compliance cert formulas)
-- Automated eligibility testing against lending criteria
-- Concentration limit tracking with live thresholds
-- Advance rate calculations from actual portfolio data
-- Covenant monitoring and breach alerts (auto-check from tape)
-- `core/portfolio.py` computation engine with auto-dispatch (SILQ + Klaim)
-- Frontend wired to 6 live API endpoints (no more mock data)
-- **Future:** Live API connections to portfolio company databases for real-time feeds
+### Phase 2 — Portfolio Analytics (Borrowing Base Monitoring)
+**Data source: persistent database fed by inbound integration API from portfolio companies (not tape files).**
+Portfolio Analytics is the real-time counterpart to Tape Analytics. Portfolio companies push invoices, payments, and bank statements via API; the system computes borrowing base, concentration limits, and covenants continuously.
+
+**Status:**
+- ✅ **2C — Computation engine** (`core/portfolio.py`, 1139 lines). Borrowing base waterfall, concentration limits, covenants for SILQ + Klaim. Auto-dispatch via `config.analysis_type`. Currently reads from tape data as a stopgap for validation against compliance certs.
+- ✅ **2D — Dashboard wired to backend APIs**. All 3 portfolio tabs (Borrowing Base, Concentration Limits, Covenants) fetch live computed data from 6 backend endpoints. No more mock data.
+- **Not started — 2A: PostgreSQL database.** Schema needed: `organizations`, `invoices`, `payments`, `bank_statements`, `facility_config`. Replaces file-based storage for portfolio data.
+- **Not started — 2B: Integration API.** Inbound endpoints for portfolio companies to push data (`/api/integration/invoices`, `/payments`, `/bank-statements`). X-API-Key auth per organization. Bulk operations (up to 5,000 per request).
+- **Not started — 2.7: Feature gap pages.** Invoices page (eligible/ineligible split), Payments page (transaction ledger), Bank Statements page (cash verification + upload), Concentration breach drill-down, Covenant historical date selector.
+
+**Reference:** Full implementation plan in `API_Integration_Guide_Updated.docx` (Sharif's Desktop). Covers Creditit analysis, architecture, DB schema, API endpoints, computation engine, dashboard connection, feature gaps, timeline, and portfolio company communication framework.
+
 ### Phase 3 — Deployment & Team Access
 - Cloud deployment on Railway (~$5/mo) — always-on, no laptop dependency
 - Role-based access (analyst vs IC vs read-only)
 - Scheduled report delivery
-- Direct API integrations with portfolio companies' loan management systems (like Cascade's native DB connectors)
-- Real-time covenant monitoring with automated alerts
+- Accounting reports upload (P&L, Balance Sheet PDFs from portfolio companies)
 -----
 ## Tech Stack
 - **Backend:** Python, FastAPI (`localhost:8000`), Pandas, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
@@ -389,7 +396,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
 - **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
 - **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
-- **Portfolio Analytics engine** — `core/portfolio.py` (1139 lines) computes borrowing base, concentration limits, and covenants for both SILQ and Klaim. Auto-dispatches via `config.analysis_type`. Frontend fetches live data from 6 portfolio API endpoints. Facility params (corporate-level data) persist as JSON in `data/{company}/{product}/facility_params.json`.
+- **Portfolio Analytics engine** — `core/portfolio.py` (1139 lines) computes borrowing base, concentration limits, and covenants for both SILQ and Klaim. Auto-dispatches via `config.analysis_type`. Frontend fetches live data from 6 portfolio API endpoints. Facility params (corporate-level data) persist as JSON in `data/{company}/{product}/facility_params.json`. **Current data source: tape files (stopgap).** End-state: PostgreSQL database fed by inbound integration API from portfolio companies (Phase 2A/2B).
 - **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 tape tabs (excluding Data Integrity) via sidebar link navigation. Navigates to `/company/:co/:product/tape/:slug` URLs. ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
 -----
@@ -544,10 +551,24 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Frontend portfolio tabs wired to real backend APIs (replaced mock data)
 - [x] 6 portfolio API endpoints (borrowing base, concentration limits, covenants, flow, facility params)
 - [x] Facility params persistence (corporate-level data saved as JSON)
-**Short term:**
+**Short term (Tape Analytics):**
 - [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
 - [ ] Facility params input UI panel (currently no frontend for editing facility params)
 - [ ] Portfolio flow tab UI (backend endpoint exists, no frontend tab yet)
+**Phase 2A — Database (not started):**
+- [ ] PostgreSQL setup + schema (`organizations`, `invoices`, `payments`, `bank_statements`, `facility_config`)
+- [ ] Migration of existing CSV tape data into database (for validation)
+- [ ] JSONB metadata columns for company-specific fields (Klaim vs SILQ different schemas)
+**Phase 2B — Integration API (not started):**
+- [ ] Inbound API endpoints: `/api/integration/invoices` (CRUD + bulk), `/payments` (CRUD + bulk), `/bank-statements`
+- [ ] X-API-Key authentication per organization
+- [ ] Per-company field mappings via `facility_config` JSON
+**Phase 2 Feature Gaps (not started):**
+- [ ] Invoices page (eligible vs ineligible split, filterable/sortable, paginated)
+- [ ] Payments page (transaction ledger with ADVANCE/PARTIAL/FINAL badges, invoice cross-reference)
+- [ ] Bank Statements page (balance overview, historical chart, upload interface)
+- [ ] Concentration breach drill-down (expandable limit cards with breaching items)
+- [ ] Covenant historical date selector (query past reporting periods)
 
 **SILQ Compliance Certificate — Extracted Formulas (Dec 2025 cert, reconciliation Excel at `Downloads/SILQ_KSA_Compliance_Reconciliation.xlsx`):**
 
@@ -572,11 +593,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Collection Ratio: Cert 95.53% 3M avg — tape rates higher because extra month of collections occurred
 - Repayment at Term: Cert 97.33% vs tape 96.86% — Δ 0.47pp, within expected tolerance
 - LTV: 74.85%, only 15bps below 75% limit — tightest covenant, depends on cash injection
-**Phase 3 (Deployment & Live Monitoring):**
-- [ ] Cloud deployment — Railway (~$5/mo), deploys from GitHub, auto-HTTPS. Data files committed to repo (small enough). Add simple auth before exposing.
+**Phase 3 (Deployment & Team Access):**
+- [ ] Cloud deployment — Railway (~$5/mo), deploys from GitHub, auto-HTTPS. Add simple auth before exposing.
 - [ ] Role-based access (analyst vs IC vs read-only)
 - [ ] Scheduled report delivery
-- [ ] Live API integrations — connect to portfolio company databases for real-time Portfolio Analytics (Cascade Debt / Creditit alternative). Tape Analytics stays manual.
+- [ ] Accounting reports upload (P&L, Balance Sheet PDFs from portfolio companies)
 -----
 ## Environment
 - **Machine:** Windows (PowerShell)
