@@ -42,6 +42,7 @@ from core.portfolio import (
 )
 from core.database import engine, get_db
 from core.db_loader import has_db_data, load_from_db, get_facility_config as db_facility_config
+from backend.integration import router as integration_router
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ACP Private Credit API", lifespan=lifespan)
+app.include_router(integration_router)
 
 app.add_middleware(
     CORSMiddleware,
