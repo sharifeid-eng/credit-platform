@@ -31,6 +31,15 @@ from core.analysis_silq import (
     filter_silq_by_date,
 )
 from core.validation_silq import validate_silq_tape
+from core.portfolio import (
+    compute_borrowing_base as portfolio_borrowing_base,
+    compute_concentration_limits as portfolio_concentration_limits,
+    compute_covenants as portfolio_covenants,
+    compute_portfolio_flow,
+    compute_klaim_borrowing_base,
+    compute_klaim_concentration_limits,
+    compute_klaim_covenants,
+)
 app = FastAPI(title="ACP Private Credit API")
 
 app.add_middleware(
@@ -1082,6 +1091,127 @@ INSTRUCTIONS:
         system=system, messages=msgs
     )
     return {'answer': resp.content[0].text, 'question': request.get('question', '')}
+# ── Portfolio Analytics endpoints ─────────────────────────────────────────────
+
+def _facility_params_path(company, product):
+    """Path to stored facility parameters JSON."""
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..',
+        'data', company, product, 'facility_params.json'
+    )
+
+def _load_facility_params(company, product):
+    """Load saved facility params or return empty dict."""
+    path = _facility_params_path(company, product)
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {}
+
+def _portfolio_load(company, product, snapshot, as_of_date, currency):
+    """Load snapshot and prepare for portfolio computation. Supports SILQ and Klaim."""
+    config = load_config(company, product)
+    analysis_type = config.get('analysis_type', '') if config else ''
+
+    snaps = get_snapshots(company, product)
+    if not snaps:
+        raise HTTPException(status_code=404, detail="No snapshots found")
+    sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
+
+    if analysis_type == 'silq':
+        df, _ = load_silq_snapshot(sel['filepath'])
+        if as_of_date:
+            df = filter_silq_by_date(df, as_of_date)
+    else:
+        df = load_snapshot(sel['filepath'])
+        if as_of_date:
+            df = filter_by_date(df, as_of_date)
+
+    disp = currency or (config['currency'] if config else 'USD')
+    mult = apply_multiplier(config, disp)
+    ref_date = as_of_date or sel['date']
+
+    facility_params = _load_facility_params(company, product)
+    if config and 'usd_rate' in config:
+        facility_params.setdefault('usd_rate', config['usd_rate'])
+
+    return df, sel, config, disp, mult, ref_date, facility_params, analysis_type
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/borrowing-base")
+def get_portfolio_borrowing_base(company: str, product: str,
+                                  snapshot: Optional[str] = None,
+                                  as_of_date: Optional[str] = None,
+                                  currency: Optional[str] = None):
+    df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
+        company, product, snapshot, as_of_date, currency)
+    if atype == 'silq':
+        result = portfolio_borrowing_base(df, mult, ref_date, fp)
+    else:
+        result = compute_klaim_borrowing_base(df, mult, ref_date, fp)
+    return {**result, 'currency': disp, 'snapshot': sel['date']}
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/concentration-limits")
+def get_portfolio_concentration_limits(company: str, product: str,
+                                        snapshot: Optional[str] = None,
+                                        as_of_date: Optional[str] = None,
+                                        currency: Optional[str] = None):
+    df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
+        company, product, snapshot, as_of_date, currency)
+    if atype == 'silq':
+        result = portfolio_concentration_limits(df, mult, ref_date, fp)
+    else:
+        result = compute_klaim_concentration_limits(df, mult, ref_date, fp)
+    return {**result, 'currency': disp, 'snapshot': sel['date']}
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/covenants")
+def get_portfolio_covenants(company: str, product: str,
+                             snapshot: Optional[str] = None,
+                             as_of_date: Optional[str] = None,
+                             currency: Optional[str] = None):
+    df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
+        company, product, snapshot, as_of_date, currency)
+    if atype == 'silq':
+        result = portfolio_covenants(df, mult, ref_date, fp)
+    else:
+        result = compute_klaim_covenants(df, mult, ref_date, fp)
+    return {**result, 'currency': disp, 'snapshot': sel['date']}
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/flow")
+def get_portfolio_flow(company: str, product: str,
+                        snapshot: Optional[str] = None,
+                        as_of_date: Optional[str] = None,
+                        currency: Optional[str] = None):
+    df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
+        company, product, snapshot, as_of_date, currency)
+    result = compute_portfolio_flow(df, mult)
+    return {**result, 'currency': disp, 'snapshot': sel['date']}
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/facility-params")
+def get_facility_params(company: str, product: str):
+    return _load_facility_params(company, product)
+
+
+@app.post("/companies/{company}/products/{product}/portfolio/facility-params")
+def save_facility_params(company: str, product: str, request: dict):
+    """Save facility parameters (facility_limit, facility_drawn, cash_balance, etc.)."""
+    allowed_keys = {
+        'facility_limit', 'facility_drawn', 'cash_balance',
+        'equity_injection', 'advance_rate', 'advance_rates_by_product',
+        'approved_recipients',
+    }
+    params = {k: v for k, v in request.items() if k in allowed_keys}
+    params['updated_at'] = datetime.now().isoformat()
+
+    path = _facility_params_path(company, product)
+    with open(path, 'w') as f:
+        json.dump(params, f, indent=2)
+
+    return {'saved': True, 'params': params}
 
 
 # ── PDF Report Generation ─────────────────────────────────────────────────────
