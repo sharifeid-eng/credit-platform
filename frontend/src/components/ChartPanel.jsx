@@ -10,14 +10,21 @@
  *   minHeight  number    — default 320
  *   children   node      — the Recharts component
  */
+import { motion, AnimatePresence } from 'framer-motion'
+
 export default function ChartPanel({ title, subtitle, action, loading, error, minHeight = 320, children }) {
   return (
-    <div style={{
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)',
-      overflow: 'hidden',
-    }}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+      }}
+    >
       {/* Header */}
       <div style={{
         padding: '14px 20px 12px',
@@ -25,7 +32,7 @@ export default function ChartPanel({ title, subtitle, action, loading, error, mi
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
             {title}
           </div>
           {subtitle && (
@@ -39,34 +46,64 @@ export default function ChartPanel({ title, subtitle, action, loading, error, mi
 
       {/* Body */}
       <div style={{ padding: '20px', minHeight }}>
-        {loading ? (
-          <LoadingState minHeight={minHeight} />
-        ) : error ? (
-          <ErrorState message={error} minHeight={minHeight} />
-        ) : (
-          children
-        )}
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <SkeletonChart key="skeleton" minHeight={minHeight} />
+          ) : error ? (
+            <ErrorState key="error" message={error} minHeight={minHeight} />
+          ) : (
+            <motion.div
+              key="content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              {children}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
-function LoadingState({ minHeight }) {
+function SkeletonChart({ minHeight }) {
   return (
-    <div style={{
-      minHeight: minHeight - 40,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column', gap: 10,
-    }}>
+    <motion.div
+      key="skeleton"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      style={{
+        minHeight: minHeight - 40,
+        display: 'flex', flexDirection: 'column',
+        gap: 12, padding: '20px 0',
+      }}
+    >
+      {/* Fake chart bars */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: minHeight - 120, padding: '0 20px' }}>
+        {[65, 80, 45, 90, 55, 70, 40, 85, 60, 75, 50, 88].map((h, i) => (
+          <div key={i} style={{
+            flex: 1,
+            height: `${h}%`,
+            borderRadius: '4px 4px 0 0',
+            background: 'linear-gradient(90deg, var(--border) 25%, #1E2D40 50%, var(--border) 75%)',
+            backgroundSize: '200% 100%',
+            animation: `shimmer 1.4s infinite ${i * 0.05}s`,
+          }} />
+        ))}
+      </div>
+      {/* Fake axis */}
       <div style={{
-        width: 24, height: 24, borderRadius: '50%',
-        border: '2px solid var(--border)',
-        borderTopColor: 'var(--gold)',
-        animation: 'spin 0.8s linear infinite',
+        height: 8, borderRadius: 4, width: '100%',
+        background: 'linear-gradient(90deg, var(--border) 25%, #1E2D40 50%, var(--border) 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.4s infinite',
       }} />
-      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Loading…</div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+      <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
+    </motion.div>
   )
 }
 

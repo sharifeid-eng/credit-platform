@@ -1,16 +1,9 @@
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getAICommentary } from '../services/api'
 
 /**
- * AICommentary — dark theme panel
- *
- * Props:
- *   company   string
- *   product   string
- *   snapshot  string
- *   currency  string
- *   cached    string | null   — pre-fetched text from parent (Company.jsx)
- *   onCache   fn(text)        — callback to store in parent state
+ * AICommentary — dark theme panel with slide-up animation
  */
 export default function AICommentary({ company, product, snapshot, currency, cached, onCache }) {
   const [loading, setLoading] = useState(false)
@@ -31,12 +24,17 @@ export default function AICommentary({ company, product, snapshot, currency, cac
   }
 
   return (
-    <div style={{
-      background: '#0E1220',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)',
-      overflow: 'hidden',
-    }}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3, delay: 0.1 }}
+      style={{
+        background: '#0E1220',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+      }}
+    >
       {/* Header */}
       <div style={{
         padding: '13px 16px 11px',
@@ -60,7 +58,7 @@ export default function AICommentary({ company, product, snapshot, currency, cac
             background: loading ? 'var(--gold-dim)' : 'var(--gold)',
             color: '#000', border: 'none', cursor: loading ? 'default' : 'pointer',
             fontFamily: 'var(--font-ui)',
-            transition: 'background 0.15s',
+            transition: 'background var(--transition-fast)',
           }}>
             {loading ? 'Generating…' : 'Generate'}
           </button>
@@ -81,16 +79,25 @@ export default function AICommentary({ company, product, snapshot, currency, cac
 
         {loading && <Skeleton />}
 
-        {cached && <CommentaryBody text={cached} />}
+        <AnimatePresence>
+          {cached && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+            >
+              <CommentaryBody text={cached} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
 /* ── Sub-components ──────────────────────────────── */
 
 function CommentaryBody({ text }) {
-  // Expect sections separated by newlines; lines starting with "•" or "-" are bullets
   const lines = text.split('\n').filter(l => l.trim())
 
   return (

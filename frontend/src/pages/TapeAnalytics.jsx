@@ -1,5 +1,6 @@
 import React from 'react'
 import { useParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
 import { generatePDFReport } from '../services/api'
 
@@ -141,6 +142,14 @@ export default function TapeAnalytics() {
       {/* Tab content */}
       <div style={{ padding: '20px 28px 40px' }}>
         {isBackdated && <BackdatedBanner asOfDate={asOfDate} snapshotDate={snapshotDate} />}
+        <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
         {analysisType === 'silq' ? (
           <SilqTabContent
             tab={tab} activeTab={activeTab}
@@ -162,6 +171,8 @@ export default function TapeAnalytics() {
             isBackdated={isBackdated}
           />
         )}
+        </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   )
@@ -297,7 +308,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         {showSkeleton
           ? Array(10).fill(null).map((_, i) => <SkeletonKpi key={i} />)
-          : kpis.map((k, i) => <KpiCard key={i} {...k} />)
+          : kpis.map((k, i) => <KpiCard key={i} {...k} index={i} />)
         }
       </div>
       {summary?.portfolio_commentary && (
@@ -370,7 +381,7 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         {showSkeleton
           ? Array(10).fill(null).map((_, i) => <SkeletonKpi key={i} />)
-          : kpis.map((k, i) => <KpiCard key={i} {...k} />)
+          : kpis.map((k, i) => <KpiCard key={i} {...k} index={i} />)
         }
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>

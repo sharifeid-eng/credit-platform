@@ -23,7 +23,7 @@ const PORTFOLIO_TABS = [
   { slug: 'covenants',            label: 'Covenants' },
   { slug: 'invoices',             label: 'Invoices' },
   { slug: 'payments',             label: 'Payments' },
-  { slug: 'bank-statements',      label: 'Bank Statements' },
+  { slug: 'bank-statements',     label: 'Bank Statements' },
 ]
 
 export default function Sidebar() {
@@ -51,6 +51,7 @@ export default function Sidebar() {
       background: 'var(--bg-nav)',
       scrollbarWidth: 'thin',
       scrollbarColor: 'var(--border) transparent',
+      scrollBehavior: 'smooth',
     }}>
       {/* Company name */}
       <div style={{
@@ -60,7 +61,7 @@ export default function Sidebar() {
         textTransform: 'uppercase',
         letterSpacing: '0.1em',
         color: 'var(--gold)',
-        marginBottom: 16,
+        marginBottom: 18,
       }}>
         {company?.toUpperCase()}
       </div>
@@ -126,7 +127,7 @@ export default function Sidebar() {
 function SectionHeader({ children }) {
   return (
     <div style={{
-      padding: '12px 20px 6px',
+      padding: '14px 20px 6px',
       fontSize: 9,
       fontWeight: 700,
       textTransform: 'uppercase',
@@ -150,10 +151,25 @@ function NavItem({ label, to, active, icon }) {
         fontSize: 11,
         fontWeight: active ? 600 : 400,
         color: active ? 'var(--gold)' : 'var(--text-muted)',
-        borderLeft: active ? '2px solid var(--gold)' : '2px solid transparent',
+        borderLeft: `2px solid ${active ? 'var(--gold)' : 'transparent'}`,
         textDecoration: 'none',
-        transition: 'all 0.15s',
+        transition: 'all var(--transition-fast)',
         whiteSpace: 'nowrap',
+        background: active ? 'rgba(201,168,76,0.04)' : 'transparent',
+      }}
+      onMouseEnter={e => {
+        if (!active) {
+          e.currentTarget.style.color = 'var(--text-primary)'
+          e.currentTarget.style.paddingLeft = '22px'
+          e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
+        }
+      }}
+      onMouseLeave={e => {
+        if (!active) {
+          e.currentTarget.style.color = 'var(--text-muted)'
+          e.currentTarget.style.paddingLeft = '20px'
+          e.currentTarget.style.background = 'transparent'
+        }
       }}
     >
       {icon}
@@ -163,7 +179,7 @@ function NavItem({ label, to, active, icon }) {
 }
 
 function Divider() {
-  return <div style={{ height: 1, background: 'var(--border)', margin: '10px 20px' }} />
+  return <div style={{ height: 1, background: 'var(--border)', margin: '12px 20px' }} />
 }
 
 export { DEFAULT_TAPE_TABS as TAPE_TABS, PORTFOLIO_TABS }

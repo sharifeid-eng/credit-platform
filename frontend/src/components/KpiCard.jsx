@@ -1,5 +1,5 @@
 /**
- * KpiCard — dark theme
+ * KpiCard — dark theme with hover effects and stagger animation
  *
  * Props:
  *   label      string   — uppercase label e.g. "Collection Rate"
@@ -8,8 +8,13 @@
  *   trend      number   — optional delta e.g. 1.2 or -0.4 (shows ↑↓ badge)
  *   trendLabel string   — optional suffix e.g. "vs prev month"
  *   color      string   — 'gold' | 'teal' | 'red' | 'blue'  (default 'gold')
+ *   index      number   — optional index for stagger delay (default 0)
  */
-export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false }) {
+import { motion } from 'framer-motion'
+import { useState } from 'react'
+
+export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false, index = 0 }) {
+  const [hovered, setHovered] = useState(false)
   const palette = {
     gold: { accent: 'var(--gold)',  muted: 'var(--gold-muted)' },
     teal: { accent: 'var(--teal)',  muted: 'var(--teal-muted)' },
@@ -21,14 +26,25 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
   const isDown = trend < 0
 
   return (
-    <div style={{
-      background: 'var(--bg-surface)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)',
-      padding: '16px 16px 14px',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.04, ease: 'easeOut' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: 'var(--bg-surface)',
+        border: `1px solid ${hovered ? 'var(--border-hover)' : 'var(--border)'}`,
+        borderRadius: 'var(--radius-md)',
+        padding: '16px 16px 14px',
+        position: 'relative',
+        overflow: 'hidden',
+        transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
+        boxShadow: hovered ? 'var(--shadow-card-hover)' : 'var(--shadow-card)',
+        transition: 'border-color var(--transition-fast), box-shadow var(--transition-normal), transform var(--transition-fast)',
+        cursor: 'default',
+      }}
+    >
       {/* Left accent bar */}
       <div style={{
         position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
@@ -104,6 +120,6 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
           {trendLabel}
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }

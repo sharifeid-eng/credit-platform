@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
 import {
   getPortfolioBorrowingBase, getPortfolioConcentrationLimits, getPortfolioCovenants,
@@ -134,6 +135,14 @@ export default function PortfolioAnalytics() {
       )}
 
       <div style={{ padding: '12px 28px 40px' }}>
+        <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
         {/* Parent-managed tabs with loading state */}
         {!SELF_LOADING_TABS.includes(tab) && loading ? loadingBar : (
           <>
@@ -154,6 +163,8 @@ export default function PortfolioAnalytics() {
         {tab === 'invoices' && <InvoicesTable />}
         {tab === 'payments' && <PaymentsTable />}
         {tab === 'bank-statements' && <BankStatementsView />}
+        </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Facility Params slide-out panel */}

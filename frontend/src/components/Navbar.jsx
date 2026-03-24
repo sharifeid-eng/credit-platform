@@ -139,16 +139,22 @@ function LiveDot() {
 
 function Chip({ children, highlight }) {
   return (
-    <div style={{
-      fontSize: 12,
-      padding: '4px 12px',
-      borderRadius: 20,
-      border: '1px solid var(--border)',
-      color: highlight ? 'var(--text-secondary)' : 'var(--text-muted)',
-      background: highlight ? 'var(--bg-surface)' : 'transparent',
-      fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.02em',
-    }}>
+    <div
+      style={{
+        fontSize: 12,
+        padding: '4px 12px',
+        borderRadius: 20,
+        border: '1px solid var(--border)',
+        color: highlight ? 'var(--text-secondary)' : 'var(--text-muted)',
+        background: highlight ? 'var(--bg-surface)' : 'transparent',
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.02em',
+        transition: 'opacity var(--transition-fast), border-color var(--transition-fast)',
+        cursor: 'default',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.opacity = '1' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.opacity = '' }}
+    >
       {children}
     </div>
   )

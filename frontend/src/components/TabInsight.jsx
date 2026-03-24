@@ -1,15 +1,9 @@
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getTabInsight } from '../services/api'
 
 /**
- * TabInsight — compact one-click AI insight bar shown at top of each non-overview tab
- *
- * Props:
- *   company   string
- *   product   string
- *   snapshot  string
- *   currency  string
- *   tab       string   — e.g. "deployment", "denial-trend"
+ * TabInsight — compact one-click AI insight bar with smooth expand/collapse
  */
 export default function TabInsight({ company, product, snapshot, currency, tab }) {
   const [text, setText]       = useState(null)
@@ -33,15 +27,20 @@ export default function TabInsight({ company, product, snapshot, currency, tab }
   }
 
   return (
-    <div style={{
-      background: open ? 'rgba(201,168,76,0.06)' : 'transparent',
-      border: '1px solid',
-      borderColor: open ? 'rgba(201,168,76,0.25)' : 'var(--border)',
-      borderRadius: 'var(--radius-md)',
-      overflow: 'hidden',
-      marginBottom: 16,
-      transition: 'all 0.2s',
-    }}>
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      style={{
+        background: open ? 'rgba(201,168,76,0.06)' : 'transparent',
+        border: '1px solid',
+        borderColor: open ? 'rgba(201,168,76,0.25)' : 'var(--border)',
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+        marginBottom: 16,
+        transition: 'background var(--transition-normal), border-color var(--transition-normal)',
+      }}
+    >
       {/* Trigger row */}
       <button onClick={fetch} style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
@@ -55,33 +54,52 @@ export default function TabInsight({ company, product, snapshot, currency, tab }
         <span style={{ fontSize: 10, color: 'var(--text-faint)', flex: 1 }}>
           {loading ? 'Analysing…' : text ? 'Click to toggle' : `Get AI insight for this view`}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-block' }}
+        >
           ▾
-        </span>
+        </motion.span>
       </button>
 
       {/* Expanded body */}
-      {open && (
-        <div style={{
-          padding: '2px 14px 12px 36px',
-          borderTop: '1px solid rgba(201,168,76,0.12)',
-        }}>
-          {loading && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: 8 }}>
-              Generating…
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{
+              padding: '2px 14px 12px 36px',
+              borderTop: '1px solid rgba(201,168,76,0.12)',
+            }}>
+              {loading && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: 8 }}>
+                  Generating…
+                </div>
+              )}
+              {error && (
+                <div style={{ fontSize: 11, color: 'var(--red)', paddingTop: 8 }}>{error}</div>
+              )}
+              {text && !loading && (
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                  style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '8px 0 0' }}
+                >
+                  {text}
+                </motion.p>
+              )}
             </div>
-          )}
-          {error && (
-            <div style={{ fontSize: 11, color: 'var(--red)', paddingTop: 8 }}>{error}</div>
-          )}
-          {text && !loading && (
-            <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '8px 0 0' }}>
-              {text}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }
 
