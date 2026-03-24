@@ -77,7 +77,7 @@ Portfolio Analytics is the real-time counterpart to Tape Analytics. Portfolio co
 - ✅ **2C — Computation engine** (`core/portfolio.py`, 1139 lines). Borrowing base waterfall, concentration limits, covenants for SILQ + Klaim. Auto-dispatch via `config.analysis_type`. Currently reads from tape data as a stopgap for validation against compliance certs.
 - ✅ **2D — Dashboard wired to backend APIs**. All 3 portfolio tabs (Borrowing Base, Concentration Limits, Covenants) fetch live computed data from 6 backend endpoints. No more mock data.
 - ✅ **2A — PostgreSQL database.** 6 tables: `organizations`, `products`, `invoices`, `payments`, `bank_statements`, `facility_config`. SQLAlchemy 2.0 + Alembic migrations. DB-optional (tape fallback when no DATABASE_URL). Seed script populates from tape data (7,697 Klaim + 1,915 SILQ invoices).
-- **Not started — 2B: Integration API.** Inbound endpoints for portfolio companies to push data (`/api/integration/invoices`, `/payments`, `/bank-statements`). X-API-Key auth per organization. Bulk operations (up to 5,000 per request).
+- ✅ **2B — Integration API.** 12 inbound endpoints under `/api/integration/` for portfolio companies to push invoices, payments, bank statements. X-API-Key auth (SHA-256 hashed). Bulk operations up to 5,000/request. Pydantic validation. `scripts/create_api_key.py` CLI to generate keys.
 - **Not started — 2.7: Feature gap pages.** Invoices page (eligible/ineligible split), Payments page (transaction ledger), Bank Statements page (cash verification + upload), Concentration breach drill-down, Covenant historical date selector.
 
 **Reference:** Full implementation plan in `API_Integration_Guide_Updated.docx` (Sharif's Desktop). Covers Creditit analysis, architecture, DB schema, API endpoints, computation engine, dashboard connection, feature gaps, timeline, and portfolio company communication framework.
@@ -565,10 +565,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] `core/db_loader.py` — DB→DataFrame bridge (maps to tape column names for both Klaim and SILQ)
 - [x] `scripts/seed_db.py` — seeds tape data into DB (7,697 Klaim + 1,915 SILQ invoices)
 - [x] `backend/main.py` — `_portfolio_load()` tries DB first, falls back to tape
-**Phase 2B — Integration API (not started):**
-- [ ] Inbound API endpoints: `/api/integration/invoices` (CRUD + bulk), `/payments` (CRUD + bulk), `/bank-statements`
-- [ ] X-API-Key authentication per organization
-- [ ] Per-company field mappings via `facility_config` JSON
+**Phase 2B — Integration API (done):**
+- [x] 12 inbound endpoints: `/api/integration/invoices` (GET, POST, POST/bulk, PATCH, DELETE), `/payments` (GET, POST, POST/bulk), `/bank-statements` (GET, POST)
+- [x] X-API-Key authentication per organization (SHA-256 hashed, `scripts/create_api_key.py`)
+- [x] Pydantic request/response schemas (`backend/schemas.py`)
+- [x] Bulk operations up to 5,000 per request with partial success reporting
 **Phase 2 Feature Gaps (not started):**
 - [ ] Invoices page (eligible vs ineligible split, filterable/sortable, paginated)
 - [ ] Payments page (transaction ledger with ADVANCE/PARTIAL/FINAL badges, invoice cross-reference)
