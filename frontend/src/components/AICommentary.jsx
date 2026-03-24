@@ -29,7 +29,7 @@ export default function AICommentary({ company, product, snapshot, currency, cac
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3, delay: 0.1 }}
       style={{
-        background: '#0E1220',
+        background: 'var(--bg-deep)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
@@ -144,7 +144,7 @@ function Skeleton() {
       {[80, 100, 65, 90, 55].map((w, i) => (
         <div key={i} style={{
           height: 10, borderRadius: 4,
-          background: 'linear-gradient(90deg, var(--border) 25%, #263040 50%, var(--border) 75%)',
+          background: 'linear-gradient(90deg, var(--border) 25%, #2A3D55 50%, var(--border) 75%)',
           backgroundSize: '200% 100%',
           animation: 'shimmer 1.4s infinite',
           width: `${w}%`,

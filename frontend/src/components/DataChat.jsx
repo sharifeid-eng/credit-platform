@@ -101,7 +101,7 @@ export default function DataChat({ company, product, snapshot, currency }) {
           rows={1}
           style={{
             flex: 1, resize: 'none', overflow: 'hidden',
-            background: '#080B12', border: '1px solid var(--border)',
+            background: 'var(--bg-deep)', border: '1px solid var(--border)',
             borderRadius: 8, padding: '8px 12px',
             fontSize: 12, color: 'var(--text-primary)',
             fontFamily: 'var(--font-ui)',

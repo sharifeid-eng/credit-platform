@@ -2,14 +2,14 @@
 
 :root {
   /* ── Backgrounds ── */
-  --bg-base:    #0C1018;
-  --bg-surface: #111620;
-  --bg-nav:     #080B12;
-  --bg-deep:    #050810;
+  --bg-base:    #121C27;
+  --bg-surface: #172231;
+  --bg-nav:     #0D1520;
+  --bg-deep:    #0A1119;
 
   /* ── Borders ── */
-  --border:       #1E2736;
-  --border-faint: #141B27;
+  --border:       #243040;
+  --border-faint: #1A2535;
 
   /* ── Brand Accents ── */
   --gold:       #C9A84C;
@@ -29,7 +29,7 @@
   --text-primary: #E8EAF0;
   --text-secondary: #8A94A8;
   --text-muted:   #8494A7;
-  --text-faint:   #2A3548;
+  --text-faint:   #304050;
 
   /* ── Typography ── */
   --font-ui:   'Inter', system-ui, sans-serif;
@@ -42,12 +42,12 @@
 
   /* ── Shadows ── */
   --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px var(--border);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px #2A3548;
+  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px var(--border-hover);
   --shadow-glow-gold: 0 0 16px rgba(201,168,76,0.2);
   --shadow-glow-teal: 0 0 8px rgba(45,212,191,0.3);
 
   /* ── Hover ── */
-  --border-hover: #2A3548;
+  --border-hover: #304058;
 
   /* ── Transitions ── */
   --transition-fast: 150ms ease;

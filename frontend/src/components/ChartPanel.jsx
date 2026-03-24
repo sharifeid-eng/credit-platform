@@ -89,7 +89,7 @@ function SkeletonChart({ minHeight }) {
             flex: 1,
             height: `${h}%`,
             borderRadius: '4px 4px 0 0',
-            background: 'linear-gradient(90deg, var(--border) 25%, #1E2D40 50%, var(--border) 75%)',
+            background: 'linear-gradient(90deg, var(--border) 25%, #243A50 50%, var(--border) 75%)',
             backgroundSize: '200% 100%',
             animation: `shimmer 1.4s infinite ${i * 0.05}s`,
           }} />
@@ -98,7 +98,7 @@ function SkeletonChart({ minHeight }) {
       {/* Fake axis */}
       <div style={{
         height: 8, borderRadius: 4, width: '100%',
-        background: 'linear-gradient(90deg, var(--border) 25%, #1E2D40 50%, var(--border) 75%)',
+        background: 'linear-gradient(90deg, var(--border) 25%, #243A50 50%, var(--border) 75%)',
         backgroundSize: '200% 100%',
         animation: 'shimmer 1.4s infinite',
       }} />

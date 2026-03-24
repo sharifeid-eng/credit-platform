@@ -8,9 +8,9 @@ export const COLORS = {
   teal:  '#2DD4BF',
   red:   '#F06060',
   blue:  '#5B8DEF',
-  muted: '#2A3548',
+  muted: '#304050',
   text:  '#8494A7',
-  grid:  '#1E2736',
+  grid:  '#243040',
 }
 
 /** Standard CartesianGrid props */
@@ -38,8 +38,8 @@ export const yAxisProps = {
 /** Standard Tooltip style */
 export const tooltipStyle = {
   contentStyle: {
-    background: '#0C1018',
-    border: '1px solid #1E2736',
+    background: '#0D1520',
+    border: '1px solid #243040',
     borderRadius: 8,
     fontSize: 11,
     fontFamily: 'IBM Plex Mono',

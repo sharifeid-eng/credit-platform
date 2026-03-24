@@ -424,7 +424,7 @@ function SkeletonKpi() {
       {[40, 70, 50].map((w, i) => (
         <div key={i} style={{
           height: i === 1 ? 18 : 8, borderRadius: 4, marginBottom: i === 1 ? 8 : 6,
-          background: 'linear-gradient(90deg, var(--border) 25%, #1E2D40 50%, var(--border) 75%)',
+          background: 'linear-gradient(90deg, var(--border) 25%, #243A50 50%, var(--border) 75%)',
           backgroundSize: '200% 100%',
           animation: 'shimmer 1.4s infinite',
           width: `${w}%`,

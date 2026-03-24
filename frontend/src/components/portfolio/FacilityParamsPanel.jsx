@@ -441,7 +441,7 @@ const styles = {
   saveBtn: {
     flex: 2, padding: '8px 0', fontSize: 12, fontWeight: 600,
     background: 'var(--accent-gold)', border: 'none',
-    borderRadius: 'var(--radius-sm, 4px)', color: '#0C1018',
+    borderRadius: 'var(--radius-sm, 4px)', color: '#0A1119',
     cursor: 'pointer',
   },
 }
