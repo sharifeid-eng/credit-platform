@@ -26,7 +26,7 @@ The platform allows analysts and investment committee members to:
 **Who uses it:** Sharif (fund analyst/PM) and eventually the broader investment committee.
 **Current portfolio companies:**
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
-- **SILQ** — POS lending. Not yet onboarded into the platform.
+- **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (1 tape: Jan 2026). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
 **Asset classes:** Receivables (insurance claims factoring) and short-term consumer/POS loans.
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`.
 **Data notes:**
@@ -85,8 +85,7 @@ Opens two terminal windows (backend + frontend) and launches the browser automat
 credit-platform/
 ├── analyze.py              # Legacy CLI analysis tool (still functional)
 ├── generate_report.py      # Playwright + ReportLab PDF report generator (CLI + backend)
-├── .env                    # API key — NEVER committed to GitHub
-├── .env.example            # Placeholder showing required env vars
+├── .env                    # API key + DATABASE_URL — NEVER committed to GitHub
 ├── .gitignore              # Must include: .env, node_modules/, venv/, __pycache__/, reports/
 ├── alembic/
 │   ├── env.py              # Alembic migration environment
@@ -99,7 +98,8 @@ credit-platform/
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
-│   ├── analysis.py         # All pure tape data computation functions (no I/O)
+│   ├── analysis.py         # All pure Klaim data computation functions (no I/O)
+│   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── database.py         # SQLAlchemy 2.0 engine/session setup (DB-optional mode)
 │   ├── db_loader.py        # DB → tape-compatible DataFrame bridge (Klaim + SILQ mappers)
 │   ├── loader.py           # File discovery, snapshot loading
@@ -108,7 +108,8 @@ credit-platform/
 │   ├── migration.py        # Multi-snapshot roll-rate & cure-rate analysis
 │   ├── models.py           # SQLAlchemy ORM models (6 tables: Organization, Product, Invoice, Payment, BankStatement, FacilityConfig)
 │   ├── portfolio.py        # Portfolio analytics computation (borrowing base, concentration, covenants)
-│   ├── validation.py       # Single-tape data quality checks
+│   ├── validation.py       # Single-tape data quality checks (Klaim)
+│   ├── validation_silq.py  # SILQ-specific data quality checks
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── data/
 │   └── {company}/
@@ -168,9 +169,14 @@ credit-platform/
 │   │   └── services/
 │   │       └── api.js
 │   └── package.json
+├── tests/
+│   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
+│   └── test_analysis_silq.py   # Integration tests for SILQ analytics
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   └── create_api_key.py   # CLI to generate API keys for portfolio companies
+├── docs/
+│   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
 └── reports/
 ```
 -----
@@ -238,6 +244,8 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/integrity/notes`           |Get saved analyst notes              |
 |`POST /companies/{co}/products/{p}/chat`                     |AI data chat (multi-turn)          |
 |`POST /companies/{co}/products/{p}/generate-report`          |Generate PDF report (streams bytes) |
+|`GET /fx-rates`                                              |Foreign exchange rates              |
+|`GET /companies/{co}/products/{p}/charts/silq/{chart_name}`  |Dynamic SILQ chart routing          |
 
 **Portfolio Analytics endpoints (real data — DB or tape fallback):**
 |Endpoint                                                     |Description                        |
@@ -246,7 +254,8 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/portfolio/concentration-limits`|Limit cards + breaching items    |
 |`GET /companies/{co}/products/{p}/portfolio/covenants`       |Covenant compliance status          |
 |`GET /companies/{co}/products/{p}/portfolio/flow`            |Portfolio cash flow                 |
-|`GET /companies/{co}/products/{p}/portfolio/facility-params` |Facility configuration              |
+|`GET /companies/{co}/products/{p}/portfolio/facility-params` |Get facility configuration           |
+|`POST /companies/{co}/products/{p}/portfolio/facility-params`|Save facility configuration          |
 |`GET /companies/{co}/products/{p}/portfolio/invoices`        |Paginated invoice list (DB/tape)    |
 |`GET /companies/{co}/products/{p}/portfolio/payments`        |Paginated payment ledger            |
 |`GET /companies/{co}/products/{p}/portfolio/bank-statements` |Bank statement history + KPIs       |
@@ -531,7 +540,8 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 -----
 ## Known Gaps & Next Steps
 **Short term:**
-- [ ] Onboard SILQ — POS lending asset class (tape analytics + portfolio computation scaffolded, needs data)
+- [x] Onboard SILQ — POS lending asset class (analysis module, validation, tests, 1 tape live)
+- [ ] SILQ — add more tapes + expand dashboard coverage
 - [ ] Add `core/analysis.py` unit tests
 - [ ] Replace hardcoded FX rates with live API
 - [x] Startup script — `start.ps1` boots both servers + opens browser
