@@ -65,13 +65,15 @@ The platform allows analysts and investment committee members to:
 - Consistency checks across snapshots
 - Investment committee-ready commentary
 - Bespoke analysis per asset class (receivables factoring vs POS lending)
-### Phase 2 — Portfolio Analytics (Borrowing Base Monitoring)
+### Phase 2 — Portfolio Analytics (Borrowing Base Monitoring) ✅
 - Real borrowing base calculations from tape data (compliance cert formulas)
 - Automated eligibility testing against lending criteria
 - Concentration limit tracking with live thresholds
 - Advance rate calculations from actual portfolio data
 - Covenant monitoring and breach alerts (auto-check from tape)
-- **Future:** Live API connections to portfolio company databases (replace mock data with real-time feeds)
+- `core/portfolio.py` computation engine with auto-dispatch (SILQ + Klaim)
+- Frontend wired to 6 live API endpoints (no more mock data)
+- **Future:** Live API connections to portfolio company databases for real-time feeds
 ### Phase 3 — Deployment & Team Access
 - Cloud deployment on Railway (~$5/mo) — always-on, no laptop dependency
 - Role-based access (analyst vs IC vs read-only)
@@ -118,11 +120,16 @@ credit-platform/
 │   ├── migration.py        # Multi-snapshot roll-rate & cure-rate analysis
 │   ├── validation.py       # Klaim single-tape data quality checks
 │   ├── validation_silq.py  # SILQ single-tape data quality checks
+│   ├── portfolio.py        # Portfolio analytics engine (BB, conc limits, covenants) — SILQ + Klaim
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
+├── tests/
+│   ├── test_analysis_klaim.py  # Klaim unit tests
+│   └── test_analysis_silq.py   # SILQ unit tests (99+ tests total)
 ├── data/
 │   └── {company}/
 │       └── {product}/
 │           ├── config.json
+│           ├── facility_params.json  # Saved facility parameters (auto-generated)
 │           └── YYYY-MM-DD_{name}.csv
 ├── frontend/
 │   ├── public/
@@ -136,7 +143,7 @@ credit-platform/
 │   │   ├── pages/
 │   │   │   ├── Home.jsx             # Landing page — company grid
 │   │   │   ├── TapeAnalytics.jsx    # Multi-company tape dashboard (Klaim 12 tabs, SILQ 8 tabs)
-│   │   │   ├── PortfolioAnalytics.jsx  # 3-tab portfolio view (mock data)
+│   │   │   ├── PortfolioAnalytics.jsx  # 3-tab portfolio view (live data from API)
 │   │   │   └── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   ├── components/
 │   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
@@ -259,6 +266,15 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/silq/tenure`        |Tenure distribution, performance   |
 |`GET /companies/{co}/products/{p}/charts/silq/borrowing-base`|Waterfall, eligible amount         |
 |`GET /companies/{co}/products/{p}/charts/silq/covenants`     |5 covenant compliance tests        |
+**Portfolio Analytics endpoints** (auto-dispatch to SILQ or Klaim via `config.analysis_type`):
+|Endpoint                                                     |Description                        |
+|-------------------------------------------------------------|-----------------------------------|
+|`GET /companies/{co}/products/{p}/portfolio/borrowing-base`   |Waterfall, KPIs, advance rates, facility capacity|
+|`GET /companies/{co}/products/{p}/portfolio/concentration-limits`|Limit cards with compliance status|
+|`GET /companies/{co}/products/{p}/portfolio/covenants`        |Covenant tests with breakdowns     |
+|`GET /companies/{co}/products/{p}/portfolio/flow`             |Monthly origination waterfall      |
+|`GET /companies/{co}/products/{p}/portfolio/facility-params`  |Load saved facility parameters     |
+|`POST /companies/{co}/products/{p}/portfolio/facility-params` |Save facility parameters           |
 All chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 Summary, validate, AI commentary, AI tab insight, and chat endpoints auto-dispatch to SILQ-specific logic when `config.analysis_type == 'silq'`.
@@ -271,7 +287,7 @@ Summary, validate, AI commentary, AI tab insight, and chat endpoints auto-dispat
 |---|---|---|
 | `/` | `Home` | Landing page — company grid |
 | `/company/:co/:product/tape/:tab` | `TapeAnalytics` | 12-tab dashboard (tab slug in URL) |
-| `/company/:co/:product/portfolio/:tab` | `PortfolioAnalytics` | 3-tab portfolio view (mock data) |
+| `/company/:co/:product/portfolio/:tab` | `PortfolioAnalytics` | 3-tab portfolio view (live data) |
 | `/company/:co/:product/methodology` | `Methodology` | Definitions & formulas reference |
 
 **Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Tape Analytics (12 links), Portfolio Analytics (3 links), Methodology. Active state: gold left border + gold text.
@@ -318,23 +334,23 @@ Each non-overview tab has a **TabInsight** component with one-click AI insight.
 Dashboard controls: Snapshot selector, As-of Date picker, Currency toggle (SAR ↔ USD). PDF Report button hidden for SILQ.
 
 -----
-## Portfolio Analytics Tabs (3) — Mock Data
+## Portfolio Analytics Tabs (3) — Live Data
 |Tab                  |What It Shows                                                |
 |---------------------|-------------------------------------------------------------|
-|Borrowing Base       |4 KPI cards, waterfall table (gross → eligible → BB), advance rates by region, facility capacity bar|
+|Borrowing Base       |4 KPI cards, waterfall table (gross → eligible → BB), advance rates by segment, facility capacity bar|
 |Concentration Limits |Summary bar (compliant/breach counts), 2-column grid of limit cards with progress bars|
 |Covenants            |Covenant cards with threshold bars, calculation breakdowns, compliance badges|
 
-**Note:** All portfolio data is mock (hardcoded in `mockData.js`). No backend endpoints yet — Phase 2 will add real data APIs.
+**Data source:** Real-time computation from loan tape data via `core/portfolio.py`. Auto-dispatches to SILQ or Klaim computation based on `config.analysis_type`. Frontend fetches from `/portfolio/borrowing-base`, `/portfolio/concentration-limits`, `/portfolio/covenants` endpoints.
 -----
 ## Currency System
 Supported: `AED (0.2723)`, `USD (1.0)`, `EUR (1.08)`, `GBP (1.27)`, `SAR (0.2667)`, `KWD (3.26)`.
 Each product has a `config.json` with its reported currency. Frontend shows toggle between reported currency and USD. Backend applies multiplier via `apply_multiplier()` in `core/analysis.py`.
-> TODO: Replace hardcoded FX rates with a live FX API call.
+FX rates are fetched live on backend startup (with hardcoded fallback if API unavailable).
 -----
 ## Dashboard Customization Philosophy
 Each company/product has its own configured dashboard. The platform shares a common shell but specific views, metrics, and AI prompts are driven by asset class and available columns. Onboarding a new company requires designing the right views for that asset class.
-**Current implementation:** Built around Klaim's healthcare receivables. Not yet abstracted for multi-asset-class use.
+**Current implementation:** Two asset classes live — Klaim (healthcare receivables, 12 tape tabs) and SILQ (POS lending, 9 tape tabs). `core/portfolio.py` auto-dispatches to asset-class-specific computations via `config.analysis_type`.
 -----
 ## Key Architectural Decisions
 - **Multi-company dispatch** — `config.json` has `analysis_type` field (`"klaim"` or `"silq"`) that routes endpoints to the correct analysis module. `_get_analysis_type()` helper in `main.py`. Each company has its own `core/analysis_*.py` and `core/validation_*.py`.
@@ -373,7 +389,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
 - **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
 - **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
-- **Portfolio Analytics mock data** — All 3 portfolio tabs use hardcoded data from `components/portfolio/mockData.js`. Phase 2 will replace with real backend APIs.
+- **Portfolio Analytics engine** — `core/portfolio.py` (1139 lines) computes borrowing base, concentration limits, and covenants for both SILQ and Klaim. Auto-dispatches via `config.analysis_type`. Frontend fetches live data from 6 portfolio API endpoints. Facility params (corporate-level data) persist as JSON in `data/{company}/{product}/facility_params.json`.
 - **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 tape tabs (excluding Data Integrity) via sidebar link navigation. Navigates to `/company/:co/:product/tape/:slug` URLs. ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
 -----
@@ -483,11 +499,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ **Sidebar navigation + URL-based routing** — Company pages use persistent sidebar with Tape Analytics (12 tabs) + Portfolio Analytics (3 tabs) + Methodology. Tabs are URL-driven (`/tape/:slug`, `/portfolio/:slug`), bookmarkable. Old horizontal tab bar replaced.
 - ✅ **CompanyContext + CompanyLayout** — Shared state provider (`CompanyContext.jsx`) consumed by all company pages. `CompanyLayout.jsx` renders sidebar + `<Outlet>`. Extracted from old `Company.jsx` (deleted).
 - ✅ **Landing page cleanup** — Removed duplicate logo (Navbar already shows it). Enriched company cards with product chips and snapshot counts. Companies API returns `{name, products, total_snapshots}`.
-- ✅ **Portfolio Analytics UI (mock data):**
-  - Borrowing Base — 4 KPI cards, waterfall table, advance rates by region, facility capacity bar
-  - Concentration Limits — summary bar, 2-column grid of limit cards with progress bars + compliance badges
-  - Covenants — covenant cards with threshold bars, calculation breakdowns, compliance distance warnings
-  - All data from `mockData.js` — no backend endpoints yet
+- ✅ **Portfolio Analytics (live data):**
+  - `core/portfolio.py` — computation engine (1139 lines) with auto-dispatch for SILQ and Klaim
+  - 6 backend API endpoints: borrowing-base, concentration-limits, covenants, flow, facility-params (GET + POST)
+  - Frontend wired to real APIs — Borrowing Base, Concentration Limits, Covenants tabs show live computed data
+  - SILQ: DPD-based ineligibility, tiered concentration (per facility size), 5 covenants (PAR30/90, collection ratio, repayment at term, LTV)
+  - Klaim: Outstanding-based waterfall, 5 concentration limits (single receivable, top-10, customer, payer, extended age), 6 covenants
+  - Facility params persistence (corporate-level data: facility limit, drawn, cash balance, advance rates)
 - ✅ **SILQ onboarded** — full multi-company architecture:
   - `core/analysis_silq.py` — 8 compute functions (summary, delinquency, collections, concentration, cohorts, yield, tenure, borrowing base)
   - `core/validation_silq.py` — SILQ-specific data quality checks
@@ -522,14 +540,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Compliance cert reconciliation — verified against Dec 2025 cert and Jan 2026 Commentary
 - [x] GBV-weighted PAR, DPD ref-date fix, backward-date caveat system
 - [x] SILQ-specific Methodology page
+- [x] Portfolio analytics computation engine — `core/portfolio.py` with auto-dispatch for SILQ and Klaim
+- [x] Frontend portfolio tabs wired to real backend APIs (replaced mock data)
+- [x] 6 portfolio API endpoints (borrowing base, concentration limits, covenants, flow, facility params)
+- [x] Facility params persistence (corporate-level data saved as JSON)
 **Short term:**
 - [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
-**Phase 2 (Portfolio Analytics — Borrowing Base Monitoring):**
-- [ ] Build `core/portfolio.py` computation engine — reusable for both tape and future API data
-- [ ] Wire computation engine to SILQ Portfolio Analytics tabs (replace mock data)
-- [ ] Extend to Klaim once Creditit parameters extracted
-- [ ] Eligibility criteria testing per deal
-- [ ] Automated concentration limit tracking
+- [ ] Facility params input UI panel (currently no frontend for editing facility params)
+- [ ] Portfolio flow tab UI (backend endpoint exists, no frontend tab yet)
 
 **SILQ Compliance Certificate — Extracted Formulas (Dec 2025 cert, reconciliation Excel at `Downloads/SILQ_KSA_Compliance_Reconciliation.xlsx`):**
 
