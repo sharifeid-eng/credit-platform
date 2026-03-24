@@ -1247,8 +1247,11 @@ def save_facility_params(company: str, product: str, request: dict):
     """Save facility parameters (facility_limit, facility_drawn, cash_balance, etc.)."""
     allowed_keys = {
         'facility_limit', 'facility_drawn', 'cash_balance',
-        'equity_injection', 'advance_rate', 'advance_rates_by_product',
+        'equity_injection', 'advance_rate',
+        'advance_rates_by_product', 'advance_rates_by_region',
         'approved_recipients',
+        'single_payer_limit', 'wal_threshold_days',
+        'net_cash_burn', 'net_cash_burn_3m_avg',
     }
     params = {k: v for k, v in request.items() if k in allowed_keys}
     params['updated_at'] = datetime.now().isoformat()

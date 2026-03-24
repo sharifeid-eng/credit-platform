@@ -543,7 +543,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Onboard SILQ — POS lending asset class (analysis module, validation, tests, 1 tape live)
 - [ ] SILQ — add more tapes + expand dashboard coverage
 - [ ] Add `core/analysis.py` unit tests
-- [ ] Replace hardcoded FX rates with live API
+- [x] Replace hardcoded FX rates with live API (exchangerate-api.com, fallback to hardcoded)
 - [x] Startup script — `start.ps1` boots both servers + opens browser
 **Phase 2 — Borrowing Base Monitoring ✅ COMPLETE:**
 - [x] PostgreSQL 18.3 database + SQLAlchemy ORM + Alembic migrations

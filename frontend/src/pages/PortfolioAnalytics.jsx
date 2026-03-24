@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { useCompany } from '../contexts/CompanyContext'
 import {
@@ -11,13 +11,14 @@ import Covenants from '../components/portfolio/Covenants'
 import InvoicesTable from '../components/portfolio/InvoicesTable'
 import PaymentsTable from '../components/portfolio/PaymentsTable'
 import BankStatementsView from '../components/portfolio/BankStatementsView'
+import FacilityParamsPanel from '../components/portfolio/FacilityParamsPanel'
 
 // Tabs that manage their own data fetching (no parent loading state needed)
 const SELF_LOADING_TABS = ['invoices', 'payments', 'bank-statements']
 
 export default function PortfolioAnalytics() {
   const { tab } = useParams()
-  const { company, product, snapshot, currency, asOfDate } = useCompany()
+  const { company, product, snapshot, currency, asOfDate, analysisType } = useCompany()
 
   const [bbData, setBbData] = useState(null)
   const [clData, setClData] = useState(null)
@@ -26,6 +27,8 @@ export default function PortfolioAnalytics() {
   const [covSelectedDate, setCovSelectedDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showParams, setShowParams] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // Fetch covenant dates when on covenants tab
   useEffect(() => {
@@ -47,6 +50,11 @@ export default function PortfolioAnalytics() {
     }
   }, [covSelectedDate])
 
+  // Callback when facility params are saved — re-fetch all portfolio data
+  const handleParamsSaved = useCallback(() => {
+    setRefreshKey(k => k + 1)
+  }, [])
+
   // Main data fetch for parent-managed tabs
   useEffect(() => {
     if (!company || !product || !snapshot) return
@@ -65,7 +73,7 @@ export default function PortfolioAnalytics() {
     fetcher
       .catch(err => setError(err.response?.data?.detail || err.message || 'Failed to load data'))
       .finally(() => setLoading(false))
-  }, [company, product, snapshot, currency, asOfDate, tab])
+  }, [company, product, snapshot, currency, asOfDate, tab, refreshKey])
 
   const loadingBar = (
     <div style={{ padding: '40px 28px', textAlign: 'center' }}>
@@ -93,10 +101,39 @@ export default function PortfolioAnalytics() {
     </div>
   )
 
+  // Show gear icon on BB, CL, Covenants tabs (the ones affected by facility params)
+  const showGear = ['borrowing-base', 'concentration-limits', 'covenants'].includes(tab)
+
   return (
     <div>
       {errorBanner}
-      <div style={{ padding: '20px 28px 40px' }}>
+
+      {/* Gear icon for facility params — positioned top-right of content area */}
+      {showGear && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 28px 0' }}>
+          <button
+            onClick={() => setShowParams(true)}
+            title="Facility Parameters"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', fontSize: 11, fontWeight: 500,
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm, 4px)', color: 'var(--text-muted)',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.target.style.borderColor = 'var(--accent-gold)'; e.target.style.color = 'var(--accent-gold)' }}
+            onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = 'var(--text-muted)' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Facility Params
+          </button>
+        </div>
+      )}
+
+      <div style={{ padding: '12px 28px 40px' }}>
         {/* Parent-managed tabs with loading state */}
         {!SELF_LOADING_TABS.includes(tab) && loading ? loadingBar : (
           <>
@@ -118,6 +155,17 @@ export default function PortfolioAnalytics() {
         {tab === 'payments' && <PaymentsTable />}
         {tab === 'bank-statements' && <BankStatementsView />}
       </div>
+
+      {/* Facility Params slide-out panel */}
+      {showParams && (
+        <FacilityParamsPanel
+          company={company}
+          product={product}
+          analysisType={analysisType}
+          onClose={() => setShowParams(false)}
+          onSave={handleParamsSaved}
+        />
+      )}
     </div>
   )
 }
