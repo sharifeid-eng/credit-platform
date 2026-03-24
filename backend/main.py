@@ -193,10 +193,14 @@ def get_date_range(company: str, product: str, snapshot: Optional[str] = None):
         raise HTTPException(status_code=400, detail=f"No {date_col} column found")
     df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
     df = df.dropna(subset=[date_col])
+    data_max = df[date_col].max().strftime('%Y-%m-%d')
+    snap_date = sel['date']
+    # Use snapshot date as upper bound if it's later than the data's max date
+    effective_max = max(data_max, snap_date) if snap_date else data_max
     return {
         'min_date':      df[date_col].min().strftime('%Y-%m-%d'),
-        'max_date':      df[date_col].max().strftime('%Y-%m-%d'),
-        'snapshot_date': sel['date'],
+        'max_date':      effective_max,
+        'snapshot_date': snap_date,
     }
 
 # ── Summary ───────────────────────────────────────────────────────────────────

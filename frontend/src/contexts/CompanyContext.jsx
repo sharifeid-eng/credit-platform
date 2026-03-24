@@ -69,8 +69,10 @@ export function CompanyProvider({ children }) {
   useEffect(() => {
     if (!product || !snapshot) return
     getDateRange(company, product, snapshot).then(dr => {
-      setDateRange({ min: dr.min_date ?? '', max: dr.max_date ?? '' })
-      setAsOfDate(dr.max_date ?? '')
+      const effectiveMax = dr.max_date ?? ''
+      setDateRange({ min: dr.min_date ?? '', max: effectiveMax })
+      // Default as-of date to snapshot date (tape extraction date), fall back to max deal date
+      setAsOfDate(dr.snapshot_date ?? effectiveMax)
       setSnapshotDate(dr.snapshot_date ?? '')
     }).catch(() => {
       setDateRange({ min: '', max: '' })
