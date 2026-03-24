@@ -40,7 +40,29 @@ from core.portfolio import (
     compute_klaim_concentration_limits,
     compute_klaim_covenants,
 )
-app = FastAPI(title="ACP Private Credit API")
+from core.database import engine, get_db
+from core.db_loader import has_db_data, load_from_db, get_facility_config as db_facility_config
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if engine:
+        try:
+            from sqlalchemy import text as sa_text
+            with engine.connect() as conn:
+                conn.execute(sa_text("SELECT 1"))
+            print("[Laith] Database connected.")
+        except Exception as e:
+            print(f"[Laith] Database connection failed: {e}. Running in tape-only mode.")
+    else:
+        print("[Laith] No DATABASE_URL configured. Running in tape-only mode.")
+    yield
+
+
+app = FastAPI(title="ACP Private Credit API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1108,30 +1130,44 @@ def _load_facility_params(company, product):
             return json.load(f)
     return {}
 
-def _portfolio_load(company, product, snapshot, as_of_date, currency):
-    """Load snapshot and prepare for portfolio computation. Supports SILQ and Klaim."""
+def _portfolio_load(company, product, snapshot, as_of_date, currency, db=None):
+    """Load data for portfolio computation. Tries DB first, falls back to tape.
+
+    When DB has invoices for this company/product, loads from database.
+    Otherwise loads from tape file (CSV/Excel) as before.
+    """
     config = load_config(company, product)
     analysis_type = config.get('analysis_type', '') if config else ''
-
-    snaps = get_snapshots(company, product)
-    if not snaps:
-        raise HTTPException(status_code=404, detail="No snapshots found")
-    sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
-
-    if analysis_type == 'silq':
-        df, _ = load_silq_snapshot(sel['filepath'])
-        if as_of_date:
-            df = filter_silq_by_date(df, as_of_date)
-    else:
-        df = load_snapshot(sel['filepath'])
-        if as_of_date:
-            df = filter_by_date(df, as_of_date)
-
     disp = currency or (config['currency'] if config else 'USD')
     mult = apply_multiplier(config, disp)
-    ref_date = as_of_date or sel['date']
 
-    facility_params = _load_facility_params(company, product)
+    # Try database first
+    if db and has_db_data(db, company, product):
+        df = load_from_db(db, company, product)
+        sel = {'date': datetime.now().strftime('%Y-%m-%d'), 'filename': 'database', 'source': 'database'}
+        ref_date = as_of_date or sel['date']
+        # Merge DB facility config with file-based params
+        facility_params = _load_facility_params(company, product)
+        facility_params.update(db_facility_config(db, company, product))
+    else:
+        # Fall back to tape file
+        snaps = get_snapshots(company, product)
+        if not snaps:
+            raise HTTPException(status_code=404, detail="No snapshots found")
+        sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
+
+        if analysis_type == 'silq':
+            df, _ = load_silq_snapshot(sel['filepath'])
+            if as_of_date:
+                df = filter_silq_by_date(df, as_of_date)
+        else:
+            df = load_snapshot(sel['filepath'])
+            if as_of_date:
+                df = filter_by_date(df, as_of_date)
+
+        ref_date = as_of_date or sel['date']
+        facility_params = _load_facility_params(company, product)
+
     if config and 'usd_rate' in config:
         facility_params.setdefault('usd_rate', config['usd_rate'])
 
@@ -1142,9 +1178,10 @@ def _portfolio_load(company, product, snapshot, as_of_date, currency):
 def get_portfolio_borrowing_base(company: str, product: str,
                                   snapshot: Optional[str] = None,
                                   as_of_date: Optional[str] = None,
-                                  currency: Optional[str] = None):
+                                  currency: Optional[str] = None,
+                                  db: Session = Depends(get_db)):
     df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
-        company, product, snapshot, as_of_date, currency)
+        company, product, snapshot, as_of_date, currency, db=db)
     if atype == 'silq':
         result = portfolio_borrowing_base(df, mult, ref_date, fp)
     else:
@@ -1156,9 +1193,10 @@ def get_portfolio_borrowing_base(company: str, product: str,
 def get_portfolio_concentration_limits(company: str, product: str,
                                         snapshot: Optional[str] = None,
                                         as_of_date: Optional[str] = None,
-                                        currency: Optional[str] = None):
+                                        currency: Optional[str] = None,
+                                        db: Session = Depends(get_db)):
     df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
-        company, product, snapshot, as_of_date, currency)
+        company, product, snapshot, as_of_date, currency, db=db)
     if atype == 'silq':
         result = portfolio_concentration_limits(df, mult, ref_date, fp)
     else:
@@ -1170,9 +1208,10 @@ def get_portfolio_concentration_limits(company: str, product: str,
 def get_portfolio_covenants(company: str, product: str,
                              snapshot: Optional[str] = None,
                              as_of_date: Optional[str] = None,
-                             currency: Optional[str] = None):
+                             currency: Optional[str] = None,
+                             db: Session = Depends(get_db)):
     df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
-        company, product, snapshot, as_of_date, currency)
+        company, product, snapshot, as_of_date, currency, db=db)
     if atype == 'silq':
         result = portfolio_covenants(df, mult, ref_date, fp)
     else:
@@ -1184,9 +1223,10 @@ def get_portfolio_covenants(company: str, product: str,
 def get_portfolio_flow(company: str, product: str,
                         snapshot: Optional[str] = None,
                         as_of_date: Optional[str] = None,
-                        currency: Optional[str] = None):
+                        currency: Optional[str] = None,
+                        db: Session = Depends(get_db)):
     df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
-        company, product, snapshot, as_of_date, currency)
+        company, product, snapshot, as_of_date, currency, db=db)
     result = compute_portfolio_flow(df, mult)
     return {**result, 'currency': disp, 'snapshot': sel['date']}
 

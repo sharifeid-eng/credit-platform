@@ -61,7 +61,7 @@ The platform allows analysts and investment committee members to:
 
 Both systems coexist on the same sidebar. A company can have both: historical tapes for trend analysis AND live API data for borrowing base monitoring. Tape snapshots also serve as a reconciliation source to validate API-fed data.
 
-**Current state:** Computation engine + dashboard are built and working. Currently reads from tape data as a stopgap. The database (Phase 2A) and integration API (Phase 2B) are needed to unlock the real-time, API-driven architecture.
+**Current state:** Computation engine + dashboard + PostgreSQL database are built and working. Portfolio endpoints try DB first, fall back to tape. The integration API (Phase 2B) is needed so portfolio companies can push data into the database.
 
 ### Phase 1 — Tape Analytics ✅ (current)
 - Manual file upload workflow (CSV/Excel loan tapes)
@@ -76,7 +76,7 @@ Portfolio Analytics is the real-time counterpart to Tape Analytics. Portfolio co
 **Status:**
 - ✅ **2C — Computation engine** (`core/portfolio.py`, 1139 lines). Borrowing base waterfall, concentration limits, covenants for SILQ + Klaim. Auto-dispatch via `config.analysis_type`. Currently reads from tape data as a stopgap for validation against compliance certs.
 - ✅ **2D — Dashboard wired to backend APIs**. All 3 portfolio tabs (Borrowing Base, Concentration Limits, Covenants) fetch live computed data from 6 backend endpoints. No more mock data.
-- **Not started — 2A: PostgreSQL database.** Schema needed: `organizations`, `invoices`, `payments`, `bank_statements`, `facility_config`. Replaces file-based storage for portfolio data.
+- ✅ **2A — PostgreSQL database.** 6 tables: `organizations`, `products`, `invoices`, `payments`, `bank_statements`, `facility_config`. SQLAlchemy 2.0 + Alembic migrations. DB-optional (tape fallback when no DATABASE_URL). Seed script populates from tape data (7,697 Klaim + 1,915 SILQ invoices).
 - **Not started — 2B: Integration API.** Inbound endpoints for portfolio companies to push data (`/api/integration/invoices`, `/payments`, `/bank-statements`). X-API-Key auth per organization. Bulk operations (up to 5,000 per request).
 - **Not started — 2.7: Feature gap pages.** Invoices page (eligible/ineligible split), Payments page (transaction ledger), Bank Statements page (cash verification + upload), Concentration breach drill-down, Covenant historical date selector.
 
@@ -89,7 +89,7 @@ Portfolio Analytics is the real-time counterpart to Tape Analytics. Portfolio co
 - Accounting reports upload (P&L, Balance Sheet PDFs from portfolio companies)
 -----
 ## Tech Stack
-- **Backend:** Python, FastAPI (`localhost:8000`), Pandas, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
+- **Backend:** Python, FastAPI (`localhost:8000`), Pandas, SQLAlchemy 2.0 + PostgreSQL, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
 - **Frontend:** React (Vite), Tailwind CSS, Recharts, React Router, Axios (`localhost:5173`)
 - **AI:** Anthropic API — portfolio commentary, per-tab insights, data chat, PDF integrity reports
 - **PDF Reports:** Playwright (headless Chrome) for dashboard screenshots + ReportLab for PDF composition
@@ -128,6 +128,9 @@ credit-platform/
 │   ├── validation.py       # Klaim single-tape data quality checks
 │   ├── validation_silq.py  # SILQ single-tape data quality checks
 │   ├── portfolio.py        # Portfolio analytics engine (BB, conc limits, covenants) — SILQ + Klaim
+│   ├── database.py         # SQLAlchemy engine + session factory (DB-optional)
+│   ├── models.py           # 6 ORM models (organizations, products, invoices, payments, bank_statements, facility_config)
+│   ├── db_loader.py        # DB → DataFrame bridge (maps to tape column names)
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── tests/
 │   ├── test_analysis_klaim.py  # Klaim unit tests
@@ -555,10 +558,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] SILQ Data Integrity tab — needs second tape for cross-tape consistency checks
 - [ ] Facility params input UI panel (currently no frontend for editing facility params)
 - [ ] Portfolio flow tab UI (backend endpoint exists, no frontend tab yet)
-**Phase 2A — Database (not started):**
-- [ ] PostgreSQL setup + schema (`organizations`, `invoices`, `payments`, `bank_statements`, `facility_config`)
-- [ ] Migration of existing CSV tape data into database (for validation)
-- [ ] JSONB metadata columns for company-specific fields (Klaim vs SILQ different schemas)
+**Phase 2A — Database (done):**
+- [x] PostgreSQL setup + schema (6 tables via Alembic migration)
+- [x] `core/database.py` — engine + session factory (DB-optional)
+- [x] `core/models.py` — SQLAlchemy ORM models with JSONB `extra_data` for company-specific fields
+- [x] `core/db_loader.py` — DB→DataFrame bridge (maps to tape column names for both Klaim and SILQ)
+- [x] `scripts/seed_db.py` — seeds tape data into DB (7,697 Klaim + 1,915 SILQ invoices)
+- [x] `backend/main.py` — `_portfolio_load()` tries DB first, falls back to tape
 **Phase 2B — Integration API (not started):**
 - [ ] Inbound API endpoints: `/api/integration/invoices` (CRUD + bulk), `/payments` (CRUD + bulk), `/bank-statements`
 - [ ] X-API-Key authentication per organization
@@ -604,7 +610,9 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - **Python:** 3.14.3, virtual environment at `credit-platform/venv/`
 - **Node:** v24
 - **Repo:** https://github.com/sharifeid-eng/credit-platform
-- **Required `.env`:** `ANTHROPIC_API_KEY=sk-ant-...` in project root — NEVER commit this file
+- **Required `.env`:** NEVER commit this file
+  - `ANTHROPIC_API_KEY=sk-ant-...` — AI features
+  - `DATABASE_URL=postgresql://laith:laith@localhost:5432/laith_credit` — Portfolio Analytics DB (optional; omit for tape-only mode)
 -----
 ## .env Safety Checklist (run if unsure)
 ```powershell
