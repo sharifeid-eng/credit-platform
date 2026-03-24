@@ -6,6 +6,9 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
     if (format === 'money') return `${currency} ${(v / 1_000_000).toFixed(1)}M`
+    if (format === 'ratio') return typeof v === 'number' ? v.toFixed(2) : String(v)
+    if (format === 'weeks') return `${Math.round(v)} weeks`
+    if (format === 'days') return `${Math.round(v)} days`
     return String(v)
   }
 

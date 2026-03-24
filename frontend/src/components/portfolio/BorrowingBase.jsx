@@ -1,10 +1,10 @@
 import KpiCard from '../KpiCard'
 import WaterfallTable from './WaterfallTable'
-import { MOCK_BORROWING_BASE } from './mockData'
 
-export default function BorrowingBase() {
-  const d = MOCK_BORROWING_BASE
-  const fmt = (v) => `AED ${(v / 1_000_000).toFixed(1)}M`
+export default function BorrowingBase({ data }) {
+  const d = data
+  const ccy = data.currency || 'AED'
+  const fmt = (v) => `${ccy} ${(v / 1_000_000).toFixed(1)}M`
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -24,7 +24,7 @@ export default function BorrowingBase() {
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
           Step-by-step calculation from gross receivables to borrowing base
         </div>
-        <WaterfallTable data={d.waterfall} currency="AED" />
+        <WaterfallTable data={d.waterfall} currency={ccy} />
       </div>
 
       {/* Two-column: Advance Rates + Facility Capacity */}
@@ -37,10 +37,10 @@ export default function BorrowingBase() {
           padding: '20px',
         }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-            Advance Rates by Region
+            Advance Rates
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Maximum advance rates per region
+            Maximum advance rates by segment
           </div>
 
           {/* Table header */}
@@ -49,7 +49,7 @@ export default function BorrowingBase() {
             padding: '8px 0', borderBottom: '1px solid var(--border)',
             fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)',
           }}>
-            <div>Region</div>
+            <div>{d.advance_rates?.[0]?.region ? 'Region' : 'Product'}</div>
             <div style={{ textAlign: 'right' }}>Rate</div>
             <div style={{ textAlign: 'right' }}>Eligible</div>
             <div style={{ textAlign: 'right' }}>Advanceable</div>
@@ -67,13 +67,13 @@ export default function BorrowingBase() {
                   display: 'inline-block', width: 8, height: 8, borderRadius: '50%', marginRight: 8,
                   background: ['var(--gold)', 'var(--accent-teal)', 'var(--accent-blue)'][i],
                 }} />
-                {r.region}
+                {r.region || r.product}
               </div>
               <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--accent-teal)', fontWeight: 600 }}>
-                {(r.rate * 100).toFixed(0)}%
+                {((r.rate || r.advance_rate || 0) * 100).toFixed(0)}%
               </div>
               <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                {fmt(r.eligible_ar)}
+                {fmt(r.eligible_ar ?? r.eligible ?? 0)}
               </div>
               <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                 {fmt(r.advanceable)}

@@ -1,37 +1,75 @@
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { useCompany } from '../contexts/CompanyContext'
+import { getPortfolioBorrowingBase, getPortfolioConcentrationLimits, getPortfolioCovenants } from '../services/api'
 import BorrowingBase from '../components/portfolio/BorrowingBase'
 import ConcentrationLimits from '../components/portfolio/ConcentrationLimits'
 import Covenants from '../components/portfolio/Covenants'
 
 export default function PortfolioAnalytics() {
   const { tab } = useParams()
+  const { company, product, snapshot, currency, asOfDate } = useCompany()
+
+  const [bbData, setBbData] = useState(null)
+  const [clData, setClData] = useState(null)
+  const [covData, setCovData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!company || !product || !snapshot) return
+    setLoading(true)
+    setError(null)
+
+    const aod = asOfDate || undefined
+    const fetcher =
+      tab === 'borrowing-base'        ? getPortfolioBorrowingBase(company, product, snapshot, currency, aod).then(setBbData) :
+      tab === 'concentration-limits'  ? getPortfolioConcentrationLimits(company, product, snapshot, currency, aod).then(setClData) :
+      tab === 'covenants'             ? getPortfolioCovenants(company, product, snapshot, currency, aod).then(setCovData) :
+      Promise.resolve()
+
+    fetcher
+      .catch(err => setError(err.response?.data?.detail || err.message || 'Failed to load data'))
+      .finally(() => setLoading(false))
+  }, [company, product, snapshot, currency, asOfDate, tab])
+
+  const loadingBar = (
+    <div style={{ padding: '40px 28px', textAlign: 'center' }}>
+      <div style={{
+        width: 200, height: 3, margin: '0 auto 12px', borderRadius: 2,
+        background: 'var(--border)', overflow: 'hidden',
+      }}>
+        <div style={{
+          width: '40%', height: '100%', background: 'var(--accent-gold)',
+          borderRadius: 2, animation: 'slideRight 1.2s ease-in-out infinite',
+        }} />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading portfolio data...</div>
+      <style>{`@keyframes slideRight { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }`}</style>
+    </div>
+  )
+
+  const errorBanner = error && (
+    <div style={{
+      margin: '16px 28px 0', padding: '10px 16px',
+      background: 'rgba(240, 96, 96, 0.08)', border: '1px solid rgba(240, 96, 96, 0.2)',
+      borderRadius: 'var(--radius-md)', fontSize: 11, color: 'var(--accent-red)',
+    }}>
+      {error}
+    </div>
+  )
 
   return (
     <div>
-      {/* Sample data banner */}
-      <div style={{
-        margin: '16px 28px 0',
-        padding: '10px 16px',
-        background: 'rgba(91, 141, 239, 0.08)',
-        border: '1px solid rgba(91, 141, 239, 0.2)',
-        borderRadius: 'var(--radius-md)',
-        fontSize: 11,
-        color: 'var(--accent-blue)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-      }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-        </svg>
-        Showing sample data — connect a data source for live portfolio analytics.
-      </div>
-
-      {/* Tab content */}
+      {errorBanner}
       <div style={{ padding: '20px 28px 40px' }}>
-        {tab === 'borrowing-base' && <BorrowingBase />}
-        {tab === 'concentration-limits' && <ConcentrationLimits />}
-        {tab === 'covenants' && <Covenants />}
+        {loading ? loadingBar : (
+          <>
+            {tab === 'borrowing-base' && bbData && <BorrowingBase data={bbData} />}
+            {tab === 'concentration-limits' && clData && <ConcentrationLimits data={clData} />}
+            {tab === 'covenants' && covData && <Covenants data={covData} />}
+          </>
+        )}
       </div>
     </div>
   )

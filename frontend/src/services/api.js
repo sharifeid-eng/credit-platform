@@ -105,6 +105,20 @@ export const generatePDFReport = (co, prod, snap, cur) =>
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   });
 
+// ── Portfolio Analytics ─────────────────────────────────────────────────────
+export const getPortfolioBorrowingBase      = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/borrowing-base`,      { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getPortfolioConcentrationLimits = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/concentration-limits`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getPortfolioCovenants          = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/covenants`,           { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getPortfolioFlow               = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/flow`,                { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getFacilityParams              = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/facility-params`).then(r => r.data);
+export const saveFacilityParams             = (co, prod, params) =>
+  api.post(`/companies/${co}/products/${prod}/portfolio/facility-params`, params).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

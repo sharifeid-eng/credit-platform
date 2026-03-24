@@ -1,11 +1,9 @@
 import LimitCard from './LimitCard'
-import { MOCK_CONCENTRATION_LIMITS } from './mockData'
 
-export default function ConcentrationLimits() {
-  const limits = MOCK_CONCENTRATION_LIMITS
-
-  const compliantCount = limits.filter(l => l.compliant).length
-  const breachCount = limits.length - compliantCount
+export default function ConcentrationLimits({ data }) {
+  const limits = data.limits || []
+  const compliantCount = data.compliant_count ?? limits.filter(l => l.compliant).length
+  const breachCount = data.breach_count ?? (limits.length - compliantCount)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
