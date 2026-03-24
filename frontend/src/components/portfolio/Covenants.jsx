@@ -1,6 +1,6 @@
 import CovenantCard from './CovenantCard'
 
-export default function Covenants({ data }) {
+export default function Covenants({ data, availableDates, selectedDate, onDateChange }) {
   const covenants = data.covenants || []
   const compliantCount = data.compliant_count ?? covenants.filter(c => c.compliant).length
   const breachCount = data.breach_count ?? (covenants.length - compliantCount)
@@ -9,7 +9,7 @@ export default function Covenants({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Header with date */}
+      {/* Header with date selector */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '12px 20px',
@@ -33,7 +33,30 @@ export default function Covenants({ data }) {
           </div>
         </div>
 
-        {testDate && (
+        {/* Date selector or static date */}
+        {availableDates && availableDates.length > 1 ? (
+          <select
+            value={selectedDate || testDate}
+            onChange={e => onDateChange?.(e.target.value)}
+            style={{
+              padding: '5px 12px',
+              background: 'var(--bg-base)',
+              border: '1px solid var(--border)',
+              borderRadius: 7,
+              fontSize: 11,
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-mono)',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            {availableDates.map(d => (
+              <option key={d} value={d} style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+                {d}
+              </option>
+            ))}
+          </select>
+        ) : testDate ? (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '5px 12px',
@@ -49,7 +72,7 @@ export default function Covenants({ data }) {
             </svg>
             {testDate}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Covenant cards */}

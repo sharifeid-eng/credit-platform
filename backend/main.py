@@ -1256,6 +1256,188 @@ def save_facility_params(company: str, product: str, request: dict):
     return {'saved': True, 'params': params}
 
 
+# ── Portfolio Dashboard Data endpoints ───────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/portfolio/invoices")
+def get_portfolio_invoices(company: str, product: str,
+                           page: int = 1, per_page: int = 50,
+                           status: Optional[str] = None,
+                           eligible: Optional[str] = None,
+                           db: Session = Depends(get_db)):
+    """List invoices for dashboard view with eligibility info."""
+    from core.models import Invoice, Payment, Product, Organization
+    from sqlalchemy import func as sqfunc
+
+    if db is None:
+        return {'invoices': [], 'total': 0, 'page': page, 'per_page': per_page}
+
+    # Find product
+    prod = (db.query(Product).join(Organization)
+            .filter(Organization.name == company, Product.name == product).first())
+    if not prod:
+        return {'invoices': [], 'total': 0, 'page': page, 'per_page': per_page}
+
+    q = db.query(Invoice).filter(Invoice.product_id == prod.id)
+    if status:
+        q = q.filter(Invoice.status == status.lower())
+
+    total = q.count()
+    rows = q.order_by(Invoice.invoice_date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    invoices = []
+    today = datetime.now().date()
+    for inv in rows:
+        # Compute collected amount
+        collected = db.query(sqfunc.coalesce(sqfunc.sum(Payment.payment_amount), 0)).filter(
+            Payment.invoice_id == inv.id).scalar()
+
+        # Simple eligibility: not past due >90 days, status not denied
+        days_overdue = (today - inv.due_date).days if inv.due_date and inv.due_date < today else 0
+        is_eligible = inv.status not in ('paid', 'denied') and days_overdue <= 90
+        ineligible_reason = None
+        if not is_eligible:
+            if inv.status in ('paid', 'denied'):
+                ineligible_reason = f'Status: {inv.status}'
+            elif days_overdue > 90:
+                ineligible_reason = f'Past due: {days_overdue} days'
+
+        invoices.append({
+            'id': str(inv.id),
+            'invoice_number': inv.invoice_number,
+            'customer_name': inv.customer_name,
+            'payer_name': inv.payer_name,
+            'amount_due': float(inv.amount_due),
+            'collected': float(collected),
+            'currency': inv.currency,
+            'status': inv.status,
+            'invoice_date': str(inv.invoice_date) if inv.invoice_date else None,
+            'due_date': str(inv.due_date) if inv.due_date else None,
+            'days_overdue': days_overdue,
+            'eligible': is_eligible,
+            'ineligible_reason': ineligible_reason,
+        })
+
+    # Filter by eligibility if requested
+    if eligible == 'true':
+        invoices = [i for i in invoices if i['eligible']]
+        total = len(invoices)
+    elif eligible == 'false':
+        invoices = [i for i in invoices if not i['eligible']]
+        total = len(invoices)
+
+    return {'invoices': invoices, 'total': total, 'page': page, 'per_page': per_page}
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/payments")
+def get_portfolio_payments(company: str, product: str,
+                           page: int = 1, per_page: int = 50,
+                           payment_type: Optional[str] = None,
+                           db: Session = Depends(get_db)):
+    """List payments for dashboard view."""
+    from core.models import Invoice, Payment, Product, Organization
+
+    if db is None:
+        return {'payments': [], 'total': 0, 'page': page, 'per_page': per_page}
+
+    prod = (db.query(Product).join(Organization)
+            .filter(Organization.name == company, Product.name == product).first())
+    if not prod:
+        return {'payments': [], 'total': 0, 'page': page, 'per_page': per_page}
+
+    q = (db.query(Payment, Invoice.invoice_number)
+         .join(Invoice, Payment.invoice_id == Invoice.id)
+         .filter(Invoice.product_id == prod.id))
+    if payment_type:
+        q = q.filter(Payment.payment_type == payment_type.upper())
+
+    total = q.count()
+    rows = q.order_by(Payment.payment_date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    payments = []
+    for pay, inv_number in rows:
+        payments.append({
+            'id': str(pay.id),
+            'invoice_id': str(pay.invoice_id),
+            'invoice_number': inv_number,
+            'payment_type': pay.payment_type,
+            'payment_amount': float(pay.payment_amount),
+            'currency': pay.currency,
+            'payment_date': str(pay.payment_date) if pay.payment_date else None,
+            'transaction_id': pay.transaction_id,
+        })
+
+    return {'payments': payments, 'total': total, 'page': page, 'per_page': per_page}
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/bank-statements")
+def get_portfolio_bank_statements(company: str, product: str,
+                                   page: int = 1, per_page: int = 50,
+                                   db: Session = Depends(get_db)):
+    """List bank statements for dashboard view."""
+    from core.models import BankStatement, Organization
+
+    if db is None:
+        return {'statements': [], 'total': 0, 'page': page, 'per_page': per_page,
+                'summary': {'cash_balance': 0, 'collection_balance': 0, 'last_upload': None}}
+
+    org = db.query(Organization).filter_by(name=company).first()
+    if not org:
+        return {'statements': [], 'total': 0, 'page': page, 'per_page': per_page,
+                'summary': {'cash_balance': 0, 'collection_balance': 0, 'last_upload': None}}
+
+    q = db.query(BankStatement).filter(BankStatement.org_id == org.id)
+    total = q.count()
+    rows = q.order_by(BankStatement.statement_date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    # Compute summary from latest statements per account type
+    from sqlalchemy import func as sqfunc
+    cash = (db.query(sqfunc.coalesce(BankStatement.balance, 0))
+            .filter(BankStatement.org_id == org.id, BankStatement.account_type == 'cash-account')
+            .order_by(BankStatement.statement_date.desc()).first())
+    collection = (db.query(sqfunc.coalesce(BankStatement.balance, 0))
+                  .filter(BankStatement.org_id == org.id, BankStatement.account_type == 'collection')
+                  .order_by(BankStatement.statement_date.desc()).first())
+    last = (db.query(sqfunc.max(BankStatement.statement_date))
+            .filter(BankStatement.org_id == org.id).scalar())
+
+    statements = [{
+        'id': str(bs.id),
+        'balance': float(bs.balance),
+        'currency': bs.currency,
+        'account_type': bs.account_type,
+        'statement_date': str(bs.statement_date),
+        'created_at': str(bs.created_at) if bs.created_at else None,
+    } for bs in rows]
+
+    return {
+        'statements': statements,
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'summary': {
+            'cash_balance': float(cash[0]) if cash else 0,
+            'collection_balance': float(collection[0]) if collection else 0,
+            'last_upload': str(last) if last else None,
+        },
+    }
+
+
+@app.get("/companies/{company}/products/{product}/portfolio/covenant-dates")
+def get_portfolio_covenant_dates(company: str, product: str,
+                                  db: Session = Depends(get_db)):
+    """Return available covenant test dates (snapshot dates)."""
+    snaps = get_snapshots(company, product)
+    dates = [s['date'] for s in snaps]
+    # Also add today if DB has data
+    if db:
+        from core.db_loader import has_db_data
+        if has_db_data(db, company, product):
+            today = datetime.now().strftime('%Y-%m-%d')
+            if today not in dates:
+                dates.insert(0, today)
+    return {'dates': sorted(dates, reverse=True)}
+
+
 # ── PDF Report Generation ─────────────────────────────────────────────────────
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

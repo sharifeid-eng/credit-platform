@@ -119,6 +119,16 @@ export const getFacilityParams              = (co, prod) =>
 export const saveFacilityParams             = (co, prod, params) =>
   api.post(`/companies/${co}/products/${prod}/portfolio/facility-params`, params).then(r => r.data);
 
+// ── Portfolio Dashboard Data ────────────────────────────────────────────────
+export const getPortfolioInvoices          = (co, prod, page = 1, perPage = 50, filters = {}) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/invoices`, { params: { page, per_page: perPage, ...filters } }).then(r => r.data);
+export const getPortfolioPayments          = (co, prod, page = 1, perPage = 50, filters = {}) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/payments`, { params: { page, per_page: perPage, ...filters } }).then(r => r.data);
+export const getPortfolioBankStatements    = (co, prod, page = 1, perPage = 50) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/bank-statements`, { params: { page, per_page: perPage } }).then(r => r.data);
+export const getPortfolioCovenantDates     = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/portfolio/covenant-dates`).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

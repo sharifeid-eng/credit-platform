@@ -21,6 +21,9 @@ const PORTFOLIO_TABS = [
   { slug: 'borrowing-base',       label: 'Borrowing Base' },
   { slug: 'concentration-limits', label: 'Concentration Limits' },
   { slug: 'covenants',            label: 'Covenants' },
+  { slug: 'invoices',             label: 'Invoices' },
+  { slug: 'payments',             label: 'Payments' },
+  { slug: 'bank-statements',      label: 'Bank Statements' },
 ]
 
 export default function Sidebar() {

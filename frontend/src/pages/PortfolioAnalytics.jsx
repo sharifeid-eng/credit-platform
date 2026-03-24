@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useCompany } from '../contexts/CompanyContext'
-import { getPortfolioBorrowingBase, getPortfolioConcentrationLimits, getPortfolioCovenants } from '../services/api'
+import {
+  getPortfolioBorrowingBase, getPortfolioConcentrationLimits, getPortfolioCovenants,
+  getPortfolioCovenantDates,
+} from '../services/api'
 import BorrowingBase from '../components/portfolio/BorrowingBase'
 import ConcentrationLimits from '../components/portfolio/ConcentrationLimits'
 import Covenants from '../components/portfolio/Covenants'
+import InvoicesTable from '../components/portfolio/InvoicesTable'
+import PaymentsTable from '../components/portfolio/PaymentsTable'
+import BankStatementsView from '../components/portfolio/BankStatementsView'
+
+// Tabs that manage their own data fetching (no parent loading state needed)
+const SELF_LOADING_TABS = ['invoices', 'payments', 'bank-statements']
 
 export default function PortfolioAnalytics() {
   const { tab } = useParams()
@@ -13,19 +22,44 @@ export default function PortfolioAnalytics() {
   const [bbData, setBbData] = useState(null)
   const [clData, setClData] = useState(null)
   const [covData, setCovData] = useState(null)
+  const [covDates, setCovDates] = useState([])
+  const [covSelectedDate, setCovSelectedDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  // Fetch covenant dates when on covenants tab
+  useEffect(() => {
+    if (tab === 'covenants' && company && product) {
+      getPortfolioCovenantDates(company, product)
+        .then(d => setCovDates(d.dates || []))
+        .catch(() => setCovDates([]))
+    }
+  }, [tab, company, product])
+
+  // Re-fetch covenants when selected date changes
+  useEffect(() => {
+    if (tab === 'covenants' && covSelectedDate && company && product && snapshot) {
+      setLoading(true)
+      getPortfolioCovenants(company, product, snapshot, currency, covSelectedDate)
+        .then(setCovData)
+        .catch(err => setError(err.response?.data?.detail || err.message))
+        .finally(() => setLoading(false))
+    }
+  }, [covSelectedDate])
+
+  // Main data fetch for parent-managed tabs
   useEffect(() => {
     if (!company || !product || !snapshot) return
+    if (SELF_LOADING_TABS.includes(tab)) return  // These tabs fetch their own data
+
     setLoading(true)
     setError(null)
 
     const aod = asOfDate || undefined
     const fetcher =
-      tab === 'borrowing-base'        ? getPortfolioBorrowingBase(company, product, snapshot, currency, aod).then(setBbData) :
-      tab === 'concentration-limits'  ? getPortfolioConcentrationLimits(company, product, snapshot, currency, aod).then(setClData) :
-      tab === 'covenants'             ? getPortfolioCovenants(company, product, snapshot, currency, aod).then(setCovData) :
+      tab === 'borrowing-base'       ? getPortfolioBorrowingBase(company, product, snapshot, currency, aod).then(setBbData) :
+      tab === 'concentration-limits' ? getPortfolioConcentrationLimits(company, product, snapshot, currency, aod).then(setClData) :
+      tab === 'covenants'            ? getPortfolioCovenants(company, product, snapshot, currency, aod).then(setCovData) :
       Promise.resolve()
 
     fetcher
@@ -63,13 +97,26 @@ export default function PortfolioAnalytics() {
     <div>
       {errorBanner}
       <div style={{ padding: '20px 28px 40px' }}>
-        {loading ? loadingBar : (
+        {/* Parent-managed tabs with loading state */}
+        {!SELF_LOADING_TABS.includes(tab) && loading ? loadingBar : (
           <>
             {tab === 'borrowing-base' && bbData && <BorrowingBase data={bbData} />}
             {tab === 'concentration-limits' && clData && <ConcentrationLimits data={clData} />}
-            {tab === 'covenants' && covData && <Covenants data={covData} />}
+            {tab === 'covenants' && covData && (
+              <Covenants
+                data={covData}
+                availableDates={covDates}
+                selectedDate={covSelectedDate}
+                onDateChange={setCovSelectedDate}
+              />
+            )}
           </>
         )}
+
+        {/* Self-loading tabs */}
+        {tab === 'invoices' && <InvoicesTable />}
+        {tab === 'payments' && <PaymentsTable />}
+        {tab === 'bank-statements' && <BankStatementsView />}
       </div>
     </div>
   )
