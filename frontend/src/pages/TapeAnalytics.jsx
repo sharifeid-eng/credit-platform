@@ -40,6 +40,7 @@ import SilqCohortTable         from '../components/charts/silq/SilqCohortTable'
 import YieldMarginsChart       from '../components/charts/silq/YieldMarginsChart'
 import TenureAnalysisChart     from '../components/charts/silq/TenureAnalysisChart'
 import SilqCovenantsChart      from '../components/charts/silq/SilqCovenantsChart'
+import EjariDashboard          from './EjariDashboard'
 
 import { TAPE_TABS } from '../components/Sidebar'
 
@@ -62,6 +63,15 @@ export default function TapeAnalytics() {
   const tabs = tapeTabs || TAPE_TABS
   const slugToLabel = Object.fromEntries(tabs.map(t => [t.slug, t.label]))
   const activeTab = slugToLabel[tab] || 'Overview'
+
+  // Ejari: render read-only summary dashboard instead of normal tabs
+  if (analysisType === 'ejari_summary') {
+    return (
+      <div style={{ padding: '16px 28px' }}>
+        <EjariDashboard />
+      </div>
+    )
+  }
 
   return (
     <div>

@@ -30,6 +30,7 @@ from core.migration import compute_roll_rates
 from core.validation import validate_tape
 from core.consistency import run_consistency_check
 from core.reporter import generate_ai_analysis, save_pdf_report
+from core.analysis_ejari import parse_ejari_workbook
 from core.analysis_silq import (
     compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
@@ -229,6 +230,14 @@ def get_summary(company: str, product: str,
                 as_of_date: Optional[str] = None,
                 currency: Optional[str] = None):
     at = _get_analysis_type(company, product)
+    if at == 'ejari_summary':
+        return {'company': company, 'product': product, 'display_currency': 'USD',
+                'total_deals': 0, 'total_purchase_value': 0, 'total_collected': 0,
+                'total_denied': 0, 'total_pending': 0, 'total_expected': 0,
+                'collection_rate': 0, 'denial_rate': 0, 'pending_rate': 0,
+                'active_deals': 0, 'completed_deals': 0, 'avg_discount': 0,
+                'dso_available': False, 'hhi_group': 0, 'top_1_group_pct': 0,
+                'analysis_type': 'ejari_summary'}
     if at == 'silq':
         df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
@@ -678,6 +687,19 @@ def get_hhi_timeseries(company: str, product: str, currency: Optional[str] = Non
         'trend': trend,
         'warning': warning,
     }
+
+# ── Ejari summary endpoint ────────────────────────────────────────────────────
+
+_ejari_cache = {}
+
+@app.get("/companies/{company}/products/{product}/ejari-summary")
+def get_ejari_summary(company: str, product: str, snapshot: Optional[str] = None):
+    """Return parsed Ejari ODS workbook as structured JSON (read-only summary)."""
+    sel = _resolve_snapshot(company, product, snapshot)
+    filepath = sel['filepath']
+    if filepath not in _ejari_cache:
+        _ejari_cache[filepath] = parse_ejari_workbook(filepath)
+    return _ejari_cache[filepath]
 
 # ── SILQ chart endpoints ─────────────────────────────────────────────────────
 

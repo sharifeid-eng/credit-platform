@@ -27,7 +27,7 @@ def get_snapshots(company, product):
     snapshots = []
     
     for file in os.listdir(product_path):
-        if file.endswith('.csv') or file.endswith('.xlsx'):
+        if file.endswith('.csv') or file.endswith('.xlsx') or file.endswith('.ods'):
             filepath = os.path.join(product_path, file)
             snapshots.append({
                 'filename': file,

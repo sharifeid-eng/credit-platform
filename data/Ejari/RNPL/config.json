@@ -1,0 +1,11 @@
+{
+  "currency": "USD",
+  "description": "Rent Now Pay Later — portfolio summary analysis (read-only)",
+  "company": "Ejari",
+  "product": "RNPL",
+  "usd_rate": 1.0,
+  "analysis_type": "ejari_summary",
+  "tabs": [
+    { "slug": "overview", "label": "Overview" }
+  ]
+}
