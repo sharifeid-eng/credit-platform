@@ -28,8 +28,9 @@ The platform allows analysts and investment committee members to:
 **Current portfolio companies:**
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
 - **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (2 tapes: Jan 2026, Feb 2026). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests. Feb 2026 tape introduced product renames: RBF (Exclusive) → RCL (Revolving Credit Line), RBF (Non-Exclusive) → RBF. Loader handles both old and new sheet/product names.
-**Asset classes:** Receivables (insurance claims factoring) and short-term consumer/POS loans.
-**Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`.
+- **Ejari** — Rent Now Pay Later (RNPL), KSA. Data in USD. **Read-only summary** — no raw loan tape, only a pre-computed ODS workbook with 13 sheets of analysis. Rendered as a dedicated dashboard (`EjariDashboard.jsx`) without live computation. Parser: `core/analysis_ejari.py`. Config: `analysis_type: "ejari_summary"`. Live dataset: `data/Ejari/RNPL/`
+**Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, and rent payment financing (RNPL).
+**Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook).
 **Data notes:**
 - **Tapes available:** Sep 2025 (25 cols), Dec 2025 (xlsx), Feb 2026 (25 cols), Mar 2026 (60 cols — latest)
 - Sep 2025 tape has `Expected IRR` and `Actual IRR` columns; Dec 2025 and Feb 2026 do not
@@ -102,6 +103,7 @@ credit-platform/
 │   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (5-level hierarchy, metric dictionary)
 │   ├── analysis.py         # All pure Klaim data computation functions (no I/O) — 40+ compute functions
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
+│   ├── analysis_ejari.py   # Ejari ODS workbook parser (read-only summary, 12 sections)
 │   ├── database.py         # SQLAlchemy 2.0 engine/session setup (DB-optional mode)
 │   ├── db_loader.py        # DB → tape-compatible DataFrame bridge (Klaim + SILQ mappers)
 │   ├── loader.py           # File discovery, snapshot loading
@@ -132,7 +134,9 @@ credit-platform/
 │   │   │   ├── TapeAnalytics.jsx    # 18-tab tape dashboard (extracted from old Company.jsx)
 │   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
 │   │   │   ├── Framework.jsx        # Analysis Framework page — markdown renderer with sticky TOC
-│   │   │   └── Methodology.jsx      # Definitions, formulas, rationale for all analytics
+│   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
+│   │   │   ├── Framework.jsx       # Analysis Framework page (/framework) — analytical philosophy
+│   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   ├── components/
 │   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
 │   │   │   ├── KpiCard.jsx          # Framer Motion stagger + hover effects
@@ -264,6 +268,7 @@ Key columns in loan tape files:
 |`POST /companies/{co}/products/{p}/generate-report`          |Generate PDF report (streams bytes) |
 |`GET /fx-rates`                                              |Foreign exchange rates              |
 |`GET /companies/{co}/products/{p}/charts/silq/{chart_name}`  |Dynamic SILQ chart routing          |
+|`GET /companies/{co}/products/{p}/ejari-summary`             |Parsed Ejari ODS workbook (12 sections, cached)|
 |`GET /companies/{co}/products/{p}/charts/par`                |PAR 30+/60+/90+ (Portfolio at Risk)  |
 |`GET /companies/{co}/products/{p}/charts/dtfc`               |Days to First Cash (leading indicator)|
 |`GET /companies/{co}/products/{p}/charts/cohort-loss-waterfall`|Cohort loss waterfall (per-vintage)  |
@@ -403,7 +408,7 @@ Each product has a `config.json` with its reported currency. Frontend shows togg
 -----
 ## Dashboard Customization Philosophy
 Each company/product has its own configured dashboard. The platform shares a common shell but specific views, metrics, and AI prompts are driven by asset class and available columns. Onboarding a new company requires designing the right views for that asset class.
-**Current implementation:** Klaim (healthcare receivables) and SILQ (POS lending) both onboarded. SILQ has a dedicated analysis module (`core/analysis_silq.py`) and custom dashboard tabs configured via `config.json`. The `analysisType` field in config determines which chart components render.
+**Current implementation:** Klaim (healthcare receivables), SILQ (POS lending), and Ejari (RNPL read-only summary) all onboarded. SILQ has a dedicated analysis module (`core/analysis_silq.py`) and custom dashboard tabs configured via `config.json`. Ejari uses `analysis_type: "ejari_summary"` to render a dedicated read-only dashboard (`EjariDashboard.jsx`) that parses an ODS workbook instead of running live computations. The `analysisType` field in config determines which chart components render.
 -----
 ## Key Architectural Decisions
 - **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.
@@ -460,6 +465,8 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Underwriting drift** — `compute_underwriting_drift()` compares per-vintage metrics (avg deal size, discount, collection rate) against historical norms (rolling mean of prior vintages). Flags vintages where metrics deviate beyond 1 standard deviation.
 - **Seasonality** — `compute_seasonality()` groups deployment by calendar month across years for YoY comparison. Computes seasonal index (month average / overall average) to identify seasonal patterns in origination.
 - **Methodology log** — `compute_methodology_log()` documents all data corrections, column availability checks, and data quality decisions applied during analysis. Provides audit trail for IC-level transparency.
+- **Ejari read-only summary pattern** — When `analysis_type` is `"ejari_summary"`, the platform bypasses all tape loading and computation. The summary endpoint returns a stub response, and TapeAnalytics renders `EjariDashboard.jsx` instead of the normal tab system. The `parse_ejari_workbook()` function in `core/analysis_ejari.py` reads the ODS file once (cached per session), extracting 12 structured sections. This pattern can be reused for any future company that provides pre-computed analysis instead of raw tapes.
+- **ODS file support** — `core/loader.py` `get_snapshots()` now accepts `.ods` files alongside `.csv` and `.xlsx`.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -621,6 +628,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Sheet names: `BNPL+RBF_NE` → `BNPL + RBF`, `RBF_LT` → `RCL_LT`
   - Loader handles both old and new naming conventions seamlessly
   - Portfolio commentary from tape displayed in Overview tab
+- ✅ **Ejari RNPL onboarded (read-only summary):**
+  - Pre-computed ODS workbook with 13 sheets — no raw loan tape
+  - `analysis_type: "ejari_summary"` bypasses normal tape loading, renders dedicated dashboard
+  - Parser (`core/analysis_ejari.py`) extracts 12 structured sections from ODS
+  - Dashboard (`EjariDashboard.jsx`) renders: Portfolio Overview (KPIs + DPD), Monthly Cohorts, Cohort Loss Waterfall, Roll Rates, Historical Performance, Collections by Month/Origination, Segment Analysis (6 dimensions), Credit Quality Trends, Najiz & Legal, Write-offs & Fraud, Data Notes
+  - Section navigation pills for quick jump between sections
+  - Loader updated to support `.ods` file extension
+  - Cached parsing — ODS parsed once per session
 - ✅ **Unit test coverage complete:**
   - 120 tests total (61 Klaim + 59 SILQ), all passing
   - Klaim: 23 test classes covering all 28 `core/analysis.py` functions
