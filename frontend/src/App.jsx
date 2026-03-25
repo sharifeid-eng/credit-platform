@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
+import Framework from './pages/Framework';
 import CompanyLayout from './layouts/CompanyLayout';
 import TapeAnalytics from './pages/TapeAnalytics';
 import PortfolioAnalytics from './pages/PortfolioAnalytics';
@@ -18,6 +19,7 @@ export default function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/framework" element={<Framework />} />
 
         {/* Company routes with sidebar layout */}
         <Route path="/company/:companyName/:product" element={<CompanyLayout />}>

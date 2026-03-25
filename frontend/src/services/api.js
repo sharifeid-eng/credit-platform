@@ -5,6 +5,9 @@ const api = axios.create({ baseURL: API_BASE, headers: { 'Content-Type': 'applic
 
 export default api;
 
+// ── Framework ────────────────────────────────────────────────────────────────
+export const getFramework     = () => api.get('/framework').then(r => r.data.content);
+
 // ── Core ──────────────────────────────────────────────────────────────────────
 export const getCompanies     = () => api.get('/companies').then(r => r.data);
 export const getProducts      = (co) => api.get(`/companies/${co}/products`).then(r => r.data);
@@ -34,6 +37,34 @@ export const getTabInsight       = (co, prod, snap, cur, tab, asOf) =>
 
 export const postChat            = (co, prod, snap, cur, question, history = []) =>
   api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data.answer);
+
+// ── PAR & DTFC ──────────────────────────────────────────────────────────────
+export const getParChart              = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/par`,               { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getDtfcChart             = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/dtfc`,              { params: p(snap, cur, asOf) }).then(r => r.data);
+
+// ── New analytical endpoints ────────────────────────────────────────────────
+export const getCohortLossWaterfall   = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/cohort-loss-waterfall`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getRecoveryAnalysis      = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/recovery-analysis`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getVintageLossCurves     = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/vintage-loss-curves`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getUnderwritingDrift     = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/underwriting-drift`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getSegmentAnalysis       = (co, prod, snap, cur, asOf, segBy = 'product') =>
+  api.get(`/companies/${co}/products/${prod}/charts/segment-analysis`, { params: { ...p(snap, cur, asOf), segment_by: segBy } }).then(r => r.data);
+export const getCollectionsTiming     = (co, prod, snap, cur, asOf, view = 'origination_month') =>
+  api.get(`/companies/${co}/products/${prod}/charts/collections-timing`, { params: { ...p(snap, cur, asOf), view } }).then(r => r.data);
+export const getSeasonality           = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/seasonality`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getLossCategorization    = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/loss-categorization`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getMethodologyLog        = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/methodology-log`, { params: { snapshot: snap, ...(asOf ? { as_of_date: asOf } : {}) } }).then(r => r.data);
+export const getHhiTimeseries         = (co, prod, cur) =>
+  api.get(`/companies/${co}/products/${prod}/charts/hhi-timeseries`, { params: { currency: cur } }).then(r => r.data);
 
 // ── Charts — new names (used by new chart components) ────────────────────────
 export const getDeploymentChart         = (co, prod, snap, cur, asOf) =>

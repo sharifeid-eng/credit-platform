@@ -12,7 +12,8 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 The platform allows analysts and investment committee members to:
 - Upload loan tape snapshots (CSV/Excel) and explore portfolio performance
 - Run automated data integrity checks across snapshots
-- View interactive dashboards with 12 analysis tabs (including institutional risk analytics and data integrity)
+- View interactive dashboards with 18 analysis tabs (including institutional risk analytics, loss attribution, and forward-looking signals)
+- Explore the Analysis Framework — a structured analytical philosophy guiding all metrics
 - Generate AI-powered portfolio commentary and ask natural language questions about the data
 -----
 ## Branding
@@ -43,7 +44,7 @@ The platform allows analysts and investment committee members to:
 ## Long-Term Vision (3 Phases)
 ### Phase 1 — Loan Tape Analysis & Dashboards ✅
 - Manual CSV/Excel upload workflow
-- AI-powered dashboards per company/product (12 tape analytics tabs)
+- AI-powered dashboards per company/product (18 tape analytics tabs)
 - Consistency checks across snapshots
 - Investment committee-ready commentary + one-click PDF reports
 ### Phase 2 — Borrowing Base Monitoring ✅
@@ -98,7 +99,8 @@ credit-platform/
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
-│   ├── analysis.py         # All pure Klaim data computation functions (no I/O)
+│   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (5-level hierarchy, metric dictionary)
+│   ├── analysis.py         # All pure Klaim data computation functions (no I/O) — 40+ compute functions
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── database.py         # SQLAlchemy 2.0 engine/session setup (DB-optional mode)
 │   ├── db_loader.py        # DB → tape-compatible DataFrame bridge (Klaim + SILQ mappers)
@@ -126,9 +128,10 @@ credit-platform/
 │   │   ├── layouts/
 │   │   │   └── CompanyLayout.jsx    # Sidebar + <Outlet> wrapper with CompanyProvider
 │   │   ├── pages/
-│   │   │   ├── Home.jsx             # Landing page — company grid
-│   │   │   ├── TapeAnalytics.jsx    # 12-tab tape dashboard (extracted from old Company.jsx)
+│   │   │   ├── Home.jsx             # Landing page — company grid + resources section
+│   │   │   ├── TapeAnalytics.jsx    # 18-tab tape dashboard (extracted from old Company.jsx)
 │   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
+│   │   │   ├── Framework.jsx        # Analysis Framework page — markdown renderer with sticky TOC
 │   │   │   └── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   ├── components/
 │   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
@@ -151,6 +154,12 @@ credit-platform/
 │   │   │   │   ├── RiskMigrationChart.jsx    # Roll-rates, cure rates, EL model, stress test
 │   │   │   │   ├── DenialFunnelChart.jsx     # Resolution pipeline funnel visualization
 │   │   │   │   ├── DataIntegrityChart.jsx    # Two-tape comparison, validation, AI report + notes
+│   │   │   │   ├── CohortLossWaterfallChart.jsx  # Loss waterfall table + vintage loss curves + loss categorization
+│   │   │   │   ├── RecoveryAnalysisChart.jsx     # Recovery rates, timing, worst/best deals by vintage
+│   │   │   │   ├── CollectionsTimingChart.jsx    # Timing bucket distribution using collection curves
+│   │   │   │   ├── UnderwritingDriftChart.jsx    # Per-vintage quality metrics + drift flags
+│   │   │   │   ├── SegmentAnalysisChart.jsx      # Multi-dimensional cuts with heat-map coloring
+│   │   │   │   ├── SeasonalityChart.jsx          # YoY comparison + seasonal index
 │   │   │   │   └── silq/                    # SILQ-specific chart components
 │   │   │   │       ├── DelinquencyChart.jsx
 │   │   │   │       ├── SilqCollectionsChart.jsx
@@ -255,6 +264,19 @@ Key columns in loan tape files:
 |`POST /companies/{co}/products/{p}/generate-report`          |Generate PDF report (streams bytes) |
 |`GET /fx-rates`                                              |Foreign exchange rates              |
 |`GET /companies/{co}/products/{p}/charts/silq/{chart_name}`  |Dynamic SILQ chart routing          |
+|`GET /companies/{co}/products/{p}/charts/par`                |PAR 30+/60+/90+ (Portfolio at Risk)  |
+|`GET /companies/{co}/products/{p}/charts/dtfc`               |Days to First Cash (leading indicator)|
+|`GET /companies/{co}/products/{p}/charts/cohort-loss-waterfall`|Cohort loss waterfall (per-vintage)  |
+|`GET /companies/{co}/products/{p}/charts/recovery-analysis`  |Recovery rates, timing, worst/best deals|
+|`GET /companies/{co}/products/{p}/charts/vintage-loss-curves`|Cumulative loss development curves    |
+|`GET /companies/{co}/products/{p}/charts/loss-categorization`|Fraud/anomaly categorization heuristics|
+|`GET /companies/{co}/products/{p}/charts/collections-timing` |Collections timing waterfall (curve-based)|
+|`GET /companies/{co}/products/{p}/charts/underwriting-drift` |Underwriting drift flags by vintage   |
+|`GET /companies/{co}/products/{p}/charts/segment-analysis`   |Multi-dimensional segment cuts        |
+|`GET /companies/{co}/products/{p}/charts/hhi-timeseries`     |HHI concentration across all snapshots|
+|`GET /companies/{co}/products/{p}/charts/seasonality`        |YoY seasonal patterns + seasonal index|
+|`GET /companies/{co}/products/{p}/charts/methodology-log`    |Data corrections & column availability log|
+|`GET /framework`                                             |Analysis Framework markdown document  |
 
 **Portfolio Analytics endpoints (real data — DB or tape fallback):**
 |Endpoint                                                     |Description                        |
@@ -295,23 +317,24 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 | Route | Component | Description |
 |---|---|---|
 | `/` | `Home` | Landing page — company grid |
-| `/company/:co/:product/tape/:tab` | `TapeAnalytics` | 12-tab dashboard (tab slug in URL) |
+| `/company/:co/:product/tape/:tab` | `TapeAnalytics` | 18-tab dashboard (tab slug in URL) |
 | `/company/:co/:product/portfolio/:tab` | `PortfolioAnalytics` | 6-tab portfolio view (live data from DB/tape) |
 | `/company/:co/:product/methodology` | `Methodology` | Definitions & formulas reference |
+| `/framework` | `Framework` | Analysis Framework — analytical philosophy with sticky TOC |
 
-**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Tape Analytics (12 links), Portfolio Analytics (6 links), Methodology. Active state: gold left border + gold text.
+**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Tape Analytics (18 links), Portfolio Analytics (6 links), Methodology. Active state: gold left border + gold text.
 
-**URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
+**URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `loss-waterfall`, `recovery-analysis`, `collections-timing`, `underwriting-drift`, `segment-analysis`, `seasonality`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
 
 **Backward compat:** `/company/:co` and `/company/:co/:product` redirect to `tape/overview`.
 
 **State management:** `CompanyContext` provides shared state (company, products, snapshots, config, currency, summary, etc.) consumed by both TapeAnalytics and PortfolioAnalytics.
 
 -----
-## Tape Analytics Tabs (12)
+## Tape Analytics Tabs (18)
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
-|Overview          |10 KPI cards (incl curve-based DSO + HHI; DSO hidden on older tapes) + AI commentary + Data Chat|
+|Overview          |12+ KPI cards (incl curve-based DSO, HHI, PAR 30+/60+/90+, DTFC; graceful degradation on older tapes) + AI commentary + Data Chat|
 |Actual vs Expected|Cumulative collected vs expected area chart + Today marker + 6 KPI cards (purchase price, discount, expected, collected/pending/denied with %)|
 |Deployment        |Monthly capital deployed: by business type (new vs repeat) + by product type (stacked bars)|
 |Collection        |Monthly collection rate + 3M avg + expected rate line (forecast benchmark) + cash collection breakdown by deal age|
@@ -323,6 +346,12 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 |Returns           |Margin KPIs (realised margin = completed deals only, capital recovery), monthly returns chart, discount band analysis, new vs repeat + IRR KPIs, vintage chart, distribution histogram (when tape has IRR)|
 |Risk & Migration  |Roll-rate matrix, cure rates, EL model (PD×LGD×EAD), stress test scenarios|
 |Data Integrity    |Two-tape comparison: per-tape validation, cross-tape consistency, AI report + per-question notes|
+|Loss Waterfall    |Per-vintage loss waterfall (Originated → Gross Default → Recovery → Net Loss), vintage loss curves, loss categorization pie chart|
+|Recovery Analysis |Recovery rates and timing by vintage, worst/best performing deals drill-down|
+|Collections Timing|Timing bucket distribution using collection curve columns (0-30d, 30-60d, etc.), stacked bars + portfolio distribution|
+|Underwriting Drift|Per-vintage quality metrics (deal size, discount, collection rate) + drift flag badges when metrics deviate from historical norms|
+|Segment Analysis  |Multi-dimensional cuts (product, provider size, deal size, new vs repeat) with sortable heat-map table and dimension dropdown|
+|Seasonality       |YoY comparison by calendar month (grouped bars per year) + seasonal index line overlay|
 Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
 Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
 
@@ -418,6 +447,19 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **As-of date default** — `date-range` endpoint returns `snapshot_date` extracted from filename. Frontend uses `max(data_max_date, snapshot_date)` as calendar upper bound and default.
 - **Framer Motion integration** — Uses `motion.div` wrappers with `initial`/`animate`/`exit` props. `AnimatePresence mode="wait"` for tab transitions and chart loading states. KPI stagger via `index * 0.04s` delay. All animations use `transform`/`opacity` for GPU acceleration.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
+- **Analysis Framework** — `core/ANALYSIS_FRAMEWORK.md` defines a 5-level analytical hierarchy (Size → Cash Conversion → Credit Quality → Loss Attribution → Forward Signals). All new tabs and metrics are mapped to this hierarchy. Framework served via `GET /framework` endpoint, rendered as full-page markdown with sticky TOC.
+- **PAR computation** — 3-method approach: (1) Primary uses `Expected till date` column to compute shortfall-based estimated DPD, (2) Option C builds empirical collection benchmarks from 50+ completed deals when `Expected till date` unavailable, (3) Fallback returns `available: False`. PAR denominator decision: active outstanding for Tape Analytics, eligible outstanding for Portfolio Analytics. "Derived from historical patterns" badge shown when Option C used.
+- **DTFC (Days to First Cash)** — leading indicator that deteriorates before collection rate does. Curve-based method (precise) uses collection curve columns; estimated method (fallback) approximates from deal dates and collected amounts. Shows Median and P90 on Overview.
+- **DSO dual perspectives** — DSO Capital (days from funding to collection) measures capital efficiency. DSO Operational (days from expected due date to collection) measures payer behavior. Both use curve-based and estimated methods.
+- **Cohort loss waterfall** — "default" for Klaim = denial > 50% of purchase value (since there are no contractual due dates). Per-vintage waterfall: Originated → Gross Default → Recovery → Net Loss. Integrates vintage loss curves and loss categorization.
+- **Separation Principle** — `separate_portfolio()` splits into clean (active + normal completed) vs loss (denial > 50% PV). Clean portfolio used for performance metrics; loss portfolio isolated for attribution analysis. Prevents loss deals from distorting healthy portfolio metrics.
+- **Loss categorization heuristics** — `compute_loss_categorization()` applies rules-based classification: provider_issue (high denial from specific groups), coding_error (partial denials suggesting claim issues), credit/underwriting (remaining). Not ML — transparent heuristics for analyst interpretation.
+- **Collections timing** — `compute_collections_timing()` uses collection curve columns (Expected/Actual at 30d intervals) to build timing bucket distributions. Returns both per-vintage and portfolio-level views. Requires Mar 2026+ tape with curve columns.
+- **Segment analysis multi-dimensional cuts** — `compute_segment_analysis()` supports 4 dimensions: product type, provider_size (bucketed by PV volume), deal_size (quartile-based), new_repeat. Each dimension returns per-segment metrics with deal count, volume, collection/denial rates, margins.
+- **HHI time series** — `compute_hhi_for_snapshot()` computes HHI for a single snapshot. Endpoint loads ALL snapshots to build time series, detects trend (increasing/decreasing/stable) and issues warnings when concentration is rising.
+- **Underwriting drift** — `compute_underwriting_drift()` compares per-vintage metrics (avg deal size, discount, collection rate) against historical norms (rolling mean of prior vintages). Flags vintages where metrics deviate beyond 1 standard deviation.
+- **Seasonality** — `compute_seasonality()` groups deployment by calendar month across years for YoY comparison. Computes seasonal index (month average / overall average) to identify seasonal patterns in origination.
+- **Methodology log** — `compute_methodology_log()` documents all data corrections, column availability checks, and data quality decisions applied during analysis. Provides audit trail for IC-level transparency.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -474,10 +516,24 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Summary API returns: `total_deals`, `total_purchase_value`, `total_collected`, `total_denied`, `total_pending`, `total_expected`, `avg_discount`, `collection_rate`, `denial_rate`, `pending_rate`, `active_deals`, `completed_deals`, `dso_available`
 - Snapshots API returns objects `{filename, date}` — must extract `.filename`
 - Companies API may return objects — must extract `.name`
+- PAR: `res.available`, `res.method` (`primary`/`option_c`/`unavailable`), `res.par_30{}`, `res.par_60{}`, `res.par_90{}` (each has `balance_pct`, `count_pct`, `balance`, `count`), `res.total_active_outstanding`, `res.total_active_count`
+- DTFC: `res.available`, `res.method` (`curve_based`/`estimated`), `res.median_dtfc`, `res.p90_dtfc`, `res.by_vintage[]`
+- DSO: also returns `res.dso_operational_weighted`, `res.dso_operational_median` when available
+- Cohort loss waterfall: `res.vintages[]` (each has `vintage`, `originated`, `gross_default`, `recovery`, `net_loss`, `default_rate`, `recovery_rate`, `net_loss_rate`), `res.totals{}`
+- Vintage loss curves: `res.available`, `res.curves[]` (per-vintage cumulative loss at age intervals)
+- Loss categorization: `res.categories[]` (each has `category`, `count`, `total_denied`, `pct`), `res.total_loss_deals`
+- Recovery analysis: `res.by_vintage[]` (recovery_rate, avg_recovery_days), `res.worst_deals[]`, `res.best_deals[]`, `res.portfolio_recovery_rate`
+- Collections timing: `res.available`, `res.buckets[]` (timing bucket distribution), `res.by_vintage[]`, `res.portfolio_distribution{}`
+- Underwriting drift: `res.vintages[]` (each has `vintage`, metrics, `flags[]`), `res.historical_norms{}`
+- Segment analysis: `res.segments[]` (per-segment metrics), `res.segment_by`, `res.dimensions[]`
+- HHI timeseries: `res.available`, `res.points[]` (each has `snapshot`, `hhi`), `res.trend`, `res.warning`
+- Seasonality: `res.months[]` (per-month-per-year data), `res.seasonal_index[]`, `res.years[]`
+- Methodology log: `res.corrections[]`, `res.column_availability{}`, `res.data_quality{}`
+- Framework: `res.content` (markdown string)
 -----
 ## What's Working
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
-- ✅ 12-tab React dashboard with dark theme
+- ✅ 18-tab React dashboard with dark theme
 - ✅ AI commentary (cached, clears on snapshot change)
 - ✅ Per-tab AI insights (TabInsight)
 - ✅ Data chat (enriched context: group performance, ageing, DSO, margins, discount bands, new vs repeat, HHI; fallback for deal-level questions; answerable suggested questions)
@@ -504,7 +560,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ Roll-rate migration matrix across snapshots (cure rates, transition probabilities)
 - ✅ Single-tape data quality validation (dupes, date sanity, negatives, nulls)
 - ✅ Risk & Migration tab (11th tab) — institutional-grade risk analytics
-- ✅ Enhanced Overview with 10 KPI cards (added DSO + HHI)
+- ✅ Enhanced Overview with 12+ KPI cards (DSO, HHI, PAR 30+/60+/90+, DTFC median/P90)
 - ✅ Enhanced Concentration tab (HHI badges + group performance table)
 - ✅ Methodology page (`/company/:name/methodology`) — company-scoped reference with definitions, formulas, rationale for all analytics; back-to-dashboard navigation; accessed via book icon in tab bar
 - ✅ Data Integrity tab (12th tab) — pick two tapes to compare, per-tape validation + cross-tape consistency, cached results auto-load, AI report generation (separate button), per-question notes with debounced auto-save, PDF report saved to reports/
@@ -533,7 +589,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Streaming response — no files saved to disk; PDF opens in new browser tab as blob URL
   - Button states: idle (gold outline), generating (grey + spinner), error (red + retry)
   - ~70s generation time, 13-page ~2MB PDF
-- ✅ **Sidebar navigation + URL-based routing** — Company pages use persistent sidebar with Tape Analytics (12 tabs) + Portfolio Analytics (3 tabs) + Methodology. Tabs are URL-driven (`/tape/:slug`, `/portfolio/:slug`), bookmarkable. Old horizontal tab bar replaced.
+- ✅ **Sidebar navigation + URL-based routing** — Company pages use persistent sidebar with Tape Analytics (18 tabs) + Portfolio Analytics (6 tabs) + Methodology. Tabs are URL-driven (`/tape/:slug`, `/portfolio/:slug`), bookmarkable. Old horizontal tab bar replaced.
 - ✅ **CompanyContext + CompanyLayout** — Shared state provider (`CompanyContext.jsx`) consumed by all company pages. `CompanyLayout.jsx` renders sidebar + `<Outlet>`. Extracted from old `Company.jsx` (deleted).
 - ✅ **Landing page cleanup** — Removed duplicate logo (Navbar already shows it). Enriched company cards with product chips and snapshot counts. Companies API returns `{name, products, total_snapshots}`.
 - ✅ **Portfolio Analytics UI (live data from DB/tape):**
@@ -582,6 +638,51 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - All surfaces, borders, and hardcoded colors updated proportionally
   - Warmer, more institutional feel while preserving gold/teal/red/blue semantic palette
 - ✅ **As-of date fix:** Defaults to snapshot date (from filename), not max deal date in data
+- ✅ **Analysis Framework (Phase 0):**
+  - `core/ANALYSIS_FRAMEWORK.md` — analytical philosophy document with 5-level hierarchy (Size → Cash Conversion → Credit Quality → Loss Attribution → Forward Signals)
+  - 6 sections: Analytical Hierarchy, Metric Dictionary, Tape vs Portfolio Philosophy, Asset Class Adaptations, Leading vs Lagging Indicators, Separation Principle
+  - `GET /framework` endpoint serves markdown content
+  - `Framework.jsx` — full-page markdown renderer with sticky TOC, accessed via Navbar link
+  - Resources section on Home page with Framework card (teal accent)
+- ✅ **PAR (Portfolio at Risk) KPIs:**
+  - `compute_par()` with 3 methods: primary (Expected till date shortfall-based estimated DPD), Option C (empirical benchmarks from 50+ completed deals, labeled "Derived"), fallback (`available: False`)
+  - `_build_empirical_benchmark()` helper builds collection timing benchmarks from completed deal pool
+  - PAR 30+/60+/90+ KPI cards on Overview (balance-weighted + count-based)
+  - PAR denominator: active outstanding for Tape, eligible outstanding for Portfolio
+- ✅ **Days to First Cash (DTFC):**
+  - `compute_dtfc()` — curve-based (precise) and estimated (fallback) methods
+  - DTFC Median and P90 KPI cards on Overview — leading indicator that deteriorates before collection rate
+- ✅ **DSO Variants:**
+  - Enhanced `compute_dso()` with DSO Capital (days from funding to collection) and DSO Operational (days from expected due date to collection)
+  - Returns `dso_operational_weighted`, `dso_operational_median`
+- ✅ **Loss Waterfall tab (13th tab):**
+  - `compute_cohort_loss_waterfall()` — per-vintage: Originated → Gross Default → Recovery → Net Loss with rates
+  - `compute_vintage_loss_curves()` — cumulative loss development curves by vintage
+  - `compute_loss_categorization()` — rules-based heuristics (provider_issue, coding_error, credit/underwriting)
+  - `CohortLossWaterfallChart.jsx` integrates 3 sub-sections: loss waterfall table, vintage loss curves, loss categorization pie
+- ✅ **Recovery Analysis tab (14th tab):**
+  - `compute_recovery_analysis()` — recovery rates, timing, worst/best deals by vintage
+  - `RecoveryAnalysisChart.jsx`
+- ✅ **Collections Timing tab (15th tab):**
+  - `compute_collections_timing()` — timing bucket distribution using collection curve columns
+  - `CollectionsTimingChart.jsx` — stacked bars + portfolio distribution
+- ✅ **Underwriting Drift tab (16th tab):**
+  - `compute_underwriting_drift()` — per-vintage quality metrics + drift flags when metrics deviate from historical norms
+  - `UnderwritingDriftChart.jsx` — dual-axis chart + flag badges
+- ✅ **Segment Analysis tab (17th tab):**
+  - `compute_segment_analysis()` — multi-dimensional cuts (product, provider_size, deal_size, new_repeat)
+  - `SegmentAnalysisChart.jsx` — dimension dropdown + sortable table with heat-map coloring
+- ✅ **Seasonality tab (18th tab):**
+  - `compute_seasonality()` — YoY comparison by calendar month + seasonal index
+  - `SeasonalityChart.jsx` — grouped bars per year + seasonal index line
+- ✅ **HHI Time Series:**
+  - `compute_hhi_for_snapshot()` — computes HHI for a single snapshot
+  - `GET .../charts/hhi-timeseries` endpoint loads ALL snapshots, detects concentration trends + warnings
+- ✅ **Separation Principle (clean vs loss portfolio):**
+  - `separate_portfolio()` helper splits portfolio into clean (active + normal completed) vs loss (denial > 50% PV)
+  - Used by loss attribution functions to isolate write-off cohort
+- ✅ **Methodology Transparency:**
+  - `compute_methodology_log()` — documents corrections, column availability, data quality decisions for audit trail
 -----
 ## Known Gaps & Next Steps
 **Short term:**
@@ -593,6 +694,15 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Design elevation — Framer Motion animations, card hover effects, skeleton loading, micro-interactions
 - [x] Color scheme — shifted to ACP-aligned warmer navy (`#121C27` base)
 - [x] As-of date fix — defaults to snapshot date, not max deal date
+- [x] Analysis Framework — 5-level analytical hierarchy document + Framework page with sticky TOC
+- [x] 6 new tape analytics tabs — Loss Waterfall, Recovery Analysis, Collections Timing, Underwriting Drift, Segment Analysis, Seasonality
+- [x] PAR (Portfolio at Risk) KPIs — 3-method computation, Overview KPI cards
+- [x] DTFC (Days to First Cash) — leading indicator on Overview
+- [x] DSO Operational variant — days from expected due date to collection
+- [x] HHI time series — concentration trend across all snapshots
+- [x] Loss categorization — rules-based heuristic classification
+- [x] Separation Principle — clean vs loss portfolio isolation
+- [x] Methodology transparency log — data corrections and column availability audit trail
 **Phase 2 — Borrowing Base Monitoring ✅ COMPLETE:**
 - [x] PostgreSQL 18.3 database + SQLAlchemy ORM + Alembic migrations
 - [x] Integration API (12 endpoints) with X-API-Key auth

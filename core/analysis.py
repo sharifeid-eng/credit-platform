@@ -848,6 +848,35 @@ def compute_dso(df, mult, as_of_date=None):
             'collected':    round(float(g_total), 2),
         })
 
+    # DSO Operational — days from expected due date to actual collection
+    # "Due date" for Klaim = Deal date + median deal term (derived from completed deals)
+    dso_ops = {'dso_operational_available': False}
+    if 'Expected till date' in df.columns and has_curves:
+        # Approximate: operational delay = true_dso - expected_dso
+        # where expected_dso = deal_age at which Expected till date % reaches 90%
+        # Simpler: operational DSO = true_dso minus the median deal term
+        median_deal_age = float((valid['true_dso']).median()) if len(valid) > 0 else 0
+        # Compute how many deals collected AFTER their expected timeline
+        # Use: deal_age at completion vs expected term proxy
+        if 'Deal date' in valid.columns:
+            valid_copy = valid.copy()
+            today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+            valid_copy['deal_age'] = (today - valid_copy['Deal date']).dt.days
+            # Operational delay = true_dso - (deal_age * expected_collection_pct)
+            # Simpler: just report true_dso vs a reference benchmark
+            # Expected deal term: median of deal_age for completed deals
+            median_term = float(valid_copy['deal_age'].median())
+            # DSO from due: how many extra days beyond median term to collect
+            valid_copy['dso_operational'] = (valid_copy['true_dso'] - median_term * 0.5).clip(lower=0)
+            ops_vals = valid_copy['dso_operational']
+            ops_coll = valid_copy['Collected till date'] * mult
+            ops_total = ops_coll.sum()
+            dso_ops = {
+                'dso_operational_available': True,
+                'dso_operational_weighted': round(float((ops_vals * ops_coll).sum() / ops_total), 1) if ops_total else 0,
+                'dso_operational_median': round(float(ops_vals.median()), 1),
+            }
+
     return {
         'available':       True,
         'weighted_dso':    round(weighted_dso, 1),
@@ -855,6 +884,7 @@ def compute_dso(df, mult, as_of_date=None):
         'p95_dso':         round(p95_dso, 1),
         'total_completed': int(len(completed)),
         'by_vintage':      by_vintage,
+        **dso_ops,
     }
 
 
@@ -1263,3 +1293,832 @@ def compute_vat_summary(df, mult):
         'vat_fees':   round(vat_fees, 2),
         'total_vat':  round(total_vat, 2),
     }
+
+
+# ── PAR (Portfolio at Risk) ──────────────────────────────────────────────────
+
+def _build_empirical_benchmark(completed_df):
+    """Build empirical expected collection % by deal age bucket from completed deals.
+
+    Groups completed deals by age bucket (30-day intervals), computes the median
+    collection percentage (Collected / Purchase value) at each age.
+    Returns a sorted list of (max_age_days, expected_collection_pct) tuples.
+    """
+    if len(completed_df) < 50:
+        return None
+
+    cdf = completed_df.copy()
+    cdf['coll_pct'] = cdf['Collected till date'] / cdf['Purchase value'].replace(0, float('nan'))
+    cdf = cdf.dropna(subset=['coll_pct'])
+
+    if len(cdf) < 50:
+        return None
+
+    # Use deal age at completion (or latest snapshot) as the reference
+    if 'Deal date' not in cdf.columns:
+        return None
+
+    today = pd.Timestamp.now()
+    cdf['deal_age'] = (today - cdf['Deal date']).dt.days
+
+    # Create 30-day buckets from 0 to 720
+    buckets = []
+    for cutoff in range(30, 721, 30):
+        mask = cdf['deal_age'] <= cutoff
+        if mask.sum() >= 10:
+            median_pct = cdf.loc[mask, 'coll_pct'].median()
+            buckets.append((cutoff, float(median_pct)))
+
+    return buckets if len(buckets) >= 3 else None
+
+
+def compute_par(df, mult, as_of_date=None):
+    """Portfolio at Risk KPIs for Klaim.
+
+    Primary method: Uses 'Expected till date' column to identify deals behind schedule.
+    Option C: Derives empirical benchmarks from completed deals if Expected column missing.
+    Fallback: Returns available=False when neither approach is viable.
+
+    Returns:
+        dict with keys: available, method, par30/60/90 (balance-weighted %),
+        par30/60/90_count (count-based %), par30/60/90_amount,
+        total_active_outstanding, total_active_count
+    """
+    active = df[df['Status'] == 'Executed'].copy()
+    if len(active) == 0:
+        return {'available': False}
+
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+
+    # Compute outstanding per deal
+    active['outstanding'] = (
+        active['Purchase value'] - active['Collected till date'] -
+        active.get('Denied by insurance', pd.Series(0, index=active.index))
+    ).clip(lower=0) * mult
+
+    total_active_outstanding = float(active['outstanding'].sum())
+    total_active_count = len(active)
+
+    if total_active_outstanding <= 0:
+        return {'available': False}
+
+    # Method 1: Primary — Expected till date column
+    if 'Expected till date' in df.columns:
+        active['expected'] = active['Expected till date'].fillna(0) * mult
+        active['collected'] = active['Collected till date'] * mult
+        active['shortfall'] = (active['expected'] - active['collected']).clip(lower=0)
+
+        # For Klaim receivables, "days past due" is derived from the shortfall:
+        # We estimate how many days of collection the deal is behind.
+        # shortfall_ratio = shortfall / purchase_value gives % of deal still behind.
+        # Then estimate DPD = deal_age * shortfall_ratio (how many deal-days are "missing").
+        active['deal_age'] = (today - active['Deal date']).dt.days
+        pv = (active['Purchase value'] * mult).replace(0, float('nan'))
+        active['shortfall_ratio'] = active['shortfall'] / pv
+        active['shortfall_ratio'] = active['shortfall_ratio'].fillna(0)
+
+        # Estimated DPD: deal_age * shortfall_ratio gives an approximation of
+        # how many days worth of collection are outstanding.
+        # A deal that is 200 days old with 15% shortfall has ~30 estimated DPD.
+        active['est_dpd'] = active['deal_age'] * active['shortfall_ratio']
+
+        def _par_at(threshold_days):
+            mask = (
+                (active['est_dpd'] >= threshold_days) &
+                (active['outstanding'] > 0) &
+                (active['shortfall'] > 0)
+            )
+            amount = float(active.loc[mask, 'outstanding'].sum())
+            count = int(mask.sum())
+            pct = amount / total_active_outstanding * 100 if total_active_outstanding > 0 else 0
+            count_pct = count / total_active_count * 100 if total_active_count > 0 else 0
+            return amount, count, pct, count_pct
+
+        par30_amt, par30_ct, par30, par30_ct_pct = _par_at(30)
+        par60_amt, par60_ct, par60, par60_ct_pct = _par_at(60)
+        par90_amt, par90_ct, par90, par90_ct_pct = _par_at(90)
+
+        return {
+            'available': True,
+            'method': 'expected',
+            'par30': round(par30, 4),
+            'par60': round(par60, 4),
+            'par90': round(par90, 4),
+            'par30_count': round(par30_ct_pct, 4),
+            'par60_count': round(par60_ct_pct, 4),
+            'par90_count': round(par90_ct_pct, 4),
+            'par30_amount': round(par30_amt, 2),
+            'par60_amount': round(par60_amt, 2),
+            'par90_amount': round(par90_amt, 2),
+            'total_active_outstanding': round(total_active_outstanding, 2),
+            'total_active_count': total_active_count,
+        }
+
+    # Method 2: Option C — Empirical benchmarks from completed deals
+    completed = df[df['Status'] == 'Completed'].copy()
+    benchmark = _build_empirical_benchmark(completed)
+
+    if benchmark is not None:
+        active['deal_age'] = (today - active['Deal date']).dt.days
+        active['coll_pct'] = (active['Collected till date'] * mult) / (active['Purchase value'] * mult).replace(0, float('nan'))
+        active['coll_pct'] = active['coll_pct'].fillna(0)
+
+        # For each active deal, find the expected collection % at its age from the benchmark
+        def _expected_pct(age):
+            for cutoff, pct in benchmark:
+                if age <= cutoff:
+                    return pct
+            return benchmark[-1][1] if benchmark else 1.0
+
+        active['expected_pct'] = active['deal_age'].apply(_expected_pct)
+        active['pct_behind'] = active['expected_pct'] - active['coll_pct']
+
+        # PAR: deal is X+ DPD if deal_age > X AND collecting less than 90% of expected benchmark
+        def _par_derived(threshold_days):
+            mask = (
+                (active['deal_age'] > threshold_days) &
+                (active['pct_behind'] > 0.10) &  # collecting 10%+ behind benchmark
+                (active['outstanding'] > 0)
+            )
+            amount = float(active.loc[mask, 'outstanding'].sum())
+            count = int(mask.sum())
+            pct = amount / total_active_outstanding * 100 if total_active_outstanding > 0 else 0
+            count_pct = count / total_active_count * 100 if total_active_count > 0 else 0
+            return amount, count, pct, count_pct
+
+        par30_amt, par30_ct, par30, par30_ct_pct = _par_derived(30)
+        par60_amt, par60_ct, par60, par60_ct_pct = _par_derived(60)
+        par90_amt, par90_ct, par90, par90_ct_pct = _par_derived(90)
+
+        return {
+            'available': True,
+            'method': 'derived',
+            'par30': round(par30, 4),
+            'par60': round(par60, 4),
+            'par90': round(par90, 4),
+            'par30_count': round(par30_ct_pct, 4),
+            'par60_count': round(par60_ct_pct, 4),
+            'par90_count': round(par90_ct_pct, 4),
+            'par30_amount': round(par30_amt, 2),
+            'par60_amount': round(par60_amt, 2),
+            'par90_amount': round(par90_amt, 2),
+            'total_active_outstanding': round(total_active_outstanding, 2),
+            'total_active_count': total_active_count,
+        }
+
+    # Fallback: neither method available
+    return {'available': False}
+
+
+# ── DTFC (Days to First Cash) ────────────────────────────────────────────────
+
+def compute_dtfc(df, mult, as_of_date=None):
+    """Days to First Cash — time from deal origination to first non-zero collection.
+
+    Leading indicator: deterioration in DTFC precedes collection rate decline.
+    Uses collection curve columns when available; otherwise estimates from
+    completed deals with positive collections.
+    """
+    if 'Deal date' not in df.columns:
+        return {'available': False}
+
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+
+    # Method 1: Use collection curve columns (most precise)
+    curve_cols = [c for c in df.columns if c.startswith('Actual in ') and 'days' in c]
+    if curve_cols:
+        # Find the first non-zero curve column per deal
+        dtfc_values = []
+        for _, row in df.iterrows():
+            for col in sorted(curve_cols, key=lambda c: int(''.join(filter(str.isdigit, c)))):
+                days = int(''.join(filter(str.isdigit, col)))
+                val = row.get(col, 0)
+                if pd.notna(val) and val > 0:
+                    dtfc_values.append(days)
+                    break
+
+        if len(dtfc_values) >= 10:
+            dtfc_series = pd.Series(dtfc_values)
+            by_vintage = _dtfc_by_vintage(df, curve_cols, today)
+            return {
+                'available': True,
+                'method': 'curves',
+                'median_dtfc': round(float(dtfc_series.median()), 1),
+                'p90_dtfc': round(float(dtfc_series.quantile(0.9)), 1),
+                'mean_dtfc': round(float(dtfc_series.mean()), 1),
+                'total_deals': len(dtfc_values),
+                'by_vintage': by_vintage,
+            }
+
+    # Method 2: Estimate from completed deals (less precise)
+    completed = df[(df['Status'] == 'Completed') & (df['Collected till date'] > 0)].copy()
+    if len(completed) < 20:
+        return {'available': False}
+
+    # Estimate DTFC as a fraction of deal age for completed deals
+    # Average deal age at completion is a rough proxy for when first cash arrived
+    completed['deal_age'] = (today - completed['Deal date']).dt.days
+    # Heuristic: first cash arrives early — estimate as 20% of total deal age
+    # This is coarse but better than nothing; curve method is preferred
+    completed['est_dtfc'] = completed['deal_age'] * 0.15
+    completed['est_dtfc'] = completed['est_dtfc'].clip(lower=7, upper=180)
+
+    return {
+        'available': True,
+        'method': 'estimated',
+        'median_dtfc': round(float(completed['est_dtfc'].median()), 1),
+        'p90_dtfc': round(float(completed['est_dtfc'].quantile(0.9)), 1),
+        'mean_dtfc': round(float(completed['est_dtfc'].mean()), 1),
+        'total_deals': len(completed),
+        'by_vintage': [],
+    }
+
+
+def _dtfc_by_vintage(df, curve_cols, today):
+    """Helper to compute DTFC by vintage month using curve columns."""
+    if 'Deal date' not in df.columns:
+        return []
+
+    df = df.copy()
+    df['vintage'] = df['Deal date'].dt.to_period('M').astype(str)
+
+    results = []
+    for vintage, group in df.groupby('vintage'):
+        dtfc_vals = []
+        for _, row in group.iterrows():
+            for col in sorted(curve_cols, key=lambda c: int(''.join(filter(str.isdigit, c)))):
+                days = int(''.join(filter(str.isdigit, col)))
+                val = row.get(col, 0)
+                if pd.notna(val) and val > 0:
+                    dtfc_vals.append(days)
+                    break
+        if dtfc_vals:
+            s = pd.Series(dtfc_vals)
+            results.append({
+                'vintage': str(vintage),
+                'median_dtfc': round(float(s.median()), 1),
+                'p90_dtfc': round(float(s.quantile(0.9)), 1),
+                'count': len(dtfc_vals),
+            })
+    return results
+
+
+# ── Cohort Loss Waterfall ────────────────────────────────────────────────────
+
+def compute_cohort_loss_waterfall(df, mult, as_of_date=None):
+    """Per-vintage loss cascade: Originated -> Gross Default -> Recovery -> Net Loss.
+
+    For Klaim: 'default' = deals where denial > 50% of purchase value.
+    Recovery = collections on defaulted deals (collected despite significant denial).
+    """
+    if 'Deal date' not in df.columns:
+        return {'available': False}
+
+    df = add_month_column(df)
+    vintages = []
+
+    for month, grp in df.groupby('Month'):
+        originated = float(grp['Purchase value'].sum() * mult)
+        denied = float(grp['Denied by insurance'].sum() * mult) if 'Denied by insurance' in grp.columns else 0
+
+        # Default = deals where denial rate > 50% of purchase value
+        pv = grp['Purchase value'] * mult
+        den = grp['Denied by insurance'] * mult if 'Denied by insurance' in grp.columns else pd.Series(0, index=grp.index)
+        defaulted_mask = den > (pv * 0.5)
+        gross_default = float(den[defaulted_mask].sum())
+
+        # Recovery on defaulted deals = any collection on those deals
+        coll_on_default = float((grp.loc[defaulted_mask, 'Collected till date'] * mult).sum()) if defaulted_mask.any() else 0
+
+        # Provisions on defaulted deals
+        prov_on_default = float((grp.loc[defaulted_mask, 'Provisions'] * mult).sum()) if 'Provisions' in grp.columns and defaulted_mask.any() else 0
+
+        recovery = coll_on_default + prov_on_default
+        net_loss = max(0, gross_default - recovery)
+
+        vintages.append({
+            'vintage': month,
+            'deal_count': int(len(grp)),
+            'originated': round(originated, 2),
+            'gross_default': round(gross_default, 2),
+            'recovery': round(recovery, 2),
+            'net_loss': round(net_loss, 2),
+            'gross_default_rate': round(gross_default / originated * 100, 4) if originated > 0 else 0,
+            'net_loss_rate': round(net_loss / originated * 100, 4) if originated > 0 else 0,
+            'recovery_rate': round(recovery / gross_default * 100, 4) if gross_default > 0 else 0,
+            'default_count': int(defaulted_mask.sum()),
+        })
+
+    # Totals
+    t_orig = sum(v['originated'] for v in vintages)
+    t_gross = sum(v['gross_default'] for v in vintages)
+    t_recov = sum(v['recovery'] for v in vintages)
+    t_net = sum(v['net_loss'] for v in vintages)
+
+    return {
+        'available': True,
+        'vintages': vintages,
+        'totals': {
+            'originated': round(t_orig, 2),
+            'gross_default': round(t_gross, 2),
+            'recovery': round(t_recov, 2),
+            'net_loss': round(t_net, 2),
+            'gross_default_rate': round(t_gross / t_orig * 100, 4) if t_orig > 0 else 0,
+            'net_loss_rate': round(t_net / t_orig * 100, 4) if t_orig > 0 else 0,
+            'recovery_rate': round(t_recov / t_gross * 100, 4) if t_gross > 0 else 0,
+        }
+    }
+
+
+# ── Recovery Analysis Post-Default ───────────────────────────────────────────
+
+def compute_recovery_analysis(df, mult, as_of_date=None):
+    """Recovery metrics for defaulted deals (Klaim: denial > 50% of PV)."""
+    pv = df['Purchase value'] * mult
+    den = df['Denied by insurance'] * mult if 'Denied by insurance' in df.columns else pd.Series(0, index=df.index)
+    coll = df['Collected till date'] * mult
+
+    defaulted_mask = den > (pv * 0.5)
+    defaulted = df[defaulted_mask].copy()
+
+    if len(defaulted) == 0:
+        return {'available': False}
+
+    total_default_amount = float(den[defaulted_mask].sum())
+    total_recovery = float(coll[defaulted_mask].sum())
+    recovery_rate = total_recovery / total_default_amount * 100 if total_default_amount > 0 else 0
+
+    # By vintage
+    defaulted = add_month_column(defaulted)
+    by_vintage = []
+    for month, grp in defaulted.groupby('Month'):
+        g_den = float((grp['Denied by insurance'] * mult).sum())
+        g_coll = float((grp['Collected till date'] * mult).sum())
+        by_vintage.append({
+            'vintage': month,
+            'defaults': int(len(grp)),
+            'default_amount': round(g_den, 2),
+            'recovered': round(g_coll, 2),
+            'recovery_rate': round(g_coll / g_den * 100, 4) if g_den > 0 else 0,
+        })
+
+    # Worst and best deals
+    defaulted['d_amt'] = den[defaulted_mask].values
+    defaulted['r_amt'] = coll[defaulted_mask].values
+    defaulted['r_rate'] = (defaulted['r_amt'] / defaulted['d_amt'].replace(0, float('nan'))).fillna(0)
+
+    worst = defaulted.nlargest(10, 'd_amt')[['Month', 'd_amt', 'r_amt', 'r_rate']].to_dict('records')
+    best = defaulted.nlargest(10, 'r_rate')[['Month', 'd_amt', 'r_amt', 'r_rate']].to_dict('records')
+
+    return {
+        'available': True,
+        'total_defaults': int(len(defaulted)),
+        'total_default_amount': round(total_default_amount, 2),
+        'total_recovery': round(total_recovery, 2),
+        'recovery_rate': round(recovery_rate, 4),
+        'by_vintage': by_vintage,
+        'worst_deals': worst,
+        'best_recoveries': best,
+    }
+
+
+# ── Vintage Loss Curves ─────────────────────────────────────────────────────
+
+def compute_vintage_loss_curves(df, mult, as_of_date=None):
+    """Cumulative loss development curves by vintage — like collection curves but for losses."""
+    if 'Deal date' not in df.columns:
+        return {'available': False}
+
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+    df = df.copy()
+    df['vintage'] = df['Deal date'].dt.to_period('M').astype(str)
+    df['months_since_orig'] = ((today - df['Deal date']).dt.days / 30.44).astype(int)
+
+    den = df['Denied by insurance'] * mult if 'Denied by insurance' in df.columns else pd.Series(0, index=df.index)
+    pv = df['Purchase value'] * mult
+
+    vintages = []
+    for vintage, grp in df.groupby('vintage'):
+        if len(grp) < 5:
+            continue
+        originated = float(grp['Purchase value'].sum() * mult)
+        if originated <= 0:
+            continue
+
+        max_months = int(grp['months_since_orig'].max())
+        points = []
+        for m in range(1, min(max_months + 1, 25)):  # cap at 24 months
+            deals_at_m = grp[grp['months_since_orig'] >= m]
+            cum_denied = float((deals_at_m['Denied by insurance'] * mult).sum()) if 'Denied by insurance' in deals_at_m.columns else 0
+            cum_collected = float((deals_at_m['Collected till date'] * mult).sum())
+            points.append({
+                'months_since_orig': m,
+                'cumulative_default_rate': round(cum_denied / originated * 100, 4),
+                'cumulative_collection_rate': round(cum_collected / originated * 100, 4),
+            })
+
+        vintages.append({
+            'vintage': str(vintage),
+            'deal_count': int(len(grp)),
+            'originated': round(originated, 2),
+            'points': points,
+        })
+
+    return {
+        'available': len(vintages) > 0,
+        'vintages': vintages,
+    }
+
+
+# ── Underwriting Drift ───────────────────────────────────────────────────────
+
+def compute_underwriting_drift(df, mult, as_of_date=None):
+    """Per monthly cohort: origination quality metrics to detect underwriting changes."""
+    if 'Deal date' not in df.columns:
+        return {'available': False}
+
+    df = add_month_column(df)
+    cohorts = []
+
+    for month, grp in df.groupby('Month'):
+        pv = grp['Purchase value'] * mult
+        cohort = {
+            'Month': month,
+            'deal_count': int(len(grp)),
+            'avg_deal_size': round(float(pv.mean()), 2),
+            'median_deal_size': round(float(pv.median()), 2),
+            'total_originated': round(float(pv.sum()), 2),
+        }
+
+        if 'Discount' in grp.columns:
+            cohort['avg_discount'] = round(float(grp['Discount'].mean()), 4)
+        if 'New business' in grp.columns:
+            new_count = int(grp['New business'].sum())
+            cohort['new_pct'] = round(new_count / len(grp) * 100, 2) if len(grp) > 0 else 0
+        if 'Claim count' in grp.columns:
+            cohort['avg_claim_count'] = round(float(grp['Claim count'].mean()), 2)
+        if 'Product' in grp.columns:
+            cohort['product_mix'] = grp['Product'].value_counts(normalize=True).round(4).to_dict()
+
+        # Outcome metrics (only for vintages with enough seasoning)
+        completed = grp[grp['Status'] == 'Completed']
+        if len(completed) >= 5:
+            coll = (completed['Collected till date'] * mult).sum()
+            pvcomp = (completed['Purchase value'] * mult).sum()
+            cohort['outcome_collection_rate'] = round(float(coll / pvcomp * 100), 4) if pvcomp > 0 else None
+            if 'Denied by insurance' in completed.columns:
+                denied = (completed['Denied by insurance'] * mult).sum()
+                cohort['outcome_denial_rate'] = round(float(denied / pvcomp * 100), 4) if pvcomp > 0 else None
+
+        cohorts.append(cohort)
+
+    # Drift flags — compare last 3 months to prior 6 months
+    drift_flags = []
+    if len(cohorts) >= 9:
+        recent = cohorts[-3:]
+        prior = cohorts[-9:-3]
+        r_avg_size = sum(c['avg_deal_size'] for c in recent) / 3
+        p_avg_size = sum(c['avg_deal_size'] for c in prior) / 6
+        if p_avg_size > 0 and abs(r_avg_size - p_avg_size) / p_avg_size > 0.15:
+            direction = 'up' if r_avg_size > p_avg_size else 'down'
+            drift_flags.append(f'Average deal size {direction} {abs(r_avg_size - p_avg_size) / p_avg_size * 100:.0f}% vs 6M average')
+
+        if all('avg_discount' in c for c in recent + prior):
+            r_disc = sum(c['avg_discount'] for c in recent) / 3
+            p_disc = sum(c['avg_discount'] for c in prior) / 6
+            if p_disc > 0 and abs(r_disc - p_disc) / p_disc > 0.10:
+                direction = 'up' if r_disc > p_disc else 'down'
+                drift_flags.append(f'Average discount {direction} {abs(r_disc - p_disc) / p_disc * 100:.0f}% vs 6M average')
+
+    return {
+        'available': True,
+        'cohorts': cohorts,
+        'drift_flags': drift_flags,
+    }
+
+
+# ── Segment Analysis ─────────────────────────────────────────────────────────
+
+def compute_segment_analysis(df, mult, as_of_date=None, segment_by='product'):
+    """Multi-dimensional performance cuts by different segmentation dimensions."""
+    # Determine available dimensions
+    available_dims = []
+    if 'Product' in df.columns:
+        available_dims.append('product')
+    if 'Group' in df.columns:
+        available_dims.append('provider_size')
+    if 'New business' in df.columns:
+        available_dims.append('new_repeat')
+    available_dims.append('deal_size')  # always available — computed from Purchase value
+
+    if segment_by not in available_dims and segment_by != 'deal_size':
+        return {'available': False, 'available_dimensions': available_dims}
+
+    # Determine the segmentation column
+    df = df.copy()
+    if segment_by == 'product' and 'Product' in df.columns:
+        df['_segment'] = df['Product'].fillna('Unknown')
+    elif segment_by == 'provider_size' and 'Group' in df.columns:
+        # Bucket providers by total originated volume
+        group_totals = df.groupby('Group')['Purchase value'].sum()
+        def _size_band(g):
+            total = group_totals.get(g, 0)
+            if total > 5_000_000: return 'Enterprise (>5M)'
+            if total > 1_000_000: return 'Large (1M-5M)'
+            if total > 200_000:   return 'Medium (200K-1M)'
+            return 'Small (<200K)'
+        df['_segment'] = df['Group'].apply(_size_band)
+    elif segment_by == 'new_repeat' and 'New business' in df.columns:
+        df['_segment'] = df['New business'].apply(lambda x: 'New' if x else 'Repeat')
+    elif segment_by == 'deal_size':
+        pv = df['Purchase value'] * mult
+        df['_segment'] = pd.cut(pv, bins=[0, 50000, 200000, 500000, float('inf')],
+                                labels=['Small (<50K)', 'Medium (50K-200K)', 'Large (200K-500K)', 'Enterprise (>500K)'])
+    else:
+        return {'available': False, 'available_dimensions': available_dims}
+
+    segments = []
+    for seg, grp in df.groupby('_segment', observed=True):
+        originated = float((grp['Purchase value'] * mult).sum())
+        outstanding = float(((grp['Purchase value'] - grp['Collected till date'] -
+                             grp.get('Denied by insurance', pd.Series(0, index=grp.index))) * mult).clip(lower=0).sum())
+        collected = float((grp['Collected till date'] * mult).sum())
+        denied = float((grp['Denied by insurance'] * mult).sum()) if 'Denied by insurance' in grp.columns else 0
+        active = int((grp['Status'] == 'Executed').sum())
+
+        segments.append({
+            'segment': str(seg),
+            'count': int(len(grp)),
+            'active': active,
+            'originated': round(originated, 2),
+            'outstanding': round(outstanding, 2),
+            'collection_pct': round(collected / originated * 100, 4) if originated > 0 else 0,
+            'denial_pct': round(denied / originated * 100, 4) if originated > 0 else 0,
+            'avg_discount': round(float(grp['Discount'].mean()), 4) if 'Discount' in grp.columns else None,
+        })
+
+    return {
+        'available': True,
+        'segment_by': segment_by,
+        'segments': sorted(segments, key=lambda s: s['originated'], reverse=True),
+        'available_dimensions': available_dims,
+    }
+
+
+# ── Collections Timing Waterfall ─────────────────────────────────────────────
+
+def compute_collections_timing(df, mult, as_of_date=None, view='origination_month'):
+    """Collections timing distribution by bucket.
+
+    View 'origination_month': for each vintage, how collections distribute across timing buckets.
+    View 'payment_month': by payment period, what timing buckets were collected.
+    """
+    if 'Deal date' not in df.columns:
+        return {'available': False}
+
+    # Use collection curve columns for precise timing when available
+    curve_cols = sorted(
+        [c for c in df.columns if c.startswith('Actual in ') and 'days' in c],
+        key=lambda c: int(''.join(filter(str.isdigit, c)))
+    )
+
+    if not curve_cols:
+        return {'available': False, 'reason': 'No collection curve columns'}
+
+    df = add_month_column(df)
+    bucket_labels = []
+    for i, col in enumerate(curve_cols):
+        days = int(''.join(filter(str.isdigit, col)))
+        if i == 0:
+            bucket_labels.append(f'0-{days}d')
+        else:
+            prev_days = int(''.join(filter(str.isdigit, curve_cols[i-1])))
+            bucket_labels.append(f'{prev_days+1}-{days}d')
+
+    months = []
+    for month, grp in df.groupby('Month'):
+        row = {'Month': month, 'deal_count': int(len(grp))}
+        total = 0
+        for i, col in enumerate(curve_cols):
+            val = float(grp[col].fillna(0).sum() * mult)
+            if i > 0:
+                prev_val = float(grp[curve_cols[i-1]].fillna(0).sum() * mult)
+                bucket_val = val - prev_val
+            else:
+                bucket_val = val
+            bucket_val = max(0, bucket_val)
+            row[bucket_labels[i]] = round(bucket_val, 2)
+            total += bucket_val
+        row['total'] = round(total, 2)
+        months.append(row)
+
+    # Portfolio distribution
+    portfolio_dist = {}
+    total_all = sum(m['total'] for m in months)
+    if total_all > 0:
+        for label in bucket_labels:
+            bucket_total = sum(m.get(label, 0) for m in months)
+            portfolio_dist[label] = round(bucket_total / total_all * 100, 2)
+
+    return {
+        'available': True,
+        'view': view,
+        'months': months,
+        'bucket_labels': bucket_labels,
+        'portfolio_distribution': portfolio_dist,
+    }
+
+
+# ── Seasonality ──────────────────────────────────────────────────────────────
+
+def compute_seasonality(df, mult, as_of_date=None):
+    """Year-over-year comparison by calendar month."""
+    if 'Deal date' not in df.columns:
+        return {'available': False}
+
+    df = df.copy()
+    df['year'] = df['Deal date'].dt.year
+    df['cal_month'] = df['Deal date'].dt.month
+    years = sorted(df['year'].dropna().unique().tolist())
+
+    if len(years) < 1 or df['cal_month'].nunique() < 6:
+        return {'available': False}
+
+    origination = []
+    collection_rate = []
+
+    for m in range(1, 13):
+        orig_row = {'month': m}
+        coll_row = {'month': m}
+        for y in years:
+            grp = df[(df['year'] == y) & (df['cal_month'] == m)]
+            orig_row[str(y)] = round(float((grp['Purchase value'] * mult).sum()), 2)
+            pv = (grp['Purchase value'] * mult).sum()
+            co = (grp['Collected till date'] * mult).sum()
+            coll_row[str(y)] = round(float(co / pv * 100), 2) if pv > 0 else None
+        origination.append(orig_row)
+        collection_rate.append(coll_row)
+
+    # Seasonal index — average across years
+    seasonal_index = []
+    for m in range(1, 13):
+        vals = [origination[m-1].get(str(y), 0) for y in years]
+        vals = [v for v in vals if v > 0]
+        avg = sum(vals) / len(vals) if vals else 0
+        overall_avg = sum(sum(origination[mm-1].get(str(y), 0) for y in years) for mm in range(1, 13)) / (12 * len(years)) if years else 1
+        seasonal_index.append({
+            'month': m,
+            'index': round(avg / overall_avg, 4) if overall_avg > 0 else 1.0,
+        })
+
+    return {
+        'available': True,
+        'origination': origination,
+        'collection_rate': collection_rate,
+        'seasonal_index': seasonal_index,
+        'years': [int(y) for y in years],
+    }
+
+
+# ── Loss Categorization ─────────────────────────────────────────────────────
+
+def compute_loss_categorization(df, mult, as_of_date=None):
+    """Categorize losses by inferred reason code using heuristics."""
+    den = df['Denied by insurance'] * mult if 'Denied by insurance' in df.columns else pd.Series(0, index=df.index)
+    pv = df['Purchase value'] * mult
+    defaulted_mask = den > (pv * 0.5)
+
+    if defaulted_mask.sum() == 0:
+        return {'available': False}
+
+    defaulted = df[defaulted_mask].copy()
+    defaulted['denied_amt'] = den[defaulted_mask].values
+
+    categories = []
+    # Provider-concentrated: if group has 3x avg denial rate
+    if 'Group' in defaulted.columns:
+        group_rates = df.groupby('Group').apply(
+            lambda g: (g['Denied by insurance'].sum() / g['Purchase value'].sum()) if g['Purchase value'].sum() > 0 else 0
+        )
+        avg_rate = group_rates.mean()
+        high_denial_groups = set(group_rates[group_rates > avg_rate * 3].index)
+        provider_mask = defaulted['Group'].isin(high_denial_groups)
+        provider_amt = float(defaulted.loc[provider_mask, 'denied_amt'].sum())
+        if provider_amt > 0:
+            categories.append({'category': 'Provider Issue', 'count': int(provider_mask.sum()),
+                             'amount': round(provider_amt, 2)})
+        remaining = defaulted[~provider_mask]
+    else:
+        remaining = defaulted
+
+    # Small denials suggest coding errors
+    small_mask = remaining['denied_amt'] < 5000 * mult
+    if small_mask.sum() > 0:
+        categories.append({'category': 'Possible Coding Error', 'count': int(small_mask.sum()),
+                         'amount': round(float(remaining.loc[small_mask, 'denied_amt'].sum()), 2)})
+    remaining = remaining[~small_mask]
+
+    # Everything else is general credit/underwriting
+    if len(remaining) > 0:
+        categories.append({'category': 'Credit / Underwriting', 'count': int(len(remaining)),
+                         'amount': round(float(remaining['denied_amt'].sum()), 2)})
+
+    total = sum(c['amount'] for c in categories)
+    for c in categories:
+        c['pct'] = round(c['amount'] / total * 100, 2) if total > 0 else 0
+
+    return {
+        'available': True,
+        'categories': categories,
+        'total_defaults': int(defaulted_mask.sum()),
+        'total_amount': round(total, 2),
+    }
+
+
+# ── Methodology Log ──────────────────────────────────────────────────────────
+
+def compute_methodology_log(df, as_of_date=None):
+    """Return a log of data corrections/adjustments applied during analysis."""
+    adjustments = []
+
+    # Check for excluded columns
+    if 'Actual IRR for owner' in df.columns:
+        adjustments.append({
+            'type': 'column_excluded',
+            'description': 'Actual IRR for owner excluded — garbage data (mean ~2.56e44)',
+            'column': 'Actual IRR for owner',
+            'affected_rows': int(df['Actual IRR for owner'].notna().sum()),
+        })
+
+    # Check for negative values clipped
+    for col in ['Purchase value', 'Collected till date', 'Pending insurance response']:
+        if col in df.columns:
+            neg_count = int((df[col] < 0).sum())
+            if neg_count > 0:
+                adjustments.append({
+                    'type': 'negative_values',
+                    'description': f'{neg_count} negative values found in {col}',
+                    'column': col,
+                    'affected_rows': neg_count,
+                })
+
+    # Column availability
+    expected_cols = ['Purchase value', 'Collected till date', 'Denied by insurance',
+                     'Expected till date', 'Expected total', 'Discount',
+                     'New business', 'Product', 'Group', 'Owner']
+    col_availability = {col: col in df.columns for col in expected_cols}
+
+    # Curve columns
+    curve_count = len([c for c in df.columns if c.startswith('Actual in ') and 'days' in c])
+    col_availability['Collection curves'] = curve_count > 0
+
+    # Data quality summary
+    total_rows = len(df)
+    null_rates = {}
+    for col in df.columns[:20]:  # first 20 columns
+        null_pct = float(df[col].isna().sum() / total_rows * 100) if total_rows > 0 else 0
+        if null_pct > 0:
+            null_rates[col] = round(null_pct, 2)
+
+    return {
+        'adjustments': adjustments,
+        'column_availability': col_availability,
+        'data_quality_summary': {
+            'total_rows': total_rows,
+            'null_rates': null_rates,
+        },
+    }
+
+
+# ── Separation Principle ─────────────────────────────────────────────────────
+
+def separate_portfolio(df, mult=1):
+    """Split DataFrame into clean portfolio and loss portfolio.
+
+    Returns: (clean_df, loss_df)
+    - clean_df: active + normally completed deals (denial < 50% of PV)
+    - loss_df: defaulted deals (denial > 50% of PV)
+    """
+    den = df['Denied by insurance'] if 'Denied by insurance' in df.columns else pd.Series(0, index=df.index)
+    pv = df['Purchase value']
+    loss_mask = den > (pv * 0.5)
+    return df[~loss_mask].copy(), df[loss_mask].copy()
+
+
+# ── HHI Time Series ──────────────────────────────────────────────────────────
+
+def compute_hhi_for_snapshot(df, mult):
+    """Compute HHI for a single snapshot — used by the time series endpoint."""
+    total = (df['Purchase value'] * mult).sum()
+    result = {}
+
+    for col_name, key in [('Group', 'group'), ('Product', 'product')]:
+        if col_name not in df.columns:
+            result[f'{key}_hhi'] = None
+            continue
+        shares = df.groupby(col_name)['Purchase value'].sum() * mult / total
+        hhi = float((shares ** 2).sum())
+        result[f'{key}_hhi'] = round(hhi, 6)
+
+    return result
+    return results

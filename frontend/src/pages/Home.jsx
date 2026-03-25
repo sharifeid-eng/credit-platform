@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { getCompanies } from '../services/api'
 
 export default function Home() {
@@ -56,6 +56,28 @@ export default function Home() {
           />
         ))}
         {companies.length === 0 && <EmptyState />}
+      </div>
+
+      {/* Resources section */}
+      <div style={{ marginTop: 40, paddingTop: 28, borderTop: '1px solid var(--border)' }}>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{
+            fontSize: 16, fontWeight: 700, color: 'var(--text-primary)',
+            margin: 0, letterSpacing: '-0.01em',
+          }}>
+            Resources
+          </h2>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Platform documentation and analytical methodology.
+          </p>
+        </div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 14,
+        }}>
+          <FrameworkCard />
+        </div>
       </div>
     </div>
   )
@@ -147,6 +169,66 @@ function CompanyCard({ company, onClick }) {
         <span style={{ color: hovered ? 'var(--gold)' : 'var(--text-faint)', transition: 'color 0.15s', fontSize: 13 }}>→</span>
       </div>
     </div>
+  )
+}
+
+function FrameworkCard() {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <Link
+      to="/framework"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        textDecoration: 'none',
+        background: 'var(--bg-surface)',
+        border: `1px solid ${hovered ? 'rgba(45, 212, 191, 0.4)' : 'var(--border)'}`,
+        borderRadius: 'var(--radius-md)',
+        padding: '20px',
+        cursor: 'pointer',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+        boxShadow: hovered ? '0 0 20px rgba(45, 212, 191, 0.08)' : 'none',
+        position: 'relative', overflow: 'hidden',
+        display: 'block',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        background: hovered ? 'linear-gradient(90deg, var(--teal), transparent)' : 'transparent',
+        transition: 'background 0.2s',
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div style={{
+          width: 40, height: 40,
+          background: 'linear-gradient(135deg, var(--teal), rgba(45,212,191,0.4))',
+          borderRadius: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, flexShrink: 0,
+        }}>
+          <span role="img" aria-label="book" style={{ filter: 'brightness(0) invert(0)' }}>&#128218;</span>
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Analysis Framework
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--teal)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 2 }}>
+            Methodology
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 12 }}>
+        The analytical hierarchy, metric definitions, and philosophy that guide
+        every dashboard, chart, and AI insight in Laith.
+      </div>
+      <div style={{
+        fontSize: 11, color: 'var(--text-muted)',
+        paddingTop: 12, borderTop: '1px solid var(--border)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span>Read Framework</span>
+        <span style={{ color: hovered ? 'var(--teal)' : 'var(--text-faint)', transition: 'color 0.15s', fontSize: 13 }}>→</span>
+      </div>
+    </Link>
   )
 }
 

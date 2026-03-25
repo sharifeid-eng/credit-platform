@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
-import { generatePDFReport } from '../services/api'
+import { generatePDFReport, getParChart, getDtfcChart } from '../services/api'
 
 import KpiCard       from '../components/KpiCard'
 import AICommentary  from '../components/AICommentary'
@@ -23,6 +23,14 @@ import ReturnsAnalysisChart    from '../components/charts/ReturnsAnalysisChart'
 import RiskMigrationChart      from '../components/charts/RiskMigrationChart'
 import DenialFunnelChart       from '../components/charts/DenialFunnelChart'
 import DataIntegrityChart      from '../components/charts/DataIntegrityChart'
+
+// New analytical charts
+import CohortLossWaterfallChart from '../components/charts/CohortLossWaterfallChart'
+import RecoveryAnalysisChart    from '../components/charts/RecoveryAnalysisChart'
+import CollectionsTimingChart   from '../components/charts/CollectionsTimingChart'
+import UnderwritingDriftChart   from '../components/charts/UnderwritingDriftChart'
+import SegmentAnalysisChart     from '../components/charts/SegmentAnalysisChart'
+import SeasonalityChart         from '../components/charts/SeasonalityChart'
 
 // SILQ Charts
 import SilqDelinquencyChart    from '../components/charts/silq/DelinquencyChart'
@@ -268,6 +276,36 @@ function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, cur
           <ReturnsAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
+      {activeTab === 'Collections Timing' && (
+        <ChartTab tab="collections-timing" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <CollectionsTimingChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
+      {activeTab === 'Loss Waterfall' && (
+        <ChartTab tab="loss-waterfall" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <CohortLossWaterfallChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
+      {activeTab === 'Recovery Analysis' && (
+        <ChartTab tab="recovery-analysis" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <RecoveryAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
+      {activeTab === 'Underwriting Drift' && (
+        <ChartTab tab="underwriting-drift" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <UnderwritingDriftChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
+      {activeTab === 'Segment Analysis' && (
+        <ChartTab tab="segment-analysis" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <SegmentAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
+      {activeTab === 'Seasonality' && (
+        <ChartTab tab="seasonality" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <SeasonalityChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
       {activeTab === 'Risk & Migration' && (
         <ChartTab tab="risk-migration" company={company} product={product} snapshot={snapshot} currency={currency}>
           <RiskMigrationChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
@@ -360,6 +398,16 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
   const hhiFmt = (v) => v == null ? '—' : v.toFixed(4)
   const bd = isBackdated
 
+  // Fetch PAR and DTFC data
+  const [par, setPar] = useState(null)
+  const [dtfc, setDtfc] = useState(null)
+
+  useEffect(() => {
+    if (!product || !snapshot) return
+    getParChart(company, product, snapshot, currency, asOfDate).then(setPar).catch(() => setPar(null))
+    getDtfcChart(company, product, snapshot, currency, asOfDate).then(setDtfc).catch(() => setDtfc(null))
+  }, [company, product, snapshot, currency, asOfDate])
+
   const kpis = summary ? [
     { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold' },
     { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal', stale: bd },
@@ -373,6 +421,19 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
     { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top provider: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal' },
   ] : Array(10).fill(null)
 
+  // PAR KPIs — only shown when available
+  const parKpis = par?.available ? [
+    { label: 'PAR 30+', value: pct(par.par30), sub: `${par.par30_count != null ? pct(par.par30_count) + ' by count' : ''}`, color: par.par30 > 5 ? 'red' : par.par30 > 3 ? 'gold' : 'teal', derived: par.method === 'derived' },
+    { label: 'PAR 60+', value: pct(par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: par.par60 > 3 ? 'red' : par.par60 > 2 ? 'gold' : 'teal', derived: par.method === 'derived' },
+    { label: 'PAR 90+', value: pct(par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: par.par90 > 2 ? 'red' : par.par90 > 1 ? 'gold' : 'teal', derived: par.method === 'derived' },
+  ] : []
+
+  // DTFC KPIs — only shown when available
+  const dtfcKpis = dtfc?.available ? [
+    { label: 'DTFC (Median)', value: `${dtfc.median_dtfc.toFixed(0)}d`, sub: `${dtfc.total_deals} deals`, color: 'blue' },
+    { label: 'DTFC (P90)',    value: `${dtfc.p90_dtfc.toFixed(0)}d`, sub: 'slowest 10%',                  color: dtfc.p90_dtfc > 90 ? 'red' : 'gold' },
+  ] : []
+
   const showSkeleton = summaryLoading || !summary
 
   return (
@@ -384,6 +445,49 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
           : kpis.map((k, i) => <KpiCard key={i} {...k} index={i} />)
         }
       </div>
+
+      {/* PAR KPIs — shown when available */}
+      {parKpis.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+              Portfolio at Risk
+            </span>
+            {par?.method === 'derived' && (
+              <span style={{
+                fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                background: 'rgba(201,168,76,0.1)', color: 'var(--gold)',
+                border: '1px dashed rgba(201,168,76,0.3)',
+              }}>
+                Derived from historical patterns
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${parKpis.length + dtfcKpis.length}, 1fr)`, gap: 10 }}>
+            {parKpis.map((k, i) => (
+              <div key={`par-${i}`} style={k.derived ? { borderStyle: 'dashed' } : undefined}>
+                <KpiCard {...k} index={i} />
+              </div>
+            ))}
+            {dtfcKpis.map((k, i) => (
+              <KpiCard key={`dtfc-${i}`} {...k} index={parKpis.length + i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* DTFC-only row when PAR not available but DTFC is */}
+      {parKpis.length === 0 && dtfcKpis.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
+            Cash Conversion
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${dtfcKpis.length}, 1fr)`, gap: 10, maxWidth: 400 }}>
+            {dtfcKpis.map((k, i) => <KpiCard key={`dtfc-${i}`} {...k} index={i} />)}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} />
         <DataChat company={company} product={product} snapshot={snapshot} currency={currency} />

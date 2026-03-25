@@ -29,8 +29,21 @@ export default function Navbar() {
         </div>
       </Link>
 
-      {/* Right — Status chips */}
+      {/* Right — Nav links + Status chips */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Link to="/framework" style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: pathname === '/framework' ? 'var(--gold)' : 'var(--text-muted)',
+          textDecoration: 'none',
+          padding: '4px 10px',
+          borderRadius: 6,
+          transition: 'color var(--transition-fast)',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.02em',
+        }}>
+          Framework
+        </Link>
         <LiveDot />
         <Chip>v0.5</Chip>
         <Chip highlight>Sharif Eid</Chip>

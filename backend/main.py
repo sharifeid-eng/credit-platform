@@ -19,6 +19,12 @@ from core.analysis import (
     compute_stress_test, compute_expected_loss, compute_loss_triangle,
     compute_group_performance,
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
+    compute_par, compute_dtfc,
+    compute_cohort_loss_waterfall, compute_recovery_analysis,
+    compute_vintage_loss_curves, compute_underwriting_drift,
+    compute_segment_analysis, compute_collections_timing,
+    compute_seasonality, compute_loss_categorization,
+    compute_methodology_log, compute_hhi_for_snapshot,
 )
 from core.migration import compute_roll_rates
 from core.validation import validate_tape
@@ -141,6 +147,18 @@ def _silq_load(company, product, snapshot, as_of_date, currency):
     # DPD reference date: as-of date if set, otherwise snapshot date
     ref_date = pd.to_datetime(as_of_date) if as_of_date else pd.to_datetime(sel['date'])
     return df, sel, config, disp, mult, commentary_text, ref_date
+
+# ── Framework endpoint ─────────────────────────────────────────────────────────
+
+@app.get("/framework")
+def get_framework():
+    """Return the analysis framework markdown document."""
+    framework_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'core', 'ANALYSIS_FRAMEWORK.md')
+    try:
+        with open(framework_path, 'r', encoding='utf-8') as f:
+            return {'content': f.read()}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Framework document not found")
 
 # ── FX rates endpoint ──────────────────────────────────────────────────────────
 
@@ -482,6 +500,184 @@ def get_risk_migration(company: str, product: str,
     result['new_snapshot']   = new_sel['date']
 
     return result
+
+# ── PAR (Portfolio at Risk) ───────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/par")
+def get_par(company: str, product: str,
+            snapshot: Optional[str] = None, currency: Optional[str] = None,
+            as_of_date: Optional[str] = None):
+    """Portfolio at Risk KPIs."""
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_par(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── DTFC (Days to First Cash) ────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/dtfc")
+def get_dtfc(company: str, product: str,
+             snapshot: Optional[str] = None, currency: Optional[str] = None,
+             as_of_date: Optional[str] = None):
+    """Days to First Cash — leading indicator."""
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_dtfc(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Cohort Loss Waterfall ────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/cohort-loss-waterfall")
+def get_cohort_loss_waterfall(company: str, product: str,
+                              snapshot: Optional[str] = None, currency: Optional[str] = None,
+                              as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_cohort_loss_waterfall(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Recovery Analysis ────────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/recovery-analysis")
+def get_recovery_analysis(company: str, product: str,
+                          snapshot: Optional[str] = None, currency: Optional[str] = None,
+                          as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_recovery_analysis(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Vintage Loss Curves ─────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/vintage-loss-curves")
+def get_vintage_loss_curves(company: str, product: str,
+                            snapshot: Optional[str] = None, currency: Optional[str] = None,
+                            as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_vintage_loss_curves(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Underwriting Drift ──────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/underwriting-drift")
+def get_underwriting_drift(company: str, product: str,
+                           snapshot: Optional[str] = None, currency: Optional[str] = None,
+                           as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_underwriting_drift(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Segment Analysis ─────────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/segment-analysis")
+def get_segment_analysis(company: str, product: str,
+                         snapshot: Optional[str] = None, currency: Optional[str] = None,
+                         as_of_date: Optional[str] = None, segment_by: str = 'product'):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_segment_analysis(df, mult, as_of_date=as_of_date or sel['date'], segment_by=segment_by)
+
+# ── Collections Timing ───────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/collections-timing")
+def get_collections_timing(company: str, product: str,
+                           snapshot: Optional[str] = None, currency: Optional[str] = None,
+                           as_of_date: Optional[str] = None, view: str = 'origination_month'):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_collections_timing(df, mult, as_of_date=as_of_date or sel['date'], view=view)
+
+# ── Seasonality ──────────────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/seasonality")
+def get_seasonality(company: str, product: str,
+                    snapshot: Optional[str] = None, currency: Optional[str] = None,
+                    as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_seasonality(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Loss Categorization ─────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/loss-categorization")
+def get_loss_categorization(company: str, product: str,
+                            snapshot: Optional[str] = None, currency: Optional[str] = None,
+                            as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_loss_categorization(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Methodology Log ──────────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/methodology-log")
+def get_methodology_log(company: str, product: str,
+                        snapshot: Optional[str] = None,
+                        as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    return compute_methodology_log(df, as_of_date=as_of_date or sel['date'])
+
+# ── HHI Time Series ─────────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/hhi-timeseries")
+def get_hhi_timeseries(company: str, product: str, currency: Optional[str] = None):
+    """Compute HHI across ALL snapshots for time series view."""
+    snaps = get_snapshots(company, product)
+    if len(snaps) < 2:
+        return {'available': False, 'reason': 'Need at least 2 snapshots'}
+
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+
+    points = []
+    for snap in snaps:
+        try:
+            snap_df = load_snapshot(snap['filepath'])
+            hhi = compute_hhi_for_snapshot(snap_df, mult)
+            points.append({
+                'date': snap['date'],
+                'group_hhi': hhi.get('group_hhi'),
+                'product_hhi': hhi.get('product_hhi'),
+            })
+        except Exception:
+            continue
+
+    if len(points) < 2:
+        return {'available': False, 'reason': 'Insufficient valid snapshots'}
+
+    # Trend detection
+    group_vals = [p['group_hhi'] for p in points if p['group_hhi'] is not None]
+    trend = 'stable'
+    warning = None
+    if len(group_vals) >= 2:
+        if group_vals[-1] > group_vals[0] * 1.10:
+            trend = 'increasing'
+            warning = f'Group HHI increased from {group_vals[0]:.4f} to {group_vals[-1]:.4f}'
+        elif group_vals[-1] < group_vals[0] * 0.90:
+            trend = 'decreasing'
+
+    return {
+        'available': True,
+        'points': points,
+        'trend': trend,
+        'warning': warning,
+    }
 
 # ── SILQ chart endpoints ─────────────────────────────────────────────────────
 
