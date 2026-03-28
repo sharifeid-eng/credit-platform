@@ -465,8 +465,8 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Underwriting drift** — `compute_underwriting_drift()` compares per-vintage metrics (avg deal size, discount, collection rate) against historical norms (rolling mean of prior vintages). Flags vintages where metrics deviate beyond 1 standard deviation.
 - **Seasonality** — `compute_seasonality()` groups deployment by calendar month across years for YoY comparison. Computes seasonal index (month average / overall average) to identify seasonal patterns in origination.
 - **Methodology log** — `compute_methodology_log()` documents all data corrections, column availability checks, and data quality decisions applied during analysis. Provides audit trail for IC-level transparency.
-- **Ejari read-only summary pattern** — When `analysis_type` is `"ejari_summary"`, the platform bypasses all tape loading and computation. The summary endpoint returns a stub response, and TapeAnalytics renders `EjariDashboard.jsx` instead of the normal tab system. The `parse_ejari_workbook()` function in `core/analysis_ejari.py` reads the ODS file once (cached per session), extracting 12 structured sections. This pattern can be reused for any future company that provides pre-computed analysis instead of raw tapes.
-- **ODS file support** — `core/loader.py` `get_snapshots()` now accepts `.ods` files alongside `.csv` and `.xlsx`.
+- **Ejari read-only summary pattern** — When `analysis_type` is `"ejari_summary"`, the platform bypasses all tape loading and computation. TapeAnalytics renders `EjariDashboard.jsx` which reads the URL `:tab` param and renders only the matching section. The `parse_ejari_workbook()` function in `core/analysis_ejari.py` reads the ODS file once (cached per session), extracting 12 structured sections. Config uses `hide_portfolio_tabs: true` to suppress Portfolio Analytics in sidebar, and sidebar header shows "Analysis" instead of "Tape Analytics". This pattern can be reused for any future company that provides pre-computed analysis instead of raw tapes.
+- **ODS file support** — `core/loader.py` `get_snapshots()` now accepts `.ods` files alongside `.csv` and `.xlsx`. Requires `odfpy` package (`pip install odfpy`).
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -632,9 +632,9 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Pre-computed ODS workbook with 13 sheets — no raw loan tape
   - `analysis_type: "ejari_summary"` bypasses normal tape loading, renders dedicated dashboard
   - Parser (`core/analysis_ejari.py`) extracts 12 structured sections from ODS
-  - Dashboard (`EjariDashboard.jsx`) renders: Portfolio Overview (KPIs + DPD), Monthly Cohorts, Cohort Loss Waterfall, Roll Rates, Historical Performance, Collections by Month/Origination, Segment Analysis (6 dimensions), Credit Quality Trends, Najiz & Legal, Write-offs & Fraud, Data Notes
-  - Section navigation pills for quick jump between sections
-  - Loader updated to support `.ods` file extension
+  - Dashboard (`EjariDashboard.jsx`) renders 12 tabs: Portfolio Overview (KPIs + DPD), Monthly Cohorts, Cohort Loss Waterfall, Roll Rates, Historical Performance, Collections by Month/Origination, Segment Analysis (6 dimensions), Credit Quality Trends, Najiz & Legal, Write-offs & Fraud, Data Notes
+  - **Sidebar navigation** — aligned with Klaim/SILQ design pattern: 12 tabs in left sidebar, URL-driven (`/tape/:slug`), single section rendered per tab. Sidebar header shows "Analysis" (not "Tape Analytics"). Portfolio Analytics section hidden via `hide_portfolio_tabs: true` in config.
+  - Loader updated to support `.ods` file extension (requires `odfpy` package in venv)
   - Cached parsing — ODS parsed once per session
 - ✅ **Unit test coverage complete:**
   - 120 tests total (61 Klaim + 59 SILQ), all passing
@@ -725,6 +725,31 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] DB-optional fallback to tape data
 - [x] Frontend: 6 portfolio tabs with live data
 - [x] Seed script + API key generation CLI
+**Analytical Framework Expansion (from Ejari/RNPL deep-dive — applies to ALL companies):**
+Derived from detailed analysis of Ejari's loan tape analysis workbook and a lender-grade RNPL analytical framework. These improvements strengthen the platform for any asset class, not just RNPL.
+- [ ] **PAR as headline Overview KPIs** — PAR 30+/60+/90+ as % of active outstanding (Tape), % of eligible outstanding (Portfolio). Hidden on tapes without contractual benchmarks (graceful degradation). Option C: derived PAR from empirical completed-deal curves, clearly labeled "Derived from historical patterns" when used.
+- [ ] **Collections timing waterfall** — timing bucket distribution (Early/0-15d/15-30d/30-45d/45-60d/60-90d/90+). Two views: by payment month (liquidity quality) and by origination month (vintage behavior). Tape = retrospective; Portfolio = live + projected with expected overlay.
+- [ ] **Cohort loss waterfall** — per-vintage: Originated → Gross Default → Recovery → Net Loss. Separate fraud/anomaly share. Net loss rate and recovery rate (ex-fraud). Tape = retrospective dollar journey; Portfolio = exposure waterfall (Total → Eligible → At Risk → Impaired → Reserved).
+- [ ] **Credit quality / underwriting drift** — per-vintage origination characteristics (avg deal size, discount, term, product mix, group concentration). Tape = vintage quality trends over time; Portfolio = current book quality profile vs historical average.
+- [ ] **Enhanced segment analysis** — multi-dimensional performance cuts: product, provider size band, region, deal size band, new vs repeat. Each showing count, volume, collection/denial rates, margins, PAR. Tape = performance drivers; Portfolio = concentration risk matrix.
+- [ ] **Roll rate enhancement (cure/roll signals)** — per-DPD-bucket: avg days since last collection, % with recent activity (30d/60d), implied cure rate, implied roll rate. Tape = behavioral signals; Portfolio = early warning triggers feeding covenant monitoring.
+- [ ] **Recovery analysis post-default** — for deals hitting default status: recovery rate, recovery timing distribution, loan-level detail for worst/best. Informs LGD assumptions in EL model.
+- [ ] **Historical vintage performance curves** — cumulative gross/net default and recovery rate development over time per vintage (like collection curves but for losses). Projects immature vintage ultimate loss rates.
+- [ ] **Write-off / loss isolation (separation principle enhancement)** — all performance dashboards show clean portfolio; dedicated Loss Analysis section for written-off/fully-denied deals with reason code breakdown.
+- [ ] **Fraud/anomaly categorization enhancement** — reason codes: legitimate denial, documentation error, duplicate claim, provider fraud, coding error. Understanding *why* deals fail.
+- [ ] **HHI time series** — track concentration across all snapshots to show direction of travel, trend detection, warnings.
+- [ ] **DTFC (Days to First Cash)** — time from origination to first collection, median and P90. Leading indicator.
+- [ ] **DSO dual variants** — DSO Capital (from funding, capital duration) + DSO Operational (from due date, payer behavior).
+- [ ] **Seasonality dashboard enhancement** — YoY comparison + seasonal index + delinquency emergence overlay.
+- [ ] **Methodology transparency enhancement** — data corrections log, column availability audit trail.
+- [ ] **Analysis Framework document expansion** — formalize: Analytical Hierarchy, Metric Dictionary with exact definitions/denominators/filters, Tape vs Portfolio Philosophy, Asset Class Adaptations, Leading vs Lagging Indicators, AI Commentary Guidelines. Available on Home page.
+- [ ] **Company Methodology page updates** — expand per-company methodology pages with new metric definitions as features are added.
+**Key analytical design decisions (documented for consistency):**
+- PAR denominator: active outstanding (Tape), eligible outstanding (Portfolio). Lifetime rates live in Loss Waterfall as "Gross/Net Default Rate" — different metric, different location.
+- PAR without contractual benchmarks: hide (graceful degradation), not estimate. Exception: Option C (empirical curves from completed deals) with explicit "Derived" labeling when robust enough (min N completed deals, min vintage depth).
+- Tape Analytics = retrospective, IC-ready analysis. Portfolio Analytics = live monitoring, facility-grade.
+- Completed-only metrics for margins/returns. Outstanding-based metrics for ageing/health (not face value).
+- Separation principle: clean portfolio for performance metrics, loss portfolio isolated for attribution.
 **Phase 2 — Remaining polish:**
 - [ ] Facility params input UI (edit advance rates, concentration limits, covenants from frontend)
 - [ ] Breach notification system (email/Slack alerts on covenant breach)
