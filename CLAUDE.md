@@ -7,6 +7,33 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 1. Update CLAUDE.md (offer to do it)
 2. Commit and push to GitHub (offer to do it, confirm `.env` is not tracked)
 -----
+## Workflow Rules
+
+### Planning
+- Enter plan mode for any non-trivial task (3+ steps or architectural decisions). Write the plan to `tasks/todo.md` with checkable items.
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing.
+- Write detailed specs upfront to reduce ambiguity. Check in with the user before starting implementation.
+
+### Execution
+- **Subagents:** Offload research, exploration, and parallel analysis to subagents. One task per subagent for focused execution. Keep main context window clean.
+- **Simplicity first:** Make every change as simple as possible. Minimal impact. Only touch what's necessary.
+- **No laziness:** Find root causes. No temporary fixes. Senior developer standards.
+- **Autonomous bug fixing:** When given a bug report, just fix it. Point at logs, errors, failing tests — then resolve them. Zero context switching required from the user.
+
+### Verification
+- Never mark a task complete without proving it works — run tests, check logs, demonstrate correctness.
+- When a task depends on external data (tape edits, DB migrations), **verify the data first** before updating code that references it.
+- Ask yourself: "Would a staff engineer approve this?"
+
+### Self-Improvement
+- After ANY correction from the user, update `tasks/lessons.md` with the pattern. Write rules that prevent the same mistake.
+- Review `tasks/lessons.md` at session start for this project.
+
+### Progress Tracking
+- Track plans and progress in `tasks/todo.md`. Mark items complete as you go.
+- Explain changes with high-level summaries at each step.
+- After completing a major task, add a review section to `tasks/todo.md` and capture lessons.
+-----
 ## What This Project Is
 **Laith** (with **AI** as a play in the name) — an institutional-grade, full-stack web application for analyzing and monitoring asset-backed loan portfolios. Built for a private credit fund (ACP) that purchases receivables and short-term loans from portfolio companies.
 The platform allows analysts and investment committee members to:
@@ -27,7 +54,7 @@ The platform allows analysts and investment committee members to:
 **Who uses it:** Sharif (fund analyst/PM) and eventually the broader investment committee.
 **Current portfolio companies:**
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
-- **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (2 tapes: Jan 2026, Feb 2026). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests. Feb 2026 tape introduced product renames: RBF (Exclusive) → RCL (Revolving Credit Line), RBF (Non-Exclusive) → RBF. Loader handles both old and new sheet/product names.
+- **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (2 tapes: Jan 2026, Feb 2026). Three product types: BNPL, RBF, RCL (Revolving Credit Line). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
 - **Ejari** — Rent Now Pay Later (RNPL), KSA. Data in USD. **Read-only summary** — no raw loan tape, only a pre-computed ODS workbook with 13 sheets of analysis. Rendered as a dedicated dashboard (`EjariDashboard.jsx`) without live computation. Parser: `core/analysis_ejari.py`. Config: `analysis_type: "ejari_summary"`. Live dataset: `data/Ejari/RNPL/`
 **Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, and rent payment financing (RNPL).
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook).
@@ -409,6 +436,19 @@ Each product has a `config.json` with its reported currency. Frontend shows togg
 ## Dashboard Customization Philosophy
 Each company/product has its own configured dashboard. The platform shares a common shell but specific views, metrics, and AI prompts are driven by asset class and available columns. Onboarding a new company requires designing the right views for that asset class.
 **Current implementation:** Klaim (healthcare receivables), SILQ (POS lending), and Ejari (RNPL read-only summary) all onboarded. SILQ has a dedicated analysis module (`core/analysis_silq.py`) and custom dashboard tabs configured via `config.json`. Ejari uses `analysis_type: "ejari_summary"` to render a dedicated read-only dashboard (`EjariDashboard.jsx`) that parses an ODS workbook instead of running live computations. The `analysisType` field in config determines which chart components render.
+
+### Methodology Onboarding Checklist
+When onboarding a new company, follow these steps to build its methodology page. Full guide in `core/ANALYSIS_FRAMEWORK.md` Section 7.
+1. **Define `analysis_type`** in `config.json` — reuse existing type if same asset class, or create new one
+2. **Build methodology sections covering all 5 hierarchy levels:**
+   - L1 Size & Composition — what constitutes "a deal", volume metrics, product types
+   - L2 Cash Conversion — collection rate formula, DSO variant, timing distribution
+   - L3 Credit Quality — distress signal (DPD vs denial vs default), PAR method, health thresholds
+   - L4 Loss Attribution — loss event definition, recovery path, margin structure, EL parameters
+   - L5 Forward Signals — at least one leading indicator, covenant thresholds, stress scenarios
+3. **Add cross-cutting sections** — Product Types, Cohort Analysis, Data Caveats, Currency, Data Quality
+4. **Add conditional branch** in `Methodology.jsx` — new `{TYPE}_SECTIONS` array with `level` tags, new content component
+5. **Verify metrics match backend** — every formula in the methodology must correspond to an actual computation in the analysis module
 -----
 ## Key Architectural Decisions
 - **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.
@@ -448,7 +488,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 - **Facility config as JSONB** — `FacilityConfig` model stores advance_rates, concentration_limits, covenants as flexible JSON for per-facility customization.
 - **Portfolio computation engine** — `core/portfolio.py` contains pure functions: `compute_borrowing_base()` (waterfall + eligibility), `compute_concentration_limits()` (4 limits with breach drill-down), `compute_covenants()` (5-6 per asset class), `compute_portfolio_flow()` (cash waterfall). Supports both Klaim and SILQ asset classes.
 - **PDF report generation** — `generate_report.py` uses Playwright headless Chrome to screenshot all 11 tape tabs (excluding Data Integrity) via sidebar link navigation. Navigates to `/company/:co/:product/tape/:slug` URLs. ReportLab composes a professional PDF (dark cover page with LAITH branding, TOC, full-width tab screenshots). Backend `POST /generate-report` endpoint runs the script as a subprocess, streams the PDF via `FileResponse`, and auto-deletes the temp file via `BackgroundTask`. Frontend receives blob, creates `blob://` URL, opens in new tab. Nothing saved to disk — user saves manually from Chrome's PDF viewer. Playwright falls back to `channel="chrome"` (local Chrome) if managed Chromium is unavailable.
-- **SILQ multi-sheet Excel loader** — `core/loader.py` handles both old (Jan 2026: `BNPL+RBF_NE`, `RBF_LT`) and new (Feb 2026: `BNPL + RBF`, `RCL_LT`) sheet names. Product values normalized: `RBF_Exc` → `RCL`, `RBF_NE` → `RBF`. Row 1 is header (row 0 has formulas). `Loan_Type` column in RCL sheet mapped to `Product`.
+- **SILQ multi-sheet Excel loader** — `core/loader.py` reads all data sheets from the Excel workbook and concatenates them. Three product types: BNPL, RBF, RCL. Row 1 is header (row 0 has formulas). `Loan_Type` column in RCL sheet mapped to `Product`.
 - **As-of date default** — `date-range` endpoint returns `snapshot_date` extracted from filename. Frontend uses `max(data_max_date, snapshot_date)` as calendar upper bound and default.
 - **Framer Motion integration** — Uses `motion.div` wrappers with `initial`/`animate`/`exit` props. `AnimatePresence mode="wait"` for tab transitions and chart loading states. KPI stagger via `index * 0.04s` delay. All animations use `transform`/`opacity` for GPU acceleration.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
@@ -624,9 +664,8 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Supports both Klaim (receivables factoring) and SILQ (POS lending) asset classes
   - `_portfolio_load()` auto-selects data source (DB → tape fallback)
 - ✅ **SILQ Feb 2026 tape onboarded:**
-  - Product renames: RBF (Exclusive) → RCL, RBF (Non-Exclusive) → RBF, BNPL unchanged
-  - Sheet names: `BNPL+RBF_NE` → `BNPL + RBF`, `RBF_LT` → `RCL_LT`
-  - Loader handles both old and new naming conventions seamlessly
+  - Three product types: BNPL, RBF, RCL — consistent across both tapes
+  - Loader reads all data sheets and normalises `Loan_Type` → `Product`
   - Portfolio commentary from tape displayed in Overview tab
 - ✅ **Ejari RNPL onboarded (read-only summary):**
   - Pre-computed ODS workbook with 13 sheets — no raw loan tape
@@ -702,7 +741,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 ## Known Gaps & Next Steps
 **Short term:**
 - [x] Onboard SILQ — POS lending asset class (analysis module, validation, tests, 2 tapes live)
-- [x] SILQ Feb 2026 tape — product renames (RBF Exc → RCL, RBF NE → RBF), loader handles both conventions
+- [x] SILQ Feb 2026 tape — three product types (BNPL, RBF, RCL) consistent across both tapes
 - [x] Add `core/analysis.py` unit tests — 120 tests (61 Klaim + 59 SILQ), full coverage of all 28 analysis functions
 - [x] Replace hardcoded FX rates with live API (exchangerate-api.com, fallback to hardcoded)
 - [x] Startup script — `start.ps1` boots both servers + opens browser
@@ -742,7 +781,7 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 - [ ] **DSO dual variants** — DSO Capital (from funding, capital duration) + DSO Operational (from due date, payer behavior).
 - [ ] **Seasonality dashboard enhancement** — YoY comparison + seasonal index + delinquency emergence overlay.
 - [ ] **Methodology transparency enhancement** — data corrections log, column availability audit trail.
-- [ ] **Analysis Framework document expansion** — formalize: Analytical Hierarchy, Metric Dictionary with exact definitions/denominators/filters, Tape vs Portfolio Philosophy, Asset Class Adaptations, Leading vs Lagging Indicators, AI Commentary Guidelines. Available on Home page.
+- [x] **Analysis Framework document expansion** — formalized: Analytical Hierarchy, Metric Doctrine (denominator/weighting/confidence), Three Clocks, Collection Rate Disambiguation, Dilution Framework, Denominator Discipline, Methodology Onboarding Guide with hierarchy-level mapping. Served via Framework page with sticky TOC.
 - [ ] **Company Methodology page updates** — expand per-company methodology pages with new metric definitions as features are added.
 **Key analytical design decisions (documented for consistency):**
 - PAR denominator: active outstanding (Tape), eligible outstanding (Portfolio). Lifetime rates live in Loss Waterfall as "Gross/Net Default Rate" — different metric, different location.
@@ -750,15 +789,33 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 - Tape Analytics = retrospective, IC-ready analysis. Portfolio Analytics = live monitoring, facility-grade.
 - Completed-only metrics for margins/returns. Outstanding-based metrics for ageing/health (not face value).
 - Separation principle: clean portfolio for performance metrics, loss portfolio isolated for attribution.
-**Phase 2 — Remaining polish:**
+- Denominator discipline: every metric declares total vs active vs eligible. See ANALYSIS_FRAMEWORK.md Section 6.
+- Three clocks: origination age, contractual DPD, operational delay. New asset classes must declare which clock drives delinquency. See ANALYSIS_FRAMEWORK.md Section 7.
+- Collection rate = GLR (all cash vs face). CRR (capital recovery) shown separately in Returns. See ANALYSIS_FRAMEWORK.md Section 8.
+- Dilution (non-credit loss) reframed for Klaim: denial = dilution by reason code. See ANALYSIS_FRAMEWORK.md Section 9.
+- Metric doctrine: every metric must declare formula, denominator, weighting, inclusion, clock, confidence grade. See ANALYSIS_FRAMEWORK.md Section 10.
+**Portfolio Analytics — Near-term enhancements:**
+- [ ] Trigger distance + projected breach date on Covenants tab — show basis points / percentage to trigger, projected breach date under current trajectory
+- [ ] BB Movement Attribution waterfall — period-over-period decomposition: ΔEligible + ΔCaps + ΔReserves + ΔOutstanding = ΔAvailability
+- [ ] Breakeven analysis — "At what collection rate does the borrowing base breach?" Invert stress to find threshold.
+- [ ] BB Sensitivity formulas — ∂BB/∂advance_rate, ∂BB/∂reserve. Shows which lever moves availability most.
 - [ ] Facility params input UI (edit advance rates, concentration limits, covenants from frontend)
+**Data Quality — Near-term enhancements:**
+- [ ] Duplicate/anomaly detection in validation — suspiciously identical amounts across deals, duplicate counterparty+amount+date combinations, statistical outliers (deal size, discount, timing far outside distribution), balance identity violations
+- [ ] Confidence grading badges on metrics — A (observed), B (inferred), C (derived) displayed in UI
+**Portfolio Analytics — Medium-term:**
+- [ ] Automated compliance certificate / BBC export — generate the borrowing base certificate document from live data
+- [ ] Conditional monthly rates (CDR/CCR) alongside cumulative — monthly annualized default/collection rate strips out vintage effects
 - [ ] Breach notification system (email/Slack alerts on covenant breach)
 - [ ] Portfolio company onboarding flow (self-service API key provisioning)
+- [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
+- [ ] Recovery discounting — PV-adjusted LGD using discount rate (undiscounted LGD overstates recovery value)
 **Phase 3 (Team & Deployment):**
 - [ ] Cloud deployment
 - [ ] Role-based access (RBAC)
 - [ ] Scheduled report delivery
 - [ ] Real-time webhook notifications to portfolio companies
+- [ ] AI-powered covenant extraction — ingest facility agreement PDFs, extract advance rates, concentration limits, covenant formulas, eligibility criteria → auto-populate facility_configs
 -----
 ## Environment
 - **Machine:** Windows (PowerShell)

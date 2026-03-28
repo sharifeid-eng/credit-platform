@@ -204,7 +204,124 @@ The platform provides a "Clean Portfolio / Full Portfolio" toggle so analysts ca
 
 ---
 
-## 6. Metric Definitions Reference
+## 6. Denominator Discipline
+
+The most common failure mode in quantitative ABL analysis is denominator confusion. Analysts compute "performance" on a portfolio basis, while the facility is governed by eligible collateral and contractual exclusions. Every metric in Laith must declare its denominator explicitly.
+
+### The Three Denominators
+
+Every metric that expresses a rate, ratio, or percentage must state which base it uses:
+
+| Denominator | Definition | When to Use |
+|-------------|-----------|-------------|
+| **Total** | All deals in the tape/database, regardless of status or eligibility | Lifetime analysis, IC reporting, portfolio-level summaries |
+| **Active** | Deals with Status ≠ Completed/Closed (still outstanding) | Tape Analytics: PAR, health, ageing, outstanding-based metrics |
+| **Eligible** | Active deals passing all eligibility predicates (age, documentation, concentration, dispute status) | Portfolio Analytics: borrowing base, advance rates, covenant denominators |
+
+**Rule:** If a metric's denominator is "total" but the facility uses "eligible," your monitoring will fail at the worst time. Laith defaults to the most conservative denominator appropriate to the context (active for Tape, eligible for Portfolio).
+
+### Denominator Examples
+
+| Metric | Tape Denominator | Portfolio Denominator | Why They Differ |
+|--------|-----------------|----------------------|-----------------|
+| PAR 30+ | Active outstanding | Eligible outstanding | Tape measures book quality; Portfolio measures what the lender is exposed to |
+| Collection Rate | Purchase Value (face) of deals in period | Collectable amount of eligible pool | Tape measures vintage performance; Portfolio measures current cash conversion |
+| Margin | Completed deals only (not active) | Completed eligible deals | Active deals are still collecting — including them understates margin |
+| HHI | All groups by originated value | Eligible groups by advanceable value | Tape shows historical concentration; Portfolio shows current facility exposure |
+| Denial/Default Rate | Purchase Value of completed deals (denominator) | Eligible outstanding (denominator) | Tape = lifetime rate; Portfolio = current impairment |
+
+### Confidence Grading
+
+Every metric should carry an implicit confidence grade based on data quality:
+
+| Grade | Meaning | Example |
+|-------|---------|---------|
+| **A — Observed** | Computed from directly observed, validated data | Collection rate from actual cash received |
+| **B — Inferred** | Reconstructed from balance changes or cross-snapshot comparison | Roll rates from two snapshots; DSO from balance proxy |
+| **C — Derived** | Estimated from empirical patterns or models | PAR from empirical benchmarks (Option C); EL model output |
+
+Laith's existing "graceful degradation" pattern (hide when unavailable, label as "Derived" when estimated) is the implementation of this grading. When adding new metrics, always classify: is this A, B, or C?
+
+---
+
+## 7. The Three Clocks
+
+A single time clock will misclassify delinquency for entire asset classes. Laith supports three clocks, and every time-based metric must declare which clock it uses.
+
+### Clock Definitions
+
+| Clock | Formula | Asset Classes | Use For |
+|-------|---------|---------------|---------|
+| **Origination Age** (seasoning) | `today - origination_date` | All | Vintage analysis, cohort construction, seasoning curves |
+| **Contractual Delinquency** (DPD) | `max(0, today - contract_due_date)` | SILQ (consumer lending) | PAR, DPD buckets, roll rates, covenant tests |
+| **Operational Delay** (OD) | `max(0, today - expected_collection_date)` | Klaim (insurance claims) | PAR, health status, collection pacing |
+
+### Design Principle
+
+If an asset's "due" is operational (insurer adjudication, invoice approval cycle), delinquency states must be based on Operational Delay, not DPD. Forcing contractual DPD on operational-resolution assets produces false PAR and false ineligibles.
+
+**Current implementation:**
+- Klaim uses Operational Delay (via `Expected till date` column) or empirical benchmarks when expected dates unavailable
+- SILQ uses Contractual DPD (via `Repayment_Deadline` column)
+- Ejari (read-only) — clocks are pre-computed in the ODS workbook
+
+When onboarding a new asset class, the first analytical decision is: **which clock drives delinquency?**
+
+---
+
+## 8. Collection Rate Disambiguation
+
+A single "collection rate" is a pitfall. Different definitions answer different questions, and using the wrong one hides liquidity stress.
+
+### Collection Rate Variants
+
+| Variant | Formula | Question It Answers | Laith Implementation |
+|---------|---------|--------------------|--------------------|
+| **Gross Liquidation Rate (GLR)** | All cash collected / Face value (Purchase Value) | "What fraction of face value has been converted to cash?" | **This is what Laith reports as "Collection Rate"** |
+| **Capital Recovery Rate (CRR)** | Principal collected / Funded amount (Purchase Price) | "How much of our deployed capital came back?" | Reported as "Capital Recovery" in Returns tab |
+| **Economic Recovery Rate (ERR)** | PV of cash collected (discounted) / Funded amount | "What is the time-value-adjusted return on capital?" | Not currently implemented |
+| **Conditional Collection Rate (CCR)** | Cash collected in month / Outstanding at start of month | "What is the current monthly run-rate of collections?" | Not currently implemented — cumulative rates only |
+
+### Why This Matters
+
+- GLR can look healthy (90%+) while CRR reveals capital erosion (if deals were purchased at a premium)
+- Cumulative GLR masks deterioration — if recent months are collecting at 60% but lifetime is 90%, the cumulative rate hides the problem
+- ERR penalizes slow collections even if ultimate recovery is high — relevant for capital allocation decisions
+- CCR (conditional monthly rate) strips out vintage effects and shows current portfolio behavior
+
+**Current Laith approach:** GLR is the primary metric, CRR appears in Returns. This is appropriate for IC reporting. The manual recommends documenting which rate is displayed and ensuring analysts understand the distinction.
+
+---
+
+## 9. Dilution Framework
+
+In ABL terminology, "dilution" is any non-credit reduction in receivable value: returns, allowances, credit memos, denials, chargebacks, pricing adjustments. This is distinct from credit loss (inability to pay).
+
+### Mapping to Laith's Asset Classes
+
+| ABL Concept | Klaim Equivalent | SILQ Equivalent |
+|-------------|-----------------|-----------------|
+| Dilution | Insurance denial (full or partial) | N/A (consumer lending has no dilution) |
+| Dilution by reason code | Loss Categorization: provider_issue, coding_error, documentation | N/A |
+| Credit loss | Denial after appeal exhaustion | DPD > 90 / charge-off |
+| Non-credit leakage | Partial denials, documentation rejections | Late fees, penalties |
+
+### Why This Reframing Matters
+
+For Klaim (receivables factoring), most "losses" are actually dilution — the insurance company denies the claim, not because the claim is uncollectible, but because of documentation, coding, or coverage issues. This has two implications:
+
+1. **Dilution is partially controllable** — better documentation, coding accuracy, and provider selection reduce dilution. Credit loss is not controllable post-origination.
+2. **Dilution reserve in borrowing base** — the facility should hold a dilution reserve based on historical dilution rates by reason code, separate from a credit loss reserve. Laith's Loss Categorization already provides the reason-code breakdown needed to compute this.
+
+### Dilution Rate
+
+**Formula:** Sum of denied/returned amounts / Sum of face value (gross receivables)
+**Decomposition:** By reason code (provider_issue, coding_error, documentation, credit/underwriting)
+**Borrowing base impact:** Dilution reserve = historical dilution rate × current eligible pool
+
+---
+
+## 10. Metric Definitions Reference
 
 ### PAR (Portfolio at Risk)
 **Formula:** PAR X+ = Sum of Outstanding on deals past due by X+ days / Total Active Outstanding
@@ -225,18 +342,137 @@ The platform provides a "Clean Portfolio / Full Portfolio" toggle so analysts ca
 **Method:** Uses collection curve columns (first non-zero Actual in X days) when available; otherwise uses deal age of completed deals with positive collections
 **Purpose:** Leading indicator — deterioration in DTFC precedes collection rate decline
 
-### Collection Rate
+### Collection Rate (GLR)
 **Formula:** Collected till date / Purchase Value
-**Scope:** Monthly (for trend), cumulative (for total)
+**Numerator:** All cash collected (principal + margin + fees)
 **Denominator:** Purchase Value (face value), not Purchase Price (funded amount)
+**Weighting:** Face-weighted (each deal weighted by its PV)
+**Scope:** Monthly (for trend), cumulative (for total)
+**Inclusion:** All deals in period (active + completed). Completed-only variant used for vintage analysis.
+**Confidence:** A (observed cash)
+**See also:** Section 8 (Collection Rate Disambiguation) for CRR, ERR, CCR variants.
 
 ### HHI (Herfindahl-Hirschman Index)
 **Formula:** Sum of (market share)^2 across all groups/products
+**Numerator:** Per-group share squared
+**Denominator:** Total originated value (Tape) or total eligible advances (Portfolio)
+**Weighting:** Value-weighted (by originated or eligible amount)
 **Interpretation:** < 1,500 = unconcentrated, 1,500-2,500 = moderate, > 2,500 = highly concentrated
 **Time Series:** Computed across multiple snapshots to detect concentration trends
+**Confidence:** A (observed data)
 
 ### Expected Loss (EL)
 **Formula:** PD x LGD x EAD
 **PD (Probability of Default):** % of completed deals with denial/charge-off rate > threshold (Klaim: >1% denial; SILQ: DPD > 90)
-**LGD (Loss Given Default):** (Denied - Provisions - Recovery) / Denied for defaulted deals
+**LGD (Loss Given Default):** (Denied - Provisions - Recovery) / Denied for defaulted deals. Currently undiscounted — PV-adjusted LGD (discounting recoveries to default date) is a planned enhancement.
 **EAD (Exposure at Default):** Outstanding amount on active deals
+**Confidence:** B-C (PD inferred from completed deals; LGD from observed outcomes; EAD = current balance)
+
+### Metric Doctrine Summary
+
+Every metric in Laith should be documentable in this format:
+
+| Field | What to Declare |
+|-------|----------------|
+| **Formula** | Mathematical expression |
+| **Numerator** | What is being measured |
+| **Denominator** | What base it is expressed against (total / active / eligible / completed) |
+| **Weighting** | Count-weighted, balance-weighted, face-weighted, cash-weighted, or PV-weighted |
+| **Inclusion/Exclusion** | Which deals are in vs out (status filter, eligibility filter, date filter) |
+| **Clock** | Which of the three clocks drives time-based calculations |
+| **Confidence** | A (observed), B (inferred/reconstructed), C (derived/estimated) |
+
+This doctrine table is the "contract" for analytics. When adding a new metric, fill every field. When debugging a metric discrepancy, check the denominator and inclusion rules first — they are the most common source of error.
+
+---
+
+## 11. Methodology Onboarding Guide
+
+Every company/product in Laith has a Methodology page — a bespoke reference document defining how each metric is computed, what it means, and why it matters for that asset class. This section formalizes the pattern for building methodology when onboarding a new company.
+
+### Principle: Asset-Class-Centric, Not Company-Centric
+
+Methodology is organized by **asset class** (receivables factoring, POS lending, RNPL, trade finance, etc.), not by company name. Two companies in the same asset class share the same methodology template and analysis module. The `analysis_type` field in `config.json` determines which methodology renders.
+
+### Decision Tree: Reuse or Create?
+
+1. **Is the new company's asset class identical to an existing one?**
+   - Yes → Set `analysis_type` to the existing type (e.g., `"klaim"` for another receivables factorer). Methodology page is inherited automatically.
+   - No → Create a new `analysis_type`, a new backend analysis module (`core/analysis_{type}.py`), and a new methodology content block in `Methodology.jsx`.
+
+2. **Is the new company a read-only summary (no raw tape)?**
+   - Yes → Use `analysis_type: "{type}_summary"`, build a dedicated dashboard component (like `EjariDashboard.jsx`), set `hide_portfolio_tabs: true`. Methodology is optional — can be inline in the dashboard or omitted.
+
+### Hierarchy-to-Methodology Mapping
+
+Every methodology page must cover all 5 levels of the analytical hierarchy. Each level requires specific sections with metric definitions.
+
+| Level | Question | Required Methodology Sections | What to Define |
+|-------|----------|-------------------------------|----------------|
+| **L1 — Size & Composition** | What do we own? | Portfolio Overview | What constitutes "a deal", key size metrics (originated, funded, outstanding), product types, counterparty structure |
+| **L2 — Cash Conversion** | How fast does capital return? | Collection Performance, Collection Analysis | Collection rate formula + denominator, DSO variant (capital vs operational), timing distribution, expected vs actual pacing |
+| **L3 — Credit Quality** | What is deteriorating? | Health/Delinquency, Risk Migration | Distress signal definition (DPD vs denial vs default), PAR computation method, health classification thresholds, roll-rate mechanics |
+| **L4 — Loss Attribution** | Where did the dollars go? | Loss Analysis, Returns/Yield, Expected Loss | Loss event definition (what counts as default), recovery path, margin structure, EL model parameters (PD/LGD/EAD thresholds) |
+| **L5 — Forward Signals** | What is about to happen? | Stress Testing, Covenants | At least one leading indicator, covenant thresholds if facility exists, stress scenario design |
+
+### Cross-Cutting Sections (Required for Every Asset Class)
+
+These sections appear in every methodology regardless of asset class:
+
+| Section | Purpose |
+|---------|---------|
+| **Product Types** | Define each product in the portfolio — mechanics, pricing, origination channel, how margin is structured |
+| **Cohort Analysis** | How vintages are constructed (by deal date, disbursement date, etc.), what columns the cohort table shows |
+| **Data Caveats** | Limitations of the tape data — backward-date filtering, balance columns vs as-of-date, column availability |
+| **Currency Conversion** | Reported currency, FX rate source, toggle behavior |
+| **Data Quality Validation** | What checks are run, critical vs warning thresholds |
+
+### Existing Asset Class Reference
+
+| Asset Class | analysis_type | Methodology Sections | Backend Module |
+|-------------|--------------|---------------------|----------------|
+| Healthcare Receivables | `klaim` | Overview, Collection Perf, Collection Analysis, Health, Cohort, Returns, Denial Funnel, Stress Testing, Expected Loss, Roll-Rate Migration, Data Quality, Currency | `core/analysis.py` |
+| POS Lending | `silq` | Overview, Delinquency & PAR, Collections, Concentration, Cohort, Yield & Margins, Tenure, Covenants, Product Types, Data Caveats, Currency | `core/analysis_silq.py` |
+| RNPL (read-only) | `ejari_summary` | _(no methodology page — read-only dashboard)_ | `core/analysis_ejari.py` |
+
+### Template for New Asset Class Methodology
+
+When building methodology for a new asset class, fill this template:
+
+```
+Level 1 — Size & Composition
+  □ Define "a deal" for this asset class
+  □ Key volume metrics: originated, funded, outstanding formula
+  □ Product types with descriptions
+  □ Counterparty/obligor structure
+
+Level 2 — Cash Conversion
+  □ Collection rate: formula, denominator, monthly vs cumulative
+  □ DSO variant: which dates are available? Capital vs Operational?
+  □ Collection timing: are collection curve columns available?
+  □ Expected vs actual pacing: is there an expected timeline?
+
+Level 3 — Credit Quality
+  □ Distress signal: DPD (lending), denial (factoring), or other?
+  □ PAR method: direct DPD, expected-date shortfall, or empirical?
+  □ Health classification: what thresholds define Healthy/Watch/Delayed/Poor?
+  □ Roll rates: what buckets are meaningful?
+
+Level 4 — Loss Attribution
+  □ Default definition: what constitutes a loss event?
+  □ Recovery path: how are losses recovered (collections, legal, resubmission)?
+  □ Margin structure: how is revenue earned and tracked?
+  □ EL parameters: PD threshold, LGD methodology, EAD basis
+
+Level 5 — Forward Signals
+  □ Leading indicator: which signal is most predictive for this asset class?
+  □ Covenant monitoring: does a facility agreement exist?
+  □ Stress scenarios: what concentration/macro shocks are relevant?
+
+Cross-Cutting
+  □ Product types documented with mechanics and pricing
+  □ Cohort construction method defined
+  □ Data limitations and caveats documented
+  □ Currency and FX behavior specified
+  □ Validation checks listed
+```
