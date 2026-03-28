@@ -4,3 +4,4 @@ venv/
 __pycache__/
 reports/
 alembic/versions/__pycache__/
+.claude/
