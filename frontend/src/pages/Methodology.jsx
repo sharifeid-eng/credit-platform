@@ -2,34 +2,43 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useCompany } from '../contexts/CompanyContext'
 
+// level = Analytical Hierarchy level (see ANALYSIS_FRAMEWORK.md Section 7)
+// L1=Size & Composition, L2=Cash Conversion, L3=Credit Quality, L4=Loss Attribution, L5=Forward Signals
 const KLAIM_SECTIONS = [
-  { id: 'overview', title: 'Portfolio Overview Metrics' },
-  { id: 'collection-perf', title: 'Collection Performance' },
-  { id: 'collection-analysis', title: 'Collection Analysis' },
-  { id: 'health', title: 'Health Classification' },
-  { id: 'cohort', title: 'Cohort Analysis' },
-  { id: 'returns', title: 'Returns Analysis' },
-  { id: 'denial-funnel', title: 'Denial Funnel' },
-  { id: 'stress', title: 'Stress Testing' },
-  { id: 'expected-loss', title: 'Expected Loss Model' },
-  { id: 'migration', title: 'Roll-Rate Migration' },
-  { id: 'validation', title: 'Data Quality Validation' },
-  { id: 'currency', title: 'Currency Conversion' },
+  { id: 'overview', title: 'Portfolio Overview Metrics', level: 1 },
+  { id: 'collection-perf', title: 'Collection Performance', level: 2 },
+  { id: 'collection-analysis', title: 'Collection Analysis', level: 2 },
+  { id: 'health', title: 'Health Classification', level: 3 },
+  { id: 'cohort', title: 'Cohort Analysis', level: null },
+  { id: 'returns', title: 'Returns Analysis', level: 4 },
+  { id: 'denial-funnel', title: 'Denial Funnel', level: 4 },
+  { id: 'stress', title: 'Stress Testing', level: 5 },
+  { id: 'expected-loss', title: 'Expected Loss Model', level: 4 },
+  { id: 'migration', title: 'Roll-Rate Migration', level: 3 },
+  { id: 'validation', title: 'Data Quality Validation', level: null },
+  { id: 'currency', title: 'Currency Conversion', level: null },
 ]
 
 const SILQ_SECTIONS = [
-  { id: 'overview', title: 'Portfolio Overview' },
-  { id: 'delinquency', title: 'Delinquency & PAR' },
-  { id: 'collections', title: 'Collections' },
-  { id: 'concentration', title: 'Concentration' },
-  { id: 'cohort', title: 'Cohort Analysis' },
-  { id: 'yield', title: 'Yield & Margins' },
-  { id: 'tenure', title: 'Tenure Analysis' },
-  { id: 'covenants', title: 'Covenant Monitoring' },
-  { id: 'products', title: 'Product Types' },
-  { id: 'backward-date', title: 'Backward-Date Caveat' },
-  { id: 'currency', title: 'Currency Conversion' },
+  { id: 'overview', title: 'Portfolio Overview', level: 1 },
+  { id: 'delinquency', title: 'Delinquency & PAR', level: 3 },
+  { id: 'collections', title: 'Collections', level: 2 },
+  { id: 'concentration', title: 'Concentration', level: 1 },
+  { id: 'cohort', title: 'Cohort Analysis', level: null },
+  { id: 'yield', title: 'Yield & Margins', level: 4 },
+  { id: 'tenure', title: 'Tenure Analysis', level: null },
+  { id: 'covenants', title: 'Covenant Monitoring', level: 5 },
+  { id: 'products', title: 'Product Types', level: null },
+  { id: 'backward-date', title: 'Backward-Date Caveat', level: null },
+  { id: 'currency', title: 'Currency Conversion', level: null },
 ]
+
+const LEVEL_LABELS = {
+  1: 'L1', 2: 'L2', 3: 'L3', 4: 'L4', 5: 'L5',
+}
+const LEVEL_COLORS = {
+  1: '#5B8DEF', 2: '#2DD4BF', 3: '#C9A84C', 4: '#F06060', 5: '#A78BFA',
+}
 
 export default function Methodology() {
   const { companyName } = useParams()
@@ -91,7 +100,9 @@ export default function Methodology() {
             key={s.id}
             onClick={() => scrollTo(s.id)}
             style={{
-              display: 'block',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
               width: '100%',
               textAlign: 'left',
               background: 'none',
@@ -108,6 +119,20 @@ export default function Methodology() {
             }}
           >
             {s.title}
+            {s.level && (
+              <span style={{
+                fontSize: 8,
+                fontWeight: 700,
+                padding: '1px 4px',
+                borderRadius: 3,
+                backgroundColor: LEVEL_COLORS[s.level] + '18',
+                color: LEVEL_COLORS[s.level],
+                letterSpacing: '0.04em',
+                flexShrink: 0,
+              }}>
+                {LEVEL_LABELS[s.level]}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -896,9 +921,9 @@ function SilqMethodologyContent() {
           rationale="Margin on fully matured loans. Excludes active loans still collecting, giving a cleaner view of actual return."
         />
         <Note>
-          <strong>RBF Margin = 0%:</strong> The RBF_LT (RBF Exclusive) data sheet does not include a separate
-          Margin Collected column. RBF revenue is structured as part of the total repayment amount, not broken out.
-          This does not mean RBF earns zero revenue — it means margin is not separately trackable from the tape.
+          <strong>RCL Margin = 0%:</strong> The RCL data sheet does not include a separate
+          Margin Collected column. RCL revenue is priced at 3% monthly on the assigned limit, invoiced separately at month-end,
+          not broken out in the loan tape. This does not mean RCL earns zero revenue — it means margin is not separately trackable from the tape.
         </Note>
       </Section>
 
@@ -950,22 +975,28 @@ function SilqMethodologyContent() {
       <Section id="products" title="Product Types">
         <Subsection title="BNPL (Buy Now Pay Later)">
           <p style={styles.body}>
-            Short-term consumer loans originated through merchant POS terminals. 969 loans in the current tape.
-            Tenures range from 4-90 weeks. Margin is explicitly tracked via the Margin Collected column.
+            The buyer submits a purchase order to FINA. FINA pays the supplier upfront and issues a sales
+            invoice to the buyer with a due date based on the selected tenor (4–90 days). The buyer repays
+            principal plus ~3% monthly markup on the due date. Credit limits are set at ~50% of the buyer's
+            sales quantum. Serves SMEs in grocery, FMCG, mini-markets, wholesalers, and HoReCa.
+            Origination can be buyer-led or supplier-led — both flow through the same product rails.
+            Margin is explicitly tracked via the Margin Collected column.
           </p>
         </Subsection>
-        <Subsection title="RBF Exclusive (Revenue-Based Financing)">
+        <Subsection title="RCL (Revolving Credit Line)">
           <p style={styles.body}>
-            Longer-term merchant financing. 943 loans from the RBF_LT sheet. Fixed 90-week tenure.
-            Revenue structure differs from BNPL — margin is baked into the repayment schedule rather than
-            separated as a distinct column. The loader fills Margin Collected with 0.0 and flags these rows
-            as synthetic.
+            A dedicated committed revolving facility. The partner routes all procurement through FINA exclusively
+            and uses OMNI for sales visibility. FINA assigns a committed limit (typically 2–3x monthly revenue),
+            and the partner draws down as needed — each drawdown carries a max 90-day tenor. Repayments follow
+            the partner's incoming collections (no fixed instalments), and the limit resets as amounts are repaid.
+            Pricing is 3% monthly on the assigned limit, invoiced separately at month-end. Margin is not separately
+            tracked in the loan tape — the loader fills Margin Collected with 0.0 and flags these rows as synthetic.
           </p>
         </Subsection>
-        <Subsection title="RBF NE (New Entry)">
+        <Subsection title="RBF (Revenue-Based Financing)">
           <p style={styles.body}>
-            Small cohort (3 loans, SAR 15M disbursed). Same structure as BNPL with explicit margin tracking.
-            Low collection rate (29.2%) reflects that these loans are still actively collecting, not distressed.
+            Same underlying mechanics as RCL. No exclusivity requirement — the merchant is not required to route
+            all procurement through FINA or use OMNI. Margin is explicitly tracked via the Margin Collected column.
           </p>
         </Subsection>
       </Section>

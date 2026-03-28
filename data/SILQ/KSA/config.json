@@ -1,6 +1,6 @@
 {
   "currency": "SAR",
-  "description": "POS lending — BNPL & revenue-based financing",
+  "description": "POS lending — BNPL, RBF & RCL",
   "company": "SILQ",
   "product": "KSA",
   "usd_rate": 0.2667,

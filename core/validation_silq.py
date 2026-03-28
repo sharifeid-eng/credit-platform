@@ -1,5 +1,5 @@
 """
-SILQ-specific data quality validation checks for BNPL/RBF loan tapes.
+SILQ-specific data quality validation checks for BNPL, RBF & RCL loan tapes.
 """
 
 import pandas as pd

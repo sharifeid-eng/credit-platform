@@ -120,8 +120,8 @@ class TestSummary:
     def test_product_mix(self, full_df, jan31_ref):
         result = compute_silq_summary(full_df, mult=1, ref_date=jan31_ref)
         assert result['product_mix']['BNPL'] == 969
-        assert result['product_mix']['RBF_Exc'] == 943
-        assert result['product_mix']['RBF_NE'] == 3
+        assert result['product_mix']['RCL'] == 943
+        assert result['product_mix']['RBF'] == 3
 
     def test_total_disbursed(self, full_df, jan31_ref):
         result = compute_silq_summary(full_df, mult=1, ref_date=jan31_ref)
@@ -211,7 +211,7 @@ class TestCollections:
         result = compute_silq_collections(full_df, mult=1)
         products = {p['product'] for p in result['by_product']}
         assert 'BNPL' in products
-        assert 'RBF_Exc' in products
+        assert 'RCL' in products
 
     def test_monthly_has_data(self, full_df):
         result = compute_silq_collections(full_df, mult=1)
@@ -268,9 +268,9 @@ class TestCohorts:
 
 class TestYield:
     def test_rbf_margin_flagged(self, full_df):
-        """RBF_Exc should be flagged as margin not available."""
+        """RCL should be flagged as margin not available."""
         result = compute_silq_yield(full_df, mult=1)
-        assert 'RBF_Exc' in result['margin_not_available']
+        assert 'RCL' in result['margin_not_available']
 
     def test_bnpl_has_margin(self, full_df):
         result = compute_silq_yield(full_df, mult=1)
@@ -326,17 +326,17 @@ class TestComplianceReconciliation:
     and Jan 2026 Commentary."""
 
     def test_commentary_outstanding_bnpl(self, full_df, jan31_ref):
-        """Commentary: 'SAR 47 Mn under BNPL' — includes BNPL + RBF_NE sheets."""
-        # Commentary groups non-RBF_Exc as "BNPL" (BNPL sheet = BNPL + RBF_NE)
-        bnpl_sheet = full_df[full_df[C_PRODUCT].isin(['BNPL', 'RBF_NE'])]
+        """Commentary: 'SAR 47 Mn under BNPL' — includes BNPL + RBF sheets."""
+        # Commentary groups non-RCL as "BNPL" (BNPL sheet = BNPL + RBF)
+        bnpl_sheet = full_df[full_df[C_PRODUCT].isin(['BNPL', 'RBF'])]
         bnpl_outstanding = bnpl_sheet[C_OUTSTANDING].sum()
         assert bnpl_outstanding == pytest.approx(46_688_260.43, rel=0.01)
 
-    def test_commentary_outstanding_rbf(self, full_df, jan31_ref):
-        """Commentary: 'SAR 29 Mn under RBF'."""
-        rbf = full_df[full_df[C_PRODUCT] == 'RBF_Exc']
-        rbf_outstanding = rbf[C_OUTSTANDING].sum()
-        assert rbf_outstanding == pytest.approx(29_511_118.01, rel=0.01)
+    def test_commentary_outstanding_rcl(self, full_df, jan31_ref):
+        """Commentary: 'SAR 29 Mn under RCL (Revolving Credit Line)'."""
+        rcl = full_df[full_df[C_PRODUCT] == 'RCL']
+        rcl_outstanding = rcl[C_OUTSTANDING].sum()
+        assert rcl_outstanding == pytest.approx(29_511_118.01, rel=0.01)
 
     def test_commentary_dpd90_amount(self, full_df, jan31_ref):
         """Commentary: 'DPD >90 limited to SAR 1.10 Mn'."""

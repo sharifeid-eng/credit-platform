@@ -1289,7 +1289,7 @@ def _silq_chat(company, product, request, snap, aod, cur):
         commentary_ctx = f"\nANALYST PORTFOLIO COMMENTARY (from tape):\n{commentary_text}\n"
 
     system = f"""You are an expert credit analyst assistant for ACP Private Credit,
-analyzing the SILQ POS lending portfolio (BNPL, RBF_NE & RBF_Exc loans) in KSA.
+analyzing the SILQ POS lending portfolio (BNPL, RBF & RCL loans) in KSA.
 
 PORTFOLIO SUMMARY (as of {aod or sel['date']}, currency: {disp}):
 - Total Loans: {s['total_deals']:,} ({s['active_deals']} active, {s['completed_deals']} closed)

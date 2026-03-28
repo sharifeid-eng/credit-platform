@@ -1,5 +1,5 @@
 """
-SILQ analysis module — BNPL & RBF POS lending analytics.
+SILQ analysis module — BNPL, RBF & RCL POS lending analytics.
 
 All computation functions for SILQ's loan tape. Uses native column names:
   Deal ID, Disbursed_Amount (SAR), Outstanding_Amount (SAR), Overdue_Amount (SAR),
