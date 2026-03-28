@@ -5,7 +5,19 @@
   "product": "RNPL",
   "usd_rate": 1.0,
   "analysis_type": "ejari_summary",
+  "hide_portfolio_tabs": true,
   "tabs": [
-    { "slug": "overview", "label": "Overview" }
+    { "slug": "overview",          "label": "Portfolio Overview" },
+    { "slug": "cohort",            "label": "Monthly Cohorts" },
+    { "slug": "loss-waterfall",    "label": "Loss Waterfall" },
+    { "slug": "roll-rates",        "label": "Roll Rates" },
+    { "slug": "historical",        "label": "Historical Performance" },
+    { "slug": "collections-month", "label": "Collections (by Month)" },
+    { "slug": "collections-orig",  "label": "Collections (by Origination)" },
+    { "slug": "segments",          "label": "Segment Analysis" },
+    { "slug": "credit-quality",    "label": "Credit Quality Trends" },
+    { "slug": "najiz",             "label": "Najiz & Legal" },
+    { "slug": "writeoffs",         "label": "Write-offs & Fraud" },
+    { "slug": "notes",             "label": "Data Notes" }
   ]
 }

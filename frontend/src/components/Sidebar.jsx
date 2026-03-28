@@ -33,10 +33,11 @@ const PORTFOLIO_TABS = [
 ]
 
 export default function Sidebar() {
-  const { company, products, product, tapeTabs } = useCompany()
+  const { company, products, product, tapeTabs, config } = useCompany()
   const { tab } = useParams()
   const location = useLocation()
   const TAPE_TABS = tapeTabs || DEFAULT_TAPE_TABS
+  const hidePortfolio = config?.hide_portfolio_tabs === true
 
   const isTape = location.pathname.includes('/tape/')
   const isPortfolio = location.pathname.includes('/portfolio/')
@@ -89,7 +90,7 @@ export default function Sidebar() {
       )}
 
       {/* Tape Analytics */}
-      <SectionHeader>Tape Analytics</SectionHeader>
+      <SectionHeader>{hidePortfolio ? 'Analysis' : 'Tape Analytics'}</SectionHeader>
       {TAPE_TABS.map(t => (
         <NavItem
           key={t.slug}
@@ -101,18 +102,21 @@ export default function Sidebar() {
 
       <Divider />
 
-      {/* Portfolio Analytics */}
-      <SectionHeader>Portfolio Analytics</SectionHeader>
-      {PORTFOLIO_TABS.map(t => (
-        <NavItem
-          key={t.slug}
-          label={t.label}
-          to={`${basePath}/portfolio/${t.slug}`}
-          active={isPortfolio && currentSlug === t.slug}
-        />
-      ))}
-
-      <Divider />
+      {/* Portfolio Analytics — hidden for read-only summary companies */}
+      {!hidePortfolio && (
+        <>
+          <SectionHeader>Portfolio Analytics</SectionHeader>
+          {PORTFOLIO_TABS.map(t => (
+            <NavItem
+              key={t.slug}
+              label={t.label}
+              to={`${basePath}/portfolio/${t.slug}`}
+              active={isPortfolio && currentSlug === t.slug}
+            />
+          ))}
+          <Divider />
+        </>
+      )}
 
       {/* Methodology */}
       <NavItem
