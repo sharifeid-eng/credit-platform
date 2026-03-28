@@ -23,7 +23,11 @@ from core.analysis_silq import (
     C_DISB_DATE, C_REPAY_DEADLINE, C_REPAID, C_TENURE, C_SHOP_ID,
     C_COLLECTABLE, C_MARGIN,
 )
-from core.analysis_silq import compute_silq_covenants
+from core.analysis_silq import (
+    compute_silq_covenants,
+    compute_silq_seasonality, compute_silq_cohort_loss_waterfall,
+    compute_silq_underwriting_drift,
+)
 from core.loader import load_silq_snapshot
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -441,3 +445,79 @@ class TestCovenants:
         import json
         result = compute_silq_covenants(full_df, mult=1, ref_date=jan31_ref)
         json.dumps(result)  # Should not raise
+
+
+# ── Seasonality tests ────────────────────────────────────────────────────────
+
+class TestSeasonality:
+    def test_available(self, full_df):
+        result = compute_silq_seasonality(full_df, mult=1)
+        assert 'available' in result
+
+    def test_structure(self, full_df):
+        result = compute_silq_seasonality(full_df, mult=1)
+        if result['available']:
+            assert 'months' in result
+            assert 'seasonal_index' in result
+            assert 'years' in result
+            assert len(result['months']) == 12
+            assert len(result['seasonal_index']) == 12
+
+    def test_index_positive(self, full_df):
+        result = compute_silq_seasonality(full_df, mult=1)
+        if result['available']:
+            for idx in result['seasonal_index']:
+                assert idx['index'] >= 0
+
+
+# ── Cohort Loss Waterfall tests ──────────────────────────────────────────────
+
+class TestCohortLossWaterfall:
+    def test_available(self, full_df):
+        result = compute_silq_cohort_loss_waterfall(full_df, mult=1)
+        assert 'available' in result
+
+    def test_structure(self, full_df):
+        result = compute_silq_cohort_loss_waterfall(full_df, mult=1)
+        if result['available']:
+            assert 'vintages' in result
+            assert 'totals' in result
+            assert len(result['vintages']) > 0
+            v = result['vintages'][0]
+            assert 'vintage' in v
+            assert 'originated' in v
+            assert 'gross_default' in v
+            assert 'net_loss' in v
+
+    def test_totals_consistent(self, full_df):
+        result = compute_silq_cohort_loss_waterfall(full_df, mult=1)
+        if result['available']:
+            t = result['totals']
+            assert t['net_loss'] <= t['gross_default']
+            assert t['net_loss'] >= 0
+
+
+# ── Underwriting Drift tests ─────────────────────────────────────────────────
+
+class TestUnderwritingDrift:
+    def test_available(self, full_df):
+        result = compute_silq_underwriting_drift(full_df, mult=1)
+        assert 'available' in result
+
+    def test_structure(self, full_df):
+        result = compute_silq_underwriting_drift(full_df, mult=1)
+        if result['available']:
+            assert 'vintages' in result
+            assert 'historical_norms' in result
+            assert len(result['vintages']) > 0
+            v = result['vintages'][0]
+            assert 'vintage' in v
+            assert 'avg_loan_size' in v
+            assert 'avg_tenure' in v
+            assert 'flags' in v
+
+    def test_flags_are_lists(self, full_df):
+        result = compute_silq_underwriting_drift(full_df, mult=1)
+        if result['available']:
+            for v in result['vintages']:
+                assert isinstance(v['flags'], list)

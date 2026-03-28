@@ -163,6 +163,7 @@ credit-platform/
 │   │   │   ├── Framework.jsx        # Analysis Framework page — markdown renderer with sticky TOC
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── Framework.jsx       # Analysis Framework page (/framework) — analytical philosophy
+│   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — holistic findings from all metrics
 │   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   ├── components/
 │   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
@@ -265,6 +266,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/date-range`                |Min/max deal dates                 |
 |`GET /companies/{co}/products/{p}/summary`                   |Portfolio KPIs                     |
 |`GET /companies/{co}/products/{p}/ai-commentary`             |AI portfolio commentary            |
+|`GET /companies/{co}/products/{p}/ai-executive-summary`      |AI holistic findings from all metrics|
 |`GET /companies/{co}/products/{p}/ai-tab-insight`            |Short AI insight for a specific tab|
 |`GET /companies/{co}/products/{p}/charts/deployment`         |Monthly deployment                 |
 |`GET /companies/{co}/products/{p}/charts/deployment-by-product`|Monthly deployment by product type|
@@ -351,10 +353,11 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 | `/` | `Home` | Landing page — company grid |
 | `/company/:co/:product/tape/:tab` | `TapeAnalytics` | 18-tab dashboard (tab slug in URL) |
 | `/company/:co/:product/portfolio/:tab` | `PortfolioAnalytics` | 6-tab portfolio view (live data from DB/tape) |
+| `/company/:co/:product/executive-summary` | `ExecutiveSummary` | AI-powered holistic findings from all metrics |
 | `/company/:co/:product/methodology` | `Methodology` | Definitions & formulas reference |
 | `/framework` | `Framework` | Analysis Framework — analytical philosophy with sticky TOC |
 
-**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Tape Analytics (18 links), Portfolio Analytics (6 links), Methodology. Active state: gold left border + gold text.
+**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Methodology. Active state: gold left border + gold text.
 
 **URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `loss-waterfall`, `recovery-analysis`, `collections-timing`, `underwriting-drift`, `segment-analysis`, `seasonality`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
 
@@ -493,7 +496,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Framer Motion integration** — Uses `motion.div` wrappers with `initial`/`animate`/`exit` props. `AnimatePresence mode="wait"` for tab transitions and chart loading states. KPI stagger via `index * 0.04s` delay. All animations use `transform`/`opacity` for GPU acceleration.
 - **PDF report wait strategy** — 3-phase approach per tab: 4s initial mount wait → poll for "Loading..." spinners to disappear (max 20s, double-confirm) → 2s animation settle. ~6.5s per tab, ~70s total.
 - **Analysis Framework** — `core/ANALYSIS_FRAMEWORK.md` defines a 5-level analytical hierarchy (Size → Cash Conversion → Credit Quality → Loss Attribution → Forward Signals). All new tabs and metrics are mapped to this hierarchy. Framework served via `GET /framework` endpoint, rendered as full-page markdown with sticky TOC.
-- **PAR computation** — 3-method approach: (1) Primary uses `Expected till date` column to compute shortfall-based estimated DPD, (2) Option C builds empirical collection benchmarks from 50+ completed deals when `Expected till date` unavailable, (3) Fallback returns `available: False`. PAR denominator decision: active outstanding for Tape Analytics, eligible outstanding for Portfolio Analytics. "Derived from historical patterns" badge shown when Option C used.
+- **PAR computation (dual perspective)** — 3-method approach: (1) Primary uses `Expected till date` shortfall-based estimated DPD, (2) Option C builds empirical benchmarks from 50+ completed deals, (3) Fallback returns `available: False`. **Dual denominator:** Active PAR (behind-schedule outstanding / active outstanding — monitoring view, was showing 46% PAR30) and Lifetime PAR (behind-schedule outstanding / total originated — IC view, shows 3.6% PAR30). Tape Analytics shows Lifetime as headline with Active as context subtitle. The issue: active outstanding is only ~8% of total originated, which dramatically inflated the active ratio. Portfolio Analytics uses eligible outstanding for covenants. "Derived from historical patterns" badge shown when Option C used.
 - **DTFC (Days to First Cash)** — leading indicator that deteriorates before collection rate does. Curve-based method (precise) uses collection curve columns; estimated method (fallback) approximates from deal dates and collected amounts. Shows Median and P90 on Overview.
 - **DSO dual perspectives** — DSO Capital (days from funding to collection) measures capital efficiency. DSO Operational (days from expected due date to collection) measures payer behavior. Both use curve-based and estimated methods.
 - **Cohort loss waterfall** — "default" for Klaim = denial > 50% of purchase value (since there are no contractual due dates). Per-vintage waterfall: Originated → Gross Default → Recovery → Net Loss. Integrates vintage loss curves and loss categorization.
@@ -675,10 +678,26 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **Sidebar navigation** — aligned with Klaim/SILQ design pattern: 12 tabs in left sidebar, URL-driven (`/tape/:slug`), single section rendered per tab. Sidebar header shows "Analysis" (not "Tape Analytics"). Portfolio Analytics section hidden via `hide_portfolio_tabs: true` in config.
   - Loader updated to support `.ods` file extension (requires `odfpy` package in venv)
   - Cached parsing — ODS parsed once per session
-- ✅ **Unit test coverage complete:**
-  - 120 tests total (61 Klaim + 59 SILQ), all passing
-  - Klaim: 23 test classes covering all 28 `core/analysis.py` functions
-  - SILQ: tests for summary, deployment, collections, concentration, cohort, delinquency, yield/margins, tenure, covenants
+- ✅ **PAR dual perspective (Tape Analytics):**
+  - Active PAR 30+ was 46% (alarming) → Lifetime PAR 30+ is 3.6% (sensible for IC)
+  - Active outstanding is only 7.8% of total originated — inflated the active ratio
+  - Lifetime shown as headline, Active as context in subtitle
+- ✅ **AI Executive Summary page:**
+  - New endpoint `GET /ai-executive-summary` computes ALL analytics (20+ metrics) and asks Claude for top 5-10 findings
+  - Structured JSON response with severity levels (critical/warning/positive), data points, and tab links
+  - `ExecutiveSummary.jsx` page with finding cards, severity badges, "View Tab" navigation
+  - Accessible from sidebar above Tape Analytics section
+  - Supports both Klaim (20+ metrics) and SILQ (7+ metrics)
+- ✅ **SILQ analytics expansion (3 new tabs):**
+  - `compute_silq_seasonality()` — YoY calendar month patterns + seasonal index for POS lending
+  - `compute_silq_cohort_loss_waterfall()` — per-vintage: Disbursed → DPD>90 Default → Recovery → Net Loss
+  - `compute_silq_underwriting_drift()` — per-vintage quality metrics + z-score drift flags vs 6-month rolling norms
+  - All 3 wired into SILQ_CHART_MAP, config.json tabs, frontend chart components, and sidebar
+  - SILQ now has 12 tabs (was 9): overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, loss-waterfall, underwriting-drift, seasonality, covenants, data-integrity
+- ✅ **Unit test coverage expanded:**
+  - 134 tests total (66 Klaim + 68 SILQ), all passing
+  - Klaim: added PAR dual perspective tests (5 tests)
+  - SILQ: added seasonality, cohort loss waterfall, underwriting drift tests (9 tests)
 - ✅ **Design elevation (Framer Motion):**
   - KPI cards: stagger fade-in on mount, hover lift + shadow + border brighten
   - Tab content: smooth fade-in/slide transitions on tab switch (Tape + Portfolio)

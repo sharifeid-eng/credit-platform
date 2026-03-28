@@ -1339,10 +1339,9 @@ def compute_par(df, mult, as_of_date=None):
     Option C: Derives empirical benchmarks from completed deals if Expected column missing.
     Fallback: Returns available=False when neither approach is viable.
 
-    Returns:
-        dict with keys: available, method, par30/60/90 (balance-weighted %),
-        par30/60/90_count (count-based %), par30/60/90_amount,
-        total_active_outstanding, total_active_count
+    Returns dual perspective:
+        - Active PAR: behind-schedule outstanding / active outstanding (monitoring view)
+        - Lifetime PAR: behind-schedule outstanding / total originated (IC view)
     """
     active = df[df['Status'] == 'Executed'].copy()
     if len(active) == 0:
@@ -1358,6 +1357,10 @@ def compute_par(df, mult, as_of_date=None):
 
     total_active_outstanding = float(active['outstanding'].sum())
     total_active_count = len(active)
+
+    # Lifetime denominators — total originated across all deals (all statuses)
+    total_originated = float(df['Purchase value'].sum() * mult)
+    total_deal_count = len(df)
 
     if total_active_outstanding <= 0:
         return {'available': False}
@@ -1398,9 +1401,18 @@ def compute_par(df, mult, as_of_date=None):
         par60_amt, par60_ct, par60, par60_ct_pct = _par_at(60)
         par90_amt, par90_ct, par90, par90_ct_pct = _par_at(90)
 
+        # Lifetime PAR: same numerator, denominator = total originated
+        lt_par30 = par30_amt / total_originated * 100 if total_originated > 0 else 0
+        lt_par60 = par60_amt / total_originated * 100 if total_originated > 0 else 0
+        lt_par90 = par90_amt / total_originated * 100 if total_originated > 0 else 0
+        lt_par30_ct = par30_ct / total_deal_count * 100 if total_deal_count > 0 else 0
+        lt_par60_ct = par60_ct / total_deal_count * 100 if total_deal_count > 0 else 0
+        lt_par90_ct = par90_ct / total_deal_count * 100 if total_deal_count > 0 else 0
+
         return {
             'available': True,
             'method': 'expected',
+            # Active perspective (monitoring) — denominator = active outstanding
             'par30': round(par30, 4),
             'par60': round(par60, 4),
             'par90': round(par90, 4),
@@ -1412,6 +1424,15 @@ def compute_par(df, mult, as_of_date=None):
             'par90_amount': round(par90_amt, 2),
             'total_active_outstanding': round(total_active_outstanding, 2),
             'total_active_count': total_active_count,
+            # Lifetime perspective (IC view) — denominator = total originated
+            'lifetime_par30': round(lt_par30, 4),
+            'lifetime_par60': round(lt_par60, 4),
+            'lifetime_par90': round(lt_par90, 4),
+            'lifetime_par30_count': round(lt_par30_ct, 4),
+            'lifetime_par60_count': round(lt_par60_ct, 4),
+            'lifetime_par90_count': round(lt_par90_ct, 4),
+            'total_originated': round(total_originated, 2),
+            'total_deal_count': total_deal_count,
         }
 
     # Method 2: Option C — Empirical benchmarks from completed deals
@@ -1450,9 +1471,18 @@ def compute_par(df, mult, as_of_date=None):
         par60_amt, par60_ct, par60, par60_ct_pct = _par_derived(60)
         par90_amt, par90_ct, par90, par90_ct_pct = _par_derived(90)
 
+        # Lifetime PAR: same numerator, denominator = total originated
+        lt_par30 = par30_amt / total_originated * 100 if total_originated > 0 else 0
+        lt_par60 = par60_amt / total_originated * 100 if total_originated > 0 else 0
+        lt_par90 = par90_amt / total_originated * 100 if total_originated > 0 else 0
+        lt_par30_ct = par30_ct / total_deal_count * 100 if total_deal_count > 0 else 0
+        lt_par60_ct = par60_ct / total_deal_count * 100 if total_deal_count > 0 else 0
+        lt_par90_ct = par90_ct / total_deal_count * 100 if total_deal_count > 0 else 0
+
         return {
             'available': True,
             'method': 'derived',
+            # Active perspective (monitoring)
             'par30': round(par30, 4),
             'par60': round(par60, 4),
             'par90': round(par90, 4),
@@ -1464,6 +1494,15 @@ def compute_par(df, mult, as_of_date=None):
             'par90_amount': round(par90_amt, 2),
             'total_active_outstanding': round(total_active_outstanding, 2),
             'total_active_count': total_active_count,
+            # Lifetime perspective (IC view)
+            'lifetime_par30': round(lt_par30, 4),
+            'lifetime_par60': round(lt_par60, 4),
+            'lifetime_par90': round(lt_par90, 4),
+            'lifetime_par30_count': round(lt_par30_ct, 4),
+            'lifetime_par60_count': round(lt_par60_ct, 4),
+            'lifetime_par90_count': round(lt_par90_ct, 4),
+            'total_originated': round(total_originated, 2),
+            'total_deal_count': total_deal_count,
         }
 
     # Fallback: neither method available

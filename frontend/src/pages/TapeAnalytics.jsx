@@ -40,6 +40,9 @@ import SilqCohortTable         from '../components/charts/silq/SilqCohortTable'
 import YieldMarginsChart       from '../components/charts/silq/YieldMarginsChart'
 import TenureAnalysisChart     from '../components/charts/silq/TenureAnalysisChart'
 import SilqCovenantsChart      from '../components/charts/silq/SilqCovenantsChart'
+import SilqSeasonalityChart    from '../components/charts/silq/SilqSeasonalityChart'
+import SilqLossWaterfallChart  from '../components/charts/silq/SilqLossWaterfallChart'
+import SilqUnderwritingDriftChart from '../components/charts/silq/SilqUnderwritingDriftChart'
 import EjariDashboard          from './EjariDashboard'
 
 import { TAPE_TABS } from '../components/Sidebar'
@@ -222,7 +225,10 @@ function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots,
     'cohort-analysis': <ChartTab tab="cohort" {...chartProps}><SilqCohortTable {...chartProps} /></ChartTab>,
     'yield-margins':   <ChartTab tab="yield-margins" {...chartProps}><YieldMarginsChart {...chartProps} /></ChartTab>,
     'tenure':          <ChartTab tab="tenure" {...chartProps}><TenureAnalysisChart {...chartProps} /></ChartTab>,
-    'covenants':       <ChartTab tab="covenants" {...chartProps}><SilqCovenantsChart {...chartProps} /></ChartTab>,
+    'covenants':          <ChartTab tab="covenants" {...chartProps}><SilqCovenantsChart {...chartProps} /></ChartTab>,
+    'seasonality':        <ChartTab tab="seasonality" {...chartProps}><SilqSeasonalityChart {...chartProps} /></ChartTab>,
+    'loss-waterfall':     <ChartTab tab="loss-waterfall" {...chartProps}><SilqLossWaterfallChart {...chartProps} /></ChartTab>,
+    'underwriting-drift': <ChartTab tab="underwriting-drift" {...chartProps}><SilqUnderwritingDriftChart {...chartProps} /></ChartTab>,
   }
   return SILQ_TABS[tab] || <div style={{ color: 'var(--text-muted)' }}>Tab not found</div>
 }
@@ -431,11 +437,11 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
     { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top provider: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal' },
   ] : Array(10).fill(null)
 
-  // PAR KPIs — only shown when available
+  // PAR KPIs — dual perspective: lifetime (IC view) as headline, active as context
   const parKpis = par?.available ? [
-    { label: 'PAR 30+', value: pct(par.par30), sub: `${par.par30_count != null ? pct(par.par30_count) + ' by count' : ''}`, color: par.par30 > 5 ? 'red' : par.par30 > 3 ? 'gold' : 'teal', derived: par.method === 'derived' },
-    { label: 'PAR 60+', value: pct(par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: par.par60 > 3 ? 'red' : par.par60 > 2 ? 'gold' : 'teal', derived: par.method === 'derived' },
-    { label: 'PAR 90+', value: pct(par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: par.par90 > 2 ? 'red' : par.par90 > 1 ? 'gold' : 'teal', derived: par.method === 'derived' },
+    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: `${pct(par.par30)} of active outstanding`, color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived' },
+    { label: 'PAR 60+', value: pct(par.lifetime_par60 ?? par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par60 ?? par.par60) > 1.5 ? 'red' : (par.lifetime_par60 ?? par.par60) > 0.75 ? 'gold' : 'teal', derived: par.method === 'derived' },
+    { label: 'PAR 90+', value: pct(par.lifetime_par90 ?? par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par90 ?? par.par90) > 1 ? 'red' : (par.lifetime_par90 ?? par.par90) > 0.5 ? 'gold' : 'teal', derived: par.method === 'derived' },
   ] : []
 
   // DTFC KPIs — only shown when available
@@ -462,6 +468,9 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
               Portfolio at Risk
+            </span>
+            <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.7 }}>
+              vs Total Originated
             </span>
             {par?.method === 'derived' && (
               <span style={{

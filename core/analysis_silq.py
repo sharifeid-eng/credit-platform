@@ -790,3 +790,236 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
         'partial_count': partial_count,
         'test_date': test_date_str,
     }
+
+
+# ── 10. Seasonality ──────────────────────────────────────────────────────────
+
+def compute_silq_seasonality(df, mult=1):
+    """YoY seasonal patterns in disbursement and delinquency by calendar month.
+
+    POS lending is inherently seasonal (Ramadan, salary cycles, school season in KSA).
+    Returns monthly data by year + seasonal index for deployment volume.
+    """
+    if C_DISB_DATE not in df.columns:
+        return {'available': False}
+
+    df = df.copy()
+    df['_disb_dt'] = pd.to_datetime(df[C_DISB_DATE], errors='coerce')
+    df = df.dropna(subset=['_disb_dt'])
+
+    if len(df) == 0:
+        return {'available': False}
+
+    df['_year'] = df['_disb_dt'].dt.year
+    df['_month'] = df['_disb_dt'].dt.month
+
+    years = sorted(df['_year'].unique())
+
+    # Monthly deployment by year
+    months = []
+    for m in range(1, 13):
+        month_data = {'month': m, 'month_name': pd.Timestamp(2020, m, 1).strftime('%b')}
+        for y in years:
+            mask = (df['_year'] == y) & (df['_month'] == m)
+            sub = df[mask]
+            month_data[f'volume_{y}'] = _safe(sub[C_DISBURSED].sum() * mult) if C_DISBURSED in sub.columns else 0
+            month_data[f'count_{y}'] = int(len(sub))
+            # Overdue rate for this cohort
+            if C_OVERDUE in sub.columns and C_OUTSTANDING in sub.columns:
+                out = sub[C_OUTSTANDING].sum()
+                ovd = sub[C_OVERDUE].sum()
+                month_data[f'overdue_rate_{y}'] = _safe(ovd / out * 100) if out > 0 else 0
+            else:
+                month_data[f'overdue_rate_{y}'] = 0
+        months.append(month_data)
+
+    # Seasonal index: month avg volume / overall monthly avg
+    all_month_vols = []
+    for m in range(1, 13):
+        vol_sum = sum(months[m-1].get(f'volume_{y}', 0) for y in years)
+        n_years = sum(1 for y in years if months[m-1].get(f'count_{y}', 0) > 0)
+        avg = vol_sum / max(n_years, 1)
+        all_month_vols.append(avg)
+
+    overall_avg = sum(all_month_vols) / max(len([v for v in all_month_vols if v > 0]), 1)
+    seasonal_index = []
+    for m in range(1, 13):
+        idx = all_month_vols[m-1] / overall_avg if overall_avg > 0 else 1.0
+        seasonal_index.append({
+            'month': m,
+            'month_name': pd.Timestamp(2020, m, 1).strftime('%b'),
+            'index': _safe(round(idx, 3)),
+        })
+
+    return {
+        'available': True,
+        'months': months,
+        'seasonal_index': seasonal_index,
+        'years': [int(y) for y in years],
+    }
+
+
+# ── 11. Cohort Loss Waterfall ────────────────────────────────────────────────
+
+def compute_silq_cohort_loss_waterfall(df, mult=1, ref_date=None):
+    """Per-vintage loss waterfall: Disbursed -> Overdue -> Write-off progression.
+
+    For SILQ, "default" = loan with DPD > 90 or Status indicates write-off.
+    Returns per-vintage and portfolio totals.
+    """
+    if C_DISB_DATE not in df.columns:
+        return {'available': False}
+
+    df = df.copy()
+    df['_disb_dt'] = pd.to_datetime(df[C_DISB_DATE], errors='coerce')
+    df = df.dropna(subset=['_disb_dt'])
+    df['_month'] = df['_disb_dt'].dt.to_period('M').astype(str)
+
+    if len(df) == 0:
+        return {'available': False}
+
+    dpd = _dpd(df, ref_date)
+
+    vintages = []
+    for month, grp in df.groupby('_month'):
+        originated = grp[C_DISBURSED].sum() * mult if C_DISBURSED in grp.columns else 0
+        outstanding = grp[C_OUTSTANDING].sum() * mult if C_OUTSTANDING in grp.columns else 0
+        overdue = grp[C_OVERDUE].sum() * mult if C_OVERDUE in grp.columns else 0
+
+        # Default: DPD > 90 for this vintage
+        grp_dpd = dpd.loc[grp.index]
+        default_mask = grp_dpd > 90
+        gross_default = grp.loc[default_mask, C_OUTSTANDING].sum() * mult if C_OUTSTANDING in grp.columns else 0
+
+        # Recovery: amount repaid on defaulted loans
+        recovery = grp.loc[default_mask, C_REPAID].sum() * mult if C_REPAID in grp.columns else 0
+        net_loss = max(gross_default - recovery, 0)
+
+        default_rate = gross_default / originated * 100 if originated > 0 else 0
+        recovery_rate = recovery / gross_default * 100 if gross_default > 0 else 0
+        net_loss_rate = net_loss / originated * 100 if originated > 0 else 0
+
+        vintages.append({
+            'vintage': month,
+            'deals': len(grp),
+            'originated': _safe(originated),
+            'outstanding': _safe(outstanding),
+            'overdue': _safe(overdue),
+            'gross_default': _safe(gross_default),
+            'recovery': _safe(recovery),
+            'net_loss': _safe(net_loss),
+            'default_rate': _safe(round(default_rate, 2)),
+            'recovery_rate': _safe(round(recovery_rate, 2)),
+            'net_loss_rate': _safe(round(net_loss_rate, 2)),
+        })
+
+    # Portfolio totals
+    total_originated = sum(v['originated'] for v in vintages)
+    total_default = sum(v['gross_default'] for v in vintages)
+    total_recovery = sum(v['recovery'] for v in vintages)
+    total_net_loss = sum(v['net_loss'] for v in vintages)
+
+    return {
+        'available': True,
+        'vintages': vintages,
+        'totals': {
+            'originated': _safe(total_originated),
+            'gross_default': _safe(total_default),
+            'recovery': _safe(total_recovery),
+            'net_loss': _safe(total_net_loss),
+            'default_rate': _safe(round(total_default / total_originated * 100, 2)) if total_originated > 0 else 0,
+            'recovery_rate': _safe(round(total_recovery / total_default * 100, 2)) if total_default > 0 else 0,
+            'net_loss_rate': _safe(round(total_net_loss / total_originated * 100, 2)) if total_originated > 0 else 0,
+        },
+    }
+
+
+# ── 12. Underwriting Drift ───────────────────────────────────────────────────
+
+def compute_silq_underwriting_drift(df, mult=1, ref_date=None):
+    """Track origination quality metrics by vintage and flag drift from historical norms.
+
+    Per-vintage: avg loan size, avg tenure, product mix, delinquency rate.
+    Flags months where metrics deviate >1 stdev from rolling historical mean.
+    """
+    if C_DISB_DATE not in df.columns:
+        return {'available': False}
+
+    df = df.copy()
+    df['_disb_dt'] = pd.to_datetime(df[C_DISB_DATE], errors='coerce')
+    df = df.dropna(subset=['_disb_dt'])
+    df['_month'] = df['_disb_dt'].dt.to_period('M').astype(str)
+
+    if len(df) == 0:
+        return {'available': False}
+
+    dpd = _dpd(df, ref_date)
+
+    vintages = []
+    for month, grp in df.groupby('_month'):
+        avg_loan_size = grp[C_DISBURSED].mean() * mult if C_DISBURSED in grp.columns else 0
+        avg_tenure = grp[C_TENURE].mean() if C_TENURE in grp.columns else 0
+
+        grp_dpd = dpd.loc[grp.index]
+        delinquency_rate = (grp_dpd > 0).sum() / len(grp) * 100 if len(grp) > 0 else 0
+
+        # Product mix — share of each product type
+        product_mix = {}
+        if C_PRODUCT in grp.columns:
+            mix = grp[C_PRODUCT].value_counts(normalize=True)
+            for p, s in mix.items():
+                product_mix[p] = _safe(round(s * 100, 1))
+
+        # Collection rate for this vintage
+        collectable = grp[C_COLLECTABLE].sum() if C_COLLECTABLE in grp.columns else 0
+        repaid = grp[C_REPAID].sum() if C_REPAID in grp.columns else 0
+        collection_rate = repaid / collectable * 100 if collectable > 0 else 0
+
+        vintages.append({
+            'vintage': month,
+            'deals': len(grp),
+            'avg_loan_size': _safe(round(avg_loan_size, 2)),
+            'avg_tenure': _safe(round(avg_tenure, 1)),
+            'delinquency_rate': _safe(round(delinquency_rate, 2)),
+            'collection_rate': _safe(round(collection_rate, 2)),
+            'product_mix': product_mix,
+            'flags': [],
+        })
+
+    # Compute drift flags — compare each vintage against rolling mean of prior 6 vintages
+    metrics = ['avg_loan_size', 'avg_tenure', 'delinquency_rate', 'collection_rate']
+    for i, v in enumerate(vintages):
+        if i < 3:  # Need at least 3 prior vintages for meaningful norms
+            continue
+        prior = vintages[max(0, i-6):i]
+        for metric in metrics:
+            prior_vals = [p[metric] for p in prior if p[metric] is not None and p[metric] != 0]
+            if len(prior_vals) < 3:
+                continue
+            mean = sum(prior_vals) / len(prior_vals)
+            std = (sum((x - mean)**2 for x in prior_vals) / len(prior_vals)) ** 0.5
+            if std == 0:
+                continue
+            z_score = (v[metric] - mean) / std
+            if abs(z_score) > 1.0:
+                direction = 'up' if z_score > 0 else 'down'
+                v['flags'].append({
+                    'metric': metric,
+                    'direction': direction,
+                    'z_score': _safe(round(z_score, 2)),
+                    'current': v[metric],
+                    'historical_mean': _safe(round(mean, 2)),
+                })
+
+    # Historical norms (overall averages)
+    historical_norms = {}
+    for metric in metrics:
+        vals = [v[metric] for v in vintages if v[metric] is not None and v[metric] != 0]
+        if vals:
+            historical_norms[metric] = _safe(round(sum(vals) / len(vals), 2))
+
+    return {
+        'available': True,
+        'vintages': vintages,
+        'historical_norms': historical_norms,
+    }

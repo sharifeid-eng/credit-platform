@@ -12,8 +12,11 @@
     { "slug": "concentration",   "label": "Concentration" },
     { "slug": "cohort-analysis", "label": "Cohort Analysis" },
     { "slug": "yield-margins",   "label": "Yield & Margins" },
-    { "slug": "tenure",          "label": "Tenure Analysis" },
-    { "slug": "covenants",       "label": "Covenants" },
-    { "slug": "data-integrity",  "label": "Data Integrity" }
+    { "slug": "tenure",             "label": "Tenure Analysis" },
+    { "slug": "loss-waterfall",    "label": "Loss Waterfall" },
+    { "slug": "underwriting-drift","label": "Underwriting Drift" },
+    { "slug": "seasonality",       "label": "Seasonality" },
+    { "slug": "covenants",         "label": "Covenants" },
+    { "slug": "data-integrity",    "label": "Data Integrity" }
   ]
 }

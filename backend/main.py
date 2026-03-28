@@ -35,6 +35,7 @@ from core.analysis_silq import (
     compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
     compute_silq_tenure, compute_silq_borrowing_base, compute_silq_covenants,
+    compute_silq_seasonality, compute_silq_cohort_loss_waterfall, compute_silq_underwriting_drift,
     filter_silq_by_date,
 )
 from core.validation_silq import validate_silq_tape
@@ -704,14 +705,17 @@ def get_ejari_summary(company: str, product: str, snapshot: Optional[str] = None
 # ── SILQ chart endpoints ─────────────────────────────────────────────────────
 
 SILQ_CHART_MAP = {
-    'delinquency':   compute_silq_delinquency,
-    'collections':   compute_silq_collections,
-    'concentration': compute_silq_concentration,
-    'cohort':        compute_silq_cohorts,
-    'yield-margins': compute_silq_yield,
-    'tenure':        compute_silq_tenure,
-    'borrowing-base': compute_silq_borrowing_base,
-    'covenants':      compute_silq_covenants,
+    'delinquency':        compute_silq_delinquency,
+    'collections':        compute_silq_collections,
+    'concentration':      compute_silq_concentration,
+    'cohort':             compute_silq_cohorts,
+    'yield-margins':      compute_silq_yield,
+    'tenure':             compute_silq_tenure,
+    'borrowing-base':     compute_silq_borrowing_base,
+    'covenants':          compute_silq_covenants,
+    'seasonality':        compute_silq_seasonality,
+    'loss-waterfall':     compute_silq_cohort_loss_waterfall,
+    'underwriting-drift': compute_silq_underwriting_drift,
 }
 
 @app.get("/companies/{company}/products/{product}/charts/silq/{chart_name}")
@@ -968,6 +972,366 @@ Professional tone, suitable for an investment committee memo. Be specific and da
         'generated_at': datetime.now().isoformat(),
         'as_of_date':   as_of_date or sel.get('date', ''),
     }
+
+
+# ── AI Executive Summary ─────────────────────────────────────────────────────
+
+def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date):
+    """Build comprehensive analytics context from ALL Klaim compute functions."""
+    from core.analysis import add_month_column
+    sections = []
+
+    # 1. Summary
+    try:
+        s = compute_summary(df, config, disp, snapshot_date, as_of_date)
+        sections.append(f"PORTFOLIO SUMMARY: {s['total_deals']:,} deals, {disp} {s['total_purchase_value']/1e6:.1f}M originated, "
+                       f"Collection Rate {s['collection_rate']:.1f}%, Denial Rate {s['denial_rate']:.1f}%, "
+                       f"Pending {s['pending_rate']:.1f}%, Active {s['active_deals']}, Completed {s['completed_deals']}")
+    except Exception:
+        pass
+
+    # 2. PAR (dual perspective)
+    try:
+        par = compute_par(df, mult, as_of_date)
+        if par.get('available'):
+            sections.append(f"PAR (Lifetime): 30+={par['lifetime_par30']:.2f}%, 60+={par['lifetime_par60']:.2f}%, 90+={par['lifetime_par90']:.2f}% "
+                           f"| PAR (Active Outstanding): 30+={par['par30']:.1f}%, 60+={par['par60']:.1f}%, 90+={par['par90']:.1f}%")
+    except Exception:
+        pass
+
+    # 3. DTFC
+    try:
+        dtfc = compute_dtfc(df, mult, as_of_date)
+        if dtfc.get('available'):
+            sections.append(f"DTFC: Median {dtfc['median_dtfc']:.0f}d, P90 {dtfc['p90_dtfc']:.0f}d ({dtfc['method']})")
+    except Exception:
+        pass
+
+    # 4. DSO
+    try:
+        dso = compute_dso(df, mult, as_of_date)
+        if dso.get('available'):
+            sections.append(f"DSO: Weighted {dso['weighted_dso']:.0f}d, Median {dso['median_dso']:.0f}d, P95 {dso['p95_dso']:.0f}d")
+    except Exception:
+        pass
+
+    # 5. Collection velocity
+    try:
+        cv = compute_collection_velocity(df, mult, as_of_date)
+        recent = cv['monthly'][-3:] if cv.get('monthly') else []
+        if recent:
+            rates = ', '.join([f"{m.get('Month','?')}: {m.get('rate',0):.1f}%" for m in recent])
+            sections.append(f"COLLECTION VELOCITY (last 3M): {rates} | Avg days to collect: {cv.get('avg_days',0):.0f}")
+    except Exception:
+        pass
+
+    # 6. Denial trend
+    try:
+        dt = compute_denial_trend(df, mult)
+        recent = dt[-3:] if dt else []
+        if recent:
+            rates = ', '.join([f"{m.get('Month','?')}: {m.get('denial_rate',0):.1f}%" for m in recent])
+            sections.append(f"DENIAL TREND (last 3M): {rates}")
+    except Exception:
+        pass
+
+    # 7. Ageing
+    try:
+        ag = compute_ageing(df, mult, as_of_date)
+        health = {h['status']: h for h in ag.get('health_summary', [])}
+        sections.append(f"AGEING: Outstanding {disp} {ag.get('total_outstanding',0)/1e6:.1f}M | "
+                       f"Healthy {health.get('Healthy',{}).get('percentage',0):.0f}%, "
+                       f"Watch {health.get('Watch',{}).get('percentage',0):.0f}%, "
+                       f"Delayed {health.get('Delayed',{}).get('percentage',0):.0f}%, "
+                       f"Poor {health.get('Poor',{}).get('percentage',0):.0f}%")
+    except Exception:
+        pass
+
+    # 8. Concentration
+    try:
+        conc = compute_concentration(df, mult)
+        hhi = conc.get('hhi', {})
+        top_groups = conc.get('group', [])[:3]
+        top_str = ', '.join([f"{g.get('Group','?')} ({g.get('share',0):.1f}%)" for g in top_groups])
+        sections.append(f"CONCENTRATION: HHI={hhi.get('hhi',0):.4f} ({hhi.get('label','?')}), Top groups: {top_str}")
+    except Exception:
+        pass
+
+    # 9. Returns
+    try:
+        ret = compute_returns_analysis(df, mult)
+        rs = ret.get('summary', {})
+        sections.append(f"RETURNS: Realised Margin {rs.get('realised_margin',0):.2f}%, "
+                       f"Capital Recovery {rs.get('capital_recovery',0):.2f}%, "
+                       f"Avg Discount {rs.get('avg_discount',0):.2f}%")
+    except Exception:
+        pass
+
+    # 10. Expected Loss
+    try:
+        el = compute_expected_loss(df, mult)
+        p = el.get('portfolio', {})
+        sections.append(f"EXPECTED LOSS MODEL: PD={p.get('pd',0):.2f}%, LGD={p.get('lgd',0):.2f}%, "
+                       f"EL Rate={p.get('el_rate',0):.4f}%")
+    except Exception:
+        pass
+
+    # 11. Stress test
+    try:
+        st = compute_stress_test(df, mult)
+        scenarios = st.get('scenarios', [])
+        if scenarios:
+            worst = scenarios[-1]
+            sections.append(f"STRESS TEST: Worst scenario ({worst.get('scenario','')}): "
+                           f"collection drops to {worst.get('stressed_rate',0):.1f}%")
+    except Exception:
+        pass
+
+    # 12. Cohort loss waterfall
+    try:
+        clw = compute_cohort_loss_waterfall(df, mult)
+        totals = clw.get('totals', {})
+        sections.append(f"LOSS WATERFALL: Default rate {totals.get('default_rate',0):.2f}%, "
+                       f"Recovery rate {totals.get('recovery_rate',0):.2f}%, "
+                       f"Net loss rate {totals.get('net_loss_rate',0):.2f}%")
+    except Exception:
+        pass
+
+    # 13. Recovery analysis
+    try:
+        ra = compute_recovery_analysis(df, mult)
+        sections.append(f"RECOVERY: Portfolio recovery rate {ra.get('portfolio_recovery_rate',0):.1f}%")
+    except Exception:
+        pass
+
+    # 14. Underwriting drift
+    try:
+        ud = compute_underwriting_drift(df, mult, as_of_date)
+        flagged = [v for v in ud.get('vintages', []) if v.get('flags')]
+        if flagged:
+            sections.append(f"UNDERWRITING DRIFT: {len(flagged)} vintages flagged with drift out of {len(ud.get('vintages',[]))}")
+        else:
+            sections.append(f"UNDERWRITING DRIFT: No vintages flagged — origination quality stable")
+    except Exception:
+        pass
+
+    # 15. Seasonality
+    try:
+        sn = compute_seasonality(df, mult)
+        idx = sn.get('seasonal_index', [])
+        if idx:
+            peak = max(idx, key=lambda x: x.get('index', 0))
+            trough = min(idx, key=lambda x: x.get('index', 0))
+            sections.append(f"SEASONALITY: Peak month={peak.get('month','?')} (index {peak.get('index',0):.2f}), "
+                           f"Trough month={trough.get('month','?')} (index {trough.get('index',0):.2f})")
+    except Exception:
+        pass
+
+    # 16. Segment analysis
+    try:
+        sa = compute_segment_analysis(df, mult)
+        dims = sa.get('dimensions', [])
+        sections.append(f"SEGMENTS: Available dimensions: {', '.join(dims)}")
+    except Exception:
+        pass
+
+    # 17. HHI time series (load all snapshots)
+    try:
+        hhi_ts = compute_hhi_for_snapshot(df, mult)
+        sections.append(f"HHI (current snapshot): {hhi_ts.get('hhi',0):.4f}")
+    except Exception:
+        pass
+
+    # 18. Group performance
+    try:
+        gp = compute_group_performance(df, mult)
+        top3 = gp[:3] if gp else []
+        if top3:
+            top_str = ', '.join([f"{g.get('Group','?')}: coll={g.get('collection_rate',0):.1f}% den={g.get('denial_rate',0):.1f}%" for g in top3])
+            sections.append(f"TOP PROVIDERS: {top_str}")
+    except Exception:
+        pass
+
+    # 19. Cohorts (recent)
+    try:
+        cohorts = compute_cohorts(df, mult)
+        recent = cohorts[-3:] if cohorts else []
+        if recent:
+            coh_str = ', '.join([f"{c.get('month','?')}: {c.get('deals',0)} deals, coll={c.get('collection_rate',0):.1f}%" for c in recent])
+            sections.append(f"RECENT COHORTS: {coh_str}")
+    except Exception:
+        pass
+
+    # 20. Loss categorization
+    try:
+        lc = compute_loss_categorization(df, mult)
+        cats = lc.get('categories', [])
+        if cats:
+            cat_str = ', '.join([f"{c.get('category','?')}: {c.get('pct',0):.0f}%" for c in cats])
+            sections.append(f"LOSS CATEGORIES: {cat_str}")
+    except Exception:
+        pass
+
+    return '\n'.join(sections)
+
+
+def _build_silq_full_context(df, mult, ref_date, config, disp):
+    """Build comprehensive analytics context from ALL SILQ compute functions."""
+    sections = []
+
+    try:
+        s = compute_silq_summary(df, mult, ref_date=ref_date)
+        sections.append(f"PORTFOLIO: {s['total_deals']:,} loans, {disp} {s['total_disbursed']/1e6:.1f}M disbursed, "
+                       f"Outstanding {disp} {s['total_outstanding']/1e6:.1f}M, "
+                       f"Collection {s['collection_rate']:.1f}%, Overdue {s['overdue_rate']:.1f}%, "
+                       f"PAR30={s['par30']:.1f}%, PAR60={s['par60']:.1f}%, PAR90={s['par90']:.1f}%")
+    except Exception:
+        pass
+
+    try:
+        d = compute_silq_delinquency(df, mult, ref_date=ref_date)
+        buckets = d.get('buckets', [])
+        if buckets:
+            bk_str = ', '.join([f"{b['label']}: {b['count']} ({b['pct']:.1f}%)" for b in buckets])
+            sections.append(f"DPD BUCKETS: {bk_str}")
+        top_shops = d.get('top_overdue_shops', [])[:3]
+        if top_shops:
+            sh_str = ', '.join([f"{s.get('shop','?')}: {disp} {s.get('overdue',0)/1e3:.0f}K" for s in top_shops])
+            sections.append(f"TOP OVERDUE SHOPS: {sh_str}")
+    except Exception:
+        pass
+
+    try:
+        c = compute_silq_collections(df, mult)
+        bp = c.get('by_product', [])
+        if bp:
+            bp_str = ', '.join([f"{p['product']}: {p['rate']:.1f}%" for p in bp])
+            sections.append(f"COLLECTIONS BY PRODUCT: {bp_str}")
+    except Exception:
+        pass
+
+    try:
+        conc = compute_silq_concentration(df, mult)
+        top_shops = conc.get('shops', [])[:3]
+        shop_strs = [f"{s.get('shop','?')} ({s.get('share',0):.1f}%)" for s in top_shops]
+        sections.append(f"CONCENTRATION: HHI={conc.get('hhi',0):.4f}, Top shops: {', '.join(shop_strs)}")
+    except Exception:
+        pass
+
+    try:
+        coh = compute_silq_cohorts(df, mult, ref_date=ref_date)
+        recent = coh[-3:] if isinstance(coh, list) else coh.get('cohorts', [])[-3:]
+        if recent:
+            coh_str = ', '.join([f"{c.get('month','?')}: {c.get('loans',0)} loans, coll={c.get('collection_rate',0):.1f}%" for c in recent])
+            sections.append(f"RECENT COHORTS: {coh_str}")
+    except Exception:
+        pass
+
+    try:
+        y = compute_silq_yield(df, mult)
+        bp = y.get('by_product', [])
+        if bp:
+            bp_str = ', '.join([f"{p.get('product','?')}: margin={p.get('margin',0):.1f}%" for p in bp])
+            sections.append(f"YIELD BY PRODUCT: {bp_str}")
+    except Exception:
+        pass
+
+    try:
+        t = compute_silq_tenure(df, mult, ref_date=ref_date)
+        bands = t.get('tenure_bands', [])
+        if bands:
+            tb_str = ', '.join([f"{b.get('band','?')}: {b.get('count',0)} loans" for b in bands[:4]])
+            sections.append(f"TENURE DISTRIBUTION: {tb_str}")
+    except Exception:
+        pass
+
+    return '\n'.join(sections)
+
+
+@app.get("/companies/{company}/products/{product}/ai-executive-summary")
+def get_executive_summary(company: str, product: str,
+                          snapshot: Optional[str] = None,
+                          as_of_date: Optional[str] = None,
+                          currency: Optional[str] = None):
+    """AI Executive Summary — holistic analysis of ALL computed metrics.
+
+    Returns top 5-10 findings ranked by business impact with severity levels.
+    """
+    at = _get_analysis_type(company, product)
+
+    if at == 'ejari_summary':
+        return {'findings': [], 'message': 'Executive summary not available for read-only summary data.'}
+
+    if at == 'silq':
+        df, sel, config, disp, mult, _, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
+        context = _build_silq_full_context(df, mult, ref_date, config, disp)
+        company_desc = "SILQ POS lending portfolio (BNPL, RBF, RCL) in KSA"
+        n_metrics = len([l for l in context.split('\n') if l.strip()])
+    else:
+        df, sel = _load(company, product, snapshot)
+        df = filter_by_date(df, as_of_date)
+        config, disp = _currency(company, product, currency)
+        mult = apply_multiplier(config, disp)
+        context = _build_klaim_full_context(df, mult, as_of_date or sel['date'], config, disp, sel['date'])
+        company_desc = f"{company.upper()} healthcare claims factoring portfolio in UAE"
+        n_metrics = len([l for l in context.split('\n') if l.strip()])
+
+    prompt = f"""You are a senior analyst at ACP Private Credit preparing an executive summary for the investment committee.
+
+Company: {company_desc}
+Data as of: {as_of_date or sel.get('date', '')}  |  Currency: {disp if 'disp' in dir() else 'N/A'}
+
+COMPREHENSIVE ANALYTICS ({n_metrics} sections):
+{context}
+
+Based on ALL the data above, identify the TOP 5-10 MOST IMPORTANT FINDINGS for the investment committee. Rank by business impact.
+
+For each finding, respond in this exact JSON format:
+[
+  {{
+    "rank": 1,
+    "severity": "critical" or "warning" or "positive",
+    "title": "Short title (max 10 words)",
+    "explanation": "2-3 sentences explaining why this matters and what action to take.",
+    "data_points": ["Key number 1", "Key number 2"],
+    "tab": "relevant-tab-slug"
+  }}
+]
+
+Rules:
+- "critical": immediate IC attention needed (deteriorating metrics, covenant risk, concentration breaches)
+- "warning": should be monitored (emerging trends, drift signals)
+- "positive": good news worth highlighting (improving metrics, strong performance)
+- Tab slugs: overview, actual-vs-expected, deployment, collection, denial-trend, ageing, revenue, portfolio-tab, cohort-analysis, returns, risk-migration, loss-waterfall, recovery-analysis, underwriting-drift, segment-analysis, seasonality
+- For SILQ tabs: overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, covenants
+- Be specific with numbers. No vague statements.
+- Return ONLY the JSON array, no other text."""
+
+    msg = _ai_client().messages.create(
+        model="claude-opus-4-6", max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    # Parse the JSON response
+    response_text = msg.content[0].text.strip()
+    # Handle potential markdown code block wrapping
+    if response_text.startswith('```'):
+        response_text = re.sub(r'^```(?:json)?\s*', '', response_text)
+        response_text = re.sub(r'\s*```$', '', response_text)
+
+    try:
+        findings = json.loads(response_text)
+    except json.JSONDecodeError:
+        findings = [{'rank': 1, 'severity': 'warning', 'title': 'Summary generated',
+                     'explanation': response_text, 'data_points': [], 'tab': 'overview'}]
+
+    return {
+        'findings': findings,
+        'generated_at': datetime.now().isoformat(),
+        'as_of_date': as_of_date or sel.get('date', ''),
+        'context_coverage': n_metrics,
+    }
+
 
 @app.get("/companies/{company}/products/{product}/ai-tab-insight")
 def get_tab_insight(company: str, product: str,

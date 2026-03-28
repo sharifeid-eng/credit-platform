@@ -38,6 +38,9 @@ export const getTabInsight       = (co, prod, snap, cur, tab, asOf) =>
 export const postChat            = (co, prod, snap, cur, question, history = []) =>
   api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data.answer);
 
+export const getExecutiveSummary = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: p(snap, cur, asOf) }).then(r => r.data);
+
 // ── PAR & DTFC ──────────────────────────────────────────────────────────────
 export const getParChart              = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/par`,               { params: p(snap, cur, asOf) }).then(r => r.data);

@@ -20,6 +20,7 @@ from core.analysis import (
     compute_hhi, compute_denial_funnel, compute_stress_test,
     compute_expected_loss, compute_loss_triangle, compute_group_performance,
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
+    compute_par,
 )
 from core.loader import load_snapshot
 from core.config import load_config
@@ -459,3 +460,52 @@ class TestVatSummary:
             assert result['total_vat'] == pytest.approx(
                 result['vat_assets'] + result['vat_fees'], rel=0.01
             )
+
+
+# ── PAR Dual Perspective tests ──────────────────────────────────────────────
+
+class TestPAR:
+    def test_available(self, full_df):
+        result = compute_par(full_df, 1)
+        assert 'available' in result
+
+    def test_dual_perspective_keys(self, full_df):
+        result = compute_par(full_df, 1)
+        if result['available']:
+            # Active perspective keys
+            assert 'par30' in result
+            assert 'par60' in result
+            assert 'par90' in result
+            # Lifetime perspective keys
+            assert 'lifetime_par30' in result
+            assert 'lifetime_par60' in result
+            assert 'lifetime_par90' in result
+            assert 'total_originated' in result
+            assert 'total_deal_count' in result
+
+    def test_lifetime_leq_active(self, full_df):
+        """Lifetime PAR should always be <= active PAR (larger denominator)."""
+        result = compute_par(full_df, 1)
+        if result['available']:
+            assert result['lifetime_par30'] <= result['par30'] + 0.001
+            assert result['lifetime_par60'] <= result['par60'] + 0.001
+            assert result['lifetime_par90'] <= result['par90'] + 0.001
+
+    def test_lifetime_denominator_is_total(self, full_df):
+        """Lifetime denominator should equal total purchase value of all deals."""
+        result = compute_par(full_df, 1)
+        if result['available']:
+            total_pv = float(full_df['Purchase value'].sum())
+            assert result['total_originated'] == pytest.approx(total_pv, rel=0.01)
+            assert result['total_deal_count'] == len(full_df)
+
+    def test_active_denominator_is_outstanding(self, full_df):
+        """Active denominator should equal outstanding of Executed deals only."""
+        result = compute_par(full_df, 1)
+        if result['available']:
+            active = full_df[full_df['Status'] == 'Executed']
+            outstanding = (
+                active['Purchase value'] - active['Collected till date'] -
+                active.get('Denied by insurance', pd.Series(0, index=active.index))
+            ).clip(lower=0).sum()
+            assert result['total_active_outstanding'] == pytest.approx(outstanding, rel=0.01)
