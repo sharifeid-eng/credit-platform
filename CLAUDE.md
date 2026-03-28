@@ -160,9 +160,8 @@ credit-platform/
 │   │   │   ├── Home.jsx             # Landing page — company grid + resources section
 │   │   │   ├── TapeAnalytics.jsx    # 18-tab tape dashboard (extracted from old Company.jsx)
 │   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
-│   │   │   ├── Framework.jsx        # Analysis Framework page — markdown renderer with sticky TOC
+│   │   │   ├── Framework.jsx        # Analysis Framework page (/framework) — analytical philosophy with sticky TOC
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
-│   │   │   ├── Framework.jsx       # Analysis Framework page (/framework) — analytical philosophy
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — holistic findings from all metrics
 │   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   ├── components/
@@ -199,7 +198,10 @@ credit-platform/
 │   │   │   │       ├── SilqCohortTable.jsx
 │   │   │   │       ├── YieldMarginsChart.jsx
 │   │   │   │       ├── TenureAnalysisChart.jsx
-│   │   │   │       └── SilqCovenantsChart.jsx
+│   │   │   │       ├── SilqCovenantsChart.jsx
+│   │   │   │       ├── SilqSeasonalityChart.jsx
+│   │   │   │       ├── SilqLossWaterfallChart.jsx
+│   │   │   │       └── SilqUnderwritingDriftChart.jsx
 │   │   │   └── portfolio/
 │   │   │       ├── BorrowingBase.jsx         # Waterfall, KPIs, advance rates, facility capacity
 │   │   │       ├── ConcentrationLimits.jsx   # Limit cards with compliance badges + breaching items
