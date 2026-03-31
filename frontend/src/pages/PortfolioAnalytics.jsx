@@ -146,7 +146,15 @@ export default function PortfolioAnalytics() {
         {/* Parent-managed tabs with loading state */}
         {!SELF_LOADING_TABS.includes(tab) && loading ? loadingBar : (
           <>
-            {tab === 'borrowing-base' && bbData && <BorrowingBase data={bbData} />}
+            {tab === 'borrowing-base' && bbData && (
+              <BorrowingBase
+                data={bbData}
+                company={company}
+                product={product}
+                snapshot={snapshot}
+                currency={currency}
+              />
+            )}
             {tab === 'concentration-limits' && clData && <ConcentrationLimits data={clData} />}
             {tab === 'covenants' && covData && (
               <Covenants
@@ -154,6 +162,10 @@ export default function PortfolioAnalytics() {
                 availableDates={covDates}
                 selectedDate={covSelectedDate}
                 onDateChange={setCovSelectedDate}
+                company={company}
+                product={product}
+                snapshot={snapshot}
+                currency={currency}
               />
             )}
           </>

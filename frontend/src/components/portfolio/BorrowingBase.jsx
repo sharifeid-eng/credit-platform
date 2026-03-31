@@ -1,19 +1,69 @@
+import { useState } from 'react'
 import KpiCard from '../KpiCard'
 import WaterfallTable from './WaterfallTable'
+import { downloadComplianceCert } from '../../services/api'
 
-export default function BorrowingBase({ data }) {
+export default function BorrowingBase({ data, company, product, snapshot, currency }) {
   const d = data
-  const ccy = data.currency || 'AED'
+  const ccy = data.currency || currency || 'AED'
   const fmt = (v) => `${ccy} ${(v / 1_000_000).toFixed(1)}M`
+  const [bbcLoading, setBbcLoading] = useState(false)
+  const [bbcError, setBbcError] = useState(null)
+
+  const handleDownloadBBC = async () => {
+    setBbcLoading(true)
+    setBbcError(null)
+    try {
+      await downloadComplianceCert(company, product, snapshot, ccy)
+    } catch (err) {
+      setBbcError('Failed to generate certificate')
+    } finally {
+      setBbcLoading(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        <KpiCard label="Total A/R"        value={fmt(d.kpis.total_ar)}          sub="Gross receivables"                color="gold" />
-        <KpiCard label="Eligible A/R"     value={fmt(d.kpis.eligible_ar)}       sub={`${fmt(d.kpis.ineligible)} ineligible`} color="blue" />
-        <KpiCard label="Borrowing Base"   value={fmt(d.kpis.borrowing_base)}    sub={`${((d.kpis.borrowing_base / d.kpis.facility_limit) * 100).toFixed(1)}% of facility`} color="teal" />
-        <KpiCard label="Available to Draw" value={fmt(d.kpis.available_to_draw)} sub="Constrained by BB"                color="teal" />
+      {/* KPI cards + BBC button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+          <KpiCard label="Total A/R"        value={fmt(d.kpis.total_ar)}          sub="Gross receivables"                color="gold" />
+          <KpiCard label="Eligible A/R"     value={fmt(d.kpis.eligible_ar)}       sub={`${fmt(d.kpis.ineligible)} ineligible`} color="blue" />
+          <KpiCard label="Borrowing Base"   value={fmt(d.kpis.borrowing_base)}    sub={`${((d.kpis.borrowing_base / d.kpis.facility_limit) * 100).toFixed(1)}% of facility`} color="teal" />
+          <KpiCard label="Available to Draw" value={fmt(d.kpis.available_to_draw)} sub="Constrained by BB"                color="teal" />
+        </div>
+        <button
+          onClick={handleDownloadBBC}
+          disabled={bbcLoading}
+          title="Download Borrowing Base Certificate (PDF)"
+          style={{
+            padding: '8px 14px', borderRadius: 6, cursor: bbcLoading ? 'default' : 'pointer',
+            background: 'transparent',
+            border: `1px solid ${bbcError ? 'var(--accent-red)' : 'var(--accent-gold)'}`,
+            color: bbcError ? 'var(--accent-red)' : bbcLoading ? 'var(--text-muted)' : 'var(--accent-gold)',
+            fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+            whiteSpace: 'nowrap', alignSelf: 'flex-start', marginTop: 2,
+            transition: 'all 150ms',
+          }}
+        >
+          {bbcLoading ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Generating…
+            </span>
+          ) : bbcError ? (
+            <span>⚠ {bbcError}</span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+              </svg>
+              Download BBC
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Waterfall table */}
@@ -126,6 +176,117 @@ export default function BorrowingBase({ data }) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Sensitivity & Breakeven */}
+      {d.analytics && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {/* Breakeven */}
+          {d.analytics.breakeven && (
+            <div style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)', padding: '20px',
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                Breakeven Analysis
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
+                At what point does the borrowing base breach?
+              </div>
+
+              {[
+                {
+                  label: 'Eligible A/R cushion',
+                  value: fmt(d.analytics.breakeven.eligible_reduction_needed),
+                  sub: 'Amount that can become ineligible before breach',
+                  color: 'var(--accent-teal)',
+                },
+                {
+                  label: 'Stress threshold',
+                  value: `${d.analytics.breakeven.stress_pct.toFixed(1)}%`,
+                  sub: 'Of total A/R pool',
+                  color: d.analytics.breakeven.stress_pct < 10 ? 'var(--accent-red)' : d.analytics.breakeven.stress_pct < 25 ? 'var(--accent-gold)' : 'var(--accent-teal)',
+                },
+                {
+                  label: 'Current headroom',
+                  value: `${d.analytics.breakeven.headroom_pct.toFixed(1)}%`,
+                  sub: `${fmt(d.analytics.breakeven.headroom)} available to draw`,
+                  color: 'var(--accent-teal)',
+                },
+              ].map((row, i) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                  padding: '8px 0',
+                  borderTop: i > 0 ? '1px solid rgba(36,48,64,0.5)' : 'none',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 2 }}>{row.sub}</div>
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
+                    color: row.color,
+                  }}>
+                    {row.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Sensitivity */}
+          {d.analytics.sensitivity && (
+            <div style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)', padding: '20px',
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                Sensitivity
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Marginal impact on borrowing base
+              </div>
+
+              {[
+                {
+                  label: '+1pp advance rate',
+                  value: `+${fmt(d.analytics.sensitivity.per_1pp_advance_rate)}`,
+                  sub: `∂BB/∂rate · at ${(d.analytics.sensitivity.advance_rate_used * 100).toFixed(0)}% base rate`,
+                  color: 'var(--accent-teal)',
+                },
+                {
+                  label: `+${ccy} 1M ineligible`,
+                  value: fmt(d.analytics.sensitivity.per_1m_ineligible),
+                  sub: '∂BB/∂ineligible per 1M',
+                  color: 'var(--accent-red)',
+                },
+                {
+                  label: 'Eligible A/R base',
+                  value: fmt(d.analytics.sensitivity.eligible_ar),
+                  sub: 'Current eligible pool driving BB',
+                  color: 'var(--accent-blue)',
+                },
+              ].map((row, i) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                  padding: '8px 0',
+                  borderTop: i > 0 ? '1px solid rgba(36,48,64,0.5)' : 'none',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 2 }}>{row.sub}</div>
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
+                    color: row.color,
+                  }}>
+                    {row.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

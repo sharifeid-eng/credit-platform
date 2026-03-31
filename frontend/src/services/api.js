@@ -167,6 +167,29 @@ export const getPortfolioBankStatements    = (co, prod, page = 1, perPage = 50) 
 export const getPortfolioCovenantDates     = (co, prod) =>
   api.get(`/companies/${co}/products/${prod}/portfolio/covenant-dates`).then(r => r.data);
 
+// ── Compliance Certificate & Notifications ────────────────────────────────────
+export const downloadComplianceCert = (co, prod, snap, cur, officerName = '') =>
+  api.post(
+    `/companies/${co}/products/${prod}/portfolio/compliance-cert`,
+    { officer_name: officerName, currency: cur },
+    { params: { snapshot: snap }, timeout: 30_000, responseType: 'blob' },
+  ).then(r => {
+    const blob = new Blob([r.data], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `BBC_${co}_${prod}_${snap || 'latest'}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
+
+export const notifyBreaches = (co, prod, snap, cur) =>
+  api.post(
+    `/companies/${co}/products/${prod}/portfolio/notify-breaches`,
+    {},
+    { params: p(snap, cur) },
+  ).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

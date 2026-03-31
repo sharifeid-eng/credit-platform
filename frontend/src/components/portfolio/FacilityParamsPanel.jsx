@@ -340,6 +340,23 @@ export default function FacilityParamsPanel({ company, product, analysisType, on
                   />
                 </Section>
               )}
+
+              {/* Section 6 — Notifications */}
+              <Section title="Notifications">
+                <div style={{ marginBottom: 12 }}>
+                  <label style={styles.label}>Slack Webhook URL</label>
+                  <input
+                    type="url"
+                    value={params.slack_webhook_url || ''}
+                    onChange={e => set('slack_webhook_url', e.target.value || null)}
+                    placeholder="https://hooks.slack.com/services/..."
+                    style={styles.input}
+                  />
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Used to send breach alerts from the Covenants tab
+                  </div>
+                </div>
+              </Section>
             </>
           )}
         </div>

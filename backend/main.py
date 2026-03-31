@@ -1838,6 +1838,38 @@ def get_portfolio_borrowing_base(company: str, product: str,
     except Exception:
         pass  # Movement data is optional — never break the main response
 
+    # --- BB Analytics: breakeven + sensitivity ---
+    try:
+        ck = result['kpis']
+        fp_advance = float(fp.get('advance_rate', 0.80 if atype == 'silq' else 0.90))
+        available   = float(ck.get('available_to_draw') or 0)
+        total_ar    = float(ck.get('total_ar')          or 0)
+        eligible_ar = float(ck.get('eligible_ar')       or 0)
+        facility_outstanding = float(fp.get('facility_drawn') or 0) * mult
+
+        breakeven = None
+        if fp_advance > 0 and total_ar > 0 and available > 0:
+            # Eligible A/R must shrink by this much before BB ≤ outstanding
+            eligible_reduction_needed = available / fp_advance
+            stress_pct = eligible_reduction_needed / total_ar * 100
+            breakeven = {
+                'eligible_reduction_needed': eligible_reduction_needed,
+                'stress_pct': round(stress_pct, 2),
+                'headroom': available,
+                'headroom_pct': round(available / float(ck.get('borrowing_base') or 1) * 100, 2),
+                'facility_outstanding': facility_outstanding,
+            }
+
+        sensitivity = {
+            'per_1pp_advance_rate': round(eligible_ar * 0.01, 0),   # ∂BB/∂rate per 1pp
+            'per_1m_ineligible':    round(-fp_advance * 1_000_000 * mult, 0),  # ∂BB per 1M more ineligible
+            'advance_rate_used':    fp_advance,
+            'eligible_ar':          eligible_ar,
+        }
+        result['analytics'] = {'breakeven': breakeven, 'sensitivity': sensitivity}
+    except Exception:
+        pass
+
     return {**result, 'currency': disp, 'snapshot': sel['date']}
 
 
@@ -1930,6 +1962,7 @@ def save_facility_params(company: str, product: str, request: dict):
         'approved_recipients',
         'single_payer_limit', 'wal_threshold_days',
         'net_cash_burn', 'net_cash_burn_3m_avg',
+        'slack_webhook_url',
     }
     params = {k: v for k, v in request.items() if k in allowed_keys}
     params['updated_at'] = datetime.now().isoformat()
@@ -1939,6 +1972,139 @@ def save_facility_params(company: str, product: str, request: dict):
         json.dump(params, f, indent=2)
 
     return {'saved': True, 'params': params}
+
+
+@app.post("/companies/{company}/products/{product}/portfolio/compliance-cert")
+def generate_compliance_certificate(company: str, product: str,
+                                     request: dict = None,
+                                     snapshot: Optional[str] = None,
+                                     as_of_date: Optional[str] = None,
+                                     currency: Optional[str] = None,
+                                     db: Session = Depends(get_db)):
+    """Generate a Borrowing Base Certificate PDF and stream it to the client."""
+    from core.compliance_cert import generate_compliance_cert
+    from fastapi.responses import StreamingResponse
+    import io
+
+    request = request or {}
+    officer_name = request.get('officer_name', '')
+    cur_override = request.get('currency') or currency
+
+    df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
+        company, product, snapshot, as_of_date, cur_override, db=db)
+
+    # Compute all three data sources
+    if atype == 'silq':
+        bb_data   = portfolio_borrowing_base(df, mult, ref_date, fp)
+        conc_data = portfolio_concentration_limits(df, mult, ref_date, fp)
+        cov_data  = portfolio_covenants(df, mult, ref_date, fp)
+    else:
+        bb_data   = compute_klaim_borrowing_base(df, mult, ref_date, fp)
+        conc_data = compute_klaim_concentration_limits(df, mult, ref_date, fp)
+        cov_data  = compute_klaim_covenants(df, mult, ref_date, fp)
+
+    bb_data['snapshot']  = sel['date']
+    bb_data['currency']  = disp
+    conc_data['currency'] = disp
+    cov_data['currency']  = disp
+
+    pdf_bytes = generate_compliance_cert(
+        bb_data, conc_data, cov_data,
+        company=company, product=product,
+        currency=disp, officer_name=officer_name,
+    )
+
+    filename = f"BBC_{company}_{product}_{sel['date']}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/companies/{company}/products/{product}/portfolio/notify-breaches")
+def notify_breaches(company: str, product: str,
+                    snapshot: Optional[str] = None,
+                    as_of_date: Optional[str] = None,
+                    currency: Optional[str] = None,
+                    db: Session = Depends(get_db)):
+    """Send a Slack notification summarising any covenant or concentration breaches."""
+    import urllib.request as ureq
+    import json as _json
+
+    df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
+        company, product, snapshot, as_of_date, currency, db=db)
+
+    webhook_url = fp.get('slack_webhook_url', '').strip()
+    if not webhook_url:
+        raise HTTPException(status_code=400, detail='No Slack webhook URL configured. Add one in Facility Parameters.')
+
+    if atype == 'silq':
+        cov_data  = portfolio_covenants(df, mult, ref_date, fp)
+        conc_data = portfolio_concentration_limits(df, mult, ref_date, fp)
+    else:
+        cov_data  = compute_klaim_covenants(df, mult, ref_date, fp)
+        conc_data = compute_klaim_concentration_limits(df, mult, ref_date, fp)
+
+    covenants = cov_data.get('covenants', [])
+    limits    = conc_data.get('limits', [])
+
+    breach_covs  = [c for c in covenants if not c.get('compliant', True)]
+    breach_concs = [l for l in limits    if not l.get('compliant', True)]
+    total_breach = len(breach_covs) + len(breach_concs)
+
+    if total_breach == 0:
+        emoji = ':white_check_mark:'
+        header = f'{emoji} *{company.upper()} / {product}* — All covenants and limits compliant as of {sel["date"]}.'
+        fields = []
+    else:
+        emoji = ':rotating_light:'
+        header = (
+            f'{emoji} *BREACH ALERT — {company.upper()} / {product}*\n'
+            f'{total_breach} breach(es) detected as of {sel["date"]}.'
+        )
+        fields = []
+        for c in breach_covs:
+            fields.append({
+                'type': 'mrkdwn',
+                'text': f'*Covenant: {c["name"]}*\nActual: {c.get("current", "?")} | Threshold: {c.get("threshold", "?")}',
+            })
+        for l in breach_concs:
+            fields.append({
+                'type': 'mrkdwn',
+                'text': f'*Concentration: {l.get("name", "?")}*\nExposure: {l.get("current_value", "?")} | Limit: {l.get("limit_pct", "?")}%',
+            })
+
+    payload = {
+        'blocks': [
+            {'type': 'section', 'text': {'type': 'mrkdwn', 'text': header}},
+        ]
+    }
+    if fields:
+        payload['blocks'].append({'type': 'section', 'fields': fields[:10]})
+    payload['blocks'].append({
+        'type': 'context',
+        'elements': [{'type': 'mrkdwn', 'text': f'Sent by Laith Analytics Platform | {datetime.now().strftime("%Y-%m-%d %H:%M UTC")}'}],
+    })
+
+    body = _json.dumps(payload).encode('utf-8')
+    req  = ureq.Request(webhook_url, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with ureq.urlopen(req, timeout=10) as resp:
+            status = resp.status
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'Slack delivery failed: {e}')
+
+    if status != 200:
+        raise HTTPException(status_code=502, detail=f'Slack returned HTTP {status}')
+
+    return {
+        'sent': True,
+        'breach_count': total_breach,
+        'covenant_breaches': len(breach_covs),
+        'concentration_breaches': len(breach_concs),
+        'snapshot': sel['date'],
+    }
 
 
 # ── Portfolio Dashboard Data endpoints ───────────────────────────────────────
