@@ -22,6 +22,7 @@
     { "slug": "underwriting-drift", "label": "Underwriting Drift" },
     { "slug": "segment-analysis",   "label": "Segment Analysis" },
     { "slug": "seasonality",        "label": "Seasonality" },
+    { "slug": "cdr-ccr",            "label": "CDR / CCR" },
     { "slug": "risk-migration",     "label": "Risk & Migration" },
     { "slug": "data-integrity",     "label": "Data Integrity" }
   ]

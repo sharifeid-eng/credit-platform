@@ -25,6 +25,7 @@ import DenialFunnelChart       from '../components/charts/DenialFunnelChart'
 import DataIntegrityChart      from '../components/charts/DataIntegrityChart'
 
 // New analytical charts
+import CdrCcrChart              from '../components/charts/CdrCcrChart'
 import CohortLossWaterfallChart from '../components/charts/CohortLossWaterfallChart'
 import RecoveryAnalysisChart    from '../components/charts/RecoveryAnalysisChart'
 import CollectionsTimingChart   from '../components/charts/CollectionsTimingChart'
@@ -43,6 +44,7 @@ import SilqCovenantsChart      from '../components/charts/silq/SilqCovenantsChar
 import SilqSeasonalityChart    from '../components/charts/silq/SilqSeasonalityChart'
 import SilqLossWaterfallChart  from '../components/charts/silq/SilqLossWaterfallChart'
 import SilqUnderwritingDriftChart from '../components/charts/silq/SilqUnderwritingDriftChart'
+import SilqCdrCcrChart           from '../components/charts/silq/SilqCdrCcrChart'
 import EjariDashboard          from './EjariDashboard'
 
 import { TAPE_TABS } from '../components/Sidebar'
@@ -229,6 +231,7 @@ function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots,
     'seasonality':        <ChartTab tab="seasonality" {...chartProps}><SilqSeasonalityChart {...chartProps} /></ChartTab>,
     'loss-waterfall':     <ChartTab tab="loss-waterfall" {...chartProps}><SilqLossWaterfallChart {...chartProps} /></ChartTab>,
     'underwriting-drift': <ChartTab tab="underwriting-drift" {...chartProps}><SilqUnderwritingDriftChart {...chartProps} /></ChartTab>,
+    'cdr-ccr':            <ChartTab tab="cdr-ccr" {...chartProps}><SilqCdrCcrChart {...chartProps} /></ChartTab>,
   }
   return SILQ_TABS[tab] || <div style={{ color: 'var(--text-muted)' }}>Tab not found</div>
 }
@@ -320,6 +323,11 @@ function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, cur
       {activeTab === 'Seasonality' && (
         <ChartTab tab="seasonality" company={company} product={product} snapshot={snapshot} currency={currency}>
           <SeasonalityChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
+        </ChartTab>
+      )}
+      {activeTab === 'CDR / CCR' && (
+        <ChartTab tab="cdr-ccr" company={company} product={product} snapshot={snapshot} currency={currency}>
+          <CdrCcrChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Risk & Migration' && (

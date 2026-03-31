@@ -16,6 +16,7 @@
     { "slug": "loss-waterfall",    "label": "Loss Waterfall" },
     { "slug": "underwriting-drift","label": "Underwriting Drift" },
     { "slug": "seasonality",       "label": "Seasonality" },
+    { "slug": "cdr-ccr",           "label": "CDR / CCR" },
     { "slug": "covenants",         "label": "Covenants" },
     { "slug": "data-integrity",    "label": "Data Integrity" }
   ]
