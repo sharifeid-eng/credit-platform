@@ -425,29 +425,31 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
   }, [company, product, snapshot, currency, asOfDate])
 
   const kpis = summary ? [
-    { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold' },
-    { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal', stale: bd },
-    { label: 'Denial Rate',     value: pct(summary.denial_rate),          sub: 'vs Purchase Value',               color: 'red',  stale: bd },
-    { label: 'Pending Exposure',value: fmt(summary.total_pending),        sub: pct(summary.pending_rate),         color: 'blue', stale: bd },
-    { label: 'Active Deals',    value: String(summary.active_deals),      sub: 'currently executing',             color: 'blue' },
-    { label: 'Completed Deals', value: String(summary.completed_deals),   sub: 'fully collected',                 color: 'teal' },
-    { label: 'Total Collected', value: fmt(summary.total_collected),      sub: 'cumulative collections',          color: 'teal', stale: bd },
-    { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red',  stale: bd },
-    ...(summary.dso_available ? [{ label: 'Wtd Avg DSO', value: summary.dso != null ? `${summary.dso.toFixed(0)}d` : '—', sub: `Median: ${summary.median_dso != null ? summary.median_dso.toFixed(0) + 'd' : '—'}`, color: 'gold', stale: bd }] : []),
-    { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top provider: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal' },
+    { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold', confidence: 'A' },
+    { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal', stale: bd, confidence: 'A' },
+    { label: 'Denial Rate',     value: pct(summary.denial_rate),          sub: 'vs Purchase Value',               color: 'red',  stale: bd, confidence: 'A' },
+    { label: 'Pending Exposure',value: fmt(summary.total_pending),        sub: pct(summary.pending_rate),         color: 'blue', stale: bd, confidence: 'A' },
+    { label: 'Active Deals',    value: String(summary.active_deals),      sub: 'currently executing',             color: 'blue', confidence: 'A' },
+    { label: 'Completed Deals', value: String(summary.completed_deals),   sub: 'fully collected',                 color: 'teal', confidence: 'A' },
+    { label: 'Total Collected', value: fmt(summary.total_collected),      sub: 'cumulative collections',          color: 'teal', stale: bd, confidence: 'A' },
+    { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red',  stale: bd, confidence: 'A' },
+    ...(summary.dso_available ? [{ label: 'Wtd Avg DSO', value: summary.dso != null ? `${summary.dso.toFixed(0)}d` : '—', sub: `Median: ${summary.median_dso != null ? summary.median_dso.toFixed(0) + 'd' : '—'}`, color: 'gold', stale: bd, confidence: 'B' }] : []),
+    { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top provider: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal', confidence: 'A' },
   ] : Array(10).fill(null)
 
   // PAR KPIs — dual perspective: lifetime (IC view) as headline, active as context
+  const parConfidence = par?.method === 'primary' ? 'B' : 'C'
   const parKpis = par?.available ? [
-    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: `${pct(par.par30)} of active outstanding`, color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived' },
-    { label: 'PAR 60+', value: pct(par.lifetime_par60 ?? par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par60 ?? par.par60) > 1.5 ? 'red' : (par.lifetime_par60 ?? par.par60) > 0.75 ? 'gold' : 'teal', derived: par.method === 'derived' },
-    { label: 'PAR 90+', value: pct(par.lifetime_par90 ?? par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par90 ?? par.par90) > 1 ? 'red' : (par.lifetime_par90 ?? par.par90) > 0.5 ? 'gold' : 'teal', derived: par.method === 'derived' },
+    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: `${pct(par.par30)} of active outstanding`, color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
+    { label: 'PAR 60+', value: pct(par.lifetime_par60 ?? par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par60 ?? par.par60) > 1.5 ? 'red' : (par.lifetime_par60 ?? par.par60) > 0.75 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
+    { label: 'PAR 90+', value: pct(par.lifetime_par90 ?? par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par90 ?? par.par90) > 1 ? 'red' : (par.lifetime_par90 ?? par.par90) > 0.5 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
   ] : []
 
   // DTFC KPIs — only shown when available
+  const dtfcConfidence = dtfc?.method === 'curve_based' ? 'B' : 'C'
   const dtfcKpis = dtfc?.available ? [
-    { label: 'DTFC (Median)', value: `${dtfc.median_dtfc.toFixed(0)}d`, sub: `${dtfc.total_deals} deals`, color: 'blue' },
-    { label: 'DTFC (P90)',    value: `${dtfc.p90_dtfc.toFixed(0)}d`, sub: 'slowest 10%',                  color: dtfc.p90_dtfc > 90 ? 'red' : 'gold' },
+    { label: 'DTFC (Median)', value: `${dtfc.median_dtfc.toFixed(0)}d`, sub: `${dtfc.total_deals} deals`, color: 'blue', confidence: dtfcConfidence },
+    { label: 'DTFC (P90)',    value: `${dtfc.p90_dtfc.toFixed(0)}d`, sub: 'slowest 10%',                  color: dtfc.p90_dtfc > 90 ? 'red' : 'gold', confidence: dtfcConfidence },
   ] : []
 
   const showSkeleton = summaryLoading || !summary
