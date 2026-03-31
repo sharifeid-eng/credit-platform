@@ -1023,3 +1023,80 @@ def compute_silq_underwriting_drift(df, mult=1, ref_date=None):
         'vintages': vintages,
         'historical_norms': historical_norms,
     }
+
+
+# ── 13. CDR / CCR ─────────────────────────────────────────────────────────────
+
+def compute_silq_cdr_ccr(df, mult=1, ref_date=None):
+    """Conditional Default Rate (CDR) and Conditional Collection Rate (CCR) by vintage.
+
+    Annualizes cumulative default/collection rates by vintage age so that cohorts
+    of different maturities are directly comparable on a monthly basis.
+
+        CDR = (Outstanding on DPD>90 / Disbursed) / months_outstanding * 12
+        CCR = (Amt_Repaid / Disbursed) / months_outstanding * 12
+    """
+    if C_DISB_DATE not in df.columns or C_DISBURSED not in df.columns:
+        return {'available': False}
+
+    today = pd.to_datetime(ref_date) if ref_date else pd.Timestamp.now().normalize()
+    df = df.copy()
+    df['_disb_dt'] = pd.to_datetime(df[C_DISB_DATE], errors='coerce')
+    df = df.dropna(subset=['_disb_dt'])
+    df['_vintage'] = df['_disb_dt'].dt.to_period('M')
+
+    if len(df) == 0:
+        return {'available': False}
+
+    dpd = _dpd(df, ref_date)
+
+    vintages = []
+    for vintage, grp in df.groupby('_vintage'):
+        originated = float(grp[C_DISBURSED].sum() * mult)
+        if originated <= 0:
+            continue
+
+        months_outstanding = max(((today - vintage.to_timestamp()).days / 30.44), 1.0)
+
+        default_mask = dpd.loc[grp.index] > 90
+        gross_default = float(grp.loc[default_mask, C_OUTSTANDING].sum() * mult) if C_OUTSTANDING in grp.columns else 0.0
+        collected = float(grp[C_REPAID].sum() * mult) if C_REPAID in grp.columns else 0.0
+
+        cdr = (gross_default / originated) / months_outstanding * 12 * 100
+        ccr = (collected / originated) / months_outstanding * 12 * 100
+
+        vintages.append({
+            'vintage': str(vintage),
+            'deal_count': int(len(grp)),
+            'originated': _safe(round(originated, 2)),
+            'collected': _safe(round(collected, 2)),
+            'defaulted': _safe(round(gross_default, 2)),
+            'months_outstanding': round(months_outstanding, 1),
+            'cdr': _safe(round(cdr, 4)),
+            'ccr': _safe(round(ccr, 4)),
+            'net_spread': _safe(round(ccr - cdr, 4)),
+        })
+
+    if not vintages:
+        return {'available': False}
+
+    total_orig = sum(v['originated'] for v in vintages)
+    total_coll = sum(v['collected'] for v in vintages)
+    total_default = sum(v['defaulted'] for v in vintages)
+    avg_months = (
+        sum(v['months_outstanding'] * v['originated'] for v in vintages) / total_orig
+        if total_orig > 0 else 1.0
+    )
+    portfolio_cdr = (total_default / total_orig) / avg_months * 12 * 100 if total_orig > 0 else 0.0
+    portfolio_ccr = (total_coll / total_orig) / avg_months * 12 * 100 if total_orig > 0 else 0.0
+
+    return {
+        'available': True,
+        'vintages': vintages,
+        'portfolio': {
+            'cdr': _safe(round(portfolio_cdr, 4)),
+            'ccr': _safe(round(portfolio_ccr, 4)),
+            'net_spread': _safe(round(portfolio_ccr - portfolio_cdr, 4)),
+            'avg_vintage_age_months': round(avg_months, 1),
+        },
+    }

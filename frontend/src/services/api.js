@@ -72,6 +72,10 @@ export const getMethodologyLog        = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/methodology-log`, { params: { snapshot: snap, ...(asOf ? { as_of_date: asOf } : {}) } }).then(r => r.data);
 export const getHhiTimeseries         = (co, prod, cur) =>
   api.get(`/companies/${co}/products/${prod}/charts/hhi-timeseries`, { params: { currency: cur } }).then(r => r.data);
+export const getCdrCcr                = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/cdr-ccr`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getSilqCdrCcr            = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/silq/cdr-ccr`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
 // ── Charts — new names (used by new chart components) ────────────────────────
 export const getDeploymentChart         = (co, prod, snap, cur, asOf) =>

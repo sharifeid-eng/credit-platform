@@ -25,6 +25,7 @@ from core.analysis import (
     compute_segment_analysis, compute_collections_timing,
     compute_seasonality, compute_loss_categorization,
     compute_methodology_log, compute_hhi_for_snapshot,
+    compute_cdr_ccr,
 )
 from core.migration import compute_roll_rates
 from core.validation import validate_tape
@@ -36,6 +37,7 @@ from core.analysis_silq import (
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
     compute_silq_tenure, compute_silq_borrowing_base, compute_silq_covenants,
     compute_silq_seasonality, compute_silq_cohort_loss_waterfall, compute_silq_underwriting_drift,
+    compute_silq_cdr_ccr,
     filter_silq_by_date,
 )
 from core.validation_silq import validate_silq_tape
@@ -621,6 +623,18 @@ def get_seasonality(company: str, product: str,
     mult = apply_multiplier(config, disp)
     return compute_seasonality(df, mult, as_of_date=as_of_date or sel['date'])
 
+# ── CDR / CCR ────────────────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/cdr-ccr")
+def get_cdr_ccr(company: str, product: str,
+                snapshot: Optional[str] = None, currency: Optional[str] = None,
+                as_of_date: Optional[str] = None):
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_cdr_ccr(df, mult, as_of_date=as_of_date or sel['date'])
+
 # ── Loss Categorization ─────────────────────────────────────────────────────
 
 @app.get("/companies/{company}/products/{product}/charts/loss-categorization")
@@ -716,6 +730,7 @@ SILQ_CHART_MAP = {
     'seasonality':        compute_silq_seasonality,
     'loss-waterfall':     compute_silq_cohort_loss_waterfall,
     'underwriting-drift': compute_silq_underwriting_drift,
+    'cdr-ccr':            compute_silq_cdr_ccr,
 }
 
 @app.get("/companies/{company}/products/{product}/charts/silq/{chart_name}")

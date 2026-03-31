@@ -2160,4 +2160,79 @@ def compute_hhi_for_snapshot(df, mult):
         result[f'{key}_hhi'] = round(hhi, 6)
 
     return result
-    return results
+
+
+# ── CDR / CCR ─────────────────────────────────────────────────────────────────
+
+def compute_cdr_ccr(df, mult, as_of_date=None):
+    """Conditional Default Rate (CDR) and Conditional Collection Rate (CCR) by vintage.
+
+    Annualizes cumulative default/collection rates by vintage age so that cohorts
+    of different maturities are directly comparable on a monthly basis.
+
+        CDR = (Total Denied / Originated) / months_outstanding * 12
+        CCR = (Total Collected / Originated) / months_outstanding * 12
+
+    Strips out vintage age effects: a 6-month vintage with 5% cumulative defaults
+    has CDR = 10% — higher than a 12-month vintage at 8% (CDR = 8%).
+    """
+    if 'Deal date' not in df.columns or 'Purchase value' not in df.columns:
+        return {'available': False}
+
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+    df = df.copy()
+    df['_vintage'] = df['Deal date'].dt.to_period('M')
+    has_denial = 'Denied by insurance' in df.columns
+
+    vintages = []
+    for vintage, grp in df.groupby('_vintage'):
+        originated = float((grp['Purchase value'] * mult).sum())
+        if originated <= 0:
+            continue
+
+        # Age: months from start of vintage month to as_of_date (min 1)
+        months_outstanding = max(((today - vintage.to_timestamp()).days / 30.44), 1.0)
+
+        collected = float((grp['Collected till date'] * mult).sum())
+        defaulted = float((grp['Denied by insurance'] * mult).sum()) if has_denial else 0.0
+
+        # Annualized conditional rates (expressed as %)
+        cdr = (defaulted / originated) / months_outstanding * 12 * 100
+        ccr = (collected / originated) / months_outstanding * 12 * 100
+
+        vintages.append({
+            'vintage': str(vintage),
+            'deal_count': int(len(grp)),
+            'originated': round(originated, 2),
+            'collected': round(collected, 2),
+            'defaulted': round(defaulted, 2),
+            'months_outstanding': round(months_outstanding, 1),
+            'cdr': round(cdr, 4),
+            'ccr': round(ccr, 4),
+            'net_spread': round(ccr - cdr, 4),
+        })
+
+    if not vintages:
+        return {'available': False}
+
+    # Portfolio-level: volume-weighted average age for aggregation
+    total_orig = sum(v['originated'] for v in vintages)
+    total_coll = sum(v['collected'] for v in vintages)
+    total_default = sum(v['defaulted'] for v in vintages)
+    avg_months = (
+        sum(v['months_outstanding'] * v['originated'] for v in vintages) / total_orig
+        if total_orig > 0 else 1.0
+    )
+    portfolio_cdr = (total_default / total_orig) / avg_months * 12 * 100 if total_orig > 0 else 0.0
+    portfolio_ccr = (total_coll / total_orig) / avg_months * 12 * 100 if total_orig > 0 else 0.0
+
+    return {
+        'available': True,
+        'vintages': vintages,
+        'portfolio': {
+            'cdr': round(portfolio_cdr, 4),
+            'ccr': round(portfolio_ccr, 4),
+            'net_spread': round(portfolio_ccr - portfolio_cdr, 4),
+            'avg_vintage_age_months': round(avg_months, 1),
+        },
+    }

@@ -191,6 +191,7 @@ credit-platform/
 │   │   │   │   ├── UnderwritingDriftChart.jsx    # Per-vintage quality metrics + drift flags
 │   │   │   │   ├── SegmentAnalysisChart.jsx      # Multi-dimensional cuts with heat-map coloring
 │   │   │   │   ├── SeasonalityChart.jsx          # YoY comparison + seasonal index
+│   │   │   │   ├── CdrCcrChart.jsx               # CDR/CCR conditional rates by vintage (Klaim)
 │   │   │   │   └── silq/                    # SILQ-specific chart components
 │   │   │   │       ├── DelinquencyChart.jsx
 │   │   │   │       ├── SilqCollectionsChart.jsx
@@ -200,6 +201,7 @@ credit-platform/
 │   │   │   │       ├── TenureAnalysisChart.jsx
 │   │   │   │       ├── SilqCovenantsChart.jsx
 │   │   │   │       ├── SilqSeasonalityChart.jsx
+│   │   │   │       └── SilqCdrCcrChart.jsx        # CDR/CCR conditional rates by vintage (SILQ)
 │   │   │   │       ├── SilqLossWaterfallChart.jsx
 │   │   │   │       └── SilqUnderwritingDriftChart.jsx
 │   │   │   └── portfolio/
@@ -311,6 +313,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/segment-analysis`   |Multi-dimensional segment cuts        |
 |`GET /companies/{co}/products/{p}/charts/hhi-timeseries`     |HHI concentration across all snapshots|
 |`GET /companies/{co}/products/{p}/charts/seasonality`        |YoY seasonal patterns + seasonal index|
+|`GET /companies/{co}/products/{p}/charts/cdr-ccr`            |CDR/CCR by vintage (annualized conditional default/collection rates)|
 |`GET /companies/{co}/products/{p}/charts/methodology-log`    |Data corrections & column availability log|
 |`GET /framework`                                             |Analysis Framework markdown document  |
 
@@ -361,14 +364,14 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 
 **Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Methodology. Active state: gold left border + gold text.
 
-**URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `loss-waterfall`, `recovery-analysis`, `collections-timing`, `underwriting-drift`, `segment-analysis`, `seasonality`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
+**URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `loss-waterfall`, `recovery-analysis`, `collections-timing`, `underwriting-drift`, `segment-analysis`, `seasonality`, `cdr-ccr`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
 
 **Backward compat:** `/company/:co` and `/company/:co/:product` redirect to `tape/overview`.
 
 **State management:** `CompanyContext` provides shared state (company, products, snapshots, config, currency, summary, etc.) consumed by both TapeAnalytics and PortfolioAnalytics.
 
 -----
-## Tape Analytics Tabs (18)
+## Tape Analytics Tabs (19)
 |Tab               |What It Shows                                                   |
 |------------------|----------------------------------------------------------------|
 |Overview          |12+ KPI cards (incl curve-based DSO, HHI, PAR 30+/60+/90+, DTFC; graceful degradation on older tapes) + AI commentary + Data Chat|
@@ -389,6 +392,7 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 |Underwriting Drift|Per-vintage quality metrics (deal size, discount, collection rate) + drift flag badges when metrics deviate from historical norms|
 |Segment Analysis  |Multi-dimensional cuts (product, provider size, deal size, new vs repeat) with sortable heat-map table and dimension dropdown|
 |Seasonality       |YoY comparison by calendar month (grouped bars per year) + seasonal index line overlay|
+|CDR / CCR         |Conditional Default Rate + Conditional Collection Rate by vintage (annualized by vintage age); 4 KPI tiles + dual-line chart + net spread line|
 Each non-overview tab (except Data Integrity) has a **TabInsight** component — a teal bar at the top with a one-click AI insight.
 Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency toggle (local ↔ USD), PDF Report button.
 
@@ -641,7 +645,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Streaming response — no files saved to disk; PDF opens in new browser tab as blob URL
   - Button states: idle (gold outline), generating (grey + spinner), error (red + retry)
   - ~70s generation time, 13-page ~2MB PDF
-- ✅ **Sidebar navigation + URL-based routing** — Company pages use persistent sidebar with Tape Analytics (18 tabs) + Portfolio Analytics (6 tabs) + Methodology. Tabs are URL-driven (`/tape/:slug`, `/portfolio/:slug`), bookmarkable. Old horizontal tab bar replaced.
+- ✅ **Sidebar navigation + URL-based routing** — Company pages use persistent sidebar with Tape Analytics (19 tabs) + Portfolio Analytics (6 tabs) + Methodology. Tabs are URL-driven (`/tape/:slug`, `/portfolio/:slug`), bookmarkable. Old horizontal tab bar replaced.
 - ✅ **CompanyContext + CompanyLayout** — Shared state provider (`CompanyContext.jsx`) consumed by all company pages. `CompanyLayout.jsx` renders sidebar + `<Outlet>`. Extracted from old `Company.jsx` (deleted).
 - ✅ **Landing page cleanup** — Removed duplicate logo (Navbar already shows it). Enriched company cards with product chips and snapshot counts. Companies API returns `{name, products, total_snapshots}`.
 - ✅ **Portfolio Analytics UI (live data from DB/tape):**
@@ -695,7 +699,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `compute_silq_cohort_loss_waterfall()` — per-vintage: Disbursed → DPD>90 Default → Recovery → Net Loss
   - `compute_silq_underwriting_drift()` — per-vintage quality metrics + z-score drift flags vs 6-month rolling norms
   - All 3 wired into SILQ_CHART_MAP, config.json tabs, frontend chart components, and sidebar
-  - SILQ now has 12 tabs (was 9): overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, loss-waterfall, underwriting-drift, seasonality, covenants, data-integrity
+  - SILQ now has 13 tabs (was 9): overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, loss-waterfall, underwriting-drift, seasonality, cdr-ccr, covenants, data-integrity
 - ✅ **Unit test coverage expanded:**
   - 134 tests total (66 Klaim + 68 SILQ), all passing
   - Klaim: added PAR dual perspective tests (5 tests)
@@ -826,7 +830,7 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 - [x] Confidence grading badges on metrics — A (observed), B (inferred), C (derived) displayed in UI via KpiCard `confidence` prop. Klaim Overview and PAR/DTFC/DSO cards graded dynamically.
 **Portfolio Analytics — Medium-term:**
 - [x] Automated compliance certificate / BBC export — `core/compliance_cert.py` (ReportLab dark-themed PDF: facility summary, waterfall, concentration limits, covenants, officer cert); `POST .../portfolio/compliance-cert` streams PDF; "Download BBC" button in BorrowingBase.jsx.
-- [ ] Conditional monthly rates (CDR/CCR) alongside cumulative — monthly annualized default/collection rate strips out vintage effects
+- [x] Conditional monthly rates (CDR/CCR) — `compute_cdr_ccr()` (Klaim) + `compute_silq_cdr_ccr()` (SILQ); new tab for both; annualizes cumulative default/collection rates by vintage age to strip out maturity effects; 4 KPI tiles + dual-line chart + net spread line
 - [x] Breach notification system (Slack webhook) — `POST .../portfolio/notify-breaches` sends Slack block message; webhook URL in FacilityParamsPanel Notifications section; "Notify" bell button in Covenants header.
 - [ ] Portfolio company onboarding flow (self-service API key provisioning)
 - [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
