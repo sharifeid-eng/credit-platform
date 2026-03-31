@@ -27,6 +27,108 @@ export default function BorrowingBase({ data }) {
         <WaterfallTable data={d.waterfall} currency={ccy} />
       </div>
 
+      {/* Movement Attribution */}
+      {d.movement && (
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-md)',
+          padding: '20px',
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Movement Attribution
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                Period-over-period drivers of borrowing base change
+              </div>
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px',
+              borderRadius: 20,
+              background: d.movement.net_change >= 0 ? 'rgba(45,212,191,0.1)' : 'rgba(240,96,96,0.1)',
+              border: `1px solid ${d.movement.net_change >= 0 ? 'rgba(45,212,191,0.3)' : 'rgba(240,96,96,0.3)'}`,
+            }}>
+              <span style={{
+                fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                color: d.movement.net_change >= 0 ? 'var(--accent-teal)' : 'var(--accent-red)',
+              }}>
+                {d.movement.net_change >= 0 ? '+' : ''}{fmt(d.movement.net_change)}
+              </span>
+              <span style={{
+                fontSize: 11,
+                color: d.movement.net_change >= 0 ? 'var(--accent-teal)' : 'var(--accent-red)',
+              }}>
+                ({d.movement.net_change_pct >= 0 ? '+' : ''}{d.movement.net_change_pct.toFixed(1)}%)
+              </span>
+            </div>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 16 }}>
+            {d.movement.from_date} → {d.movement.to_date}
+          </div>
+
+          {/* Steps */}
+          {d.movement.steps.map((step, i) => {
+            const isStart = step.type === 'start'
+            const isEnd = step.type === 'end'
+            const isDelta = step.type === 'delta'
+            const positive = step.value >= 0
+            const maxAbs = Math.max(...d.movement.steps.filter(s => s.type === 'delta').map(s => Math.abs(s.value)), 1)
+            const barWidth = isDelta ? Math.min(Math.abs(step.value) / maxAbs * 80 + 5, 85) : 0
+
+            return (
+              <div key={i} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 0',
+                borderTop: i === 0 ? 'none' : isEnd ? '1px solid var(--border)' : '1px solid rgba(36,48,64,0.5)',
+                marginTop: isEnd ? 4 : 0,
+                paddingTop: isEnd ? 12 : 8,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                  {/* Mini bar for deltas */}
+                  <div style={{ width: 100, height: 6, borderRadius: 3, background: 'var(--bg-base)', position: 'relative', flexShrink: 0 }}>
+                    {isDelta && (
+                      <>
+                        <div style={{
+                          position: 'absolute',
+                          left: positive ? '50%' : `calc(50% - ${barWidth / 2}%)`,
+                          width: `${barWidth / 2}%`,
+                          height: '100%',
+                          borderRadius: 3,
+                          background: positive ? 'var(--accent-teal)' : 'var(--accent-red)',
+                          opacity: 0.75,
+                        }} />
+                        <div style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: 'var(--border)' }} />
+                      </>
+                    )}
+                  </div>
+                  <span style={{
+                    fontSize: isDelta ? 11 : 12,
+                    fontWeight: isEnd ? 700 : isStart ? 500 : 400,
+                    color: isEnd ? 'var(--text-primary)' : 'var(--text-muted)',
+                  }}>
+                    {step.label}
+                  </span>
+                </div>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: isDelta ? 12 : 13,
+                  fontWeight: isEnd ? 700 : 500,
+                  color: isStart || isEnd
+                    ? 'var(--text-primary)'
+                    : positive ? 'var(--accent-teal)' : 'var(--accent-red)',
+                }}>
+                  {isDelta && (positive ? '+' : '')}{fmt(step.value)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* Two-column: Advance Rates + Facility Capacity */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 14 }}>
         {/* Advance Rates */}

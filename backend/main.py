@@ -1774,6 +1774,70 @@ def get_portfolio_borrowing_base(company: str, product: str,
         result = portfolio_borrowing_base(df, mult, ref_date, fp)
     else:
         result = compute_klaim_borrowing_base(df, mult, ref_date, fp)
+
+    # --- Movement Attribution: diff BB components vs previous snapshot ---
+    try:
+        snaps = get_snapshots(company, product)
+        if len(snaps) >= 2:
+            current_idx = next(
+                (i for i, s in enumerate(snaps) if s['date'] == sel.get('date')), 0
+            )
+            prev_idx = current_idx + 1
+            if prev_idx < len(snaps):
+                prev_snap = snaps[prev_idx]
+                if atype == 'silq':
+                    prev_df, _ = load_silq_snapshot(prev_snap['filepath'])
+                else:
+                    prev_df = load_snapshot(prev_snap['filepath'])
+                prev_ref = prev_snap['date']
+                if atype == 'silq':
+                    prev_result = portfolio_borrowing_base(prev_df, mult, prev_ref, fp)
+                else:
+                    prev_result = compute_klaim_borrowing_base(prev_df, mult, prev_ref, fp)
+
+                def _d(a, b):
+                    a = float(a) if isinstance(a, (int, float)) else 0.0
+                    b = float(b) if isinstance(b, (int, float)) else 0.0
+                    return a - b
+
+                ck = result['kpis']
+                pk = prev_result['kpis']
+                net_change = _d(ck['borrowing_base'], pk['borrowing_base'])
+                d_total = _d(ck['total_ar'], pk['total_ar'])
+                d_inelig = -_d(ck['ineligible'], pk['ineligible'])
+
+                steps = [
+                    {'label': 'Previous Borrowing Base', 'value': pk['borrowing_base'], 'type': 'start'},
+                    {'label': 'Δ Portfolio Size (Total A/R)', 'value': d_total, 'type': 'delta'},
+                    {'label': 'Δ Eligibility (Ineligible A/R)', 'value': d_inelig, 'type': 'delta'},
+                ]
+
+                if atype != 'silq':
+                    curr_adj = float(ck.get('adjusted_pool_balance') or 0)
+                    prev_adj = float(pk.get('adjusted_pool_balance') or 0)
+                    d_discount = (curr_adj - prev_adj) - _d(ck['eligible_ar'], pk['eligible_ar'])
+                    if abs(d_discount) > 100:
+                        steps.append({'label': 'Δ Concentration & Advance Rate', 'value': d_discount, 'type': 'delta'})
+                    d_cash = _d(ck.get('cash_balance') or 0, pk.get('cash_balance') or 0)
+                    if abs(d_cash) > 100:
+                        steps.append({'label': 'Δ Cash Balance', 'value': d_cash, 'type': 'delta'})
+                else:
+                    d_rate = net_change - d_total - d_inelig
+                    if abs(d_rate) > 100:
+                        steps.append({'label': 'Δ Advance Rate Discount', 'value': d_rate, 'type': 'delta'})
+
+                steps.append({'label': 'Current Borrowing Base', 'value': ck['borrowing_base'], 'type': 'end'})
+
+                result['movement'] = {
+                    'from_date': prev_ref,
+                    'to_date': sel.get('date', ''),
+                    'steps': steps,
+                    'net_change': net_change,
+                    'net_change_pct': net_change / float(pk['borrowing_base']) * 100 if pk['borrowing_base'] else 0,
+                }
+    except Exception:
+        pass  # Movement data is optional — never break the main response
+
     return {**result, 'currency': disp, 'snapshot': sel['date']}
 
 
