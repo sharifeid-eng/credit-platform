@@ -819,15 +819,15 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 - [x] Trigger distance + projected breach date on Covenants tab — headroom line (teal ✓) when compliant, projected breach date (amber ⚠) when trend moving toward limit, ↘/↗ direction vs prior snapshot
 - [x] Facility params input UI (edit advance rates, concentration limits, covenants from frontend) — FacilityParamsPanel.jsx + backend endpoints complete
 - [x] BB Movement Attribution waterfall — period-over-period decomposition of BB drivers (Δ portfolio size, Δ eligibility, Δ concentration+rate, Δ cash). Frontend panel with mini diverging bars.
-- [ ] Breakeven analysis — "At what collection rate does the borrowing base breach?" Invert stress to find threshold.
-- [ ] BB Sensitivity formulas — ∂BB/∂advance_rate, ∂BB/∂reserve. Shows which lever moves availability most.
+- [x] Breakeven analysis — eligible cushion + stress % added to borrowing-base endpoint; "Breakeven Analysis" panel in BorrowingBase.jsx shows headroom, stress threshold, cushion.
+- [x] BB Sensitivity formulas — ∂BB/∂advance_rate per 1pp and ∂BB/∂ineligible per 1M; "Sensitivity" panel alongside breakeven.
 **Data Quality — Near-term enhancements:**
 - [x] Duplicate/anomaly detection in validation — 5 new checks: duplicate counterparty+amount+date combos, identical amount concentration, deal size outliers (3×IQR), discount outliers (3×IQR), balance identity violations
 - [x] Confidence grading badges on metrics — A (observed), B (inferred), C (derived) displayed in UI via KpiCard `confidence` prop. Klaim Overview and PAR/DTFC/DSO cards graded dynamically.
 **Portfolio Analytics — Medium-term:**
-- [ ] Automated compliance certificate / BBC export — generate the borrowing base certificate document from live data
+- [x] Automated compliance certificate / BBC export — `core/compliance_cert.py` (ReportLab dark-themed PDF: facility summary, waterfall, concentration limits, covenants, officer cert); `POST .../portfolio/compliance-cert` streams PDF; "Download BBC" button in BorrowingBase.jsx.
 - [ ] Conditional monthly rates (CDR/CCR) alongside cumulative — monthly annualized default/collection rate strips out vintage effects
-- [ ] Breach notification system (email/Slack alerts on covenant breach)
+- [x] Breach notification system (Slack webhook) — `POST .../portfolio/notify-breaches` sends Slack block message; webhook URL in FacilityParamsPanel Notifications section; "Notify" bell button in Covenants header.
 - [ ] Portfolio company onboarding flow (self-service API key provisioning)
 - [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
 - [ ] Recovery discounting — PV-adjusted LGD using discount rate (undiscounted LGD overstates recovery value)

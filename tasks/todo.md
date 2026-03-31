@@ -6,12 +6,15 @@ Track active work here. Claude updates this as tasks progress.
 ## Active
 _(none)_
 
-## Up Next (medium-term)
-- [ ] BB Movement Attribution waterfall — breakeven analysis ("at what collection rate does BB breach?")
-- [ ] BB Sensitivity formulas — ∂BB/∂advance_rate, ∂BB/∂reserve
-- [ ] Duplicate/anomaly detection in validation — confidence grading badges on Portfolio Analytics KPIs
-- [ ] Automated compliance certificate / BBC export
-- [ ] Breach notification system (email/Slack alerts on covenant breach)
+## Up Next
+- [ ] Automated compliance certificate — wire officer name input to cert endpoint (optional field in panel)
+- [ ] Phase 3 items: cloud deployment, RBAC, scheduled report delivery
+
+## Completed — 2026-03-31 (session 3)
+- [x] BB Breakeven analysis — eligible cushion + stress % added to borrowing-base endpoint as `analytics.breakeven`; rendered in two-column panel in BorrowingBase.jsx
+- [x] BB Sensitivity formulas — ∂BB/∂advance_rate per 1pp and ∂BB/∂ineligible per 1M added as `analytics.sensitivity`; rendered alongside breakeven panel
+- [x] Compliance Certificate (BBC PDF) — `core/compliance_cert.py` with ReportLab dark-themed PDF (facility summary, waterfall, concentration limits, covenants, officer cert block); `POST .../portfolio/compliance-cert` streams the PDF; "Download BBC" button in BorrowingBase.jsx
+- [x] Breach Notification System (Slack) — `POST .../portfolio/notify-breaches` sends Slack block message; webhook URL field added to FacilityParamsPanel Notifications section; "Notify" bell button in Covenants header with send/sent/error states
 
 ---
 
