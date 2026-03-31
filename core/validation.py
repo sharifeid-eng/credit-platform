@@ -169,7 +169,100 @@ def validate_tape(df):
             'detail': f'Status breakdown: {status_counts}',
         })
 
-    # ── 9. Column completeness summary ──
+    # ── 9. Duplicate counterparty + amount + date combos ──
+    combo_cols = [c for c in ['Group', 'Purchase value', 'Deal date'] if c in df.columns]
+    if len(combo_cols) == 3:
+        combo_dupes = df[df.duplicated(subset=combo_cols, keep=False)]
+        if len(combo_dupes) > 0:
+            unique_combos = combo_dupes.groupby(combo_cols).size().reset_index(name='count')
+            warnings.append({
+                'check': 'Duplicate Counterparty+Amount+Date',
+                'detail': (
+                    f'{len(combo_dupes)} rows share the same Group + Purchase value + Deal date '
+                    f'({len(unique_combos)} unique combinations). Possible double-entry.'
+                ),
+                'sample': unique_combos.head(3).to_dict(orient='records'),
+            })
+
+    # ── 10. Identical amount concentration ──
+    if 'Purchase value' in df.columns:
+        pv = pd.to_numeric(df['Purchase value'], errors='coerce').dropna()
+        if len(pv) > 0:
+            val_counts = pv.value_counts()
+            top_val = val_counts.index[0]
+            top_count = int(val_counts.iloc[0])
+            top_pct = top_count / len(pv) * 100
+            if top_pct > 5 and top_count > 10:
+                warnings.append({
+                    'check': 'Identical Amount Concentration',
+                    'detail': (
+                        f'{top_count} deals ({top_pct:.1f}%) share the same Purchase value of '
+                        f'{top_val:,.2f}. May indicate templated or copy-paste entries.'
+                    ),
+                })
+
+    # ── 11. Deal size outliers (IQR method, 3×IQR fence) ──
+    if 'Purchase value' in df.columns:
+        pv = pd.to_numeric(df['Purchase value'], errors='coerce').dropna()
+        if len(pv) >= 20:
+            q1, q3 = pv.quantile(0.25), pv.quantile(0.75)
+            iqr = q3 - q1
+            if iqr > 0:
+                upper = q3 + 3 * iqr
+                lower = max(q1 - 3 * iqr, 0)
+                outliers = pv[(pv > upper) | (pv < lower)]
+                if len(outliers) > 0:
+                    warnings.append({
+                        'check': 'Deal Size Outliers',
+                        'detail': (
+                            f'{len(outliers)} deals have Purchase value outside 3×IQR bounds '
+                            f'[{lower:,.0f} – {upper:,.0f}]. '
+                            f'Max outlier: {outliers.max():,.0f}.'
+                        ),
+                    })
+
+    # ── 12. Discount outliers (IQR method) ──
+    if 'Discount' in df.columns:
+        disc = pd.to_numeric(df['Discount'], errors='coerce').dropna()
+        disc = disc[(disc >= 0) & (disc <= 1)]
+        if len(disc) >= 20:
+            q1, q3 = disc.quantile(0.25), disc.quantile(0.75)
+            iqr = q3 - q1
+            if iqr > 0:
+                upper = q3 + 3 * iqr
+                lower = max(q1 - 3 * iqr, 0)
+                outliers = disc[(disc > upper) | (disc < lower)]
+                if len(outliers) > 0:
+                    warnings.append({
+                        'check': 'Discount Outliers',
+                        'detail': (
+                            f'{len(outliers)} deals have Discount outside 3×IQR bounds '
+                            f'[{lower:.1%} – {upper:.1%}]. '
+                            f'Max outlier: {outliers.max():.1%}.'
+                        ),
+                    })
+
+    # ── 13. Balance identity violations ──
+    bal_cols = {
+        'collected': 'Collected till date',
+        'denied':    'Denied by insurance',
+        'pending':   'Pending insurance response',
+        'pv':        'Purchase value',
+    }
+    if all(c in df.columns for c in bal_cols.values()):
+        nums = {k: pd.to_numeric(df[v], errors='coerce').fillna(0) for k, v in bal_cols.items()}
+        total_out = nums['collected'] + nums['denied'] + nums['pending']
+        violations = df[total_out > nums['pv'] * 1.05]
+        if len(violations) > 0:
+            warnings.append({
+                'check': 'Balance Identity Violations',
+                'detail': (
+                    f'{len(violations)} deals where Collected + Denied + Pending > '
+                    f'105% of Purchase value. Possible data inconsistency.'
+                ),
+            })
+
+    # ── 14. Column completeness summary ──
     col_completeness = {}
     for col in df.columns:
         non_null = df[col].notna().sum()
