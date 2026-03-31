@@ -7,8 +7,10 @@ Track active work here. Claude updates this as tasks progress.
 _(none)_
 
 ## Up Next
-- [ ] Automated compliance certificate — wire officer name input to cert endpoint (optional field in panel)
-- [ ] Phase 3 items: cloud deployment, RBAC, scheduled report delivery
+- [ ] CDR/CCR monthly rates — monthly annualized default/collection rates alongside cumulative
+- [ ] Cloud deployment (Phase 3 gate)
+- [ ] RBAC, scheduled report delivery, real-time webhook notifications
+- [ ] AI covenant extraction — ingest facility PDFs → auto-populate facility_configs
 
 ## Completed — 2026-03-31 (session 3)
 - [x] BB Breakeven analysis — eligible cushion + stress % added to borrowing-base endpoint as `analytics.breakeven`; rendered in two-column panel in BorrowingBase.jsx
