@@ -816,11 +816,11 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 - Dilution (non-credit loss) reframed for Klaim: denial = dilution by reason code. See ANALYSIS_FRAMEWORK.md Section 9.
 - Metric doctrine: every metric must declare formula, denominator, weighting, inclusion, clock, confidence grade. See ANALYSIS_FRAMEWORK.md Section 10.
 **Portfolio Analytics — Near-term enhancements:**
-- [ ] Trigger distance + projected breach date on Covenants tab — show basis points / percentage to trigger, projected breach date under current trajectory
+- [x] Trigger distance + projected breach date on Covenants tab — headroom line (teal ✓) when compliant, projected breach date (amber ⚠) when trend moving toward limit, ↘/↗ direction vs prior snapshot
+- [x] Facility params input UI (edit advance rates, concentration limits, covenants from frontend) — FacilityParamsPanel.jsx + backend endpoints complete
 - [ ] BB Movement Attribution waterfall — period-over-period decomposition: ΔEligible + ΔCaps + ΔReserves + ΔOutstanding = ΔAvailability
 - [ ] Breakeven analysis — "At what collection rate does the borrowing base breach?" Invert stress to find threshold.
 - [ ] BB Sensitivity formulas — ∂BB/∂advance_rate, ∂BB/∂reserve. Shows which lever moves availability most.
-- [ ] Facility params input UI (edit advance rates, concentration limits, covenants from frontend)
 **Data Quality — Near-term enhancements:**
 - [ ] Duplicate/anomaly detection in validation — suspiciously identical amounts across deals, duplicate counterparty+amount+date combinations, statistical outliers (deal size, discount, timing far outside distribution), balance identity violations
 - [ ] Confidence grading badges on metrics — A (observed), B (inferred), C (derived) displayed in UI
