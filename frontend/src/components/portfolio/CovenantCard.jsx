@@ -1,7 +1,8 @@
 import ComplianceBadge from './ComplianceBadge'
 
 export default function CovenantCard({ covenant, currency = 'AED' }) {
-  const { name, current, threshold, compliant, operator, format, period, breakdown } = covenant
+  const { name, current, threshold, compliant, operator, format, period, breakdown,
+          previous_value, days_since_previous } = covenant
 
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
@@ -22,11 +23,24 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
 
   // Threshold bar positioning
   const isGreaterThan = operator === '>=' || operator === '>'
-  // For >= thresholds: green zone is right of threshold, red is left
-  // For <= thresholds: green zone is left of threshold, red is right
   const maxVal = Math.max(current, threshold) * 1.3
   const thresholdPct = (threshold / maxVal) * 100
   const currentPct = (current / maxVal) * 100
+
+  // Trigger distance (headroom when compliant)
+  const headroom = isGreaterThan ? current - threshold : threshold - current
+
+  // Trend / projected breach
+  const hasTrend = typeof previous_value === 'number' && typeof days_since_previous === 'number' && days_since_previous > 0
+  const changePerDay = hasTrend ? (current - previous_value) / days_since_previous : 0
+  const movingTowardBreach = hasTrend && compliant && (isGreaterThan ? changePerDay < 0 : changePerDay > 0)
+  const daysToBreachRaw = movingTowardBreach && Math.abs(changePerDay) > 0
+    ? headroom / Math.abs(changePerDay)
+    : null
+  const projectedBreachDate = daysToBreachRaw != null
+    ? new Date(Date.now() + daysToBreachRaw * 86_400_000)
+        .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null
 
   return (
     <div style={{
@@ -61,12 +75,12 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
 
       {/* Period */}
       {period && (
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 16 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 12 }}>
           Period: {period}
         </div>
       )}
 
-      {/* Compliance distance */}
+      {/* Compliance distance (breach) */}
       {!compliant && (
         <div style={{
           fontSize: 10, color: 'var(--accent-red)', marginBottom: 12,
@@ -77,6 +91,35 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
             ? `${Math.abs((current - threshold) * 100).toFixed(1)}% ${isGreaterThan ? 'below minimum' : 'over limit'}`
             : `${fmtValue(Math.abs(current - threshold))} ${isGreaterThan ? 'below minimum' : 'over limit'}`
           }
+        </div>
+      )}
+
+      {/* Trigger distance (headroom when compliant) */}
+      {compliant && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: 'var(--accent-teal)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span>✓</span>
+            {format === 'pct'
+              ? `${(headroom * 100).toFixed(1)}% headroom to limit`
+              : `${fmtValue(headroom)} headroom to limit`
+            }
+          </div>
+          {projectedBreachDate && (
+            <div style={{ fontSize: 10, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>⚠</span>
+              Breach projected: {projectedBreachDate}
+              {daysToBreachRaw < 90 && (
+                <span style={{
+                  marginLeft: 4, padding: '1px 5px',
+                  background: 'rgba(201, 168, 76, 0.15)',
+                  border: '1px solid rgba(201, 168, 76, 0.3)',
+                  borderRadius: 3, fontSize: 9, fontWeight: 600,
+                }}>
+                  {Math.round(daysToBreachRaw)}d
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -91,13 +134,11 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
           display: 'flex',
         }}>
           {isGreaterThan ? (
-            // For >= : red zone left of threshold, green right
             <>
               <div style={{ width: `${thresholdPct}%`, background: 'rgba(240, 96, 96, 0.25)', height: '100%' }} />
               <div style={{ flex: 1, background: 'rgba(45, 212, 191, 0.2)', height: '100%' }} />
             </>
           ) : (
-            // For <= : green zone left of threshold, red right
             <>
               <div style={{ width: `${thresholdPct}%`, background: 'rgba(45, 212, 191, 0.2)', height: '100%' }} />
               <div style={{ flex: 1, background: 'rgba(240, 96, 96, 0.25)', height: '100%' }} />
@@ -122,9 +163,14 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
           <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-            <span style={{ color: compliant ? 'var(--accent-teal)' : 'var(--accent-red)' }}>▲</span> Current value: {fmtValue(current)}
+            <span style={{ color: compliant ? 'var(--accent-teal)' : 'var(--accent-red)' }}>▲</span> Current: {fmtValue(current)}
           </div>
           <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+            {hasTrend && (
+              <span style={{ marginRight: 8, color: movingTowardBreach ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
+                {movingTowardBreach ? '↘' : '↗'} vs prior
+              </span>
+            )}
             <span style={{ color: isGreaterThan ? 'var(--accent-red)' : 'var(--accent-teal)' }}>●</span> Limit: {operator} {fmtValue(threshold)}
           </div>
         </div>

@@ -1804,6 +1804,38 @@ def get_portfolio_covenants(company: str, product: str,
         result = portfolio_covenants(df, mult, ref_date, fp)
     else:
         result = compute_klaim_covenants(df, mult, ref_date, fp)
+
+    # --- Trend: load previous snapshot to compute rate-of-change per covenant ---
+    try:
+        snaps = get_snapshots(company, product)
+        if len(snaps) >= 2:
+            current_idx = next(
+                (i for i, s in enumerate(snaps) if s['date'] == sel.get('date')), 0
+            )
+            prev_idx = current_idx + 1  # snaps sorted newest-first
+            if prev_idx < len(snaps):
+                prev_snap = snaps[prev_idx]
+                if atype == 'silq':
+                    prev_df, _ = load_silq_snapshot(prev_snap['filepath'])
+                else:
+                    prev_df = load_snapshot(prev_snap['filepath'])
+                prev_ref = prev_snap['date']
+                if atype == 'silq':
+                    prev_result = portfolio_covenants(prev_df, mult, prev_ref, fp)
+                else:
+                    prev_result = compute_klaim_covenants(prev_df, mult, prev_ref, fp)
+                prev_by_name = {c['name']: c for c in prev_result['covenants']}
+                curr_dt = pd.to_datetime(ref_date)
+                prev_dt = pd.to_datetime(prev_ref)
+                days_between = max((curr_dt - prev_dt).days, 1)
+                for cov in result['covenants']:
+                    prev_cov = prev_by_name.get(cov['name'])
+                    if prev_cov and isinstance(prev_cov.get('current'), (int, float)):
+                        cov['previous_value'] = prev_cov['current']
+                        cov['days_since_previous'] = days_between
+    except Exception:
+        pass  # Trend data is optional — never break the main response
+
     return {**result, 'currency': disp, 'snapshot': sel['date']}
 
 
