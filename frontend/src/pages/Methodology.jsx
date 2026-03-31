@@ -9,12 +9,16 @@ const KLAIM_SECTIONS = [
   { id: 'collection-perf', title: 'Collection Performance', level: 2 },
   { id: 'collection-analysis', title: 'Collection Analysis', level: 2 },
   { id: 'health', title: 'Health Classification', level: 3 },
+  { id: 'par', title: 'Portfolio at Risk (PAR)', level: 3 },
   { id: 'cohort', title: 'Cohort Analysis', level: null },
   { id: 'returns', title: 'Returns Analysis', level: 4 },
   { id: 'denial-funnel', title: 'Denial Funnel', level: 4 },
+  { id: 'loss-waterfall', title: 'Loss Waterfall', level: 4 },
   { id: 'stress', title: 'Stress Testing', level: 5 },
+  { id: 'forward-signals', title: 'Forward-Looking Signals', level: 5 },
   { id: 'expected-loss', title: 'Expected Loss Model', level: 4 },
   { id: 'migration', title: 'Roll-Rate Migration', level: 3 },
+  { id: 'advanced-analytics', title: 'Advanced Analytics', level: null },
   { id: 'validation', title: 'Data Quality Validation', level: null },
   { id: 'currency', title: 'Currency Conversion', level: null },
 ]
@@ -317,6 +321,54 @@ export default function Methodology() {
           </Note>
         </Section>
 
+        {/* 5 — Portfolio at Risk (PAR) */}
+        <Section id="par" title="Portfolio at Risk (PAR)">
+          <p style={styles.body}>
+            PAR measures the share of the portfolio that is behind schedule, weighted by outstanding amount.
+            Laith reports two perspectives for Klaim:
+          </p>
+          <Table
+            headers={['Perspective', 'Denominator', 'Use Case']}
+            rows={[
+              ['Lifetime PAR', 'Total originated outstanding', 'IC reporting — headline metric'],
+              ['Active PAR', 'Active outstanding only', 'Operational monitoring — context metric'],
+            ]}
+          />
+          <Note>
+            Active outstanding is typically only 7–9% of total originated for Klaim (most deals have collected
+            or been denied). This means Active PAR can appear alarmingly high (e.g. 46%) while Lifetime PAR
+            is benign (e.g. 3.6%). Always read Lifetime PAR as the headline; Active PAR provides operational context.
+          </Note>
+          <Subsection title="PAR Computation Methods">
+            <p style={styles.body}>Three methods are applied in priority order:</p>
+            <Table
+              headers={['Method', 'Description', 'Confidence']}
+              rows={[
+                ['Primary', 'Shortfall-based estimated DPD using Expected till date column', 'B — Inferred'],
+                ['Option C', 'Empirical benchmarks from 50+ completed deals — labeled "Derived"', 'C — Derived'],
+                ['Unavailable', 'Returns available: false when neither method has sufficient data', '—'],
+              ]}
+            />
+          </Subsection>
+          <Subsection title="PAR Thresholds">
+            <Table
+              headers={['Metric', 'Threshold', 'Interpretation']}
+              rows={[
+                ['PAR 30+', '>2% lifetime', 'Elevated — monitor trend'],
+                ['PAR 30+', '>5% lifetime', 'High — escalate to IC'],
+                ['PAR 60+', '>1.5% lifetime', 'Elevated'],
+                ['PAR 90+', '>1% lifetime', 'Material impairment signal'],
+              ]}
+            />
+          </Subsection>
+          <Note>
+            For Klaim, there are no contractual due dates — PAR is approximated using the Expected till date
+            column as a proxy for the repayment schedule. Deals where outstanding exceeds Expected till date
+            by a threshold are treated as behind schedule. Option C builds empirical benchmarks from completed
+            deals that collected on time, and uses those patterns to assess active deals.
+          </Note>
+        </Section>
+
         {/* 3 — Cohort Analysis */}
         <Section id="cohort" title="Cohort Analysis">
           <p style={styles.body}>
@@ -454,6 +506,56 @@ export default function Methodology() {
           </Note>
         </Section>
 
+        {/* Loss Waterfall */}
+        <Section id="loss-waterfall" title="Loss Waterfall">
+          <p style={styles.body}>
+            The Loss Waterfall tab provides a per-vintage decomposition of how originated capital flows
+            through to net loss. It follows the <strong>Separation Principle</strong>: the clean portfolio
+            (active + normal completed) is kept separate from the loss portfolio (denial &gt; 50% of purchase value)
+            to prevent loss deals from distorting healthy portfolio metrics.
+          </p>
+          <Subsection title="Default Definition">
+            <p style={styles.body}>
+              For Klaim, there are no contractual due dates. A deal is classified as a <strong>gross default</strong> when
+              the insurance denial exceeds 50% of the purchase value. This is the functional equivalent of a credit loss
+              event for healthcare receivables factoring.
+            </p>
+          </Subsection>
+          <Subsection title="Waterfall Steps (per vintage)">
+            <Table
+              headers={['Step', 'Definition', 'Formula']}
+              rows={[
+                ['Originated', 'Total purchase value of deals in the vintage', '∑ Purchase Value'],
+                ['Gross Default', 'Deals where Denied > 50% of Purchase Value', '∑ PV of loss deals'],
+                ['Recovery', 'Amount actually collected on default deals', '∑ Collected on loss deals'],
+                ['Net Loss', 'Unrecovered portion after collections', 'Gross Default − Recovery'],
+              ]}
+            />
+          </Subsection>
+          <Subsection title="Loss Categorization (Heuristics)">
+            <p style={styles.body}>
+              Rules-based classification of loss deals into probable root causes. Not ML — transparent
+              heuristics for analyst interpretation:
+            </p>
+            <ul style={styles.list}>
+              <li><strong>Provider Issue:</strong> High denial concentration from a specific Group (provider_issue)</li>
+              <li><strong>Coding Error:</strong> Partial denials suggesting claim coding or documentation issues</li>
+              <li><strong>Credit / Underwriting:</strong> Remaining unexplained denials attributed to credit decision quality</li>
+            </ul>
+            <Note>
+              Categories are mutually exclusive and exhaustive. They are starting points for investigation,
+              not definitive classifications. Reason code analysis from the insurer is the authoritative source.
+            </Note>
+          </Subsection>
+          <Subsection title="Recovery Analysis">
+            <p style={styles.body}>
+              Recovery rates and timing are tracked per vintage for deals that experienced gross default.
+              Key metrics: recovery rate (% of defaulted amount recovered), average recovery days,
+              and worst/best performing deals by vintage.
+            </p>
+          </Subsection>
+        </Section>
+
         {/* 6 — Stress Testing */}
         <Section id="stress" title="Stress Testing">
           <p style={styles.body}>
@@ -520,6 +622,70 @@ export default function Methodology() {
           </Subsection>
         </Section>
 
+        {/* Forward-Looking Signals */}
+        <Section id="forward-signals" title="Forward-Looking Signals">
+          <p style={styles.body}>
+            Forward-looking signals are metrics that historically deteriorate <em>before</em> the collection
+            rate does. They provide early warning of portfolio stress and complement lagging indicators.
+          </p>
+          <Subsection title="DTFC — Days to First Cash">
+            <Metric
+              name="DTFC (Median)"
+              formula="Days from deal origination to first cash receipt — median across active deals"
+              rationale="A lengthening DTFC means insurers are taking longer to make initial payments. This typically precedes a decline in collection rate by 30–60 days, making it a leading indicator of portfolio stress. Confidence grade B (curve-based) or C (estimated)."
+            />
+            <Metric
+              name="DTFC (P90)"
+              formula="90th percentile of days to first cash"
+              rationale="Captures the slowest-paying tail of the portfolio. Rising P90 indicates the worst deals are getting worse faster than the median, a signal of selective non-payment."
+            />
+            <Table
+              headers={['Method', 'How Computed', 'Grade']}
+              rows={[
+                ['Curve-based', 'Uses 30-day collection curve columns — finds first non-zero interval', 'B'],
+                ['Estimated', 'Approximates from deal date and first collected amount date', 'C'],
+              ]}
+            />
+          </Subsection>
+          <Subsection title="HHI — Concentration Time Series">
+            <Metric
+              name="HHI (Herfindahl-Hirschman Index)"
+              formula="HHI = ∑ (Share_i)² where Share_i = Group_i outstanding / Total outstanding"
+              rationale="Measures portfolio concentration. A rising HHI across snapshots indicates the portfolio is becoming more concentrated in fewer providers — a risk factor even if current collection rates are healthy."
+            />
+            <Table
+              headers={['HHI Range', 'Classification', 'Interpretation']}
+              rows={[
+                ['< 0.10', 'Diversified', 'Low concentration risk'],
+                ['0.10 – 0.15', 'Moderate', 'Monitor top providers closely'],
+                ['> 0.15', 'Concentrated', 'Single-name risk elevated'],
+              ]}
+            />
+            <Note>
+              HHI trend (increasing / stable / decreasing) is computed across all available snapshots.
+              A warning is issued when HHI is rising and already above 0.10. Grade A — directly computed
+              from tape data.
+            </Note>
+          </Subsection>
+          <Subsection title="DSO — Dual Perspectives">
+            <Metric
+              name="DSO Capital"
+              formula="Days from deal origination (funding date) to collection — measures capital duration"
+              rationale="How long the fund's capital is tied up. Directly impacts IRR and reinvestment capacity. A rising DSO Capital means slower return of capital."
+            />
+            <Metric
+              name="DSO Operational"
+              formula="Days from Expected till date (due date) to actual collection — measures payer behaviour"
+              rationale="How late insurers are paying relative to schedule. Rising DSO Operational indicates payer deterioration independent of deal maturity. The two clocks decouple: DSO Capital can be fine while Operational worsens."
+            />
+            <Note>
+              Both DSO variants use the curve-based method when 30-day collection curve columns are available
+              (Mar 2026+ tapes), finding the day when 90% of the deal's collection arrived. Falls back to
+              deal-age estimation on older tapes. Curve-based = grade B, estimated = grade C.
+            </Note>
+          </Subsection>
+        </Section>
+
         {/* 8 — Roll-Rate Migration */}
         <Section id="migration" title="Roll-Rate Migration">
           <p style={styles.body}>
@@ -568,6 +734,55 @@ export default function Methodology() {
           </Subsection>
         </Section>
 
+        {/* Advanced Analytics */}
+        <Section id="advanced-analytics" title="Advanced Analytics">
+          <p style={styles.body}>
+            The following tabs provide deeper analytical cuts beyond the core performance metrics.
+            All use the same underlying tape data with no additional configuration required.
+          </p>
+          <Subsection title="Collections Timing">
+            <p style={styles.body}>
+              Uses 30-day collection curve columns (Mar 2026+ tapes) to show how cash arrives over the life
+              of a deal. Broken into timing buckets: 0–30d, 30–60d, 60–90d, 90–120d, 120–180d, 180d+.
+              Two views: by payment month (liquidity quality) and by origination month (vintage behaviour).
+              Requires curve columns — hidden on older tapes.
+            </p>
+          </Subsection>
+          <Subsection title="Underwriting Drift">
+            <p style={styles.body}>
+              Tracks per-vintage origination characteristics over time: average deal size, discount rate,
+              and collection rate. Computes a rolling 6-month baseline and flags vintages where any metric
+              deviates beyond 1 standard deviation from the norm. Drift flags are displayed as badges.
+            </p>
+            <Note>
+              Underwriting drift is distinct from credit quality deterioration. A vintage can have excellent
+              credit quality but show underwriting drift if deal sizes are growing unusually fast.
+            </Note>
+          </Subsection>
+          <Subsection title="Segment Analysis">
+            <p style={styles.body}>
+              Multi-dimensional performance cuts across four dimensions, each producing a sortable heat-map table:
+            </p>
+            <ul style={styles.list}>
+              <li><strong>Product Type:</strong> Performance by insurance product/claim type</li>
+              <li><strong>Provider Size:</strong> Bucketed by total purchase value volume (Small / Medium / Large)</li>
+              <li><strong>Deal Size:</strong> Quartile-based bucketing of individual deal sizes</li>
+              <li><strong>New vs Repeat:</strong> First-time vs returning counterparties</li>
+            </ul>
+            <p style={styles.body}>
+              Each segment shows deal count, total volume, collection rate, denial rate, and realised margin.
+              Heat-map colouring highlights outlier segments relative to the portfolio average.
+            </p>
+          </Subsection>
+          <Subsection title="Seasonality">
+            <p style={styles.body}>
+              Groups monthly deployment by calendar month across years for year-over-year comparison.
+              Computes a seasonal index (month average / overall average) to quantify seasonal patterns.
+              Index &gt; 1.0 indicates above-average origination months; &lt; 1.0 below-average.
+            </p>
+          </Subsection>
+        </Section>
+
         {/* 9 — Data Quality Validation */}
         <Section id="validation" title="Data Quality Validation">
           <p style={styles.body}>
@@ -591,6 +806,35 @@ export default function Methodology() {
               <li><strong>Discount anomalies:</strong> Discount &gt;100% or negative</li>
               <li><strong>Low column completeness:</strong> Columns with &lt;90% non-null values</li>
               <li><strong>Unexpected status values:</strong> Status not &ldquo;Executed&rdquo; or &ldquo;Completed&rdquo;</li>
+            </ul>
+          </Subsection>
+          <Subsection title="Anomaly Detection (review required)">
+            <p style={styles.body}>
+              Statistical and pattern-based checks that flag unusual data signatures:
+            </p>
+            <ul style={styles.list}>
+              <li>
+                <strong>Duplicate counterparty + amount + date:</strong> Rows sharing the same Group,
+                Purchase value, and Deal date — possible double-entry without a unique ID match.
+              </li>
+              <li>
+                <strong>Identical amount concentration:</strong> A single Purchase value appearing in
+                &gt;5% of all deals (minimum 10 occurrences) — may indicate templated or copy-paste entries.
+              </li>
+              <li>
+                <strong>Deal size outliers:</strong> Purchase values outside the 3&times;IQR fence
+                (Q3 + 3&times;IQR upper, Q1 − 3&times;IQR lower). Flags statistical extremes
+                that warrant individual review.
+              </li>
+              <li>
+                <strong>Discount outliers:</strong> Discount rates outside the 3&times;IQR fence
+                within the valid 0–100% range. Unusual discounts may indicate pricing errors.
+              </li>
+              <li>
+                <strong>Balance identity violations:</strong> Deals where
+                Collected + Denied + Pending &gt; 105% of Purchase value.
+                The 5% tolerance accommodates rounding and fee adjustments.
+              </li>
             </ul>
           </Subsection>
           <Subsection title="Informational">
