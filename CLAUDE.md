@@ -803,7 +803,7 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 - [ ] **Seasonality dashboard enhancement** — YoY comparison + seasonal index + delinquency emergence overlay.
 - [ ] **Methodology transparency enhancement** — data corrections log, column availability audit trail.
 - [x] **Analysis Framework document expansion** — formalized: Analytical Hierarchy, Metric Doctrine (denominator/weighting/confidence), Three Clocks, Collection Rate Disambiguation, Dilution Framework, Denominator Discipline, Methodology Onboarding Guide with hierarchy-level mapping. Served via Framework page with sticky TOC.
-- [ ] **Company Methodology page updates** — expand per-company methodology pages with new metric definitions as features are added.
+- [x] **Company Methodology page updates** — Klaim: added PAR (dual denominator, 3 methods), Loss Waterfall (default def, categorization, recovery), Forward-Looking Signals (DTFC, HHI time series, DSO dual perspectives), Advanced Analytics (collections timing, underwriting drift, segment analysis, seasonality). Validation section updated with anomaly detection docs.
 **Key analytical design decisions (documented for consistency):**
 - PAR denominator: active outstanding (Tape), eligible outstanding (Portfolio). Lifetime rates live in Loss Waterfall as "Gross/Net Default Rate" — different metric, different location.
 - PAR without contractual benchmarks: hide (graceful degradation), not estimate. Exception: Option C (empirical curves from completed deals) with explicit "Derived" labeling when robust enough (min N completed deals, min vintage depth).
@@ -818,12 +818,12 @@ Derived from detailed analysis of Ejari's loan tape analysis workbook and a lend
 **Portfolio Analytics — Near-term enhancements:**
 - [x] Trigger distance + projected breach date on Covenants tab — headroom line (teal ✓) when compliant, projected breach date (amber ⚠) when trend moving toward limit, ↘/↗ direction vs prior snapshot
 - [x] Facility params input UI (edit advance rates, concentration limits, covenants from frontend) — FacilityParamsPanel.jsx + backend endpoints complete
-- [ ] BB Movement Attribution waterfall — period-over-period decomposition: ΔEligible + ΔCaps + ΔReserves + ΔOutstanding = ΔAvailability
+- [x] BB Movement Attribution waterfall — period-over-period decomposition of BB drivers (Δ portfolio size, Δ eligibility, Δ concentration+rate, Δ cash). Frontend panel with mini diverging bars.
 - [ ] Breakeven analysis — "At what collection rate does the borrowing base breach?" Invert stress to find threshold.
 - [ ] BB Sensitivity formulas — ∂BB/∂advance_rate, ∂BB/∂reserve. Shows which lever moves availability most.
 **Data Quality — Near-term enhancements:**
-- [ ] Duplicate/anomaly detection in validation — suspiciously identical amounts across deals, duplicate counterparty+amount+date combinations, statistical outliers (deal size, discount, timing far outside distribution), balance identity violations
-- [ ] Confidence grading badges on metrics — A (observed), B (inferred), C (derived) displayed in UI
+- [x] Duplicate/anomaly detection in validation — 5 new checks: duplicate counterparty+amount+date combos, identical amount concentration, deal size outliers (3×IQR), discount outliers (3×IQR), balance identity violations
+- [x] Confidence grading badges on metrics — A (observed), B (inferred), C (derived) displayed in UI via KpiCard `confidence` prop. Klaim Overview and PAR/DTFC/DSO cards graded dynamically.
 **Portfolio Analytics — Medium-term:**
 - [ ] Automated compliance certificate / BBC export — generate the borrowing base certificate document from live data
 - [ ] Conditional monthly rates (CDR/CCR) alongside cumulative — monthly annualized default/collection rate strips out vintage effects
