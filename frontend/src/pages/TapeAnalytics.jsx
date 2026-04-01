@@ -352,15 +352,22 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
   const kpis = summary ? [
     { label: 'Total Disbursed',  value: fmt(summary.total_disbursed),  sub: `${summary.total_deals} loans`,        color: 'gold' },
     { label: 'Outstanding',      value: fmt(summary.total_outstanding),sub: 'current exposure',                     color: 'blue', stale: bd },
-    { label: 'Total Overdue',    value: fmt(summary.total_overdue),    sub: pct(summary.overdue_rate) + ' of outst.',color: 'red', stale: bd },
+    { label: 'Total Overdue',    value: fmt(summary.total_overdue),    sub: 'past repayment deadline',                                  color: 'red', stale: bd },
     { label: 'Collection Rate',  value: pct(summary.collection_rate),  sub: 'repaid vs collectable',                color: 'teal', stale: bd },
-    { label: 'PAR30',            value: pct(summary.par30),            sub: `PAR60: ${pct(summary.par60)}`,          color: summary.par30 > 20 ? 'red' : 'gold', stale: bd },
-    { label: 'PAR90',            value: pct(summary.par90),            sub: 'serious delinquency',                   color: summary.par90 > 5 ? 'red' : 'teal', stale: bd },
-    { label: 'Active Loans',     value: String(summary.active_deals),  sub: `${summary.completed_deals} closed`,    color: 'blue' },
+    { label: 'Overdue Rate',     value: pct(summary.overdue_rate),     sub: 'of outstanding',                       color: summary.overdue_rate > 15 ? 'red' : 'gold', stale: bd },
+    { label: 'Active Loans',     value: String(summary.active_deals),  sub: 'currently open',                       color: 'blue' },
+    { label: 'Completed Loans',  value: String(summary.completed_deals), sub: 'closed',                             color: 'teal' },
     { label: 'Avg Tenure',       value: `${summary.avg_tenure?.toFixed(0) ?? '—'}w`, sub: 'weeks',                  color: 'gold' },
     { label: 'HHI (Shop)',       value: summary.hhi_shop?.toFixed(4) ?? '—', sub: `Top shop: ${pct(summary.top_1_shop_pct)}`, color: summary.hhi_shop > 0.15 ? 'red' : 'teal' },
     { label: 'Total Repaid',     value: fmt(summary.total_repaid),     sub: 'cumulative collections',               color: 'teal', stale: bd },
   ] : Array(10).fill(null)
+
+  // Credit Quality — PAR as dedicated section (consistent with Klaim)
+  const parKpis = summary ? [
+    { label: 'PAR 30+', value: pct(summary.par30), sub: `${ccy} ${((summary.par30 ?? 0) * (summary.total_outstanding ?? 0) / 100 / 1000).toFixed(0)}K at risk`, color: summary.par30 > 20 ? 'red' : summary.par30 > 10 ? 'gold' : 'teal', stale: bd },
+    { label: 'PAR 60+', value: pct(summary.par60), sub: `${ccy} ${((summary.par60 ?? 0) * (summary.total_outstanding ?? 0) / 100 / 1000).toFixed(0)}K at risk`, color: summary.par60 > 10 ? 'red' : summary.par60 > 5 ? 'gold' : 'teal', stale: bd },
+    { label: 'PAR 90+', value: pct(summary.par90), sub: `${ccy} ${((summary.par90 ?? 0) * (summary.total_outstanding ?? 0) / 100 / 1000).toFixed(0)}K at risk`, color: summary.par90 > 5 ? 'red' : summary.par90 > 2 ? 'gold' : 'teal', stale: bd },
+  ] : []
 
   const showSkeleton = summaryLoading || !summary
 
@@ -373,6 +380,24 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
           : kpis.map((k, i) => <KpiCard key={i} {...k} index={i} />)
         }
       </div>
+
+      {/* Credit Quality — PAR section */}
+      {summary && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+              Credit Quality
+            </span>
+            <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.7 }}>
+              vs Active Outstanding
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+            {parKpis.map((k, i) => <KpiCard key={`par-${i}`} {...k} index={i} />)}
+          </div>
+        </div>
+      )}
+
       {summary?.portfolio_commentary && (
         <PortfolioCommentaryPanel text={summary.portfolio_commentary} />
       )}
@@ -448,7 +473,7 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
   // PAR KPIs — dual perspective: lifetime (IC view) as headline, active as context
   const parConfidence = par?.method === 'primary' ? 'B' : 'C'
   const parKpis = par?.available ? [
-    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: `${pct(par.par30)} of active outstanding`, color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
+    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: `${ccy} ${(par.par30_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
     { label: 'PAR 60+', value: pct(par.lifetime_par60 ?? par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par60 ?? par.par60) > 1.5 ? 'red' : (par.lifetime_par60 ?? par.par60) > 0.75 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
     { label: 'PAR 90+', value: pct(par.lifetime_par90 ?? par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par90 ?? par.par90) > 1 ? 'red' : (par.lifetime_par90 ?? par.par90) > 0.5 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
   ] : []
@@ -472,12 +497,12 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
         }
       </div>
 
-      {/* PAR KPIs — shown when available */}
+      {/* Credit Quality — PAR section */}
       {parKpis.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
-              Portfolio at Risk
+              Credit Quality
             </span>
             <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.7 }}>
               vs Total Originated
@@ -492,26 +517,23 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
               </span>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${parKpis.length + dtfcKpis.length}, 1fr)`, gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
             {parKpis.map((k, i) => (
               <div key={`par-${i}`} style={k.derived ? { borderStyle: 'dashed' } : undefined}>
                 <KpiCard {...k} index={i} />
               </div>
             ))}
-            {dtfcKpis.map((k, i) => (
-              <KpiCard key={`dtfc-${i}`} {...k} index={parKpis.length + i} />
-            ))}
           </div>
         </div>
       )}
 
-      {/* DTFC-only row when PAR not available but DTFC is */}
-      {parKpis.length === 0 && dtfcKpis.length > 0 && (
+      {/* Leading Indicators — DTFC section */}
+      {dtfcKpis.length > 0 && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
-            Cash Conversion
+            Leading Indicators
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${dtfcKpis.length}, 1fr)`, gap: 10, maxWidth: 400 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
             {dtfcKpis.map((k, i) => <KpiCard key={`dtfc-${i}`} {...k} index={i} />)}
           </div>
         </div>

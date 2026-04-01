@@ -70,6 +70,9 @@ export default function EjariDashboard() {
             <Kpi label="Outstanding Fee" value={fmtDollar(km.outstanding_fee)} color="gold" />
             <Kpi label="Total Collections" value={fmtDollar(km.total_collections)} color="teal" />
           </div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
+            Credit Quality
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
             <Kpi label="PAR 30+" value={fmtPct(km.par30)} color={km.par30 > 0.05 ? 'red' : 'teal'} />
             <Kpi label="PAR 60+" value={fmtPct(km.par60)} color={km.par60 > 0.04 ? 'red' : 'teal'} />

@@ -89,23 +89,19 @@ export default function Sidebar() {
         </>
       )}
 
-      {/* Executive Summary — AI-powered holistic analysis */}
-      {!hidePortfolio && (
-        <>
-          <NavItem
-            label="Executive Summary"
-            to={`${basePath}/executive-summary`}
-            active={location.pathname.includes('/executive-summary')}
-            icon={
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            }
-            accent
-          />
-          <Divider />
-        </>
-      )}
+      {/* Executive Summary — AI-powered holistic analysis (always shown) */}
+      <NavItem
+        label="Executive Summary"
+        to={`${basePath}/executive-summary`}
+        active={location.pathname.includes('/executive-summary')}
+        icon={
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        }
+        accent
+      />
+      <Divider />
 
       {/* Tape Analytics */}
       <SectionHeader>{hidePortfolio ? 'Analysis' : 'Tape Analytics'}</SectionHeader>

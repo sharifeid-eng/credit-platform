@@ -1263,6 +1263,107 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
     return '\n'.join(sections)
 
 
+def _build_ejari_full_context(data):
+    """Build comprehensive analytics context from parsed Ejari ODS workbook."""
+    sections = []
+
+    # Portfolio overview
+    ov = data.get('portfolio_overview', {})
+    km = ov.get('key_metrics', {})
+    if km:
+        sections.append(f"PORTFOLIO: {km.get('total_contracts', '?')} contracts, "
+                       f"{km.get('active_loans', '?')} active, "
+                       f"Originated ${km.get('total_originated', 0):,.0f}, "
+                       f"Funded ${km.get('total_funded', 0):,.0f}, "
+                       f"Outstanding principal ${km.get('outstanding_principal', 0):,.0f}, "
+                       f"Outstanding fee ${km.get('outstanding_fee', 0):,.0f}, "
+                       f"Collections ${km.get('total_collections', 0):,.0f}")
+        par_str = f"PAR30={km.get('par30', '?')}, PAR60={km.get('par60', '?')}, PAR90={km.get('par90', '?')}, PAR180={km.get('par180', '?')}"
+        sections.append(f"PAR: {par_str}")
+
+    # DPD distribution
+    dpd = ov.get('dpd_distribution', [])
+    if dpd:
+        dpd_str = ', '.join([f"{d['bucket']}: {d.get('loans', '?')} loans ({d.get('pct_outstanding', '?')} of O/S)" for d in dpd])
+        sections.append(f"DPD DISTRIBUTION: {dpd_str}")
+
+    # Monthly cohorts (recent 5)
+    cohorts = data.get('monthly_cohort', [])
+    recent = [c for c in cohorts if c.get('cohort') != 'TOTAL'][-5:]
+    if recent:
+        coh_str = ', '.join([f"{c.get('cohort', '?')}: {c.get('loans', '?')} loans, coll={c.get('coll_pct', '?')}, PAR30={c.get('par30', '?')}" for c in recent])
+        sections.append(f"RECENT COHORTS: {coh_str}")
+
+    # Loss waterfall totals
+    wf = data.get('cohort_loss_waterfall', [])
+    totals = next((w for w in wf if w.get('cohort') == 'TOTAL'), None)
+    if totals:
+        sections.append(f"LOSS WATERFALL (TOTAL): Disbursed ${totals.get('disbursed', 0):,.0f}, "
+                       f"Gross default rate={totals.get('default_rate', '?')}, "
+                       f"Fraud %={totals.get('fraud_pct', '?')}, "
+                       f"Recovery rate (ex-fraud)={totals.get('recovery_rate_ex_fraud', '?')}, "
+                       f"Net loss rate={totals.get('net_loss_rate', '?')}")
+    # Per-vintage loss (recent 5)
+    vintage_wf = [w for w in wf if w.get('cohort') != 'TOTAL'][-5:]
+    if vintage_wf:
+        vwf_str = ', '.join([f"{w.get('cohort', '?')}: default={w.get('default_rate', '?')}, net_loss={w.get('net_loss_rate', '?')}" for w in vintage_wf])
+        sections.append(f"RECENT VINTAGE LOSSES: {vwf_str}")
+
+    # Roll rates
+    rr = data.get('roll_rates', [])
+    if rr:
+        rr_str = ', '.join([f"{r['bucket']}: cure={r.get('implied_cure_rate', '?')}, roll={r.get('implied_roll_rate', '?')}" for r in rr])
+        sections.append(f"ROLL RATES: {rr_str}")
+
+    # Segment analysis — summarize top segments by use case
+    segs = data.get('segment_analysis', {})
+    for dim_key, dim_label in [('use_case', 'USE CASE'), ('employment', 'EMPLOYMENT'), ('region', 'REGION')]:
+        dim_data = segs.get(dim_key, [])
+        if dim_data:
+            top = sorted(dim_data, key=lambda s: s.get('loans', 0) or 0, reverse=True)[:3]
+            seg_str = ', '.join([f"{s.get('segment', '?')}: {s.get('loans', '?')} loans, coll={s.get('coll_pct', '?')}, PAR30={s.get('par30', '?')}" for s in top])
+            sections.append(f"SEGMENT ({dim_label}): {seg_str}")
+
+    # Collections timing
+    coll = data.get('collections_by_month', [])
+    recent_coll = coll[-3:] if coll else []
+    if recent_coll:
+        coll_str = ', '.join([f"{c.get('month', '?')}: coll={c.get('coll_pct', '?')}" for c in recent_coll])
+        sections.append(f"RECENT COLLECTIONS: {coll_str}")
+
+    # Credit quality trends (recent 5)
+    cq = data.get('credit_quality_trends', [])
+    recent_cq = cq[-5:] if cq else []
+    if recent_cq:
+        cq_str = ', '.join([f"{c.get('cohort', '?')}: SIMAH={c.get('avg_simah', '?')}, salary={c.get('avg_salary', '?')}, DBR={c.get('avg_dbr', '?')}" for c in recent_cq])
+        sections.append(f"CREDIT QUALITY TRENDS: {cq_str}")
+
+    # Write-offs & fraud
+    wo = data.get('writeoffs_fraud', {})
+    wo_sum = wo.get('summary', {})
+    if wo_sum:
+        for metric, vals in wo_sum.items():
+            sections.append(f"WRITE-OFF ({metric}): All={vals.get('all', '?')}, Fraud={vals.get('fraud', '?')}, Credit={vals.get('credit', '?')}")
+
+    # Najiz & Legal (totals)
+    najiz = data.get('najiz_legal', [])
+    najiz_total = next((n for n in najiz if n.get('vintage') == 'TOTAL'), None)
+    if najiz_total:
+        sections.append(f"LEGAL RECOVERY: {najiz_total.get('cases', '?')} cases, "
+                       f"execution rate={najiz_total.get('exec_rate', '?')}, "
+                       f"recovery=${najiz_total.get('recovery', 0):,.0f}, "
+                       f"fraud writeoff=${najiz_total.get('fraud_writeoff', 0):,.0f}")
+
+    # Historical performance (recent vintages)
+    hist = data.get('historical_performance', [])
+    recent_hist = hist[-3:] if hist else []
+    if recent_hist:
+        h_str = ', '.join([f"{h.get('vintage', '?')}: gross_default={h.get('gross_default_pct', '?')}, LGD={h.get('lgd', '?')}" for h in recent_hist])
+        sections.append(f"HISTORICAL PERFORMANCE: {h_str}")
+
+    return '\n'.join(sections)
+
+
 @app.get("/companies/{company}/products/{product}/ai-executive-summary")
 def get_executive_summary(company: str, product: str,
                           snapshot: Optional[str] = None,
@@ -1275,9 +1376,16 @@ def get_executive_summary(company: str, product: str,
     at = _get_analysis_type(company, product)
 
     if at == 'ejari_summary':
-        return {'findings': [], 'message': 'Executive summary not available for read-only summary data.'}
-
-    if at == 'silq':
+        sel = _resolve_snapshot(company, product, snapshot)
+        filepath = sel['filepath']
+        if filepath not in _ejari_cache:
+            _ejari_cache[filepath] = parse_ejari_workbook(filepath)
+        ejari_data = _ejari_cache[filepath]
+        context = _build_ejari_full_context(ejari_data)
+        company_desc = "Ejari Rent Now Pay Later (RNPL) portfolio in KSA"
+        disp = 'USD'
+        n_metrics = len([l for l in context.split('\n') if l.strip()])
+    elif at == 'silq':
         df, sel, config, disp, mult, _, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         context = _build_silq_full_context(df, mult, ref_date, config, disp)
         company_desc = "SILQ POS lending portfolio (BNPL, RBF, RCL) in KSA"
@@ -1319,6 +1427,7 @@ Rules:
 - "positive": good news worth highlighting (improving metrics, strong performance)
 - Tab slugs: overview, actual-vs-expected, deployment, collection, denial-trend, ageing, revenue, portfolio-tab, cohort-analysis, returns, risk-migration, loss-waterfall, recovery-analysis, underwriting-drift, segment-analysis, seasonality
 - For SILQ tabs: overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, covenants
+- For Ejari tabs: overview, cohort, loss-waterfall, roll-rates, historical, collections-month, collections-orig, segments, credit-quality, najiz, writeoffs, notes
 - Be specific with numbers. No vague statements.
 - Return ONLY the JSON array, no other text."""
 

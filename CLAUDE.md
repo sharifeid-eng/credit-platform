@@ -516,6 +516,8 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Methodology log** — `compute_methodology_log()` documents all data corrections, column availability checks, and data quality decisions applied during analysis. Provides audit trail for IC-level transparency.
 - **Ejari read-only summary pattern** — When `analysis_type` is `"ejari_summary"`, the platform bypasses all tape loading and computation. TapeAnalytics renders `EjariDashboard.jsx` which reads the URL `:tab` param and renders only the matching section. The `parse_ejari_workbook()` function in `core/analysis_ejari.py` reads the ODS file once (cached per session), extracting 12 structured sections. Config uses `hide_portfolio_tabs: true` to suppress Portfolio Analytics in sidebar, and sidebar header shows "Analysis" instead of "Tape Analytics". This pattern can be reused for any future company that provides pre-computed analysis instead of raw tapes.
 - **ODS file support** — `core/loader.py` `get_snapshots()` now accepts `.ods` files alongside `.csv` and `.xlsx`. Requires `odfpy` package (`pip install odfpy`).
+- **Overview page standardization** — All company overviews follow a consistent section structure guided by the L1-L5 analytical hierarchy: (1) Main KPIs (L1/L2, 5-col grid, bespoke per company), (2) "Credit Quality" section (L3, PAR 30+/60+/90+ as individual cards), (3) "Leading Indicators" section (L5, DTFC etc when available). PAR cards always use `{ccy} {amount}K at risk` subtitle format. Fixed 5-column grids prevent async reflow. Bespoke KPIs encouraged within each section.
+- **Executive Summary always visible** — Sidebar shows Executive Summary for all companies including Ejari. Decoupled from `hide_portfolio_tabs` flag which only controls Portfolio Analytics tabs.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -681,7 +683,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `analysis_type: "ejari_summary"` bypasses normal tape loading, renders dedicated dashboard
   - Parser (`core/analysis_ejari.py`) extracts 12 structured sections from ODS
   - Dashboard (`EjariDashboard.jsx`) renders 12 tabs: Portfolio Overview (KPIs + DPD), Monthly Cohorts, Cohort Loss Waterfall, Roll Rates, Historical Performance, Collections by Month/Origination, Segment Analysis (6 dimensions), Credit Quality Trends, Najiz & Legal, Write-offs & Fraud, Data Notes
-  - **Sidebar navigation** — aligned with Klaim/SILQ design pattern: 12 tabs in left sidebar, URL-driven (`/tape/:slug`), single section rendered per tab. Sidebar header shows "Analysis" (not "Tape Analytics"). Portfolio Analytics section hidden via `hide_portfolio_tabs: true` in config.
+  - **Sidebar navigation** — aligned with Klaim/SILQ design pattern: 12 tabs in left sidebar, URL-driven (`/tape/:slug`), single section rendered per tab. Sidebar header shows "Analysis" (not "Tape Analytics"). Portfolio Analytics section hidden via `hide_portfolio_tabs: true` in config. Executive Summary always visible (decoupled from `hide_portfolio_tabs`).
   - Loader updated to support `.ods` file extension (requires `odfpy` package in venv)
   - Cached parsing — ODS parsed once per session
 - ✅ **PAR dual perspective (Tape Analytics):**
@@ -689,11 +691,12 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Active outstanding is only 7.8% of total originated — inflated the active ratio
   - Lifetime shown as headline, Active as context in subtitle
 - ✅ **AI Executive Summary page:**
-  - New endpoint `GET /ai-executive-summary` computes ALL analytics (20+ metrics) and asks Claude for top 5-10 findings
+  - New endpoint `GET /ai-executive-summary` computes ALL analytics and asks Claude for top 5-10 findings
   - Structured JSON response with severity levels (critical/warning/positive), data points, and tab links
   - `ExecutiveSummary.jsx` page with finding cards, severity badges, "View Tab" navigation
-  - Accessible from sidebar above Tape Analytics section
-  - Supports both Klaim (20+ metrics) and SILQ (7+ metrics)
+  - Accessible from sidebar above Tape Analytics section (always visible, including Ejari)
+  - Supports all three companies: Klaim (20+ metrics), SILQ (8+ metrics), Ejari (20+ metrics from ODS workbook)
+  - `_build_ejari_full_context()` extracts portfolio overview, PAR, DPD, cohorts, loss waterfall, roll rates, segments, collections, credit quality, write-offs, legal recovery from parsed ODS
 - ✅ **SILQ analytics expansion (3 new tabs):**
   - `compute_silq_seasonality()` — YoY calendar month patterns + seasonal index for POS lending
   - `compute_silq_cohort_loss_waterfall()` — per-vintage: Disbursed → DPD>90 Default → Recovery → Net Loss
