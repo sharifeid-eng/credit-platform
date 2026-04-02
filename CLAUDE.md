@@ -162,7 +162,7 @@ credit-platform/
 │   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
 │   │   │   ├── Framework.jsx        # Analysis Framework page (/framework) — analytical philosophy with sticky TOC
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
-│   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — holistic findings from all metrics
+│   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
 │   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   ├── components/
 │   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
@@ -518,6 +518,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **ODS file support** — `core/loader.py` `get_snapshots()` now accepts `.ods` files alongside `.csv` and `.xlsx`. Requires `odfpy` package (`pip install odfpy`).
 - **Overview page standardization** — All company overviews follow a consistent section structure guided by the L1-L5 analytical hierarchy: (1) Main KPIs (L1/L2, 5-col grid, bespoke per company), (2) "Credit Quality" section (L3, PAR 30+/60+/90+ as individual cards), (3) "Leading Indicators" section (L5, DTFC etc when available). PAR cards always use `{ccy} {amount}K at risk` subtitle format. Fixed 5-column grids prevent async reflow. Bespoke KPIs encouraged within each section.
 - **Executive Summary always visible** — Sidebar shows Executive Summary for all companies including Ejari. Decoupled from `hide_portfolio_tabs` flag which only controls Portfolio Analytics tabs.
+- **Executive Summary dual-output architecture** — Single AI call returns JSON object with `narrative` (sections array + summary_table + bottom_line) and `findings` (array, same as before). Company-specific section guidance injected into prompt. Response parsing handles both old format (array) and new format (object) for backward compat. `max_tokens=8000` for the combined output. Generation takes ~50-60s vs ~10s previously.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -690,12 +691,15 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Active PAR 30+ was 46% (alarming) → Lifetime PAR 30+ is 3.6% (sensible for IC)
   - Active outstanding is only 7.8% of total originated — inflated the active ratio
   - Lifetime shown as headline, Active as context in subtitle
-- ✅ **AI Executive Summary page:**
-  - New endpoint `GET /ai-executive-summary` computes ALL analytics and asks Claude for top 5-10 findings
-  - Structured JSON response with severity levels (critical/warning/positive), data points, and tab links
-  - `ExecutiveSummary.jsx` page with finding cards, severity badges, "View Tab" navigation
+- ✅ **AI Executive Summary page (with holistic narrative):**
+  - Single `GET /ai-executive-summary` endpoint computes ALL analytics and asks Claude for both a credit memo narrative AND ranked findings in one call
+  - **Narrative section:** Company-specific sections (Ejari: 9 sections, Klaim: 7, SILQ: 6) — each with multi-paragraph analysis, assessment-colored metric pills, and gold conclusion line
+  - **Summary table:** Key metrics with RAG-style colored assessment badges (Healthy/Acceptable/Warning/Critical/Monitor)
+  - **Bottom line:** Gold-bordered verdict paragraph with specific diligence items for IC
+  - **Key findings:** 5-10 ranked findings with severity badges (critical/warning/positive), data points, and "View Tab" navigation (unchanged from before)
+  - Section guidance per company type: Ejari (Portfolio Overview → Monthly Cohorts → Loss Waterfall → Roll Rates → Historical Performance → Segment Analysis → Credit Quality → Najiz & Legal → Write-offs & Fraud), Klaim (Portfolio Overview → Cohort Performance → Collection & DSO → Denial & Loss Economics → Recovery & Risk Migration → Concentration & Segments → Forward Signals), SILQ (Portfolio Overview → Delinquency → Collections → Cohorts → Concentration → Yield & Tenure)
+  - `max_tokens=8000` (was 2000) to accommodate full narrative + findings
   - Accessible from sidebar above Tape Analytics section (always visible, including Ejari)
-  - Supports all three companies: Klaim (20+ metrics), SILQ (8+ metrics), Ejari (20+ metrics from ODS workbook)
   - `_build_ejari_full_context()` extracts portfolio overview, PAR, DPD, cohorts, loss waterfall, roll rates, segments, collections, credit quality, write-offs, legal recovery from parsed ODS
 - ✅ **SILQ analytics expansion (3 new tabs):**
   - `compute_silq_seasonality()` — YoY calendar month patterns + seasonal index for POS lending

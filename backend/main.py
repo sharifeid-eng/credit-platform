@@ -1399,6 +1399,32 @@ def get_executive_summary(company: str, product: str,
         company_desc = f"{company.upper()} healthcare claims factoring portfolio in UAE"
         n_metrics = len([l for l in context.split('\n') if l.strip()])
 
+    # Company-specific narrative section guidance
+    section_guidance = {
+        'ejari_summary': (
+            "Portfolio Overview, Monthly Cohorts, Loss Waterfall, Roll Rates, "
+            "Historical Performance, Segment Analysis, Credit Quality Trends, "
+            "Najiz & Legal, Write-offs & Fraud"
+        ),
+        'silq': (
+            "Portfolio Overview, Delinquency & DPD, Collections by Product, "
+            "Cohort Performance, Concentration, Yield & Tenure"
+        ),
+    }
+    sections_for = section_guidance.get(at,
+        "Portfolio Overview, Cohort Performance, Collection & DSO, "
+        "Denial & Loss Economics, Recovery & Risk Migration, "
+        "Concentration & Segments, Forward Signals"
+    )
+
+    tab_slugs = {
+        'ejari_summary': "overview, cohort, loss-waterfall, roll-rates, historical, collections-month, collections-orig, segments, credit-quality, najiz, writeoffs, notes",
+        'silq': "overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, covenants",
+    }
+    tabs_for = tab_slugs.get(at,
+        "overview, actual-vs-expected, deployment, collection, denial-trend, ageing, revenue, portfolio-tab, cohort-analysis, returns, risk-migration, loss-waterfall, recovery-analysis, underwriting-drift, segment-analysis, seasonality, cdr-ccr"
+    )
+
     prompt = f"""You are a senior analyst at ACP Private Credit preparing an executive summary for the investment committee.
 
 Company: {company_desc}
@@ -1407,32 +1433,55 @@ Data as of: {as_of_date or sel.get('date', '')}  |  Currency: {disp if 'disp' in
 COMPREHENSIVE ANALYTICS ({n_metrics} sections):
 {context}
 
-Based on ALL the data above, identify the TOP 5-10 MOST IMPORTANT FINDINGS for the investment committee. Rank by business impact.
+Produce a complete executive summary as a JSON object with two parts: a narrative credit memo and discrete findings.
 
-For each finding, respond in this exact JSON format:
-[
-  {{
-    "rank": 1,
-    "severity": "critical" or "warning" or "positive",
-    "title": "Short title (max 10 words)",
-    "explanation": "2-3 sentences explaining why this matters and what action to take.",
-    "data_points": ["Key number 1", "Key number 2"],
-    "tab": "relevant-tab-slug"
-  }}
-]
+Return this exact JSON structure:
+{{
+  "narrative": {{
+    "sections": [
+      {{
+        "title": "Section Name",
+        "content": "2-4 paragraphs of credit memo analysis. Use specific numbers from the data. Write in a professional, direct style — like a credit analyst presenting to an investment committee. Each paragraph should build the argument. Separate paragraphs with \\n\\n.",
+        "conclusion": "One sentence takeaway for this section.",
+        "metrics": [{{"label": "Metric Name", "value": "X.X%", "assessment": "healthy"}}]
+      }}
+    ],
+    "summary_table": [
+      {{"metric": "Key Metric", "value": "X.X%", "assessment": "Healthy"}}
+    ],
+    "bottom_line": "One paragraph (3-5 sentences) stating whether the book is investable, the primary risks, and 2-3 specific diligence items the IC should pursue."
+  }},
+  "findings": [
+    {{
+      "rank": 1,
+      "severity": "critical" or "warning" or "positive",
+      "title": "Short title (max 10 words)",
+      "explanation": "2-3 sentences explaining why this matters and what action to take.",
+      "data_points": ["Key number 1", "Key number 2"],
+      "tab": "relevant-tab-slug"
+    }}
+  ]
+}}
 
-Rules:
-- "critical": immediate IC attention needed (deteriorating metrics, covenant risk, concentration breaches)
-- "warning": should be monitored (emerging trends, drift signals)
-- "positive": good news worth highlighting (improving metrics, strong performance)
-- Tab slugs: overview, actual-vs-expected, deployment, collection, denial-trend, ageing, revenue, portfolio-tab, cohort-analysis, returns, risk-migration, loss-waterfall, recovery-analysis, underwriting-drift, segment-analysis, seasonality
-- For SILQ tabs: overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, covenants
-- For Ejari tabs: overview, cohort, loss-waterfall, roll-rates, historical, collections-month, collections-orig, segments, credit-quality, najiz, writeoffs, notes
-- Be specific with numbers. No vague statements.
-- Return ONLY the JSON array, no other text."""
+NARRATIVE RULES:
+- Write sections in this order: {sections_for}
+- Each section: 2-4 paragraphs with specific numbers. No vague statements.
+- "content" should read like a credit memo — walk through the data, explain what it means, flag risks and positives.
+- "conclusion" is a single sentence verdict for that section.
+- "metrics" are the 2-4 most important numbers from that section. "assessment" must be one of: "healthy", "acceptable", "warning", "critical", "monitor".
+- "summary_table": 6-10 rows covering the most important portfolio metrics across all sections. "assessment" values: "Healthy", "Acceptable", "Warning", "Critical", "Monitor".
+- "bottom_line": state the investment thesis clearly. Is this book performing? What are the 2-3 things IC needs to diligence?
+
+FINDINGS RULES:
+- 5-10 findings ranked by business impact.
+- "critical": immediate IC attention needed. "warning": monitor. "positive": good news.
+- Tab slugs: {tabs_for}
+- Be specific with numbers in data_points.
+
+Return ONLY the JSON object, no other text."""
 
     msg = _ai_client().messages.create(
-        model="claude-opus-4-6", max_tokens=2000,
+        model="claude-opus-4-6", max_tokens=8000,
         messages=[{"role": "user", "content": prompt}]
     )
 
@@ -1444,12 +1493,21 @@ Rules:
         response_text = re.sub(r'\s*```$', '', response_text)
 
     try:
-        findings = json.loads(response_text)
+        parsed = json.loads(response_text)
+        # Handle both old format (array of findings) and new format (object with narrative + findings)
+        if isinstance(parsed, list):
+            narrative = None
+            findings = parsed
+        else:
+            narrative = parsed.get('narrative', None)
+            findings = parsed.get('findings', [])
     except json.JSONDecodeError:
+        narrative = None
         findings = [{'rank': 1, 'severity': 'warning', 'title': 'Summary generated',
                      'explanation': response_text, 'data_points': [], 'tab': 'overview'}]
 
     return {
+        'narrative': narrative,
         'findings': findings,
         'generated_at': datetime.now().isoformat(),
         'as_of_date': as_of_date or sel.get('date', ''),

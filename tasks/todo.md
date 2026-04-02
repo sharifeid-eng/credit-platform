@@ -6,6 +6,9 @@ Track active work here. Claude updates this as tasks progress.
 ## Active
 _(none)_
 
+## Completed — 2026-04-02
+- [x] Executive Summary holistic narrative — single AI call now produces a credit memo-style narrative (company-specific sections with conclusions + metric pills) AND a summary table AND a bottom line verdict, displayed above the existing ranked findings. Ejari gets 9 sections (Portfolio Overview → Write-offs & Fraud), Klaim 7, SILQ 6. max_tokens 2000→8000.
+
 ## Up Next
 - [ ] Cloud deployment (Phase 3 gate)
 - [ ] RBAC, scheduled report delivery, real-time webhook notifications
