@@ -178,7 +178,8 @@ def get_aggregate_stats():
     Aggregate stats across ALL snapshots for all companies.
     Cached to disk — only recomputes when snapshot file list changes.
     - total_face_value_usd: sum of latest-snapshot face values, USD-normalised (no double-count)
-    - total_records: all rows across all snapshots (shows processing volume)
+    - total_deals: all deal rows across all snapshots (processing volume)
+    - total_data_points: sum of rows × columns per snapshot (raw scale)
     - total_snapshots: count of tape files
     - total_companies: count of active companies (excl. ejari_summary)
     """
@@ -211,10 +212,11 @@ def get_aggregate_stats():
             pass
 
     # Recompute
-    total_value_usd = 0.0
-    total_records   = 0
-    snapshot_count  = 0
-    company_set     = set()
+    total_value_usd  = 0.0
+    total_deals      = 0
+    total_data_points = 0
+    snapshot_count   = 0
+    company_set      = set()
 
     for co in get_companies():
         for prod in get_products(co):
@@ -223,17 +225,20 @@ def get_aggregate_stats():
             currency      = cfg.get('currency', 'USD')
             fx            = FX.get(currency, 1.0)
 
-            if analysis_type == 'ejari_summary':
-                continue
-
             snaps = get_snapshots(co, prod)
             company_set.add(co)
 
             for i, snap in enumerate(snaps):
                 snapshot_count += 1
+
+                if analysis_type == 'ejari_summary':
+                    # ODS workbook — count as 1 snapshot, no deal rows or face value
+                    continue
+
                 try:
                     df = load_snapshot(snap['filepath'])
-                    total_records += len(df)
+                    total_deals       += len(df)
+                    total_data_points += len(df) * len(df.columns)
 
                     # Face value only from latest snapshot to avoid double-counting deals
                     if i == len(snaps) - 1:
@@ -247,10 +252,11 @@ def get_aggregate_stats():
                     pass
 
     stats = {
-        'total_face_value_usd': round(total_value_usd),
-        'total_records':        total_records,
-        'total_snapshots':      snapshot_count,
-        'total_companies':      len(company_set),
+        'total_face_value_usd':  round(total_value_usd),
+        'total_deals':           total_deals,
+        'total_data_points':     total_data_points,
+        'total_snapshots':       snapshot_count,
+        'total_companies':       len(company_set),
     }
 
     cache_path.write_text(json.dumps({

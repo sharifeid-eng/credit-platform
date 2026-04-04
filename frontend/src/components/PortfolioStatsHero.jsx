@@ -132,10 +132,11 @@ export default function PortfolioStatsHero() {
       .finally(() => setLoading(false))
   }, [])
 
-  const fmtValue    = v => `$${(v / 1_000_000).toFixed(0)}M`
-  const fmtRecords  = v => `${Math.round(v).toLocaleString()}`
-  const fmtSnaps    = v => Math.round(v).toString()
-  const fmtCompanies = v => Math.round(v).toString()
+  const fmtValue      = v => `$${(v / 1_000_000).toFixed(0)}M`
+  const fmtDeals      = v => Math.round(v).toLocaleString()
+  const fmtDataPoints = v => `${(v / 1_000).toFixed(0)}K+`
+  const fmtSnaps      = v => Math.round(v).toString()
+  const fmtCompanies  = v => Math.round(v).toString()
 
   const goldDiv    = <Divider color="rgba(201,168,76,0.18)" />
   const neutralDiv = <Divider color="var(--border)" />
@@ -151,13 +152,15 @@ export default function PortfolioStatsHero() {
 
       {/* Banner 1 — Data Analyzed */}
       <Banner label="Data Analyzed" variant="gold">
-        <StatCell label="Face Value Analyzed" rawValue={stats?.total_face_value_usd} format={fmtValue}    loading={loading} index={0} valueColor="var(--gold)" />
+        <StatCell label="Face Value Analyzed" rawValue={stats?.total_face_value_usd} format={fmtValue}      loading={loading} index={0} valueColor="var(--gold)" />
         {goldDiv}
-        <StatCell label="Records Processed"   rawValue={stats?.total_records}        format={fmtRecords}  loading={loading} index={1} valueColor="var(--gold)" />
+        <StatCell label="Deals Processed"     rawValue={stats?.total_deals}          format={fmtDeals}      loading={loading} index={1} valueColor="var(--gold)" />
         {goldDiv}
-        <StatCell label="Snapshots Loaded"    rawValue={stats?.total_snapshots}      format={fmtSnaps}    loading={loading} index={2} valueColor="var(--gold)" />
+        <StatCell label="Data Points"         rawValue={stats?.total_data_points}    format={fmtDataPoints} loading={loading} index={2} valueColor="var(--gold)" />
         {goldDiv}
-        <StatCell label="Portfolio Companies" rawValue={stats?.total_companies}      format={fmtCompanies} loading={loading} index={3} valueColor="var(--gold)" />
+        <StatCell label="Snapshots Loaded"    rawValue={stats?.total_snapshots}      format={fmtSnaps}      loading={loading} index={3} valueColor="var(--gold)" />
+        {goldDiv}
+        <StatCell label="Portfolio Companies" rawValue={stats?.total_companies}      format={fmtCompanies}  loading={loading} index={4} valueColor="var(--gold)" />
       </Banner>
 
       {/* Banner 2 — Live Portfolio (empty until DB connected) */}
