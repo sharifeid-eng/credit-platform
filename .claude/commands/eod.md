@@ -8,33 +8,48 @@ Perform a thorough end-of-session close. Work through every step below in order.
 
 Run `git status` and `git diff --stat`. List every modified, untracked, or deleted file. For each file, state whether it needs to be committed.
 
-## Step 2 — Update `tasks/todo.md`
+## Step 2 — Run tests
+
+Run `pytest tests/ -q` from the project root. Report pass/fail counts. If any tests fail, fix them before proceeding — do not commit broken code.
+
+## Step 3 — Safety check: confirm .env is not tracked
+
+Run `git ls-files .env`. If it returns anything, stop immediately and remove it from tracking with `git rm --cached .env` before proceeding.
+
+## Step 4 — Clean up stale cache files
+
+Delete any stale cache files that should not persist between sessions:
+- `reports/aggregate_stats_cache.json` (will recompute on next request)
+- Any other temp files in `reports/` that are auto-generated (not hand-crafted)
+
+Do not delete hand-written files like notes or analyst reports.
+
+## Step 5 — Update `tasks/todo.md`
 
 - Move everything completed this session into a new `## Completed — YYYY-MM-DD` section (use today's date).
 - Clear the `## Active` section if there is nothing left in progress.
 - Preserve all prior completed sections as-is.
 
-## Step 3 — Update `tasks/lessons.md`
+## Step 6 — Update `tasks/lessons.md`
 
-- Review the full conversation for any: mistakes made and corrected, patterns to avoid, user corrections, architectural decisions with non-obvious rationale.
-- Add a dated entry for each new lesson. If there are no new lessons, note that explicitly so this step is visibly done.
+Review the full conversation for any: mistakes made and corrected, patterns to avoid, user corrections, architectural decisions with non-obvious rationale. Add a dated entry for each new lesson. If there are no new lessons, note that explicitly so this step is visibly done.
 
-## Step 4 — Update `CLAUDE.md`
+## Step 7 — Update `CLAUDE.md`
 
 - Update the **What's Working** section to reflect anything new that was built or changed.
 - Update the file tree in **Project Structure** if any files were added or deleted.
 - Update any architectural decision notes in **Key Architectural Decisions** if relevant.
 - Remove any references to things that no longer exist.
 
-## Step 5 — Commit all changes
+## Step 8 — Commit all changes
 
 Stage and commit `CLAUDE.md`, `tasks/todo.md`, `tasks/lessons.md`, and any other modified source files that haven't been committed yet. Use a clear, descriptive commit message. Do **not** commit `.env`.
 
-## Step 6 — Push to main
+## Step 9 — Push to main
 
 `git push origin main`
 
-## Step 7 — Sync feature branch (if one exists)
+## Step 10 — Sync feature branch (if one exists)
 
 If there is an active feature branch (check `git branch -a`), fast-forward it to main:
 ```
@@ -44,11 +59,12 @@ git push origin <feature-branch>
 git checkout main
 ```
 
-## Step 8 — Final verification
+## Step 11 — Final verification
 
 Run `git log --oneline -5` and `git status` to confirm:
 - Working tree is clean
 - Both main and feature branch (if any) are at the same commit
 - No uncommitted changes remain
+- `.env` is not tracked (`git ls-files .env` returns nothing)
 
 Report the final commit hash and confirm the session is cleanly closed.
