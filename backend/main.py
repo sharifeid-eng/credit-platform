@@ -250,7 +250,10 @@ def get_aggregate_stats():
                     continue
 
                 try:
-                    df = load_silq_snapshot(snap['filepath']) if analysis_type == 'silq' else load_snapshot(snap['filepath'])
+                    if analysis_type == 'silq':
+                        df, _ = load_silq_snapshot(snap['filepath'])
+                    else:
+                        df = load_snapshot(snap['filepath'])
                     total_deals       += len(df)
                     total_data_points += len(df) * len(df.columns)
 
