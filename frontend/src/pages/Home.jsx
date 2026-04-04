@@ -199,7 +199,7 @@ export default function Home() {
         <div style={{ paddingTop: 28, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
             <span style={{
-              fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+              fontSize: 13, fontWeight: 700, textTransform: 'uppercase',
               letterSpacing: '0.14em', color: 'var(--text-muted)',
             }}>
               Resources
