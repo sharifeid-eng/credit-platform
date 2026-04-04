@@ -225,7 +225,7 @@ function CompanyCard({ company, summary, index, onClick, onHoverChange }) {
   const meta     = getCompanyMeta(safeName)
 
   const collectionRate = summary?.collection_rate != null
-    ? `${(summary.collection_rate * 100).toFixed(1)}%`
+    ? `${summary.collection_rate.toFixed(1)}%`
     : null
   const totalDeployed  = summary?.total_purchase_value != null
     ? `$${(summary.total_purchase_value / 1_000_000).toFixed(1)}M`
@@ -308,13 +308,11 @@ function CompanyCard({ company, summary, index, onClick, onHoverChange }) {
         {/* Country flag + region */}
         {meta.region && (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 5,
             background: 'var(--bg-deep)',
             border: '1px solid var(--border)',
             borderRadius: 20, padding: '3px 9px',
             flexShrink: 0,
           }}>
-            <span style={{ fontSize: 13 }}>{meta.flag}</span>
             <span style={{
               fontSize: 9, fontWeight: 600,
               textTransform: 'uppercase', letterSpacing: '0.08em',
