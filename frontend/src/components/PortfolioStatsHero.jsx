@@ -48,7 +48,7 @@ function aggregate(summaries) {
   // Weighted average collection rate (weight by purchase value)
   const totalPV = vals.reduce((s, v) => s + (v.total_purchase_value || 0), 0)
   const weightedCR = vals.reduce((s, v) => s + (v.collection_rate || 0) * (v.total_purchase_value || 0), 0)
-  const collectionRate = totalPV > 0 ? (weightedCR / totalPV) * 100 : 0
+  const collectionRate = totalPV > 0 ? weightedCR / totalPV : 0
 
   return { totalDeployed, totalActive, totalDeals, collectionRate }
 }

@@ -64,17 +64,9 @@ function HeroLogo() {
         borderRadius: 16,
         overflow: 'hidden',
         background: '#000',
-        boxShadow: '0 0 28px rgba(201,168,76,0.35)',
-        animation: 'lionPulse 3.5s ease-in-out infinite',
       }}>
         <img src="/lion.png" alt="Laith" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       </div>
-      <style>{`
-        @keyframes lionPulse {
-          0%,100% { box-shadow: 0 0 28px rgba(201,168,76,0.35); }
-          50%      { box-shadow: 0 0 44px rgba(201,168,76,0.6); }
-        }
-      `}</style>
     </motion.div>
   )
 }
@@ -123,9 +115,6 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
 
-      {/* ── Canvas network animation (behind everything) ── */}
-      <LandingCanvas companies={companies} hoveredCompany={hoveredCompany} />
-
       {/* ── Islamic geometric background pattern ── */}
       <div
         aria-hidden="true"
@@ -166,9 +155,9 @@ export default function Home() {
             backgroundClip: 'text',
             margin: '0 0 14px',
           }}>
-            Institutional Credit Analytics
+            Credit Analytics
           </h1>
-          <TypewriterText text="Private credit portfolio intelligence for MENA asset-backed lending" />
+          <TypewriterText text="GCC asset-backed lending Analytics" />
         </motion.div>
 
         {/* ── Section label ── */}
