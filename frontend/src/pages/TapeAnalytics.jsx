@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
-import { generatePDFReport, getParChart, getDtfcChart } from '../services/api'
+import { generatePDFReport, getParChart, getDtfcChart, getSummary, getCollectionVelocityChart, getDeploymentChart } from '../services/api'
 
 import KpiCard       from '../components/KpiCard'
 import AICommentary  from '../components/AICommentary'
@@ -348,14 +348,31 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
   const fmt  = (v) => v == null ? '—' : v >= 1_000_000 ? `${ccy} ${(v/1_000_000).toFixed(1)}M` : `${ccy} ${(v/1_000).toFixed(0)}K`
   const pct  = (v) => v == null ? '—' : `${v.toFixed(1)}%`
 
+  const { snapshots } = useCompany()
+  const [prevSummary, setPrevSummary] = useState(null)
+
+  useEffect(() => {
+    if (!product || !snapshot || !snapshots?.length) { setPrevSummary(null); return }
+    const idx      = snapshots.indexOf(snapshot)
+    const prevSnap = idx > 0 ? snapshots[idx - 1] : null
+    if (!prevSnap) { setPrevSummary(null); return }
+    getSummary(company, product, prevSnap, currency).then(setPrevSummary).catch(() => setPrevSummary(null))
+  }, [company, product, snapshot, currency, snapshots])
+
+  const δcoll    = prevSummary ? (summary?.collection_rate ?? 0) - prevSummary.collection_rate  : undefined
+  const δoverdue = prevSummary ? -((summary?.overdue_rate  ?? 0) - prevSummary.overdue_rate)     : undefined  // inverted
+  const δactive  = prevSummary && prevSummary.active_deals > 0
+    ? (((summary?.active_deals ?? 0) - prevSummary.active_deals) / prevSummary.active_deals) * 100
+    : undefined
+
   const bd = isBackdated  // shorthand
   const kpis = summary ? [
     { label: 'Total Disbursed',  value: fmt(summary.total_disbursed),  sub: `${summary.total_deals} loans`,        color: 'gold' },
     { label: 'Outstanding',      value: fmt(summary.total_outstanding),sub: 'current exposure',                     color: 'blue', stale: bd },
-    { label: 'Total Overdue',    value: fmt(summary.total_overdue),    sub: 'past repayment deadline',                                  color: 'red', stale: bd },
-    { label: 'Collection Rate',  value: pct(summary.collection_rate),  sub: 'repaid vs collectable',                color: 'teal', stale: bd },
-    { label: 'Overdue Rate',     value: pct(summary.overdue_rate),     sub: 'of outstanding',                       color: summary.overdue_rate > 15 ? 'red' : 'gold', stale: bd },
-    { label: 'Active Loans',     value: String(summary.active_deals),  sub: 'currently open',                       color: 'blue' },
+    { label: 'Total Overdue',    value: fmt(summary.total_overdue),    sub: 'past repayment deadline',              color: 'red',  stale: bd },
+    { label: 'Collection Rate',  value: pct(summary.collection_rate),  sub: 'repaid vs collectable',                color: 'teal', stale: bd, trend: δcoll,    trendLabel: 'vs prev snapshot' },
+    { label: 'Overdue Rate',     value: pct(summary.overdue_rate),     sub: 'of outstanding',                       color: summary.overdue_rate > 15 ? 'red' : 'gold', stale: bd, trend: δoverdue, trendLabel: 'vs prev snapshot' },
+    { label: 'Active Loans',     value: String(summary.active_deals),  sub: 'currently open',                       color: 'blue',             trend: δactive,  trendLabel: 'vs prev snapshot' },
     { label: 'Completed Loans',  value: String(summary.completed_deals), sub: 'closed',                             color: 'teal' },
     { label: 'Avg Tenure',       value: `${summary.avg_tenure?.toFixed(0) ?? '—'}w`, sub: 'weeks',                  color: 'gold' },
     { label: 'HHI (Shop)',       value: summary.hhi_shop?.toFixed(4) ?? '—', sub: `Top shop: ${pct(summary.top_1_shop_pct)}`, color: summary.hhi_shop > 0.15 ? 'red' : 'teal' },
@@ -447,22 +464,55 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
   const hhiFmt = (v) => v == null ? '—' : v.toFixed(4)
   const bd = isBackdated
 
-  // Fetch PAR and DTFC data
-  const [par, setPar] = useState(null)
-  const [dtfc, setDtfc] = useState(null)
+  const { snapshots } = useCompany()
+
+  // Fetch PAR, DTFC, and sparkline data
+  const [par,             setPar]             = useState(null)
+  const [dtfc,            setDtfc]            = useState(null)
+  const [prevSummary,     setPrevSummary]     = useState(null)
+  const [collSparkline,   setCollSparkline]   = useState(null)
+  const [deploySparkline, setDeploySparkline] = useState(null)
 
   useEffect(() => {
     if (!product || !snapshot) return
     getParChart(company, product, snapshot, currency, asOfDate).then(setPar).catch(() => setPar(null))
     getDtfcChart(company, product, snapshot, currency, asOfDate).then(setDtfc).catch(() => setDtfc(null))
+    getCollectionVelocityChart(company, product, snapshot, currency, asOfDate)
+      .then(res => {
+        const monthly = res.monthly ?? []
+        const vals = monthly.slice(-6).map(d => d.collection_rate ?? 0)
+        setCollSparkline(vals.length >= 3 ? vals : null)
+      }).catch(() => setCollSparkline(null))
+    getDeploymentChart(company, product, snapshot, currency, asOfDate)
+      .then(res => {
+        const monthly = Array.isArray(res.data ?? res) ? (res.data ?? res) : []
+        const vals = monthly.slice(-6).map(d => (d.new_business ?? 0) + (d.repeat_business ?? d.repeat ?? 0))
+        setDeploySparkline(vals.length >= 3 ? vals : null)
+      }).catch(() => setDeploySparkline(null))
   }, [company, product, snapshot, currency, asOfDate])
 
+  // Fetch previous snapshot summary for delta indicators
+  useEffect(() => {
+    if (!product || !snapshot || !snapshots?.length) { setPrevSummary(null); return }
+    const idx     = snapshots.indexOf(snapshot)
+    const prevSnap = idx > 0 ? snapshots[idx - 1] : null
+    if (!prevSnap) { setPrevSummary(null); return }
+    getSummary(company, product, prevSnap, currency).then(setPrevSummary).catch(() => setPrevSummary(null))
+  }, [company, product, snapshot, currency, snapshots])
+
+  // Snapshot-over-snapshot deltas (percentage points for rate metrics)
+  const δcoll   = prevSummary ? (summary?.collection_rate ?? 0) - prevSummary.collection_rate   : undefined
+  const δdenial = prevSummary ? -((summary?.denial_rate   ?? 0) - prevSummary.denial_rate)       : undefined  // inverted: lower denial = positive
+  const δactive = prevSummary && prevSummary.active_deals > 0
+    ? (((summary?.active_deals ?? 0) - prevSummary.active_deals) / prevSummary.active_deals) * 100
+    : undefined
+
   const kpis = summary ? [
-    { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold', confidence: 'A' },
-    { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal', stale: bd, confidence: 'A' },
-    { label: 'Denial Rate',     value: pct(summary.denial_rate),          sub: 'vs Purchase Value',               color: 'red',  stale: bd, confidence: 'A' },
+    { label: 'Purchase Value',  value: fmt(summary.total_purchase_value), sub: `${summary.total_deals} deals`,    color: 'gold', confidence: 'A', sparklineData: deploySparkline },
+    { label: 'Collection Rate', value: pct(summary.collection_rate),      sub: 'vs Purchase Value',               color: 'teal', stale: bd, confidence: 'A', trend: δcoll,   trendLabel: 'vs prev snapshot', sparklineData: collSparkline },
+    { label: 'Denial Rate',     value: pct(summary.denial_rate),          sub: 'vs Purchase Value',               color: 'red',  stale: bd, confidence: 'A', trend: δdenial, trendLabel: 'vs prev snapshot' },
     { label: 'Pending Exposure',value: fmt(summary.total_pending),        sub: pct(summary.pending_rate),         color: 'blue', stale: bd, confidence: 'A' },
-    { label: 'Active Deals',    value: String(summary.active_deals),      sub: 'currently executing',             color: 'blue', confidence: 'A' },
+    { label: 'Active Deals',    value: String(summary.active_deals),      sub: 'currently executing',             color: 'blue', confidence: 'A',             trend: δactive, trendLabel: 'vs prev snapshot' },
     { label: 'Completed Deals', value: String(summary.completed_deals),   sub: 'fully collected',                 color: 'teal', confidence: 'A' },
     { label: 'Total Collected', value: fmt(summary.total_collected),      sub: 'cumulative collections',          color: 'teal', stale: bd, confidence: 'A' },
     { label: 'Total Denied',    value: fmt(summary.total_denied),         sub: 'denied by insurance',             color: 'red',  stale: bd, confidence: 'A' },
