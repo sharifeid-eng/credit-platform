@@ -129,7 +129,7 @@ export default function Home() {
 
       {/* ── Portfolio stats hero strip ── */}
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <PortfolioStatsHero companies={companies} summaries={summaries} />
+        <PortfolioStatsHero />
       </div>
 
       {/* ── Main content ── */}

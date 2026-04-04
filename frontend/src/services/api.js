@@ -6,7 +6,8 @@ const api = axios.create({ baseURL: API_BASE, headers: { 'Content-Type': 'applic
 export default api;
 
 // ── Framework ────────────────────────────────────────────────────────────────
-export const getFramework     = () => api.get('/framework').then(r => r.data.content);
+export const getFramework       = () => api.get('/framework').then(r => r.data.content);
+export const getAggregateStats  = ()  => api.get('/aggregate-stats').then(r => r.data);
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 export const getCompanies     = () => api.get('/companies').then(r => r.data);

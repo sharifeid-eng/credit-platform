@@ -1,89 +1,62 @@
 /**
- * PortfolioStatsHero — full-width stats strip below the navbar.
- * Shows animated count-up aggregates across all portfolio companies.
- * Props:
- *   companies  array   — from /companies endpoint
- *   summaries  object  — keyed by "companyName:product", values from /summary endpoint
+ * StatsBanners — two stacked banners on the landing page.
+ *
+ * Banner 1 "Data Analyzed" — gold tint, live data from /aggregate-stats (cached backend).
+ * Banner 2 "Live Portfolio" — neutral, all dashes until real DB data is connected.
  */
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { getAggregateStats } from '../services/api'
 
-// ── Ease-out expo count-up ───────────────────────────────────────────────────
+// ── Ease-out expo count-up ────────────────────────────────────────────────────
 function useCountUp(target, duration = 1400) {
   const [val, setVal] = useState(0)
   const raf = useRef(null)
-
   useEffect(() => {
     if (target == null || target === 0) return
     const startTime = performance.now()
-
     const animate = (now) => {
-      const elapsed = now - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      // Ease-out exponential
-      const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
+      const progress = Math.min((now - startTime) / duration, 1)
+      const eased    = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
       setVal(target * eased)
-      if (progress < 1) {
-        raf.current = requestAnimationFrame(animate)
-      } else {
-        setVal(target)
-      }
+      if (progress < 1) raf.current = requestAnimationFrame(animate)
+      else setVal(target)
     }
     raf.current = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(raf.current)
   }, [target, duration])
-
   return val
 }
 
-// ── Aggregate from summaries ──────────────────────────────────────────────────
-function aggregate(summaries) {
-  const vals = Object.values(summaries)
-  if (vals.length === 0) return null
-
-  const totalDeployed = vals.reduce((s, v) => s + (v.total_purchase_value || 0), 0)
-  const totalActive   = vals.reduce((s, v) => s + (v.active_deals || 0), 0)
-  const totalDeals    = vals.reduce((s, v) => s + (v.total_deals || 0), 0)
-
-  // Weighted average collection rate (weight by purchase value)
-  const totalPV = vals.reduce((s, v) => s + (v.total_purchase_value || 0), 0)
-  const weightedCR = vals.reduce((s, v) => s + (v.collection_rate || 0) * (v.total_purchase_value || 0), 0)
-  const collectionRate = totalPV > 0 ? weightedCR / totalPV : 0
-
-  return { totalDeployed, totalActive, totalDeals, collectionRate }
-}
-
-// ── Individual stat item ──────────────────────────────────────────────────────
-function StatItem({ label, rawValue, format, loading, index }) {
-  const animated = useCountUp(loading ? null : rawValue)
-  const display  = loading ? null : format(animated)
+// ── Single stat cell ──────────────────────────────────────────────────────────
+function StatCell({ label, rawValue, format, loading, empty, index, valueColor }) {
+  const animated = useCountUp(loading || empty ? null : rawValue)
+  const display  = empty ? '—' : loading ? null : format(animated)
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.07, ease: 'easeOut' }}
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 120 }}
+      transition={{ duration: 0.4, delay: index * 0.06, ease: 'easeOut' }}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 110 }}
     >
-      {/* Value */}
       <div style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 26,
-        fontWeight: 500,
+        fontFamily:    'var(--font-mono)',
+        fontSize:      26,
+        fontWeight:    500,
         letterSpacing: '-0.03em',
-        color: 'var(--gold)',
-        lineHeight: 1,
-        minHeight: 30,
+        color:         valueColor,
+        lineHeight:    1,
+        minHeight:     30,
       }}>
-        {display ?? <Skeleton width={80} />}
+        {display ?? <Skeleton />}
       </div>
-      {/* Label */}
       <div style={{
-        fontSize: 9,
-        fontWeight: 600,
+        fontSize:      9,
+        fontWeight:    600,
         textTransform: 'uppercase',
         letterSpacing: '0.12em',
-        color: 'var(--text-muted)',
+        color:         'var(--text-muted)',
       }}>
         {label}
       </div>
@@ -91,12 +64,10 @@ function StatItem({ label, rawValue, format, loading, index }) {
   )
 }
 
-function Skeleton({ width }) {
+function Skeleton() {
   return (
     <div style={{
-      width,
-      height: 24,
-      borderRadius: 4,
+      width: 80, height: 24, borderRadius: 4,
       background: 'linear-gradient(90deg, var(--bg-surface) 25%, var(--border) 50%, var(--bg-surface) 75%)',
       backgroundSize: '200% 100%',
       animation: 'shimmer 1.4s infinite',
@@ -104,25 +75,73 @@ function Skeleton({ width }) {
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-export default function PortfolioStatsHero({ companies, summaries }) {
-  const stats   = aggregate(summaries)
-  const loading = !stats
+// ── Divider ───────────────────────────────────────────────────────────────────
+function Divider({ color }) {
+  return <div style={{ width: 1, height: 32, background: color, flexShrink: 0 }} />
+}
 
-  const fmtDeployed    = v => `$${(v / 1_000_000).toFixed(1)}M`
-  const fmtCollRate    = v => `${v.toFixed(1)}%`
-  const fmtActiveDeals = v => Math.round(v).toLocaleString()
-  const fmtCompanies   = v => Math.round(v).toString()
-
+// ── Banner shell ──────────────────────────────────────────────────────────────
+function Banner({ label, children, variant }) {
+  const isGold = variant === 'gold'
   return (
     <div style={{
-      borderTop:    '1px solid rgba(201,168,76,0.18)',
-      borderBottom: '1px solid var(--border)',
-      background:   'linear-gradient(to bottom, rgba(201,168,76,0.04), rgba(201,168,76,0.01) 60%, transparent)',
-      padding:      '18px 28px',
-      position:     'relative',
-      overflow:     'hidden',
+      borderBottom: `1px solid ${isGold ? 'rgba(201,168,76,0.15)' : 'var(--border)'}`,
+      background:    isGold
+        ? 'linear-gradient(to bottom, rgba(201,168,76,0.07), rgba(201,168,76,0.01) 70%, transparent)'
+        : 'transparent',
+      padding: '16px 48px',
+      position: 'relative',
     }}>
+      {/* Section label — top-left */}
+      <div style={{
+        position:      'absolute',
+        top:           10,
+        left:          28,
+        fontSize:      8,
+        fontWeight:    700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.16em',
+        color:         isGold ? 'rgba(201,168,76,0.5)' : 'rgba(132,148,167,0.4)',
+      }}>
+        {label}
+      </div>
+
+      <div style={{
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        gap:            56,
+        flexWrap:       'wrap',
+        paddingTop:     8,
+      }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+export default function PortfolioStatsHero() {
+  const [stats,   setStats]   = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getAggregateStats()
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const fmtValue    = v => `$${(v / 1_000_000).toFixed(0)}M`
+  const fmtRecords  = v => `${Math.round(v).toLocaleString()}`
+  const fmtSnaps    = v => Math.round(v).toString()
+  const fmtCompanies = v => Math.round(v).toString()
+
+  const goldDiv    = <Divider color="rgba(201,168,76,0.18)" />
+  const neutralDiv = <Divider color="var(--border)" />
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
       <style>{`
         @keyframes shimmer {
           0%   { background-position: 200% 0 }
@@ -130,52 +149,29 @@ export default function PortfolioStatsHero({ companies, summaries }) {
         }
       `}</style>
 
-      <div style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        gap:            60,
-        flexWrap:       'wrap',
-      }}>
-        <StatItem
-          label="Total Deployed"
-          rawValue={stats?.totalDeployed ?? 0}
-          format={fmtDeployed}
-          loading={loading}
-          index={0}
-        />
+      {/* Banner 1 — Data Analyzed */}
+      <Banner label="Data Analyzed" variant="gold">
+        <StatCell label="Face Value Analyzed" rawValue={stats?.total_face_value_usd} format={fmtValue}    loading={loading} index={0} valueColor="var(--gold)" />
+        {goldDiv}
+        <StatCell label="Records Processed"   rawValue={stats?.total_records}        format={fmtRecords}  loading={loading} index={1} valueColor="var(--gold)" />
+        {goldDiv}
+        <StatCell label="Snapshots Loaded"    rawValue={stats?.total_snapshots}      format={fmtSnaps}    loading={loading} index={2} valueColor="var(--gold)" />
+        {goldDiv}
+        <StatCell label="Portfolio Companies" rawValue={stats?.total_companies}      format={fmtCompanies} loading={loading} index={3} valueColor="var(--gold)" />
+      </Banner>
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
-
-        <StatItem
-          label="Collection Rate"
-          rawValue={stats?.collectionRate ?? 0}
-          format={fmtCollRate}
-          loading={loading}
-          index={1}
-        />
-
-        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
-
-        <StatItem
-          label="Active Deals"
-          rawValue={stats?.totalActive ?? 0}
-          format={fmtActiveDeals}
-          loading={loading}
-          index={2}
-        />
-
-        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
-
-        <StatItem
-          label="Portfolio Companies"
-          rawValue={companies.length}
-          format={fmtCompanies}
-          loading={companies.length === 0}
-          index={3}
-        />
-      </div>
+      {/* Banner 2 — Live Portfolio (empty until DB connected) */}
+      <Banner label="Live Portfolio" variant="neutral">
+        <StatCell label="Active Exposure"     empty index={0} valueColor="var(--text-muted)" />
+        {neutralDiv}
+        <StatCell label="PAR 30+"             empty index={1} valueColor="var(--text-muted)" />
+        {neutralDiv}
+        <StatCell label="PAR 90+"             empty index={2} valueColor="var(--text-muted)" />
+        {neutralDiv}
+        <StatCell label="Covenants in Breach" empty index={3} valueColor="var(--text-muted)" />
+        {neutralDiv}
+        <StatCell label="Concentration (HHI)" empty index={4} valueColor="var(--text-muted)" />
+      </Banner>
     </div>
   )
 }

@@ -172,6 +172,94 @@ def get_fx_rates_endpoint():
     from core.config import get_fx_rates, get_fx_source
     return {'rates': get_fx_rates(), 'source': get_fx_source()}
 
+@app.get("/aggregate-stats")
+def get_aggregate_stats():
+    """
+    Aggregate stats across ALL snapshots for all companies.
+    Cached to disk — only recomputes when snapshot file list changes.
+    - total_face_value_usd: sum of latest-snapshot face values, USD-normalised (no double-count)
+    - total_records: all rows across all snapshots (shows processing volume)
+    - total_snapshots: count of tape files
+    - total_companies: count of active companies (excl. ejari_summary)
+    """
+    from pathlib import Path
+    from core.config import get_fx_rates
+
+    REPORTS = Path("reports")
+    REPORTS.mkdir(exist_ok=True)
+    cache_path = REPORTS / "aggregate_stats_cache.json"
+
+    # FX fallback rates (AED, SAR → USD)
+    rates = get_fx_rates()
+    FX = {'AED': rates.get('AED', 0.2723), 'SAR': rates.get('SAR', 0.2667)}
+
+    # Build fingerprint from all snapshot filenames
+    all_snap_ids = []
+    for co in get_companies():
+        for prod in get_products(co):
+            for s in get_snapshots(co, prod):
+                all_snap_ids.append(f"{co}/{prod}/{s['filename']}")
+    fingerprint = sorted(all_snap_ids)
+
+    # Cache hit?
+    if cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text())
+            if cached.get('fingerprint') == fingerprint:
+                return cached['stats']
+        except Exception:
+            pass
+
+    # Recompute
+    total_value_usd = 0.0
+    total_records   = 0
+    snapshot_count  = 0
+    company_set     = set()
+
+    for co in get_companies():
+        for prod in get_products(co):
+            cfg           = load_config(co, prod) or {}
+            analysis_type = cfg.get('analysis_type', 'klaim')
+            currency      = cfg.get('currency', 'USD')
+            fx            = FX.get(currency, 1.0)
+
+            if analysis_type == 'ejari_summary':
+                continue
+
+            snaps = get_snapshots(co, prod)
+            company_set.add(co)
+
+            for i, snap in enumerate(snaps):
+                snapshot_count += 1
+                try:
+                    df = load_snapshot(snap['filepath'])
+                    total_records += len(df)
+
+                    # Face value only from latest snapshot to avoid double-counting deals
+                    if i == len(snaps) - 1:
+                        if analysis_type == 'silq':
+                            val_col = 'Disbursed_Amount (SAR)'
+                        else:
+                            val_col = 'Purchase value'
+                        if val_col in df.columns:
+                            total_value_usd += float(df[val_col].sum()) * fx
+                except Exception:
+                    pass
+
+    stats = {
+        'total_face_value_usd': round(total_value_usd),
+        'total_records':        total_records,
+        'total_snapshots':      snapshot_count,
+        'total_companies':      len(company_set),
+    }
+
+    cache_path.write_text(json.dumps({
+        'fingerprint':  fingerprint,
+        'stats':        stats,
+        'computed_at':  datetime.now().isoformat(),
+    }))
+    return stats
+
 # ── Company / Product / Snapshot endpoints ────────────────────────────────────
 
 @app.get("/companies")
