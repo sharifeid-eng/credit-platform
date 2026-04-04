@@ -250,16 +250,13 @@ def get_aggregate_stats():
                     continue
 
                 try:
-                    df = load_snapshot(snap['filepath'])
+                    df = load_silq_snapshot(snap['filepath']) if analysis_type == 'silq' else load_snapshot(snap['filepath'])
                     total_deals       += len(df)
                     total_data_points += len(df) * len(df.columns)
 
                     # Face value only from latest snapshot to avoid double-counting deals
                     if i == len(snaps) - 1:
-                        if analysis_type == 'silq':
-                            val_col = 'Disbursed_Amount (SAR)'
-                        else:
-                            val_col = 'Purchase value'
+                        val_col = 'Disbursed_Amount (SAR)' if analysis_type == 'silq' else 'Purchase value'
                         if val_col in df.columns:
                             total_value_usd += float(df[val_col].sum()) * fx
                 except Exception:
