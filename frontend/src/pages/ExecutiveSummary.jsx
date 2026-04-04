@@ -75,7 +75,7 @@ function NarrativeSection({ section, index }) {
             const color = ASSESSMENT_COLORS[m.assessment] || 'var(--text-muted)'
             return (
               <span key={j} style={{
-                fontSize: 10, fontFamily: 'IBM Plex Mono, monospace',
+                fontSize: 10, fontFamily: 'var(--font-mono)',
                 padding: '3px 10px', borderRadius: 4,
                 background: `${color}10`, color,
                 border: `1px solid ${color}30`,
@@ -117,7 +117,7 @@ function SummaryTable({ rows }) {
     >
       <table style={{
         width: '100%', borderCollapse: 'collapse',
-        fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
+        fontSize: 12, fontFamily: 'var(--font-mono)',
       }}>
         <thead>
           <tr style={{ background: 'var(--bg-deep)' }}>
@@ -399,7 +399,7 @@ export default function ExecutiveSummary() {
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                             {f.data_points.map((dp, j) => (
                               <span key={j} style={{
-                                fontSize: 10, fontFamily: 'IBM Plex Mono, monospace',
+                                fontSize: 10, fontFamily: 'var(--font-mono)',
                                 padding: '2px 8px', borderRadius: 4,
                                 background: 'rgba(255,255,255,0.04)', color: 'var(--text-primary)',
                                 border: '1px solid var(--border)',

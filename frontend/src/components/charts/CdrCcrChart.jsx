@@ -16,7 +16,7 @@ function KpiTile({ label, value, color, sub }) {
       borderRadius: 8, padding: '12px 16px',
     }}>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontFamily: 'IBM Plex Mono', color: color ?? 'var(--text-primary)', fontWeight: 600 }}>
+      <div style={{ fontSize: 22, fontFamily: 'var(--font-mono)', color: color ?? 'var(--text-primary)', fontWeight: 600 }}>
         {value}
       </div>
       {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{sub}</div>}

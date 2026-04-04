@@ -54,7 +54,7 @@ export default function DenialTrendChart({ company, product, snapshot, currency,
           <Legend {...legendProps} />
           {avg != null && (
             <ReferenceLine y={avg} stroke={COLORS.muted} strokeDasharray="4 4"
-              label={{ value: `Avg ${fmtPct(avg)}`, fill: COLORS.text, fontSize: 9, fontFamily: 'IBM Plex Mono' }}
+              label={{ value: `Avg ${fmtPct(avg)}`, fill: COLORS.text, fontSize: 9, fontFamily: 'var(--font-mono)' }}
             />
           )}
           <Bar dataKey="denial_rate" name="Denial Rate" fill="url(#grad-red)" stroke={COLORS.red} strokeWidth={0} radius={[3,3,0,0]} />

@@ -13,7 +13,7 @@ function KpiCard({ label, value, sub, color }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', position: 'relative' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: colors[color] || colors.gold, borderRadius: '10px 0 0 10px' }} />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
@@ -87,12 +87,12 @@ export default function SilqCollectionsChart({ company, product, snapshot, curre
         {monthly.length > 0 && (
           <div style={{ display: 'flex', gap: 16, marginTop: 8, paddingLeft: 8 }}>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              Total deals: <span style={{ color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono', fontWeight: 600 }}>
+              Total deals: <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                 {monthly.reduce((s, m) => s + (m.deals || 0), 0).toLocaleString()}
               </span>
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              Avg monthly rate: <span style={{ color: COLORS.blue, fontFamily: 'IBM Plex Mono', fontWeight: 600 }}>
+              Avg monthly rate: <span style={{ color: COLORS.blue, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                 {fmtPct(monthly.reduce((s, m) => s + (m.rate || 0), 0) / (monthly.filter(m => m.rate > 0).length || 1))}
               </span>
             </div>
@@ -163,10 +163,10 @@ export default function SilqCollectionsChart({ company, product, snapshot, curre
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <td style={{ padding: '7px 10px', color: 'var(--text-primary)', fontWeight: 500 }}>{p.product}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)' }}>{(p.deals || 0).toLocaleString()}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono', color: COLORS.gold }}>{fmt(p.collectable)}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono', color: COLORS.teal }}>{fmt(p.repaid)}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono', color: p.rate >= 90 ? COLORS.teal : COLORS.text }}>{fmtPct(p.rate)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{(p.deals || 0).toLocaleString()}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: COLORS.gold }}>{fmt(p.collectable)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: COLORS.teal }}>{fmt(p.repaid)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: p.rate >= 90 ? COLORS.teal : COLORS.text }}>{fmtPct(p.rate)}</td>
                   </tr>
                 ))}
               </tbody>

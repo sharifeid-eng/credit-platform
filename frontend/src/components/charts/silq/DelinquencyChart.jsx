@@ -13,7 +13,7 @@ function KpiCard({ label, value, sub, color }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', position: 'relative' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: colors[color] || colors.gold, borderRadius: '10px 0 0 10px' }} />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
@@ -74,7 +74,7 @@ export default function DelinquencyChart({ company, product, snapshot, currency,
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10, paddingLeft: 8 }}>
             {buckets.map((b, i) => (
               <div key={i} style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                <span style={{ color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono', fontWeight: 600 }}>{b.label}</span>
+                <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{b.label}</span>
                 {' — '}{b.count} loans ({fmtPct(b.pct)})
               </div>
             ))}
@@ -99,7 +99,7 @@ export default function DelinquencyChart({ company, product, snapshot, currency,
                 dataKey="shop_id"
                 {...yAxisProps}
                 width={120}
-                tick={{ fill: COLORS.text, fontSize: 9, fontFamily: 'IBM Plex Mono' }}
+                tick={{ fill: COLORS.text, fontSize: 9, fontFamily: 'var(--font-mono)' }}
               />
               <Tooltip {...tooltipStyle} formatter={(v, name) => {
                 if (name === 'overdue') return [fmt(v), 'Overdue']

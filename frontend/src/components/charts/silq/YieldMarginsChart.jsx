@@ -16,7 +16,7 @@ function KpiCard({ label, value, sub, color }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', position: 'relative' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: colors[color] || colors.gold, borderRadius: '10px 0 0 10px' }} />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'IBM Plex Mono', monospace" }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
@@ -141,7 +141,7 @@ export default function YieldMarginsChart({ company, product, snapshot, currency
                 textAlign: 'center',
               }}>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{p.product}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                   {fmtMoney(p.margin, cur)}
                 </div>
                 <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -216,10 +216,10 @@ export default function YieldMarginsChart({ company, product, snapshot, currency
                 {byTenure.map((row, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid rgba(30,39,54,0.5)' }}>
                     <td style={{ padding: '6px 8px', color: 'var(--text-primary)', fontWeight: 500 }}>{row.band}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: 'var(--text-secondary)' }}>{row.deals?.toLocaleString()}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#C9A84C' }}>{fmtMoney(row.disbursed, cur)}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#2DD4BF' }}>{fmtMoney(row.margin, cur)}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: row.margin_rate >= 5 ? '#2DD4BF' : row.margin_rate >= 0 ? '#C9A84C' : '#F06060' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{row.deals?.toLocaleString()}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#C9A84C' }}>{fmtMoney(row.disbursed, cur)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#2DD4BF' }}>{fmtMoney(row.margin, cur)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: row.margin_rate >= 5 ? '#2DD4BF' : row.margin_rate >= 0 ? '#C9A84C' : '#F06060' }}>
                       {fmtPct(row.margin_rate)}
                     </td>
                   </tr>

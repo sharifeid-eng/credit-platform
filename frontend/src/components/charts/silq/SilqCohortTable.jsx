@@ -57,7 +57,7 @@ export default function SilqCohortTable({ company, product, snapshot, currency, 
     const base = {
       padding: '7px 8px',
       textAlign: col.align || 'right',
-      fontFamily: col.align === 'left' ? 'inherit' : "'IBM Plex Mono', monospace",
+      fontFamily: col.align === 'left' ? 'inherit' : 'var(--font-mono)',
       fontWeight: isTotals ? 700 : 400,
       whiteSpace: 'nowrap',
     }

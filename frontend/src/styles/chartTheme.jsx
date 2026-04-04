@@ -22,14 +22,14 @@ export const gridProps = {
 
 /** Standard XAxis props */
 export const xAxisProps = {
-  tick: { fill: COLORS.text, fontSize: 10, fontFamily: 'IBM Plex Mono' },
+  tick: { fill: COLORS.text, fontSize: 10, fontFamily: 'JetBrains Mono' },
   axisLine: { stroke: COLORS.grid },
   tickLine: false,
 }
 
 /** Standard YAxis props */
 export const yAxisProps = {
-  tick: { fill: COLORS.text, fontSize: 10, fontFamily: 'IBM Plex Mono' },
+  tick: { fill: COLORS.text, fontSize: 10, fontFamily: 'JetBrains Mono' },
   axisLine: false,
   tickLine: false,
   width: 52,
@@ -42,7 +42,7 @@ export const tooltipStyle = {
     border: '1px solid #243040',
     borderRadius: 8,
     fontSize: 11,
-    fontFamily: 'IBM Plex Mono',
+    fontFamily: 'JetBrains Mono',
     color: '#E8EAF0',
     boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
   },
@@ -50,7 +50,7 @@ export const tooltipStyle = {
     color: '#8A94A8',
     fontSize: 10,
     marginBottom: 4,
-    fontFamily: 'Inter',
+    fontFamily: 'DM Sans',
   },
   itemStyle: { color: '#E8EAF0' },
   cursor: { fill: 'rgba(255,255,255,0.03)' },
@@ -60,7 +60,7 @@ export const tooltipStyle = {
 export const legendProps = {
   wrapperStyle: {
     fontSize: 10,
-    fontFamily: 'Inter',
+    fontFamily: 'DM Sans',
     color: '#8494A7',
     paddingTop: 8,
   },

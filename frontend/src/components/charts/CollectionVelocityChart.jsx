@@ -142,10 +142,10 @@ export default function CollectionVelocityChart({ company, product, snapshot, cu
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div style={{ fontFamily: 'IBM Plex Mono', color: '#E8EAF0', fontSize: 28, fontWeight: 700 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', color: '#E8EAF0', fontSize: 28, fontWeight: 700 }}>
                 {Math.round(avgDays)}
               </div>
-              <div style={{ fontFamily: 'Inter', color: '#8494A7', fontSize: 11, marginTop: 2 }}>
+              <div style={{ fontFamily: 'var(--font-ui)', color: '#8494A7', fontSize: 11, marginTop: 2 }}>
                 {curveBased ? 'Avg Days to Collect' : 'Avg Days Outstanding'}
               </div>
             </div>

@@ -19,7 +19,7 @@ function KpiCard({ label, value, sub, color }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', position: 'relative' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: colors[color] || colors.gold, borderRadius: '10px 0 0 10px' }} />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
@@ -116,7 +116,7 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: SLICE_COLORS[i % SLICE_COLORS.length], flexShrink: 0 }} />
                     <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.shop_id}</div>
-                    <div style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: SLICE_COLORS[i % SLICE_COLORS.length], fontWeight: 600, flexShrink: 0 }}>{fmtPct(d.share)}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: SLICE_COLORS[i % SLICE_COLORS.length], fontWeight: 600, flexShrink: 0 }}>{fmtPct(d.share)}</div>
                   </div>
                 ))}
               </div>
@@ -145,7 +145,7 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
                   position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
                   textAlign: 'center', pointerEvents: 'none',
                 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'IBM Plex Mono', color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                     {productMix.length}
                   </div>
                   <div style={{ fontSize: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Products</div>
@@ -156,9 +156,9 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: [COLORS.teal, COLORS.gold, COLORS.blue, COLORS.red][i % 4], flexShrink: 0 }} />
                     <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1 }}>{d.product}</div>
-                    <div style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-primary)', fontWeight: 600 }}>{fmt(d.disbursed)}</div>
-                    <div style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)', width: 40, textAlign: 'right' }}>{fmtPct(d.share)}</div>
-                    <div style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)', width: 50, textAlign: 'right' }}>{(d.count || 0).toLocaleString()} loans</div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>{fmt(d.disbursed)}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', width: 40, textAlign: 'right' }}>{fmtPct(d.share)}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', width: 50, textAlign: 'right' }}>{(d.count || 0).toLocaleString()} loans</div>
                   </div>
                 ))}
               </div>
@@ -183,7 +183,7 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
                 dataKey="shop_id"
                 {...yAxisProps}
                 width={120}
-                tick={{ fill: COLORS.text, fontSize: 9, fontFamily: 'IBM Plex Mono' }}
+                tick={{ fill: COLORS.text, fontSize: 9, fontFamily: 'var(--font-mono)' }}
               />
               <Tooltip {...tooltipStyle} formatter={(v, name) => {
                 if (name === 'util_pct') return [fmtPct(v), 'Utilization']
@@ -256,8 +256,8 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <td style={{ padding: '7px 10px', color: 'var(--text-primary)', fontWeight: 500 }}>{d.band}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono', color: COLORS.blue }}>{(d.count || 0).toLocaleString()}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'IBM Plex Mono', color: COLORS.gold }}>{fmt(d.total)}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: COLORS.blue }}>{(d.count || 0).toLocaleString()}</td>
+                    <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: COLORS.gold }}>{fmt(d.total)}</td>
                   </tr>
                 ))}
               </tbody>

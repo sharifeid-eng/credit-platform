@@ -120,12 +120,12 @@ export default function SilqUnderwritingDriftChart({ company, product, snapshot,
                   borderBottom: '1px solid var(--border)',
                   background: v.flags?.length ? 'rgba(201,168,76,0.03)' : 'transparent',
                 }}>
-                  <td style={{ padding: '6px 10px', color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{v.vintage}</td>
+                  <td style={{ padding: '6px 10px', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{v.vintage}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{v.deals}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{fmtMoney(v.avg_loan_size, ccy)}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'IBM Plex Mono' }}>{v.avg_tenure?.toFixed(1)}w</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', color: v.delinquency_rate > 10 ? '#F06060' : 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{fmtPct(v.delinquency_rate)}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', color: '#2DD4BF', fontFamily: 'IBM Plex Mono' }}>{fmtPct(v.collection_rate)}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{fmtMoney(v.avg_loan_size, ccy)}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{v.avg_tenure?.toFixed(1)}w</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', color: v.delinquency_rate > 10 ? '#F06060' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{fmtPct(v.delinquency_rate)}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', color: '#2DD4BF', fontFamily: 'var(--font-mono)' }}>{fmtPct(v.collection_rate)}</td>
                   <td style={{ padding: '6px 10px' }}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {(v.flags || []).map((f, j) => <DriftBadge key={j} flag={f} />)}

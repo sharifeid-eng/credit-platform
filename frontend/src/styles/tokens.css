@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* Fonts loaded via index.html preconnect + link for performance */
 
 :root {
   /* ── Backgrounds ── */
@@ -32,9 +32,21 @@
   --text-faint:   #304050;
 
   /* ── Typography ── */
-  --font-ui:      'Inter', system-ui, sans-serif;
-  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
-  --font-display: 'Playfair Display', Georgia, serif;
+  --font-ui:      'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+
+  /* ── Type scale ── */
+  --text-2xs:  9px;   /* badges, confidence grades, tiny labels */
+  --text-xs:   10px;  /* chart ticks, timestamps */
+  --text-sm:   11px;  /* secondary labels, descriptions */
+  --text-md:   12px;  /* body text, controls, buttons */
+  --text-base: 13px;  /* primary UI text, nav items */
+  --text-lg:   14px;  /* card titles, section headers */
+  --text-xl:   16px;  /* major section headings */
+  --text-2xl:  20px;  /* medium KPI values */
+  --text-3xl:  24px;  /* large KPI values */
+  --text-4xl:  32px;  /* hero card metrics */
 
   /* ── Spacing ── */
   --radius-sm: 6px;

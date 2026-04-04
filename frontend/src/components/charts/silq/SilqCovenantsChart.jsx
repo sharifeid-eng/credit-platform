@@ -97,7 +97,7 @@ export default function SilqCovenantsChart({ company, product, snapshot, currenc
                   fontStyle: row.note ? 'italic' : 'normal',
                 }}>
                   <span>{row.label}{row.note ? ` (${row.note})` : ''}</span>
-                  <span style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)' }}>
                     {row.value >= 1_000_000 ? `${displayCurrency} ${(row.value / 1_000_000).toFixed(1)}M` :
                      row.value >= 1_000 ? `${displayCurrency} ${(row.value / 1_000).toFixed(0)}K` :
                      row.value < 1 && row.value > 0 ? `${(row.value * 100).toFixed(1)}%` :

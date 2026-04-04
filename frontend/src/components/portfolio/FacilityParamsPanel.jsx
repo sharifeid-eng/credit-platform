@@ -419,16 +419,16 @@ const styles = {
     width: '100%', padding: '7px 10px', fontSize: 13,
     background: 'var(--bg-base)', border: '1px solid var(--border)',
     borderRadius: 'var(--radius-sm, 4px)', color: 'var(--text-primary)',
-    outline: 'none', fontFamily: "'IBM Plex Mono', monospace",
+    outline: 'none', fontFamily: 'var(--font-mono)',
     boxSizing: 'border-box',
   },
   currencyPrefix: {
     position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-    fontSize: 12, color: 'var(--text-muted)', fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
   },
   pctSuffix: {
     position: 'absolute', right: 10, top: 8,
-    fontSize: 12, color: 'var(--text-muted)', fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
     pointerEvents: 'none',
   },
   daysSuffix: {
@@ -438,7 +438,7 @@ const styles = {
   },
   kvKey: {
     fontSize: 12, color: 'var(--text-primary)',
-    fontFamily: "'IBM Plex Mono', monospace",
+    fontFamily: 'var(--font-mono)',
   },
   removeBtn: {
     background: 'none', border: 'none', color: 'var(--accent-red)',

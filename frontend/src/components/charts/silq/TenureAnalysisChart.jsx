@@ -16,7 +16,7 @@ function KpiCard({ label, value, sub, color }) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', position: 'relative' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: colors[color] || colors.gold, borderRadius: '10px 0 0 10px' }} />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'IBM Plex Mono', monospace" }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
@@ -137,20 +137,20 @@ export default function TenureAnalysisChart({ company, product, snapshot, curren
                 {distribution.map((row, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid rgba(30,39,54,0.5)' }}>
                     <td style={{ padding: '6px 8px', color: 'var(--text-primary)', fontWeight: 500 }}>{row.band}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: 'var(--text-secondary)' }}>{row.count?.toLocaleString()}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: row.collection_rate >= 90 ? '#2DD4BF' : row.collection_rate >= 70 ? '#C9A84C' : '#F06060' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{row.count?.toLocaleString()}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: row.collection_rate >= 90 ? '#2DD4BF' : row.collection_rate >= 70 ? '#C9A84C' : '#F06060' }}>
                       {fmtPct(row.collection_rate)}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: row.dpd_rate <= 5 ? '#2DD4BF' : row.dpd_rate <= 15 ? '#C9A84C' : '#F06060' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: row.dpd_rate <= 5 ? '#2DD4BF' : row.dpd_rate <= 15 ? '#C9A84C' : '#F06060' }}>
                       {fmtPct(row.dpd_rate)}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: row.par30_rate <= 5 ? '#2DD4BF' : row.par30_rate <= 15 ? '#C9A84C' : '#F06060' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: row.par30_rate <= 5 ? '#2DD4BF' : row.par30_rate <= 15 ? '#C9A84C' : '#F06060' }}>
                       {fmtPct(row.par30_rate)}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: row.margin_rate >= 5 ? '#2DD4BF' : row.margin_rate >= 0 ? '#C9A84C' : '#F06060' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: row.margin_rate >= 5 ? '#2DD4BF' : row.margin_rate >= 0 ? '#C9A84C' : '#F06060' }}>
                       {fmtPct(row.margin_rate)}
                     </td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
                       {row.avg_tenure != null ? `${row.avg_tenure.toFixed(1)}w` : '\u2013'}
                     </td>
                   </tr>
@@ -225,13 +225,13 @@ export default function TenureAnalysisChart({ company, product, snapshot, curren
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
                   <div>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Average</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#C9A84C' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#C9A84C' }}>
                       {p.avg_tenure != null ? `${p.avg_tenure.toFixed(1)}w` : '\u2013'}
                     </div>
                   </div>
                   <div>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Median</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#5B8DEF' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#5B8DEF' }}>
                       {p.median_tenure != null ? `${p.median_tenure.toFixed(1)}w` : '\u2013'}
                     </div>
                   </div>
