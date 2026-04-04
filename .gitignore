@@ -5,3 +5,4 @@ __pycache__/
 reports/
 alembic/versions/__pycache__/
 .claude/
+!.claude/commands/
