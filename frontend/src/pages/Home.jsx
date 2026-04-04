@@ -8,10 +8,10 @@ import LandingCanvas                                from '../components/LandingC
 // ── Derive region + asset class from known company / product names ───────────
 function getCompanyMeta(companyName) {
   const n = companyName.toLowerCase()
-  if (n.includes('klaim'))  return { flag: '🇦🇪', region: 'UAE', assetClass: 'Healthcare Receivables' }
-  if (n.includes('silq'))   return { flag: '🇸🇦', region: 'KSA', assetClass: 'POS Lending'            }
-  if (n.includes('ejari'))  return { flag: '🇸🇦', region: 'KSA', assetClass: 'Rent Finance'           }
-  return { flag: '🌍', region: '', assetClass: '' }
+  if (n.includes('klaim'))  return { countryCode: 'ae', region: 'UAE', assetClass: 'Healthcare Receivables' }
+  if (n.includes('silq'))   return { countryCode: 'sa', region: 'KSA', assetClass: 'POS Lending'            }
+  if (n.includes('ejari'))  return { countryCode: 'sa', region: 'KSA', assetClass: 'Rent Finance'           }
+  return { countryCode: null, region: '', assetClass: '' }
 }
 
 // ── Typewriter text (respects prefers-reduced-motion) ───────────────────────
@@ -308,11 +308,20 @@ function CompanyCard({ company, summary, index, onClick, onHoverChange }) {
         {/* Country flag + region */}
         {meta.region && (
           <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
             background: 'var(--bg-deep)',
             border: '1px solid var(--border)',
             borderRadius: 20, padding: '3px 9px',
             flexShrink: 0,
           }}>
+            {meta.countryCode && (
+              <img
+                src={`https://flagcdn.com/16x12/${meta.countryCode}.png`}
+                width="16" height="12"
+                alt={meta.region}
+                style={{ borderRadius: 2, display: 'block' }}
+              />
+            )}
             <span style={{
               fontSize: 9, fontWeight: 600,
               textTransform: 'uppercase', letterSpacing: '0.08em',
