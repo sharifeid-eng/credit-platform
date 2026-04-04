@@ -80,8 +80,8 @@ export default function Home() {
     getCompanies().then(async (data) => {
       const normalized = data.map(c =>
         typeof c === 'string'
-          ? { name: c, products: [], total_snapshots: 0 }
-          : { name: c.name ?? c.id ?? String(c), products: c.products ?? [], total_snapshots: c.total_snapshots ?? 0 }
+          ? { name: c, products: [], total_snapshots: 0, since: null }
+          : { name: c.name ?? c.id ?? String(c), products: c.products ?? [], total_snapshots: c.total_snapshots ?? 0, since: c.since ?? null }
       )
       setCompanies(normalized)
 
@@ -216,6 +216,70 @@ export default function Home() {
   )
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtSince(dateStr) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+}
+
+// ── Card sub-components ───────────────────────────────────────────────────────
+function CardDivider() {
+  return <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border)', margin: '0 2px' }} />
+}
+
+function CardStat({ value, label, color }) {
+  return (
+    <div style={{ flex: 1, textAlign: 'center' }}>
+      <div style={{
+        fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 500,
+        letterSpacing: '-0.02em', lineHeight: 1, color,
+      }}>
+        {value ?? '—'}
+      </div>
+      <div style={{
+        fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.1em', color: 'var(--text-faint)', marginTop: 5,
+      }}>
+        {label}
+      </div>
+    </div>
+  )
+}
+
+function CardRow({ label, children, loading }) {
+  return (
+    <div style={{
+      marginTop: 10,
+      background: 'var(--bg-deep)',
+      border: '1px solid var(--border)',
+      borderRadius: 6,
+      padding: '10px 12px',
+    }}>
+      <div style={{
+        fontSize: 7, fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.14em', color: 'var(--text-faint)', marginBottom: 8,
+      }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, minHeight: 36 }}>
+        {loading ? (
+          <>
+            {[60, 50, 50].map((w, i) => (
+              <div key={i} style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                <div style={{
+                  width: w, height: 28, borderRadius: 4,
+                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                }} />
+              </div>
+            ))}
+          </>
+        ) : children}
+      </div>
+    </div>
+  )
+}
+
 // ── Company card ─────────────────────────────────────────────────────────────
 function CompanyCard({ company, summary, index, onClick }) {
   const [hovered, setHovered] = useState(false)
@@ -223,12 +287,13 @@ function CompanyCard({ company, summary, index, onClick }) {
   const initials = safeName.slice(0, 2).toUpperCase()
   const meta     = getCompanyMeta(safeName)
 
-  const collectionRate = summary?.collection_rate != null
-    ? `${summary.collection_rate.toFixed(1)}%`
+  const faceValue = summary?.total_purchase_value != null
+    ? `$${(summary.total_purchase_value / 1_000_000).toFixed(0)}M`
     : null
-  const totalDeployed  = summary?.total_purchase_value != null
-    ? `$${(summary.total_purchase_value / 1_000_000).toFixed(1)}M`
+  const deals     = summary?.total_deals != null
+    ? summary.total_deals.toLocaleString()
     : null
+  const since     = fmtSince(company.since)
 
   return (
     <motion.div
@@ -332,92 +397,38 @@ function CompanyCard({ company, summary, index, onClick }) {
         )}
       </div>
 
-      {/* Headline metric */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 24 }}>
-        {collectionRate ? (
-          <>
-            <div>
-              <div style={{
-                fontSize: 32, fontWeight: 500,
-                fontFamily: 'var(--font-mono)',
-                letterSpacing: '-0.03em', lineHeight: 1,
-                color: 'var(--teal)',
-              }}>
-                {collectionRate}
-              </div>
-              <div style={{
-                fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
-                letterSpacing: '0.1em', color: 'var(--text-muted)', marginTop: 5,
-              }}>
-                Collection Rate
-              </div>
-            </div>
+      {/* Row 1 — Tape Analytics */}
+      <CardRow label="Tape Analytics" loading={!summary}>
+        <CardStat value={faceValue} label="Face Value" color="var(--gold)" />
+        <CardDivider />
+        <CardStat value={deals}     label="Deals"      color="var(--gold)" />
+        <CardDivider />
+        <CardStat value={since}     label="Since"      color="var(--gold)" />
+      </CardRow>
 
-            {totalDeployed && (
-              <>
-                <div style={{ width: 1, height: 36, background: 'var(--border)' }} />
-                <div>
-                  <div style={{
-                    fontSize: 20, fontWeight: 500,
-                    fontFamily: 'var(--font-mono)',
-                    letterSpacing: '-0.02em', lineHeight: 1,
-                    color: 'var(--gold)',
-                  }}>
-                    {totalDeployed}
-                  </div>
-                  <div style={{
-                    fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
-                    letterSpacing: '0.1em', color: 'var(--text-muted)', marginTop: 5,
-                  }}>
-                    Deployed (USD)
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          // Loading skeleton for metrics
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{
-              width: 80, height: 34, borderRadius: 4,
-              background: 'var(--bg-deep)', border: '1px solid var(--border)',
-            }} />
-            <div style={{
-              width: 60, height: 34, borderRadius: 4,
-              background: 'var(--bg-deep)', border: '1px solid var(--border)',
-            }} />
-          </div>
-        )}
-      </div>
+      {/* Row 2 — Live Portfolio */}
+      <CardRow label="Live Portfolio">
+        <CardStat value="—" label="Borr. Base"  color="var(--text-faint)" />
+        <CardDivider />
+        <CardStat value="—" label="PAR 30+"     color="var(--text-faint)" />
+        <CardDivider />
+        <CardStat value="—" label="Covenants"   color="var(--text-faint)" />
+      </CardRow>
 
       {/* Footer */}
       <div style={{
-        marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border)',
+        marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Open Dashboard</span>
-          {company.total_snapshots > 0 && (
-            <span style={{
-              fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              background: 'var(--bg-deep)', border: '1px solid var(--border)',
-              borderRadius: 20, padding: '2px 8px',
-              color: 'var(--text-faint)',
-            }}>
-              {company.total_snapshots} snapshot{company.total_snapshots !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>
+          Open Dashboard
+        </span>
         <span style={{
           color: hovered ? 'var(--gold)' : 'var(--text-faint)',
           transition: 'color 0.15s, transform 0.15s',
           transform: hovered ? 'translateX(3px)' : 'translateX(0)',
-          display: 'inline-block',
-          fontSize: 15,
-        }}>
-          →
-        </span>
+          display: 'inline-block', fontSize: 15,
+        }}>→</span>
       </div>
     </motion.div>
   )

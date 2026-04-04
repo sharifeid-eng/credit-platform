@@ -287,12 +287,19 @@ def get_aggregate_stats():
 
 @app.get("/companies")
 def list_companies():
-    return [
-        {'name': co, 'products': ps,
-         'total_snapshots': sum(len(get_snapshots(co, p)) for p in ps)}
-        for co in get_companies()
-        for ps in [get_products(co)]
-    ]
+    result = []
+    for co in get_companies():
+        ps = get_products(co)
+        all_snaps = [s for p in ps for s in get_snapshots(co, p)]
+        all_snaps.sort(key=lambda s: s['date'])
+        since = all_snaps[0]['date'] if all_snaps else None
+        result.append({
+            'name': co,
+            'products': ps,
+            'total_snapshots': len(all_snaps),
+            'since': since,
+        })
+    return result
 
 @app.get("/companies/{company}/products")
 def list_products(company: str):
