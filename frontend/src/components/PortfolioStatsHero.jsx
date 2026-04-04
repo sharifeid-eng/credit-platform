@@ -134,7 +134,7 @@ export default function PortfolioStatsHero() {
 
   const fmtValue      = v => `$${(v / 1_000_000).toFixed(0)}M`
   const fmtDeals      = v => Math.round(v).toLocaleString()
-  const fmtDataPoints = v => `${(v / 1_000).toFixed(0)}K+`
+  const fmtDataPoints = v => `${(v / 1_000_000).toFixed(1)}M+`
   const fmtSnaps      = v => Math.round(v).toString()
   const fmtCompanies  = v => Math.round(v).toString()
 
