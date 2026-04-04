@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { postChat } from '../services/api'
+import { useCompany } from '../contexts/CompanyContext'
 
 /**
  * DataChat — dark theme natural language chat panel
@@ -11,6 +12,7 @@ import { postChat } from '../services/api'
  *   currency  string
  */
 export default function DataChat({ company, product, snapshot, currency }) {
+  const { analysisType } = useCompany()
   const [messages, setMessages] = useState([])
   const [input, setInput]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -78,7 +80,7 @@ export default function DataChat({ company, product, snapshot, currency }) {
         minHeight: 180, maxHeight: 340,
       }}>
         {messages.length === 0 && (
-          <Suggestions onSelect={q => { setInput(q); }} />
+          <Suggestions analysisType={analysisType} onSelect={q => { setInput(q); }} />
         )}
         {messages.map((m, i) => (
           <Bubble key={i} msg={m} />
@@ -176,13 +178,29 @@ function TypingIndicator() {
   )
 }
 
-function Suggestions({ onSelect }) {
-  const prompts = [
+const PROMPTS = {
+  silq: [
+    'Which product type (BNPL, RBF, RCL) has the best collection performance?',
+    'What is the overdue rate trend and which shops are driving delinquency?',
+    'How does loan tenure affect collection rates across product types?',
+    'What is the PAR 30+ as a share of outstanding balances?',
+  ],
+  ejari_summary: [
+    'What is the current DPD distribution and how is it trending?',
+    'Which cohort vintage has the highest net loss rate?',
+    'How do roll rates compare across DPD buckets?',
+    'What is the recovery rate and size of the legal recovery pipeline?',
+  ],
+  default: [
     'Which provider groups have the highest denial rates?',
     'What are the current portfolio margins and how do they vary by discount band?',
     'How healthy is the active portfolio — what share of deals are aging?',
     'How does new business compare to repeat business in collection performance?',
-  ]
+  ],
+}
+
+function Suggestions({ analysisType, onSelect }) {
+  const prompts = PROMPTS[analysisType] ?? PROMPTS.default
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ fontSize: 9, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
