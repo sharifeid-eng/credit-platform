@@ -68,23 +68,22 @@ function StatItem({ label, rawValue, format, loading, index }) {
       {/* Value */}
       <div style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: 38,
+        fontSize: 26,
         fontWeight: 500,
         letterSpacing: '-0.03em',
         color: 'var(--gold)',
         lineHeight: 1,
-        minHeight: 42,
+        minHeight: 30,
       }}>
-        {display ?? <Skeleton width={100} />}
+        {display ?? <Skeleton width={80} />}
       </div>
       {/* Label */}
       <div style={{
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 600,
         textTransform: 'uppercase',
-        letterSpacing: '0.14em',
+        letterSpacing: '0.12em',
         color: 'var(--text-muted)',
-        marginTop: 2,
       }}>
         {label}
       </div>
@@ -117,10 +116,10 @@ export default function PortfolioStatsHero({ companies, summaries }) {
 
   return (
     <div style={{
-      borderTop:    '1px solid rgba(201,168,76,0.25)',
-      borderBottom: '1px solid rgba(201,168,76,0.12)',
-      background:   'linear-gradient(to bottom, rgba(201,168,76,0.08), rgba(201,168,76,0.02) 70%, transparent)',
-      padding:      '32px 48px',
+      borderTop:    '1px solid rgba(201,168,76,0.18)',
+      borderBottom: '1px solid var(--border)',
+      background:   'linear-gradient(to bottom, rgba(201,168,76,0.04), rgba(201,168,76,0.01) 60%, transparent)',
+      padding:      '18px 28px',
       position:     'relative',
       overflow:     'hidden',
     }}>
@@ -135,7 +134,7 @@ export default function PortfolioStatsHero({ companies, summaries }) {
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
-        gap:            80,
+        gap:            60,
         flexWrap:       'wrap',
       }}>
         <StatItem
@@ -147,7 +146,7 @@ export default function PortfolioStatsHero({ companies, summaries }) {
         />
 
         {/* Divider */}
-        <div style={{ width: 1, height: 48, background: 'rgba(201,168,76,0.2)', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
 
         <StatItem
           label="Collection Rate"
@@ -157,7 +156,7 @@ export default function PortfolioStatsHero({ companies, summaries }) {
           index={1}
         />
 
-        <div style={{ width: 1, height: 48, background: 'rgba(201,168,76,0.2)', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
 
         <StatItem
           label="Active Deals"
@@ -167,7 +166,7 @@ export default function PortfolioStatsHero({ companies, summaries }) {
           index={2}
         />
 
-        <div style={{ width: 1, height: 48, background: 'rgba(201,168,76,0.2)', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
 
         <StatItem
           label="Portfolio Companies"

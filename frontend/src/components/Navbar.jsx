@@ -10,7 +10,7 @@ export default function Navbar() {
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '0 28px',
-      height: '56px',
+      height: '80px',
       position: 'sticky',
       top: 0,
       zIndex: 100,
@@ -19,7 +19,7 @@ export default function Navbar() {
       <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
         <LaithLogo size="nav" />
         <div style={{
-          fontSize: 10,
+          fontSize: 15,
           fontWeight: 600,
           color: 'var(--gold)',
           letterSpacing: '0.1em',
@@ -54,7 +54,7 @@ export default function Navbar() {
 
 function LaithLogo({ size = 'nav' }) {
   const isNav = size === 'nav'
-  const h = isNav ? 36 : 44
+  const h = isNav ? 54 : 44
 
   return (
     <div style={{
@@ -88,7 +88,7 @@ function LaithLogo({ size = 'nav' }) {
       {/* Wordmark */}
       <div style={{ display: 'flex', alignItems: 'baseline' }}>
         <span style={{
-          fontSize: isNav ? 22 : 28,
+          fontSize: isNav ? 33 : 28,
           fontWeight: 800,
           letterSpacing: '-0.02em',
           color: 'var(--text-primary)',
@@ -97,7 +97,7 @@ function LaithLogo({ size = 'nav' }) {
           L
         </span>
         <span style={{
-          fontSize: isNav ? 22 : 28,
+          fontSize: isNav ? 33 : 28,
           fontWeight: 800,
           letterSpacing: '-0.02em',
           color: 'var(--gold)',
@@ -106,7 +106,7 @@ function LaithLogo({ size = 'nav' }) {
           AI
         </span>
         <span style={{
-          fontSize: isNav ? 22 : 28,
+          fontSize: isNav ? 33 : 28,
           fontWeight: 800,
           letterSpacing: '-0.02em',
           color: 'var(--text-primary)',
