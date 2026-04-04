@@ -194,8 +194,11 @@ def get_aggregate_stats():
     rates = get_fx_rates()
     FX = {'AED': rates.get('AED', 0.2723), 'SAR': rates.get('SAR', 0.2667)}
 
-    # Build fingerprint from all snapshot filenames
-    all_snap_ids = []
+    # Schema version — bump this whenever the stats fields change
+    STATS_SCHEMA_VERSION = "3"
+
+    # Build fingerprint from schema version + all snapshot filenames
+    all_snap_ids = [f"schema:{STATS_SCHEMA_VERSION}"]
     for co in get_companies():
         for prod in get_products(co):
             for s in get_snapshots(co, prod):
