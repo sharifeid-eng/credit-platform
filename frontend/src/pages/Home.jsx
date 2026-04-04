@@ -145,10 +145,10 @@ export default function Home() {
           <HeroLogo />
           <h1 style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(36px, 5vw, 56px)',
-            fontWeight: 800,
-            letterSpacing: '-0.03em',
-            lineHeight: 1.1,
+            fontSize: 'clamp(28px, 3.5vw, 42px)',
+            fontWeight: 700,
+            letterSpacing: '-0.01em',
+            lineHeight: 1.15,
             background: 'linear-gradient(135deg, #E8C96A 0%, var(--gold) 40%, #A07830 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -290,7 +290,7 @@ function CompanyCard({ company, summary, index, onClick, onHoverChange }) {
           <div>
             <div style={{
               fontSize: 15, fontWeight: 700, color: 'var(--text-primary)',
-              letterSpacing: '-0.01em', lineHeight: 1.2,
+              letterSpacing: '0.04em', lineHeight: 1.2,
             }}>
               {safeName.toUpperCase()}
             </div>

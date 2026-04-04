@@ -89,8 +89,8 @@ function LaithLogo({ size = 'nav' }) {
       <div style={{ display: 'flex', alignItems: 'baseline' }}>
         <span style={{
           fontSize: isNav ? 22 : 28,
-          fontWeight: 800,
-          letterSpacing: '-0.03em',
+          fontWeight: 700,
+          letterSpacing: '0em',
           color: 'var(--text-primary)',
           fontFamily: 'var(--font-display)',
         }}>
@@ -98,8 +98,8 @@ function LaithLogo({ size = 'nav' }) {
         </span>
         <span style={{
           fontSize: isNav ? 22 : 28,
-          fontWeight: 800,
-          letterSpacing: '-0.03em',
+          fontWeight: 700,
+          letterSpacing: '0em',
           color: 'var(--gold)',
           fontFamily: 'var(--font-display)',
         }}>
@@ -107,8 +107,8 @@ function LaithLogo({ size = 'nav' }) {
         </span>
         <span style={{
           fontSize: isNav ? 22 : 28,
-          fontWeight: 800,
-          letterSpacing: '-0.03em',
+          fontWeight: 700,
+          letterSpacing: '0em',
           color: 'var(--text-primary)',
           fontFamily: 'var(--font-display)',
         }}>
