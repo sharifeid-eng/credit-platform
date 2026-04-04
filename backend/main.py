@@ -232,7 +232,21 @@ def get_aggregate_stats():
                 snapshot_count += 1
 
                 if analysis_type == 'ejari_summary':
-                    # ODS workbook — count as 1 snapshot, no deal rows or face value
+                    # ODS workbook — extract deal count + data points from all sheets
+                    try:
+                        import pandas as pd
+                        xls = pd.ExcelFile(snap['filepath'], engine='odf')
+                        for sheet in xls.sheet_names:
+                            df_sheet = pd.read_excel(xls, sheet_name=sheet, header=None)
+                            total_data_points += df_sheet.shape[0] * df_sheet.shape[1]
+                        # Deal count from Portfolio_Overview total_contracts
+                        from core.analysis_ejari import parse_ejari_workbook
+                        parsed = parse_ejari_workbook(snap['filepath'])
+                        contracts = parsed.get('portfolio_overview', {}).get('key_metrics', {}).get('total_contracts')
+                        if contracts is not None:
+                            total_deals += int(contracts)
+                    except Exception:
+                        pass
                     continue
 
                 try:
