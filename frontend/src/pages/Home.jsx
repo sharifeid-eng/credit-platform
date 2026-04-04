@@ -122,8 +122,8 @@ export default function Home() {
           position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
           backgroundImage: 'url(/geometric-pattern.svg)',
           backgroundRepeat: 'repeat',
-          backgroundSize: '100px 100px',
-          opacity: 0.04,
+          backgroundSize: '120px 120px',
+          opacity: 0.07,
         }}
       />
 

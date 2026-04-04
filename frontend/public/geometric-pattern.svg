@@ -2,27 +2,27 @@
   <!--
     Islamic 8-pointed star (Rub el Hizb / Girih style)
     Tile: 100×100  |  Star center: (50,50)  |  Outer R=28  Inner r=12
-    Cardinal tips connect to edge midpoints; diagonal tips connect to corners.
+    Strokes thickened for visibility at low opacity on dark backgrounds.
     When background-repeat: repeat is applied, the lines form a continuous lattice.
   -->
   <g fill="none" stroke="#C9A84C" stroke-linecap="round" stroke-linejoin="round">
     <!-- 8-pointed star -->
-    <polygon stroke-width="0.75"
+    <polygon stroke-width="1.2"
       points="50,22 54.6,38.9 69.8,30.2 61.1,45.4 78,50 61.1,54.6 69.8,69.8 54.6,61.1 50,78 45.4,61.1 30.2,69.8 38.9,54.6 22,50 38.9,45.4 30.2,30.2 45.4,38.9"/>
-    <!-- Cardinal lines: star tips → tile edge midpoints (connect adjacent stars) -->
-    <line stroke-width="0.45" x1="50" y1="22" x2="50" y2="0"/>
-    <line stroke-width="0.45" x1="78" y1="50" x2="100" y2="50"/>
-    <line stroke-width="0.45" x1="50" y1="78" x2="50" y2="100"/>
-    <line stroke-width="0.45" x1="22" y1="50" x2="0" y2="50"/>
-    <!-- Diagonal lines: star tips → tile corners (form lattice diamond) -->
-    <line stroke-width="0.45" x1="69.8" y1="30.2" x2="100" y2="0"/>
-    <line stroke-width="0.45" x1="69.8" y1="69.8" x2="100" y2="100"/>
-    <line stroke-width="0.45" x1="30.2" y1="69.8" x2="0" y2="100"/>
-    <line stroke-width="0.45" x1="30.2" y1="30.2" x2="0" y2="0"/>
-    <!-- Node dots at edge midpoints (reinforce lattice junction points) -->
-    <circle cx="50" cy="0" r="1.2" fill="#C9A84C" stroke="none"/>
-    <circle cx="100" cy="50" r="1.2" fill="#C9A84C" stroke="none"/>
-    <circle cx="50" cy="100" r="1.2" fill="#C9A84C" stroke="none"/>
-    <circle cx="0" cy="50" r="1.2" fill="#C9A84C" stroke="none"/>
+    <!-- Cardinal lines: star tips → tile edge midpoints -->
+    <line stroke-width="0.7" x1="50" y1="22" x2="50" y2="0"/>
+    <line stroke-width="0.7" x1="78" y1="50" x2="100" y2="50"/>
+    <line stroke-width="0.7" x1="50" y1="78" x2="50" y2="100"/>
+    <line stroke-width="0.7" x1="22" y1="50" x2="0" y2="50"/>
+    <!-- Diagonal lines: star tips → tile corners -->
+    <line stroke-width="0.7" x1="69.8" y1="30.2" x2="100" y2="0"/>
+    <line stroke-width="0.7" x1="69.8" y1="69.8" x2="100" y2="100"/>
+    <line stroke-width="0.7" x1="30.2" y1="69.8" x2="0" y2="100"/>
+    <line stroke-width="0.7" x1="30.2" y1="30.2" x2="0" y2="0"/>
+    <!-- Node dots at edge midpoints -->
+    <circle cx="50" cy="0" r="1.8" fill="#C9A84C" stroke="none"/>
+    <circle cx="100" cy="50" r="1.8" fill="#C9A84C" stroke="none"/>
+    <circle cx="50" cy="100" r="1.8" fill="#C9A84C" stroke="none"/>
+    <circle cx="0" cy="50" r="1.8" fill="#C9A84C" stroke="none"/>
   </g>
 </svg>
