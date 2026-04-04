@@ -90,27 +90,27 @@ function LaithLogo({ size = 'nav' }) {
         <span style={{
           fontSize: isNav ? 22 : 28,
           fontWeight: 800,
-          letterSpacing: '-0.02em',
+          letterSpacing: '-0.03em',
           color: 'var(--text-primary)',
-          fontFamily: 'var(--font-ui)',
+          fontFamily: 'var(--font-display)',
         }}>
           L
         </span>
         <span style={{
           fontSize: isNav ? 22 : 28,
           fontWeight: 800,
-          letterSpacing: '-0.02em',
+          letterSpacing: '-0.03em',
           color: 'var(--gold)',
-          fontFamily: 'var(--font-ui)',
+          fontFamily: 'var(--font-display)',
         }}>
           AI
         </span>
         <span style={{
           fontSize: isNav ? 22 : 28,
           fontWeight: 800,
-          letterSpacing: '-0.02em',
+          letterSpacing: '-0.03em',
           color: 'var(--text-primary)',
-          fontFamily: 'var(--font-ui)',
+          fontFamily: 'var(--font-display)',
         }}>
           TH
         </span>

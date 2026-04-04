@@ -32,9 +32,9 @@
   --text-faint:   #304050;
 
   /* ── Typography ── */
-  --font-ui:      'DM Sans', system-ui, sans-serif;
+  --font-ui:      'Space Grotesk', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Courier New', monospace;
-  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-display: 'Syne', system-ui, sans-serif;
 
   /* ── Type scale ── */
   --text-2xs:  9px;   /* badges, confidence grades, tiny labels */

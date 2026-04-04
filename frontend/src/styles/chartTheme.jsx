@@ -50,7 +50,7 @@ export const tooltipStyle = {
     color: '#8A94A8',
     fontSize: 10,
     marginBottom: 4,
-    fontFamily: 'DM Sans',
+    fontFamily: 'Space Grotesk',
   },
   itemStyle: { color: '#E8EAF0' },
   cursor: { fill: 'rgba(255,255,255,0.03)' },
@@ -60,7 +60,7 @@ export const tooltipStyle = {
 export const legendProps = {
   wrapperStyle: {
     fontSize: 10,
-    fontFamily: 'DM Sans',
+    fontFamily: 'Space Grotesk',
     color: '#8494A7',
     paddingTop: 8,
   },

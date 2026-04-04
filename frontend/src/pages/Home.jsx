@@ -146,8 +146,8 @@ export default function Home() {
           <h1 style={{
             fontFamily: 'var(--font-display)',
             fontSize: 'clamp(36px, 5vw, 56px)',
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
+            fontWeight: 800,
+            letterSpacing: '-0.03em',
             lineHeight: 1.1,
             background: 'linear-gradient(135deg, #E8C96A 0%, var(--gold) 40%, #A07830 100%)',
             WebkitBackgroundClip: 'text',
