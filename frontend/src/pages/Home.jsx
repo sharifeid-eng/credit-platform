@@ -143,7 +143,6 @@ export default function Home() {
           style={{ textAlign: 'center', marginBottom: 48 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 14 }}>
-            <HeroLogo />
             <h1 style={{
               fontFamily: 'var(--font-display)',
               fontSize: 'clamp(40px, 5.5vw, 64px)',
@@ -159,6 +158,7 @@ export default function Home() {
               Credit Analytics
             </h1>
           </div>
+
           <TypewriterText text="GCC asset-backed lending Analytics" />
         </motion.div>
 
