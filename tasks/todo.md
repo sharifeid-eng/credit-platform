@@ -9,11 +9,11 @@ _(none)_
 ---
 
 ## Creative UI Redesign — Landing Page & Company Pages
-**Status: COMPLETE (all phases implemented — 2 data-wiring items remain)**
+**Status: COMPLETE — all phases + data-wiring done**
 
-### Remaining data-wiring (UI is ready, data not yet flowing)
-- [ ] **P4.1 — KPI delta indicators**: `KpiCard` `trend` prop exists. Wire up: in TapeAnalytics Overview, call `/summary` for current + previous snapshot, diff `collection_rate` / `active_deals` / `total_purchase_value`, pass delta as `trend` to relevant KPI cards.
-- [ ] **P4.4 — Sparkline data**: `KpiCard` `sparklineData` prop exists. Wire up: extract last 6 monthly values from deployment or collection chart response, pass as array to the appropriate Overview KPI cards.
+### Data-wiring (both complete)
+- [x] **P4.1 — KPI delta indicators**: Previous snapshot summary fetched, δcoll / δdenial / δactive computed, passed as `trend` prop to Collection Rate, Denial Rate, Active Deals KPI cards.
+- [x] **P4.4 — Sparkline data**: Collection velocity + deployment chart fetched in OverviewTab; last 6 monthly values extracted; passed as `sparklineData` to Purchase Value (deployment totals) and Collection Rate (monthly rate) KPI cards.
 **Branch:** `claude/creative-landing-page-research-5hdf6`
 **Goal:** Transform the landing page from a generic card grid into an institutional, MENA-identity-driven experience. Elevate company pages with richer data density and interaction.
 
