@@ -594,19 +594,23 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 -----
 ## What's Working
 - ✅ **Creative UI redesign (branch: claude/creative-landing-page-research-5hdf6):**
-  - Landing page: Islamic geometric SVG background pattern (Girih/8-point star, gold, 4% opacity, tileable)
-  - Landing page: Playfair Display serif hero headline + gold gradient text (`--font-display` token)
+  - Landing page: Islamic geometric SVG background pattern (Girih/8-point star, gold, 14% opacity, 140px tile) — stroke widths tuned for visibility (1.0 lines, 1.6 star, 2.2 dots)
+  - Landing page: Syne 800 display font for hero headline + LAITH wordmark; `--font-display` CSS token
   - Landing page: TypewriterText subtitle (character-by-character, blinking cursor, respects prefers-reduced-motion)
   - Landing page: HeroLogo entrance animation (lion scale-pulse on load, gold glow pulse CSS keyframe)
-  - Landing page: PortfolioStatsHero strip — animated count-up stats (Total Deployed, Collection Rate, Active Deals, Companies) with ease-out expo curve
-  - Landing page: CompanyCard redesign — country flag + region badge (UAE/KSA), asset class small caps, headline metric (collection rate + deployed), 3D hover tilt (rotateX 1.5°), animated top border sweep, 80ms stagger
-  - Landing page: LandingCanvas — fixed canvas behind content, gold pulsing company nodes + teal Brownian deal nodes + proximity connection lines; responds to card hover with pulse ring; 30fps capped; mobile disabled; pauses on hidden tab
+  - Landing page: Two-banner PortfolioStatsHero strip — Banner 1 "Data Analyzed" (gold tint, live from `/aggregate-stats`): Face Value Analyzed, Records Processed, Snapshots Loaded, Portfolio Companies with ease-out expo count-up; Banner 2 "Live Portfolio" (neutral, all `—` until DB data connected): Active Exposure, PAR 30+, PAR 90+, Covenants in Breach, HHI
+  - Landing page: CompanyCard redesign — flagcdn.com flag images (not emoji, for Windows compat) + region badge (UAE/KSA), asset class small caps, headline metric (collection rate + deployed), 3D hover tilt (rotateX 1.5°), animated top border sweep, 80ms stagger
+  - Landing page: LandingCanvas removed (geometric pattern provides ambient texture without JS overhead)
   - Company pages: Tab transitions enhanced — blur(3px→0) + y:12→0 with easeOut cubic, blur fade-out on exit
   - Company pages: Sidebar NavItem — animated left border (Framer Motion scaleY 0→1, origin top) + gold gradient background sweep on active state; micro-indent on hover
   - Company pages: KpiCard sparkline — optional `sparklineData` prop renders 60×18px inline SVG polyline with endpoint dot
-  - New components: `PortfolioStatsHero.jsx`, `LandingCanvas.jsx`
+  - Company pages: DataChat per-company question sets — `PROMPTS` map keyed by `analysisType` (`silq`, `ejari_summary`, `default`); relevant suggested questions for each asset class
+  - Typography: Syne (display/hero), Space Grotesk (UI body), JetBrains Mono (data). Single Google Fonts load in index.html. All 55+ IBM Plex Mono / Inter hardcoded references replaced with CSS tokens.
+  - Navbar: height 56→80px, lion icon 36→54px, LAITH wordmark 22→33px (Syne 800), "Data Analytics" label 10→15px
+  - Landing page section labels: "Portfolio Companies" + "Resources" 9→13px
+  - Backend: `/aggregate-stats` endpoint — face value from latest snapshot only (no double-counting across snapshots), total records from all snapshots, FX-normalised to USD (AED×0.2723, SAR×0.2667). File-based cache at `reports/aggregate_stats_cache.json`, invalidated by snapshot fingerprint.
+  - New components: `PortfolioStatsHero.jsx` (two-banner), `LandingCanvas.jsx` (retained but unused on landing)
   - New asset: `frontend/public/geometric-pattern.svg` (Islamic 8-point star lattice)
-  - New font: Playfair Display via Google Fonts (`--font-display` CSS token)
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
 - ✅ 18-tab React dashboard with dark theme
 - ✅ AI commentary (cached, clears on snapshot change)

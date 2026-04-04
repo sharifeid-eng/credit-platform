@@ -21,6 +21,30 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-04 — Emoji Flags Don't Render on Windows Chrome
+**Mistake:** Used regional indicator emoji (🇦🇪, 🇸🇦) for country flags on company cards. They render correctly on macOS/Linux but show as two-letter codes (AE, SA) on Windows Chrome — Windows has no built-in emoji flag support.
+**Rule:** Never use emoji flags for flags that need to be visually correct across platforms. Use `<img src="https://flagcdn.com/16x12/{cc}.png">` with ISO 3166-1 alpha-2 country codes (ae, sa, us). flagcdn.com is free, fast, and renders consistently everywhere.
+
+---
+
+## 2026-04-04 — replace_all Misses Siblings with Different Indentation
+**Mistake:** Used `replace_all: true` to increase font size on two sibling elements ("Portfolio Companies" and "Resources" section labels). Only the first was updated — the second had a different indentation (3 spaces vs 4 spaces), so the string didn't match.
+**Rule:** When doing replace_all on repeated patterns that may have slight differences (trailing spaces, indent depth), verify the count of replacements made. If there are N occurrences to update and the tool only matched fewer, check each remaining one individually. Use Grep to confirm 0 remaining instances of the old value.
+
+---
+
+## 2026-04-04 — Rate Already a Percentage, Don't Multiply ×100
+**Mistake:** Backend `/summary` returns `collection_rate` as a percentage (e.g. 85.3). The frontend multiplied it by 100 again (→ 8530%). The bug existed in two places: CompanyCard and PortfolioStatsHero.
+**Rule:** Before displaying any rate/percentage from the backend, check what unit the endpoint returns. When in doubt, log the raw value. Never multiply a value by 100 without verifying it isn't already a percentage.
+
+---
+
+## 2026-04-04 — Remove Props When Component Becomes Self-Fetching
+**Mistake:** After rebuilding PortfolioStatsHero to fetch its own data, Home.jsx still passed `companies={companies} summaries={summaries}` props to it. The component silently ignored them — no error, but dead prop passing.
+**Rule:** When refactoring a component from prop-driven to self-fetching, immediately update every call site to remove the now-obsolete props. Grep for all usages before finishing the task.
+
+---
+
 ## 2026-04-04 — Canvas z-index and Fixed Background Layering
 **Context:** Adding a Canvas animation + SVG pattern behind page content on the landing page.
 **Rule:** When stacking fixed-position layers (canvas, pattern, content), assign explicit z-indexes with a gap: `-1` for decorative backgrounds, `0` for canvas, `1` for interactive content. Use `position: relative; z-index: 1` on the stats hero/content wrappers to ensure they sit above the canvas. Without explicit z-index on content wrappers, fixed-positioned canvas can bleed through.
