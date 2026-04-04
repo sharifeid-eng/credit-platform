@@ -3,7 +3,6 @@ import { useNavigate, Link }                        from 'react-router-dom'
 import { motion }                                   from 'framer-motion'
 import { getCompanies, getSummary, getSnapshots }   from '../services/api'
 import PortfolioStatsHero                           from '../components/PortfolioStatsHero'
-import LandingCanvas                                from '../components/LandingCanvas'
 
 // ── Derive region + asset class from known company / product names ───────────
 function getCompanyMeta(companyName) {
@@ -73,9 +72,8 @@ function HeroLogo() {
 
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [companies,       setCompanies]       = useState([])
-  const [summaries,       setSummaries]       = useState({})
-  const [hoveredCompany,  setHoveredCompany]  = useState(null)
+  const [companies,  setCompanies]  = useState([])
+  const [summaries,  setSummaries]  = useState({})
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -189,7 +187,6 @@ export default function Home() {
               summary={summaries[`${co.name}:${co.products?.[0]}`]}
               index={i}
               onClick={() => handleOpen(co)}
-              onHoverChange={(isHovered) => setHoveredCompany(isHovered ? co.name : null)}
             />
           ))}
           {companies.length === 0 && <EmptyState />}
@@ -220,7 +217,7 @@ export default function Home() {
 }
 
 // ── Company card ─────────────────────────────────────────────────────────────
-function CompanyCard({ company, summary, index, onClick, onHoverChange }) {
+function CompanyCard({ company, summary, index, onClick }) {
   const [hovered, setHovered] = useState(false)
   const safeName = typeof company.name === 'string' ? company.name : String(company.name ?? '')
   const initials = safeName.slice(0, 2).toUpperCase()
@@ -239,8 +236,8 @@ function CompanyCard({ company, summary, index, onClick, onHoverChange }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.08, ease: 'easeOut' }}
       onClick={onClick}
-      onMouseEnter={() => { setHovered(true);  onHoverChange?.(true)  }}
-      onMouseLeave={() => { setHovered(false); onHoverChange?.(false) }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         background:    'var(--bg-surface)',
         border:        `1px solid ${hovered ? 'rgba(201,168,76,0.45)' : 'var(--border)'}`,

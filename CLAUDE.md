@@ -173,7 +173,6 @@ credit-platform/
 │   │   │   ├── TabInsight.jsx           # Smooth expand/collapse with AnimatePresence
 │   │   │   ├── ChartPanel.jsx           # Fade-in + skeleton chart loading
 │   │   │   ├── PortfolioStatsHero.jsx   # Landing page stats strip — count-up aggregates across all companies
-│   │   │   ├── LandingCanvas.jsx        # Canvas network animation — pulsing nodes + proximity lines (landing page only)
 │   │   │   ├── charts/
 │   │   │   │   ├── ActualVsExpectedChart.jsx
 │   │   │   │   ├── AgeingChart.jsx
@@ -609,7 +608,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Navbar: height 56→80px, lion icon 36→54px, LAITH wordmark 22→33px (Syne 800), "Data Analytics" label 10→15px
   - Landing page section labels: "Portfolio Companies" + "Resources" 9→13px
   - Backend: `/aggregate-stats` endpoint — face value from latest snapshot only (no double-counting across snapshots), total records from all snapshots, FX-normalised to USD (AED×0.2723, SAR×0.2667). File-based cache at `reports/aggregate_stats_cache.json`, invalidated by snapshot fingerprint.
-  - New components: `PortfolioStatsHero.jsx` (two-banner), `LandingCanvas.jsx` (retained but unused on landing)
+  - New component: `PortfolioStatsHero.jsx` (two-banner stats strip)
   - New asset: `frontend/public/geometric-pattern.svg` (Islamic 8-point star lattice)
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
 - ✅ 18-tab React dashboard with dark theme
