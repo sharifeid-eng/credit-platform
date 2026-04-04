@@ -165,13 +165,15 @@ credit-platform/
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
 │   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   ├── components/
-│   │   │   ├── Sidebar.jsx          # 240px persistent sidebar nav (Tape + Portfolio + Methodology)
-│   │   │   ├── KpiCard.jsx          # Framer Motion stagger + hover effects
-│   │   │   ├── Navbar.jsx           # Contains LaithLogo component (exported)
-│   │   │   ├── AICommentary.jsx     # Slide-up animation on commentary
+│   │   │   ├── Sidebar.jsx              # 240px persistent sidebar nav — Framer Motion animated active border
+│   │   │   ├── KpiCard.jsx              # Framer Motion stagger + hover effects + optional sparklineData prop
+│   │   │   ├── Navbar.jsx               # Contains LaithLogo component (exported)
+│   │   │   ├── AICommentary.jsx         # Slide-up animation on commentary
 │   │   │   ├── DataChat.jsx
-│   │   │   ├── TabInsight.jsx       # Smooth expand/collapse with AnimatePresence
-│   │   │   ├── ChartPanel.jsx       # Fade-in + skeleton chart loading
+│   │   │   ├── TabInsight.jsx           # Smooth expand/collapse with AnimatePresence
+│   │   │   ├── ChartPanel.jsx           # Fade-in + skeleton chart loading
+│   │   │   ├── PortfolioStatsHero.jsx   # Landing page stats strip — count-up aggregates across all companies
+│   │   │   ├── LandingCanvas.jsx        # Canvas network animation — pulsing nodes + proximity lines (landing page only)
 │   │   │   ├── charts/
 │   │   │   │   ├── ActualVsExpectedChart.jsx
 │   │   │   │   ├── AgeingChart.jsx
@@ -591,6 +593,20 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Creative UI redesign (branch: claude/creative-landing-page-research-5hdf6):**
+  - Landing page: Islamic geometric SVG background pattern (Girih/8-point star, gold, 4% opacity, tileable)
+  - Landing page: Playfair Display serif hero headline + gold gradient text (`--font-display` token)
+  - Landing page: TypewriterText subtitle (character-by-character, blinking cursor, respects prefers-reduced-motion)
+  - Landing page: HeroLogo entrance animation (lion scale-pulse on load, gold glow pulse CSS keyframe)
+  - Landing page: PortfolioStatsHero strip — animated count-up stats (Total Deployed, Collection Rate, Active Deals, Companies) with ease-out expo curve
+  - Landing page: CompanyCard redesign — country flag + region badge (UAE/KSA), asset class small caps, headline metric (collection rate + deployed), 3D hover tilt (rotateX 1.5°), animated top border sweep, 80ms stagger
+  - Landing page: LandingCanvas — fixed canvas behind content, gold pulsing company nodes + teal Brownian deal nodes + proximity connection lines; responds to card hover with pulse ring; 30fps capped; mobile disabled; pauses on hidden tab
+  - Company pages: Tab transitions enhanced — blur(3px→0) + y:12→0 with easeOut cubic, blur fade-out on exit
+  - Company pages: Sidebar NavItem — animated left border (Framer Motion scaleY 0→1, origin top) + gold gradient background sweep on active state; micro-indent on hover
+  - Company pages: KpiCard sparkline — optional `sparklineData` prop renders 60×18px inline SVG polyline with endpoint dot
+  - New components: `PortfolioStatsHero.jsx`, `LandingCanvas.jsx`
+  - New asset: `frontend/public/geometric-pattern.svg` (Islamic 8-point star lattice)
+  - New font: Playfair Display via Google Fonts (`--font-display` CSS token)
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
 - ✅ 18-tab React dashboard with dark theme
 - ✅ AI commentary (cached, clears on snapshot change)

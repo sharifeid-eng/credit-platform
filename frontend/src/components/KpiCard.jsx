@@ -9,10 +9,11 @@
  *   trendLabel string   — optional suffix e.g. "vs prev month"
  *   color      string   — 'gold' | 'teal' | 'red' | 'blue'  (default 'gold')
  *   index      number   — optional index for stagger delay (default 0)
- *   confidence string   — 'A' | 'B' | 'C' — data confidence grade badge
- *                         A = Observed (direct tape read)
- *                         B = Inferred (derived with solid methodology)
- *                         C = Derived (estimated/approximated)
+ *   confidence    string   — 'A' | 'B' | 'C' — data confidence grade badge
+ *                           A = Observed (direct tape read)
+ *                           B = Inferred (derived with solid methodology)
+ *                           C = Derived (estimated/approximated)
+ *   sparklineData number[] — optional last-N data points for inline sparkline
  */
 import { motion } from 'framer-motion'
 import { useState } from 'react'
@@ -23,7 +24,7 @@ const CONFIDENCE = {
   C: { label: 'C', color: 'var(--text-muted)',   bg: 'rgba(132,148,167,0.12)', title: 'Grade C — Derived: estimated or approximated, use with caution' },
 }
 
-export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false, confidence, index = 0 }) {
+export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false, confidence, sparklineData, index = 0 }) {
   const [hovered, setHovered] = useState(false)
   const palette = {
     gold: { accent: 'var(--gold)',  muted: 'var(--gold-muted)' },
@@ -131,6 +132,13 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         </div>
       )}
 
+      {/* Inline sparkline */}
+      {sparklineData && sparklineData.length >= 3 && (
+        <div style={{ marginTop: 8 }}>
+          <Sparkline data={sparklineData} color={accent} />
+        </div>
+      )}
+
       {/* Confidence grade badge */}
       {confidence && CONFIDENCE[confidence] && (
         <div
@@ -149,5 +157,34 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         </div>
       )}
     </motion.div>
+  )
+}
+
+// ── Inline sparkline — 60×18px SVG polyline ──────────────────────────────────
+function Sparkline({ data, color }) {
+  const W = 60, H = 18
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const pts = data.map((v, i) => [
+    (i / (data.length - 1)) * W,
+    H - ((v - min) / range) * (H - 2) - 1,
+  ])
+  const points = pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
+  const last = pts[pts.length - 1]
+
+  return (
+    <svg width={W} height={H} style={{ display: 'block', overflow: 'visible', opacity: 0.7 }}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Dot at latest value */}
+      <circle cx={last[0]} cy={last[1]} r="2" fill={color} />
+    </svg>
   )
 }

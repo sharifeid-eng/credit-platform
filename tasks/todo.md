@@ -4,34 +4,35 @@ Track active work here. Claude updates this as tasks progress.
 ---
 
 ## Active
-_(none — awaiting session reset to continue implementation)_
+_(none)_
 
 ---
 
 ## Creative UI Redesign — Landing Page & Company Pages
+**Status: COMPLETE (all 5 phases implemented)**
 **Branch:** `claude/creative-landing-page-research-5hdf6`
 **Goal:** Transform the landing page from a generic card grid into an institutional, MENA-identity-driven experience. Elevate company pages with richer data density and interaction.
 
 ### Phase 1 — Quick Wins: Landing Page Identity (no new libraries)
 
-- [ ] **P1.1 — Islamic geometric background pattern**
+- [x] **P1.1 — Islamic geometric background pattern**
   - Create `frontend/public/geometric-pattern.svg` — a Girih/Mashrabiya tile pattern using gold (`#C9A84C`) on transparent, seamlessly tileable (~120px tile), 8-point star geometry
   - Apply as CSS `background-image` on Home.jsx at 4–5% opacity (zero runtime cost — pure SVG + CSS)
 
-- [ ] **P1.2 — Display serif font for hero text**
+- [x] **P1.2 — Display serif font for hero text**
   - Add Playfair Display (Google Fonts) to `frontend/index.html` — weights 400, 700
   - Add `--font-display: 'Playfair Display', Georgia, serif;` to `styles/tokens.css`
   - In Home.jsx, add hero headline above company grid: *"Institutional Credit Analytics"* in display serif, 48–56px, gold gradient text
   - Subtitle in Inter: *"Private credit portfolio intelligence for MENA asset-backed lending"*
 
-- [ ] **P1.3 — Aggregate portfolio stats hero strip**
+- [x] **P1.3 — Aggregate portfolio stats hero strip**
   - New component `frontend/src/components/PortfolioStatsHero.jsx`
   - Fetches per-company `/summary` on mount, aggregates: Total Deployed, Weighted Collection Rate, Total Active Deals
   - Custom `useCountUp(target, duration)` hook using `requestAnimationFrame` (no library)
   - Layout: dark strip with gold top/bottom border lines, mono font stats, small-caps labels
   - Positioned between Navbar and the company grid
 
-- [ ] **P1.4 — Country/region identity on company cards**
+- [x] **P1.4 — Country/region identity on company cards**
   - Add country flag emoji + region label to CompanyCard (AED→🇦🇪 UAE, SAR→🇸🇦 KSA, USD→check config)
   - Add asset class label in small caps: "Healthcare Receivables", "POS Lending", "Rent Finance"
   - Show one headline metric prominently (collection rate % from summary endpoint)
@@ -39,24 +40,24 @@ _(none — awaiting session reset to continue implementation)_
 
 ### Phase 2 — Cinematic Entrance & Card Elevation
 
-- [ ] **P2.1 — Hero typewriter effect**
+- [x] **P2.1 — Hero typewriter effect**
   - `useTypewriter(text, speed)` hook — types subtitle character by character on load
   - Blinking cursor that fades after typing completes
   - Respects `prefers-reduced-motion` (shows full text instantly if reduced motion preferred)
 
-- [ ] **P2.2 — Logo draw-on entrance animation**
+- [x] **P2.2 — Logo draw-on entrance animation**
   - Landing page standalone logo: lion icon scale-pulse (CSS keyframe 0.3s)
   - "L"+"TH" fade in (0.2s) → "AI" gold glow (0.2s delay) — sequential reveal
   - Subtitle typewriter starts after logo sequence completes
 
-- [ ] **P2.3 — Company cards enhanced stagger + 3D hover**
+- [x] **P2.3 — Company cards enhanced stagger + 3D hover**
   - Increase stagger to 80ms for more dramatic cascade
   - Add `rotateX: 2` + CSS `perspective: 800px` on hover for subtle 3D tilt
   - Gradient top border animates width 0%→100% on first appearance (not just hover)
 
 ### Phase 3 — Animated Canvas Background
 
-- [ ] **P3.1 — Canvas network animation**
+- [x] **P3.1 — Canvas network animation**
   - New `frontend/src/components/LandingCanvas.jsx` — fixed `<canvas>` behind content (z-index: 0)
   - Pure Canvas API (no Three.js — keeps bundle lean):
     - Company nodes: larger, gold, pulsing sine-wave radius
@@ -65,29 +66,29 @@ _(none — awaiting session reset to continue implementation)_
   - 30fps throttled via `requestAnimationFrame` + frame counter
   - Pauses on hidden tab (`visibilityState`), resizes on window resize (debounced), cleanup on unmount
 
-- [ ] **P3.2 — Canvas ↔ card hover connection**
+- [x] **P3.2 — Canvas ↔ card hover connection**
   - Shared `hoveredCompany` state: CompanyCard sets it on hover, LandingCanvas reads it
   - Hovered company's node glows brighter + emits expanding pulse ring (opacity fade-out)
 
 ### Phase 4 — Company Page Enhancements
 
-- [ ] **P4.1 — KPI card delta indicators**
+- [x] **P4.1 — KPI card delta indicators**
   - Add optional `delta` + `deltaLabel` props to `KpiCard.jsx`
   - Render small pill below value: green ▲ / red ▼ with delta amount
   - Populate on Klaim Overview for: collection rate, active deals, total deployed (vs prior snapshot)
   - Frontend diff: call `/summary` for current + previous snapshot, compute deltas
 
-- [ ] **P4.2 — Sidebar active state animation**
+- [x] **P4.2 — Sidebar active state animation**
   - Active left border: animate in via Framer Motion `scaleY` 0→1 (origin top, 150ms)
   - Active item: subtle gold gradient sweep left→right (5%→0% opacity background)
   - Hover: `translateX: 2px` micro-indent on non-active items
 
-- [ ] **P4.3 — Tab transition enhancement**
+- [x] **P4.3 — Tab transition enhancement**
   - Add `filter: blur(4px)→blur(0)` on entering tab content
   - Increase y offset 8→12 for more cinematic feel
   - Switch from linear to `easeOut` spring easing
 
-- [ ] **P4.4 — Inline sparklines on KPI cards (stretch)**
+- [x] **P4.4 — Inline sparklines on KPI cards (stretch)**
   - New optional `sparklineData` prop on KpiCard — array of 6 values
   - Render as 40×20px inline SVG `<polyline>` with gold stroke, no axes
   - Populate on Overview KPIs that have natural time-series: collection rate, deployment volume
@@ -95,17 +96,17 @@ _(none — awaiting session reset to continue implementation)_
 
 ### Phase 5 — Polish & Integration
 
-- [ ] **P5.1 — Dark mode consistency + performance pass**
+- [x] **P5.1 — Dark mode consistency + performance pass**
   - Audit new components for hardcoded colors, replace with CSS tokens
   - Canvas: test on throttled CPU (Chrome DevTools); confirm no scroll jank
   - Adjust pattern opacity if needed for different brightness levels
 
-- [ ] **P5.2 — Responsive + accessibility**
+- [x] **P5.2 — Responsive + accessibility**
   - Mobile breakpoints for hero strip, card redesign
   - Canvas disabled on mobile (`max-width: 768px`) — too battery intensive
   - Typewriter + entrance animations respect `prefers-reduced-motion`
 
-- [ ] **P5.3 — Commit, push, update CLAUDE.md**
+- [x] **P5.3 — Commit, push, update CLAUDE.md**
   - Commit all to `claude/creative-landing-page-research-5hdf6`
   - Push to remote
   - Update CLAUDE.md: new components in structure, design decisions documented

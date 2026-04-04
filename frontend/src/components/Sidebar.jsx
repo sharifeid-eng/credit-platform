@@ -1,5 +1,6 @@
 import { Link, useParams, useLocation } from 'react-router-dom'
-import { useCompany } from '../contexts/CompanyContext'
+import { motion, AnimatePresence }       from 'framer-motion'
+import { useCompany }                    from '../contexts/CompanyContext'
 
 // Default Klaim tabs (fallback when config has no tabs array)
 const DEFAULT_TAPE_TABS = [
@@ -164,39 +165,57 @@ function SectionHeader({ children }) {
 }
 
 function NavItem({ label, to, active, icon, accent }) {
-  const accentColor = accent ? 'var(--gold)' : undefined
   return (
     <Link
       to={to}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '6px 20px',
-        fontSize: accent ? 12 : 11,
-        fontWeight: active ? 600 : accent ? 500 : 400,
-        color: active ? 'var(--gold)' : accent ? accentColor : 'var(--text-muted)',
-        borderLeft: `2px solid ${active ? 'var(--gold)' : 'transparent'}`,
+        display:        'flex',
+        alignItems:     'center',
+        gap:            6,
+        padding:        '6px 20px 6px 22px',
+        fontSize:       accent ? 12 : 11,
+        fontWeight:     active ? 600 : accent ? 500 : 400,
+        color:          active ? 'var(--gold)' : accent ? 'var(--gold)' : 'var(--text-muted)',
         textDecoration: 'none',
-        transition: 'all var(--transition-fast)',
-        whiteSpace: 'nowrap',
-        background: active ? 'rgba(201,168,76,0.04)' : 'transparent',
+        whiteSpace:     'nowrap',
+        position:       'relative',
+        transition:     'color var(--transition-fast), background var(--transition-fast), padding-left var(--transition-fast)',
+        background:     active
+          ? 'linear-gradient(to right, rgba(201,168,76,0.07), transparent)'
+          : 'transparent',
       }}
       onMouseEnter={e => {
         if (!active) {
-          e.currentTarget.style.color = 'var(--text-primary)'
-          e.currentTarget.style.paddingLeft = '22px'
-          e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
+          e.currentTarget.style.color       = 'var(--text-primary)'
+          e.currentTarget.style.paddingLeft = '24px'
+          e.currentTarget.style.background  = 'rgba(255,255,255,0.02)'
         }
       }}
       onMouseLeave={e => {
         if (!active) {
-          e.currentTarget.style.color = 'var(--text-muted)'
-          e.currentTarget.style.paddingLeft = '20px'
-          e.currentTarget.style.background = 'transparent'
+          e.currentTarget.style.color       = accent ? 'var(--gold)' : 'var(--text-muted)'
+          e.currentTarget.style.paddingLeft = '22px'
+          e.currentTarget.style.background  = 'transparent'
         }
       }}
     >
+      {/* Animated left border — scaleY 0→1 when active */}
+      <motion.span
+        initial={false}
+        animate={{ scaleY: active ? 1 : 0, opacity: active ? 1 : 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        style={{
+          position:        'absolute',
+          left:            0,
+          top:             0,
+          bottom:          0,
+          width:           2,
+          background:      'var(--gold)',
+          borderRadius:    '0 2px 2px 0',
+          transformOrigin: 'top',
+          display:         'block',
+        }}
+      />
       {icon}
       {label}
     </Link>
