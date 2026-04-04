@@ -56,12 +56,12 @@ function HeroLogo() {
     <motion.div
       initial={{ opacity: 0, scale: 0.7 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }} // spring overshoot
-      style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}
+      transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+      style={{ flexShrink: 0 }}
     >
       <div style={{
-        width: 56, height: 56,
-        borderRadius: 16,
+        width: 60, height: 60,
+        borderRadius: 14,
         overflow: 'hidden',
         background: '#000',
       }}>
@@ -142,21 +142,23 @@ export default function Home() {
           transition={{ duration: 0.5, ease: 'easeOut' }}
           style={{ textAlign: 'center', marginBottom: 48 }}
         >
-          <HeroLogo />
-          <h1 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(40px, 5.5vw, 64px)',
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.15,
-            background: 'linear-gradient(135deg, #E8C96A 0%, var(--gold) 40%, #A07830 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            margin: '0 0 14px',
-          }}>
-            Credit Analytics
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 14 }}>
+            <HeroLogo />
+            <h1 style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'clamp(40px, 5.5vw, 64px)',
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+              lineHeight: 1,
+              background: 'linear-gradient(135deg, #E8C96A 0%, var(--gold) 40%, #A07830 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              margin: 0,
+            }}>
+              Credit Analytics
+            </h1>
+          </div>
           <TypewriterText text="GCC asset-backed lending Analytics" />
         </motion.div>
 
