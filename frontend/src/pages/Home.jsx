@@ -96,8 +96,8 @@ export default function Home() {
           const snapFile = last?.filename ?? last ?? null
           const summary  = await getSummary(co.name, product, snapFile, 'USD')
           result[`${co.name}:${product}`] = summary
-        } catch (_) {
-          // Ejari or any company without a standard summary — skip silently
+        } catch (err) {
+          console.error(`[Home] summary fetch failed for ${co.name}:${product}`, err)
         }
       }))
       setSummaries(result)
