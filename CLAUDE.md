@@ -597,8 +597,8 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Landing page: Syne 800 display font for hero headline + LAITH wordmark; `--font-display` CSS token
   - Landing page: TypewriterText subtitle (character-by-character, blinking cursor, respects prefers-reduced-motion)
   - Landing page: HeroLogo entrance animation (lion scale-pulse on load, gold glow pulse CSS keyframe)
-  - Landing page: Two-banner PortfolioStatsHero strip — Banner 1 "Data Analyzed" (gold tint, live from `/aggregate-stats`): Face Value Analyzed, Records Processed, Snapshots Loaded, Portfolio Companies with ease-out expo count-up; Banner 2 "Live Portfolio" (neutral, all `—` until DB data connected): Active Exposure, PAR 30+, PAR 90+, Covenants in Breach, HHI
-  - Landing page: CompanyCard redesign — flagcdn.com flag images (not emoji, for Windows compat) + region badge (UAE/KSA), asset class small caps, headline metric (collection rate + deployed), 3D hover tilt (rotateX 1.5°), animated top border sweep, 80ms stagger
+  - Landing page: Two-banner PortfolioStatsHero strip — Banner 1 "Data Analyzed" (gold tint, live from `/aggregate-stats`): Face Value Analyzed, Deals Processed, Data Points (XM+), Snapshots Loaded, Portfolio Companies with ease-out expo count-up; Banner 2 "Live Portfolio" (neutral, all `—` until DB data connected): Active Exposure, PAR 30+, PAR 90+, Covenants in Breach, HHI
+  - Landing page: CompanyCard two-row layout — Row 1 Tape Analytics (Face Value | Deals | Since); Row 2 Live Portfolio (Borr. Base | PAR 30+ | Covenants, all `—`). `CardRow`/`CardStat`/`CardDivider` sub-components. 3D hover tilt, animated top border sweep, 80ms stagger.
   - Landing page: LandingCanvas removed (geometric pattern provides ambient texture without JS overhead)
   - Company pages: Tab transitions enhanced — blur(3px→0) + y:12→0 with easeOut cubic, blur fade-out on exit
   - Company pages: Sidebar NavItem — animated left border (Framer Motion scaleY 0→1, origin top) + gold gradient background sweep on active state; micro-indent on hover
@@ -607,9 +607,12 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Typography: Syne (display/hero), Space Grotesk (UI body), JetBrains Mono (data). Single Google Fonts load in index.html. All 55+ IBM Plex Mono / Inter hardcoded references replaced with CSS tokens.
   - Navbar: height 56→80px, lion icon 36→54px, LAITH wordmark 22→33px (Syne 800), "Data Analytics" label 10→15px
   - Landing page section labels: "Portfolio Companies" + "Resources" 9→13px
-  - Backend: `/aggregate-stats` endpoint — face value from latest snapshot only (no double-counting across snapshots), total records from all snapshots, FX-normalised to USD (AED×0.2723, SAR×0.2667). File-based cache at `reports/aggregate_stats_cache.json`, invalidated by snapshot fingerprint.
+  - Backend: `/aggregate-stats` endpoint — 5 stats: face value (latest snapshot, no double-count), deals (all snapshots incl. Ejari ODS total_contracts), data points (rows×cols across all snapshots), snapshots, companies. Schema version `"3"` in fingerprint busts cache on field changes. FX-normalised to USD.
+  - Backend: `/companies` endpoint extended with `since` field (earliest snapshot date across all products).
+  - Backend: `/summary` for ejari_summary now returns real ODS data — `total_contracts` → deals, `total_funded` → face value (was hardcoded zeros).
   - New component: `PortfolioStatsHero.jsx` (two-banner stats strip)
   - New asset: `frontend/public/geometric-pattern.svg` (Islamic 8-point star lattice)
+  - New slash command: `.claude/commands/eod.md` — 11-step end-of-session checklist (tests, .env check, cache cleanup, docs, commit, push, sync)
 - ✅ Full backend with all chart and AI endpoints (including returns-analysis)
 - ✅ 18-tab React dashboard with dark theme
 - ✅ AI commentary (cached, clears on snapshot change)

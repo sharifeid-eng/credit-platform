@@ -8,7 +8,26 @@ _(none)_
 
 ---
 
-## Completed — 2026-04-04 (this session)
+## Completed — 2026-04-05 (this session)
+- [x] LandingCanvas.jsx deleted — removed file, import, `hoveredCompany` state, and `onHoverChange` prop from Home.jsx/CompanyCard. CLAUDE.md updated.
+- [x] Banner 1 expanded to 5 stats — added Deals Processed + Data Points (rows×cols); renamed Records Processed → Deals Processed
+- [x] `/aggregate-stats` backend improvements:
+  - `load_silq_snapshot` used for SILQ tapes (was using `load_snapshot`, silently failing)
+  - Tuple unpacking fixed: `df, _ = load_silq_snapshot(...)` (returns tuple, not just df)
+  - Ejari included: ODS parsed for `total_contracts` (deals) + rows×cols across all sheets (data points)
+  - Schema version `"3"` added to cache fingerprint — busts cache automatically on field changes
+- [x] Data Points format: 1162K+ → 1.2M+ (divided by 1M instead of 1K)
+- [x] Company card two-row layout:
+  - Row 1 Tape Analytics: Face Value | Deals | Since (earliest snapshot date)
+  - Row 2 Live Portfolio: Borr. Base | PAR 30+ | Covenants (all `—` until DB connected)
+  - `/companies` API extended with `since` field (earliest snapshot date)
+  - `CardRow`, `CardStat`, `CardDivider` sub-components added
+- [x] Ejari company card data fix — `/summary` for ejari_summary was returning hardcoded zeros. Now parses ODS portfolio_overview for `total_contracts` (deals) and `total_funded` (face value)
+- [x] `/eod` slash command — 11-step end-of-session checklist: inventory, tests, .env check, cache cleanup, todo/lessons/CLAUDE.md update, commit, push, sync feature branch, verify. Stored in `.claude/commands/eod.md`, tracked in git.
+
+---
+
+## Completed — 2026-04-04 (previous session)
 - [x] Typography overhaul — Syne 800 (display/hero), Space Grotesk 400-700 (UI), JetBrains Mono (data). Single load point in index.html. All 55+ IBM Plex Mono / Inter references replaced with CSS tokens.
 - [x] Islamic geometric background — SVG stroke widths tuned to be visible (1.0 lines, 1.6 star, 2.2 dots), opacity 14%, backgroundSize 140px.
 - [x] Navbar enlarged 50% — height 56→80px, lion 36→54px, LAITH wordmark 22→33px. Syne font applied to wordmark. "Data Analytics" label 10→15px.

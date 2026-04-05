@@ -3,6 +3,24 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-05 — Silent Failures from Wrong Loader Function
+**Mistake:** Used `load_snapshot()` for SILQ tapes in `/aggregate-stats`. SILQ requires `load_silq_snapshot()` (multi-sheet Excel). The wrong loader returned empty data silently — bare `except Exception: pass` swallowed the error, leaving `total_deals = 0`.
+**Rule:** Never use bare `except: pass` in data loops — at minimum log the error. When adding a new loop over all companies/snapshots, always dispatch to the correct loader per `analysis_type` (silq → `load_silq_snapshot`, klaim → `load_snapshot`, ejari_summary → handle separately).
+
+---
+
+## 2026-04-05 — load_silq_snapshot Returns a Tuple
+**Mistake:** Called `df = load_silq_snapshot(...)` then `len(df)` — but `load_silq_snapshot` returns `(df, commentary_text)`. Assigning the tuple to `df` meant `len(df) == 2` and `df.columns` threw, again swallowed silently.
+**Rule:** `load_silq_snapshot` always returns `(df, commentary_text)` — always unpack: `df, _ = load_silq_snapshot(...)`. Check the function signature before calling any loader that isn't `load_snapshot`.
+
+---
+
+## 2026-04-05 — Cache Fingerprint Must Include Schema Version
+**Mistake:** Changed stats field names (`total_records` → `total_deals`) but the cache fingerprint only tracked snapshot filenames. The cache hit check matched and served stale data with old field names, causing the frontend to show zeros.
+**Rule:** Any file-based cache fingerprint must include a schema version constant. Bump `STATS_SCHEMA_VERSION` whenever the response shape changes. Pattern: `fingerprint = ["schema:v3", ...snapshot_ids]`.
+
+---
+
 ## 2026-04-02 — Worktree .env Not Found
 **Mistake:** Started a uvicorn server in a git worktree (`/.claude/worktrees/peaceful-cray/backend/`) but the `.env` file only exists in the main project root. `load_dotenv()` traverses parent directories but won't find `.env` outside the worktree directory tree. The API call failed with an auth error.
 **Rule:** When testing backend changes in a worktree, either: (1) copy `.env` into the worktree root, or (2) copy the changed files to the main project directory and test with the already-running server there. Option 2 is simpler when the main server has `--reload`. Clean up any `.env` copies from worktrees afterward.
