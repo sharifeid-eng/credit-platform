@@ -3,6 +3,11 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-05 — No new lessons this session
+Session focused on aligning Ejari dashboard formatting with Klaim/SILQ. Straightforward component swap — no mistakes or corrections.
+
+---
+
 ## 2026-04-05 — Silent Failures from Wrong Loader Function
 **Mistake:** Used `load_snapshot()` for SILQ tapes in `/aggregate-stats`. SILQ requires `load_silq_snapshot()` (multi-sheet Excel). The wrong loader returned empty data silently — bare `except Exception: pass` swallowed the error, leaving `total_deals = 0`.
 **Rule:** Never use bare `except: pass` in data loops — at minimum log the error. When adding a new loop over all companies/snapshots, always dispatch to the correct loader per `analysis_type` (silq → `load_silq_snapshot`, klaim → `load_snapshot`, ejari_summary → handle separately).

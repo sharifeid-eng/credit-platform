@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
 import { getEjariSummary } from '../services/api'
+import KpiCard from '../components/KpiCard'
+import ChartPanel from '../components/ChartPanel'
 
-const fmt = (v) => v == null ? '—' : typeof v === 'number' ? (v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `$${(v/1_000).toFixed(0)}K` : v < 1 && v > 0 ? `${(v*100).toFixed(1)}%` : v.toLocaleString()) : String(v)
 const fmtPct = (v) => v == null ? '—' : `${(v * 100).toFixed(1)}%`
 const fmtDollar = (v) => v == null ? '—' : v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `$${(v/1_000).toFixed(0)}K` : `$${v.toFixed(0)}`
 
@@ -40,10 +42,15 @@ export default function EjariDashboard() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header badge */}
-      <div style={{
-        background: 'var(--bg-surface)', borderRadius: 10, padding: '12px 18px',
-        border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12,
-      }}>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        style={{
+          background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '12px 18px',
+          border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12,
+        }}
+      >
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--gold)' }}>
           Read-Only Summary
         </span>
@@ -55,49 +62,60 @@ export default function EjariDashboard() {
             Report date: {ov.report_date}
           </span>
         )}
-      </div>
+      </motion.div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeSection}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+        >
 
       {/* ── Portfolio Overview ── */}
       {activeSection === 'overview' && (
-        <Panel title="Portfolio Overview" subtitle={`Report date: ${ov.report_date || '—'}`}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
-            <Kpi label="Total Contracts" value={km.total_contracts} color="gold" />
-            <Kpi label="Active Loans" value={km.active_loans} color="teal" />
-            <Kpi label="Matured / Closed" value={km.matured_loans} color="blue" />
-            <Kpi label="Total Originated" value={fmtDollar(km.total_originated)} color="gold" />
-            <Kpi label="Total Funded" value={fmtDollar(km.total_funded)} color="blue" />
-            <Kpi label="Outstanding Principal" value={fmtDollar(km.outstanding_principal)} color="red" />
-            <Kpi label="Outstanding Fee" value={fmtDollar(km.outstanding_fee)} color="gold" />
-            <Kpi label="Total Collections" value={fmtDollar(km.total_collections)} color="teal" />
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <KpiCard label="Total Contracts" value={km.total_contracts?.toLocaleString() ?? '—'} sub={`${km.active_loans ?? 0} active`} color="gold" index={0} />
+            <KpiCard label="Active Loans" value={(km.active_loans ?? 0).toLocaleString()} color="teal" index={1} />
+            <KpiCard label="Matured / Closed" value={(km.matured_loans ?? 0).toLocaleString()} color="blue" index={2} />
+            <KpiCard label="Total Originated" value={fmtDollar(km.total_originated)} color="gold" index={3} />
+            <KpiCard label="Total Funded" value={fmtDollar(km.total_funded)} color="blue" index={4} />
+            <KpiCard label="Outstanding Principal" value={fmtDollar(km.outstanding_principal)} sub="active balance" color="red" index={5} />
+            <KpiCard label="Outstanding Fee" value={fmtDollar(km.outstanding_fee)} color="gold" index={6} />
+            <KpiCard label="Total Collections" value={fmtDollar(km.total_collections)} color="teal" index={7} />
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
-            Credit Quality
+
+          <SectionHeader title="Credit Quality" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <KpiCard label="PAR 30+" value={fmtPct(km.par30)} sub={`${fmtDollar(km.outstanding_principal * (km.par30 || 0))} at risk`} color={km.par30 > 0.05 ? 'red' : 'teal'} index={0} />
+            <KpiCard label="PAR 60+" value={fmtPct(km.par60)} sub={`${fmtDollar(km.outstanding_principal * (km.par60 || 0))} at risk`} color={km.par60 > 0.04 ? 'red' : 'teal'} index={1} />
+            <KpiCard label="PAR 90+" value={fmtPct(km.par90)} sub={`${fmtDollar(km.outstanding_principal * (km.par90 || 0))} at risk`} color={km.par90 > 0.03 ? 'red' : 'teal'} index={2} />
+            <KpiCard label="PAR 180+" value={fmtPct(km.par180)} sub={`${fmtDollar(km.outstanding_principal * (km.par180 || 0))} at risk`} color={km.par180 > 0.02 ? 'red' : 'teal'} index={3} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
-            <Kpi label="PAR 30+" value={fmtPct(km.par30)} color={km.par30 > 0.05 ? 'red' : 'teal'} />
-            <Kpi label="PAR 60+" value={fmtPct(km.par60)} color={km.par60 > 0.04 ? 'red' : 'teal'} />
-            <Kpi label="PAR 90+" value={fmtPct(km.par90)} color={km.par90 > 0.03 ? 'red' : 'teal'} />
-            <Kpi label="PAR 180+" value={fmtPct(km.par180)} color={km.par180 > 0.02 ? 'red' : 'teal'} />
-          </div>
+
           {ov.dpd_distribution?.length > 0 && (
-            <DataTable
-              title="DPD Distribution (Active Loans)"
-              columns={[
-                { key: 'bucket', label: 'DPD Bucket' },
-                { key: 'loans', label: '# Loans', align: 'right' },
-                { key: 'outstanding', label: 'O/S Principal', align: 'right', fmt: fmtDollar },
-                { key: 'pct_loans', label: '% of Loans', align: 'right', fmt: fmtPct },
-                { key: 'pct_outstanding', label: '% of O/S', align: 'right', fmt: fmtPct },
-              ]}
-              rows={ov.dpd_distribution}
-            />
+            <ChartPanel title="DPD Distribution (Active Loans)" subtitle="Days past due breakdown" minHeight={0}>
+              <DataTable
+                columns={[
+                  { key: 'bucket', label: 'DPD Bucket' },
+                  { key: 'loans', label: '# Loans', align: 'right' },
+                  { key: 'outstanding', label: 'O/S Principal', align: 'right', fmt: fmtDollar },
+                  { key: 'pct_loans', label: '% of Loans', align: 'right', fmt: fmtPct },
+                  { key: 'pct_outstanding', label: '% of O/S', align: 'right', fmt: fmtPct },
+                ]}
+                rows={ov.dpd_distribution}
+              />
+            </ChartPanel>
           )}
-        </Panel>
+        </>
       )}
 
       {/* ── Monthly Cohorts ── */}
       {activeSection === 'cohort' && (
-        <Panel title="Monthly Cohort Performance" subtitle="Cohorts by rent start date — write-offs excluded">
+        <ChartPanel title="Monthly Cohort Performance" subtitle="Cohorts by rent start date — write-offs excluded" minHeight={0}>
           <DataTable
             columns={[
               { key: 'cohort', label: 'Cohort' },
@@ -113,12 +131,12 @@ export default function EjariDashboard() {
             rows={data.monthly_cohort || []}
             highlightLast
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Loss Waterfall ── */}
       {activeSection === 'loss-waterfall' && (
-        <Panel title="Cohort Loss Waterfall" subtitle="Origination → 90DPD Default → Recovery → Net Loss | Fraud isolated">
+        <ChartPanel title="Cohort Loss Waterfall" subtitle="Origination → 90DPD Default → Recovery → Net Loss | Fraud isolated" minHeight={0}>
           <DataTable
             columns={[
               { key: 'cohort', label: 'Cohort' },
@@ -134,12 +152,12 @@ export default function EjariDashboard() {
             rows={data.cohort_loss_waterfall || []}
             highlightLast
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Roll Rates ── */}
       {activeSection === 'roll-rates' && (
-        <Panel title="Roll Rate Analysis" subtitle="Clean active loans — payment activity and cure/roll signals by DPD bucket">
+        <ChartPanel title="Roll Rate Analysis" subtitle="Clean active loans — payment activity and cure/roll signals by DPD bucket" minHeight={0}>
           <DataTable
             columns={[
               { key: 'bucket', label: 'DPD Bucket' },
@@ -155,12 +173,12 @@ export default function EjariDashboard() {
             ]}
             rows={data.roll_rates || []}
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Historical Performance ── */}
       {activeSection === 'historical' && (
-        <Panel title="Historical Vintage Performance" subtitle="90DPD data — cumulative default & recovery curves | Fraud isolated">
+        <ChartPanel title="Historical Vintage Performance" subtitle="90DPD data — cumulative default & recovery curves | Fraud isolated" minHeight={0}>
           <DataTable
             columns={[
               { key: 'vintage', label: 'Vintage' },
@@ -176,12 +194,12 @@ export default function EjariDashboard() {
             ]}
             rows={data.historical_performance || []}
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Collections by Month ── */}
       {activeSection === 'collections-month' && (
-        <Panel title="Collections Waterfall by Payment Month" subtitle="Timing distribution of collections">
+        <ChartPanel title="Collections Waterfall by Payment Month" subtitle="Timing distribution of collections" minHeight={0}>
           <DataTable
             columns={[
               { key: 'month', label: 'Month' },
@@ -197,12 +215,12 @@ export default function EjariDashboard() {
             ]}
             rows={data.collections_by_month || []}
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Collections by Origination ── */}
       {activeSection === 'collections-orig' && (
-        <Panel title="Collections Waterfall by Origination" subtitle="Timing distribution by vintage">
+        <ChartPanel title="Collections Waterfall by Origination" subtitle="Timing distribution by vintage" minHeight={0}>
           <DataTable
             columns={[
               { key: 'month', label: 'Month' },
@@ -217,12 +235,12 @@ export default function EjariDashboard() {
             ]}
             rows={data.collections_by_origination || []}
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Segment Analysis ── */}
       {activeSection === 'segments' && (
-        <Panel title="Segment Analysis" subtitle="Performance breakdown by multiple dimensions — write-offs excluded">
+        <ChartPanel title="Segment Analysis" subtitle="Performance breakdown by multiple dimensions — write-offs excluded" minHeight={0}>
           {data.segment_analysis && Object.entries(data.segment_analysis).map(([key, segments]) => (
             <div key={key} style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 8, textTransform: 'capitalize' }}>
@@ -245,12 +263,12 @@ export default function EjariDashboard() {
               />
             </div>
           ))}
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Credit Quality Trends ── */}
       {activeSection === 'credit-quality' && (
-        <Panel title="Credit Quality Trends" subtitle="Underwriting metrics by monthly cohort — write-offs excluded">
+        <ChartPanel title="Credit Quality Trends" subtitle="Underwriting metrics by monthly cohort — write-offs excluded" minHeight={0}>
           <DataTable
             columns={[
               { key: 'cohort', label: 'Cohort' },
@@ -266,12 +284,12 @@ export default function EjariDashboard() {
             ]}
             rows={data.credit_quality_trends || []}
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Najiz & Legal ── */}
       {activeSection === 'najiz' && (
-        <Panel title="Najiz & Legal Collections" subtitle="Court execution data by vintage">
+        <ChartPanel title="Najiz & Legal Collections" subtitle="Court execution data by vintage" minHeight={0}>
           <DataTable
             columns={[
               { key: 'vintage', label: 'Vintage' },
@@ -287,12 +305,12 @@ export default function EjariDashboard() {
             rows={data.najiz_legal || []}
             highlightLast
           />
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Write-offs & Fraud ── */}
       {activeSection === 'writeoffs' && (
-        <Panel title="Write-offs & Fraud Analysis" subtitle="32 WO loans — FULLY EXCLUDED from all other sheets">
+        <ChartPanel title="Write-offs & Fraud Analysis" subtitle="32 WO loans — FULLY EXCLUDED from all other sheets" minHeight={0}>
           {data.writeoffs_fraud?.by_reason?.length > 0 && (
             <DataTable
               title="By Reason Code"
@@ -308,12 +326,12 @@ export default function EjariDashboard() {
               rows={data.writeoffs_fraud.by_reason}
             />
           )}
-        </Panel>
+        </ChartPanel>
       )}
 
       {/* ── Data Notes ── */}
       {activeSection === 'notes' && (
-        <Panel title="Data Notes & Methodology" subtitle="Full audit trail of corrections and methodology">
+        <ChartPanel title="Data Notes & Methodology" subtitle="Full audit trail of corrections and methodology" minHeight={0}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.8 }}>
             {(data.data_notes || []).map((note, i) => (
               <div key={i} style={{
@@ -327,46 +345,29 @@ export default function EjariDashboard() {
               </div>
             ))}
           </div>
-        </Panel>
+        </ChartPanel>
       )}
+
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }
 
-/* ── Reusable Components ── */
-
-function Panel({ id, title, subtitle, children }) {
-  return (
-    <div id={id} style={{
-      background: 'var(--bg-surface)', borderRadius: 12, padding: '20px 24px',
-      border: '1px solid var(--border)', scrollMarginTop: 80,
-    }}>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{title}</div>
-        {subtitle && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{subtitle}</div>}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function Kpi({ label, value, color = 'gold' }) {
-  const colorMap = { gold: 'var(--gold)', teal: 'var(--teal)', red: 'var(--red)', blue: 'var(--blue)' }
+/* ── Section Header — matches Klaim/SILQ pattern ── */
+function SectionHeader({ title }) {
   return (
     <div style={{
-      background: 'var(--bg-deep)', borderRadius: 8, padding: '12px 14px',
-      borderLeft: `3px solid ${colorMap[color] || colorMap.gold}`,
+      fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+      letterSpacing: '0.08em', color: 'var(--text-muted)',
+      paddingBottom: 4,
     }}>
-      <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: colorMap[color], marginBottom: 6 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-        {typeof value === 'number' ? value.toLocaleString() : value}
-      </div>
+      {title}
     </div>
   )
 }
 
+/* ── DataTable — kept as-is (Ejari-specific tabular ODS rendering) ── */
 function DataTable({ title, columns, rows, highlightLast = false }) {
   if (!rows || rows.length === 0) return null
   return (
