@@ -352,13 +352,26 @@ def get_summary(company: str, product: str,
                 currency: Optional[str] = None):
     at = _get_analysis_type(company, product)
     if at == 'ejari_summary':
+        # Pull headline numbers from parsed ODS portfolio overview
+        try:
+            snaps = get_snapshots(company, product)
+            if snaps:
+                from core.analysis_ejari import parse_ejari_workbook
+                parsed   = parse_ejari_workbook(snaps[-1]['filepath'])
+                km       = parsed.get('portfolio_overview', {}).get('key_metrics', {})
+                contracts = int(km.get('total_contracts') or 0)
+                funded    = float(km.get('total_funded')   or 0)
+            else:
+                contracts, funded = 0, 0
+        except Exception:
+            contracts, funded = 0, 0
         return {'company': company, 'product': product, 'display_currency': 'USD',
-                'total_deals': 0, 'total_purchase_value': 0, 'total_collected': 0,
-                'total_denied': 0, 'total_pending': 0, 'total_expected': 0,
-                'collection_rate': 0, 'denial_rate': 0, 'pending_rate': 0,
-                'active_deals': 0, 'completed_deals': 0, 'avg_discount': 0,
-                'dso_available': False, 'hhi_group': 0, 'top_1_group_pct': 0,
-                'analysis_type': 'ejari_summary'}
+                'total_deals': contracts, 'total_purchase_value': funded,
+                'total_collected': 0, 'total_denied': 0, 'total_pending': 0,
+                'total_expected': 0, 'collection_rate': 0, 'denial_rate': 0,
+                'pending_rate': 0, 'active_deals': 0, 'completed_deals': 0,
+                'avg_discount': 0, 'dso_available': False, 'hhi_group': 0,
+                'top_1_group_pct': 0, 'analysis_type': 'ejari_summary'}
     if at == 'silq':
         df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
