@@ -195,7 +195,7 @@ def get_aggregate_stats():
     FX = {'AED': rates.get('AED', 0.2723), 'SAR': rates.get('SAR', 0.2667)}
 
     # Schema version — bump this whenever the stats fields change
-    STATS_SCHEMA_VERSION = "3"
+    STATS_SCHEMA_VERSION = "4"
 
     # Build fingerprint from schema version + all snapshot filenames
     all_snap_ids = [f"schema:{STATS_SCHEMA_VERSION}"]
@@ -242,12 +242,17 @@ def get_aggregate_stats():
                         for sheet in xls.sheet_names:
                             df_sheet = pd.read_excel(xls, sheet_name=sheet, header=None)
                             total_data_points += df_sheet.shape[0] * df_sheet.shape[1]
-                        # Deal count from Portfolio_Overview total_contracts
+                        # Deal count + face value from Portfolio_Overview
                         from core.analysis_ejari import parse_ejari_workbook
                         parsed = parse_ejari_workbook(snap['filepath'])
-                        contracts = parsed.get('portfolio_overview', {}).get('key_metrics', {}).get('total_contracts')
+                        km = parsed.get('portfolio_overview', {}).get('key_metrics', {})
+                        contracts = km.get('total_contracts')
+                        funded    = km.get('total_funded')
                         if contracts is not None:
-                            total_deals += int(contracts)
+                            total_deals += int(str(contracts).replace(',', '').strip())
+                        # Only add face value from latest snapshot
+                        if i == len(snaps) - 1 and funded is not None:
+                            total_value_usd += float(str(funded).replace(',', '').strip())
                     except Exception:
                         pass
                     continue
@@ -363,11 +368,15 @@ def get_summary(company: str, product: str,
                 from core.analysis_ejari import parse_ejari_workbook
                 parsed   = parse_ejari_workbook(snaps[-1]['filepath'])
                 km       = parsed.get('portfolio_overview', {}).get('key_metrics', {})
-                contracts = int(km.get('total_contracts') or 0)
-                funded    = float(km.get('total_funded')   or 0)
+                def _to_num(v, typ):
+                    if v is None: return 0
+                    return typ(str(v).replace(',', '').strip())
+                contracts = _to_num(km.get('total_contracts'), int)
+                funded    = _to_num(km.get('total_funded'),   float)
             else:
                 contracts, funded = 0, 0
-        except Exception:
+        except Exception as e:
+            import logging; logging.getLogger(__name__).warning(f"Ejari summary parse error: {e}")
             contracts, funded = 0, 0
         return {'company': company, 'product': product, 'display_currency': 'USD',
                 'total_deals': contracts, 'total_purchase_value': funded,
