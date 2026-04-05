@@ -607,9 +607,9 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Typography: Syne (display/hero), Space Grotesk (UI body), JetBrains Mono (data). Single Google Fonts load in index.html. All 55+ IBM Plex Mono / Inter hardcoded references replaced with CSS tokens.
   - Navbar: height 56→80px, lion icon 36→54px, LAITH wordmark 22→33px (Syne 800), "Data Analytics" label 10→15px
   - Landing page section labels: "Portfolio Companies" + "Resources" 9→13px
-  - Backend: `/aggregate-stats` endpoint — 5 stats: face value (latest snapshot, no double-count), deals (all snapshots incl. Ejari ODS total_contracts), data points (rows×cols across all snapshots), snapshots, companies. Schema version `"3"` in fingerprint busts cache on field changes. FX-normalised to USD.
+  - Backend: `/aggregate-stats` endpoint — 5 stats: face value (latest snapshot, no double-count, incl. Ejari total_funded), deals (all snapshots incl. Ejari ODS total_contracts), data points (rows×cols across all snapshots), snapshots, companies. Schema version `"4"` in fingerprint busts cache on field changes. FX-normalised to USD.
   - Backend: `/companies` endpoint extended with `since` field (earliest snapshot date across all products).
-  - Backend: `/summary` for ejari_summary now returns real ODS data — `total_contracts` → deals, `total_funded` → face value (was hardcoded zeros).
+  - Backend: `/summary` for ejari_summary now returns real ODS data — `total_contracts` → deals, `total_funded` → face value. ODS values are comma-formatted strings (`'1,348'`) — stripped before int/float conversion.
   - New component: `PortfolioStatsHero.jsx` (two-banner stats strip)
   - New asset: `frontend/public/geometric-pattern.svg` (Islamic 8-point star lattice)
   - New slash command: `.claude/commands/eod.md` — 11-step end-of-session checklist (tests, .env check, cache cleanup, docs, commit, push, sync)

@@ -16,15 +16,17 @@ _(none)_
   - `load_silq_snapshot` used for SILQ tapes (was using `load_snapshot`, silently failing)
   - Tuple unpacking fixed: `df, _ = load_silq_snapshot(...)` (returns tuple, not just df)
   - Ejari included: ODS parsed for `total_contracts` (deals) + rows×cols across all sheets (data points)
-  - Schema version `"3"` added to cache fingerprint — busts cache automatically on field changes
+  - Ejari face value (`total_funded`) now included in aggregate face value total
+  - Schema version `"3"→"4"` in cache fingerprint — busts cache automatically on field changes
 - [x] Data Points format: 1162K+ → 1.2M+ (divided by 1M instead of 1K)
 - [x] Company card two-row layout:
   - Row 1 Tape Analytics: Face Value | Deals | Since (earliest snapshot date)
   - Row 2 Live Portfolio: Borr. Base | PAR 30+ | Covenants (all `—` until DB connected)
   - `/companies` API extended with `since` field (earliest snapshot date)
   - `CardRow`, `CardStat`, `CardDivider` sub-components added
-- [x] Ejari company card data fix — `/summary` for ejari_summary was returning hardcoded zeros. Now parses ODS portfolio_overview for `total_contracts` (deals) and `total_funded` (face value)
+- [x] Ejari company card data fix (root cause: ODS comma-formatted strings) — `int('1,348')` threw ValueError caught silently. Fixed with `.replace(',', '')` before int/float conversion in both `/summary` and `/aggregate-stats`. Card now shows $13M / 1,348 deals.
 - [x] `/eod` slash command — 11-step end-of-session checklist: inventory, tests, .env check, cache cleanup, todo/lessons/CLAUDE.md update, commit, push, sync feature branch, verify. Stored in `.claude/commands/eod.md`, tracked in git.
+- [x] Playwright MCP exploration — added then removed `.mcp.json`. Root cause: session started from mobile (cloud sandbox), not desktop app. Chrome extension only works from desktop app on same machine. Lesson documented.
 
 ---
 

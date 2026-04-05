@@ -3,8 +3,20 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
-## 2026-04-05 — No new lessons this session
+## 2026-04-05 — No new lessons this session (Ejari formatting)
 Session focused on aligning Ejari dashboard formatting with Klaim/SILQ. Straightforward component swap — no mistakes or corrections.
+
+---
+
+## 2026-04-05 — Session Source Determines Browser Access
+**Mistake:** Spent significant time trying to configure Playwright MCP to connect to Chrome, going through CDP endpoints, executable paths, and multiple restarts. Root cause: the session was started from mobile (claude.ai), which runs the Claude Code agent in a cloud Linux sandbox with no access to the user's Windows machine. localhost:5173/8000 and Chrome are all unreachable from there.
+**Rule:** Browser/Chrome access (via the Claude Code Chrome extension) only works when the session is started from the **Claude Code desktop app** on the same machine as Chrome. If `localhost` is unreachable and Chrome won't connect, the first question is: "Was this session started from mobile or web?" If yes, ask the user to restart from the desktop app. Never attempt Playwright MCP workarounds — they can't cross the sandbox boundary.
+
+---
+
+## 2026-04-05 — ODS Numbers Are Comma-Formatted Strings
+**Mistake:** The Ejari ODS workbook stores numbers like `'1,348'` and `'12,727,014'` as formatted strings, not numeric types. `int('1,348')` throws `ValueError`, caught silently by `except Exception: contracts, funded = 0, 0`, returning zeros. Took multiple debugging rounds to find because the backend test (direct API call) wasn't being run until late.
+**Rule:** When parsing ODS/Excel cells that should be numeric, always strip commas before converting: `int(str(v).replace(',', '').strip())`. Whenever a backend endpoint silently returns zeros for a field that should have data, immediately test the endpoint directly (`Invoke-RestMethod`) to confirm what's actually being returned before debugging frontend code.
 
 ---
 
