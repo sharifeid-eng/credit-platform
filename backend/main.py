@@ -323,6 +323,10 @@ def get_product_config(company: str, product: str):
 @app.get("/companies/{company}/products/{product}/date-range")
 def get_date_range(company: str, product: str, snapshot: Optional[str] = None):
     at = _get_analysis_type(company, product)
+    if at == 'ejari_summary':
+        snaps = get_snapshots(company, product)
+        snap_date = snaps[-1]['date'] if snaps else ''
+        return {'min_date': snap_date, 'max_date': snap_date, 'snapshot_date': snap_date}
     if at == 'silq':
         sel = _resolve_snapshot(company, product, snapshot)
         df, _ = load_silq_snapshot(sel['filepath'])

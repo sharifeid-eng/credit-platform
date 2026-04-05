@@ -96,6 +96,7 @@ export default function Home() {
           const snapFile = last?.filename ?? last ?? null
           const summary  = await getSummary(co.name, product, snapFile, 'USD')
           result[`${co.name}:${product}`] = summary
+          console.log(`[Home] summary for ${co.name}:${product}`, summary)
         } catch (err) {
           console.error(`[Home] summary fetch failed for ${co.name}:${product}`, err)
         }
