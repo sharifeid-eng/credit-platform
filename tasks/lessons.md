@@ -3,6 +3,11 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-06 — No new lessons this session (Framework tooling)
+Session focused on creating framework slash commands, hooks, and documentation. No code errors or corrections — all deliverables were documentation/config.
+
+---
+
 ## 2026-04-05 — No new lessons this session (Ejari formatting)
 Session focused on aligning Ejari dashboard formatting with Klaim/SILQ. Straightforward component swap — no mistakes or corrections.
 

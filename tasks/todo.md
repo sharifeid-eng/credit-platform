@@ -8,7 +8,25 @@ _(none)_
 
 ---
 
-## Completed — 2026-04-05 (this session)
+## Completed — 2026-04-06
+- [x] Framework-as-Brain system — 7 slash commands + framework expansion + hooks + memory
+  - `/onboard-company` — full 6-phase onboarding (discovery, data inspection, config, backend, frontend, verification)
+  - `/add-tape` — validate new tape, column compatibility, cross-tape consistency, feature impact
+  - `/validate-tape` — comprehensive data quality with A-F grading, framework-aligned checks
+  - `/framework-audit` — audit all companies: L1-L5 coverage, denominator discipline, separation principle, tests
+  - `/extend-framework` — propagate new metrics across all layers (doc → backend → frontend → methodology → tests)
+  - `/methodology-sync` — detect drift between Methodology.jsx and backend compute functions
+  - `/company-health` — quick diagnostic with health cards, coverage, freshness, gaps
+  - `core/ANALYSIS_FRAMEWORK.md` expanded: Compute Function Registry (Sec 12), Column-to-Feature Map (Sec 13), Decision Tree (Sec 14)
+  - `core/FRAMEWORK_INDEX.md` — quick reference index for sessions
+  - `.claude/hooks/` — auto-reminders: analysis module edits → methodology-sync, new data files → add-tape, session start → command list
+  - `.claude/settings.json` — hooks configuration (FileChanged + SessionStart events)
+  - CLAUDE.md updated: "Analysis Framework Authority" workflow rule, command table, project structure
+  - Memory notes saved: framework-as-brain intent, user profile, full-scope delivery preference
+
+---
+
+## Completed — 2026-04-05
 - [x] Ejari dashboard formatting aligned with Klaim/SILQ — replaced local `Kpi` with shared `KpiCard` (Framer Motion stagger, hover lift/shadow, gradient glow, 22px values, subtitles), replaced local `Panel` with `ChartPanel`, added `AnimatePresence` tab transitions, "Credit Quality" section header. DataTable kept as-is. Deleted unused local `Kpi` and `Panel` functions.
 - [x] LandingCanvas.jsx deleted — removed file, import, `hoveredCompany` state, and `onHoverChange` prop from Home.jsx/CompanyCard. CLAUDE.md updated.
 - [x] Banner 1 expanded to 5 stats — added Deals Processed + Data Points (rows×cols); renamed Records Processed → Deals Processed

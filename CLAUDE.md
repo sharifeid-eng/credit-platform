@@ -33,6 +33,30 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 - Track plans and progress in `tasks/todo.md`. Mark items complete as you go.
 - Explain changes with high-level summaries at each step.
 - After completing a major task, add a review section to `tasks/todo.md` and capture lessons.
+
+### Analysis Framework Authority
+**The Analysis Framework (`core/ANALYSIS_FRAMEWORK.md`) is the authoritative source for ALL analytical decisions.** It is the "brain" of the platform — not just documentation, but the specification that drives every metric, dashboard, and AI prompt.
+
+**Binding rules:**
+- For any analytical decision (new metric, new company, methodology change), consult the framework FIRST
+- Its hierarchy (L1–L5), denominator discipline, three clocks, and separation principle are non-negotiable
+- New companies MUST be onboarded via `/onboard-company` which enforces framework compliance
+- New metrics/tabs MUST be added via `/extend-framework` which propagates across all layers
+- Periodic health checks via `/framework-audit` ensure no drift from the framework
+
+**Quick reference:** `core/FRAMEWORK_INDEX.md` — fast lookup of sections, commands, existing companies, and core principles.
+
+**Framework commands available:**
+| Command | When to Use |
+|---------|-------------|
+| `/onboard-company` | Adding a new company or product to the platform |
+| `/add-tape` | Adding a new tape file for an existing company |
+| `/validate-tape` | Running data quality checks on any tape |
+| `/framework-audit` | Periodic audit of all companies against the framework |
+| `/extend-framework` | Adding new metrics, tabs, or analytical capabilities |
+| `/methodology-sync` | Verifying methodology page matches backend code |
+| `/company-health` | Quick diagnostic of any company's analytical coverage |
+| `/eod` | End-of-session cleanup (tests, docs, commit, push) |
 -----
 ## What This Project Is
 **Laith** (with **AI** as a play in the name) — an institutional-grade, full-stack web application for analyzing and monitoring asset-backed loan portfolios. Built for a private credit fund (ACP) that purchases receivables and short-term loans from portfolio companies.
@@ -127,7 +151,8 @@ credit-platform/
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
-│   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (5-level hierarchy, metric dictionary)
+│   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (14 sections: hierarchy, clocks, denominators, decision trees, compute registry)
+│   ├── FRAMEWORK_INDEX.md  # Quick reference index — section map, company registry, command lookup, core principles
 │   ├── analysis.py         # All pure Klaim data computation functions (no I/O) — 40+ compute functions
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── analysis_ejari.py   # Ejari ODS workbook parser (read-only summary, 12 sections)
@@ -792,6 +817,17 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Used by loss attribution functions to isolate write-off cohort
 - ✅ **Methodology Transparency:**
   - `compute_methodology_log()` — documents corrections, column availability, data quality decisions for audit trail
+- ✅ **Framework-as-Brain system (7 slash commands + framework expansion):**
+  - `/onboard-company` — full 6-phase onboarding workflow with framework compliance checks (discovery, data inspection, config, backend, frontend, verification)
+  - `/add-tape` — new tape validation, column compatibility, cross-tape consistency, feature impact assessment
+  - `/validate-tape` — comprehensive data quality checks with framework-aligned quality scoring (A-F grades)
+  - `/framework-audit` — audit ALL companies against framework: L1-L5 coverage, denominator discipline, separation principle, confidence grading, methodology completeness, test coverage
+  - `/extend-framework` — add new metrics/tabs/capabilities with guaranteed propagation across all layers (framework doc → backend → frontend → methodology → tests → CLAUDE.md)
+  - `/methodology-sync` — detect drift between methodology page and backend compute functions; formula verification, level tag audit
+  - `/company-health` — quick diagnostic: coverage, freshness, gaps, comparison table, framework compliance score
+  - `core/ANALYSIS_FRAMEWORK.md` expanded with 3 new sections: Compute Function Registry (Section 12), Column-to-Feature Dependency Map (Section 13), Asset Class Decision Tree (Section 14)
+  - `core/FRAMEWORK_INDEX.md` — quick reference index for sessions (section map, company registry, command lookup, core principles)
+  - CLAUDE.md updated with "Analysis Framework Authority" workflow rules making the framework binding for all analytical decisions
 -----
 ## Known Gaps & Next Steps
 **Short term:**

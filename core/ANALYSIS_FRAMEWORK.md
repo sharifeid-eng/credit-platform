@@ -476,3 +476,168 @@ Cross-Cutting
   □ Currency and FX behavior specified
   □ Validation checks listed
 ```
+
+---
+
+## 12. Compute Function Registry
+
+This section maps every backend compute function to its framework level, required columns, and output shape. It serves as the machine-readable reference for `/framework-audit`, `/methodology-sync`, and `/extend-framework` commands.
+
+### Klaim — `core/analysis.py`
+
+| Function | Level | Required Columns | Output Key Fields |
+|----------|-------|------------------|-------------------|
+| `compute_summary` | L1 | Deal date, Status, Purchase value, Purchase price, Collected till date, Denied by insurance | total_deals, total_purchase_value, collection_rate, denial_rate |
+| `compute_deployment` | L1 | Deal date, Purchase value, New business | monthly[] with new/repeat breakdown |
+| `compute_deployment_by_product` | L1 | Deal date, Purchase value, Product | monthly[], products[] |
+| `compute_collection_velocity` | L2 | Deal date, Purchase value, Collected till date | monthly[] with rate, expected_rate, buckets[] |
+| `compute_actual_vs_expected` | L2 | Deal date, Purchase value, Collected till date, Expected total | cumulative series, today marker, KPI cards |
+| `compute_collections_timing` | L2 | Collection curve columns (Expected/Actual at intervals) | available, buckets[], by_vintage[] |
+| `compute_collection_curves` | L2 | Collection curve columns | available, curves[], aggregate{} |
+| `compute_dso` | L2 | Deal date, Collected till date (+ curve cols for curve-based) | available, weighted_dso, median_dso, p95_dso |
+| `compute_dtfc` | L5 | Deal date, Collected till date (+ curve cols for curve-based) | available, median_dtfc, p90_dtfc, by_vintage[] |
+| `compute_denial_trend` | L3 | Deal date, Purchase value, Denied by insurance | monthly[] with denial_rate |
+| `compute_ageing` | L3 | Deal date, Status, Purchase value, Collected till date, Denied by insurance | health_summary[], ageing_buckets[], monthly_health[] |
+| `compute_par` | L3 | Status, Purchase value, Collected, Denied, Expected till date (or empirical) | available, par_30{}, par_60{}, par_90{} |
+| `compute_cohorts` | L2/L3 | Deal date, Purchase value, Collected, Denied, Pending | cohorts[] with vintage metrics |
+| `compute_revenue` | L4 | Deal date, Purchase value, Purchase price, Collected, Gross revenue | monthly[], totals{} |
+| `compute_concentration` | L1 | Group, Purchase value, Collected, Denied | group[], top_deals[], hhi{} |
+| `compute_returns_analysis` | L4 | Purchase value, Purchase price, Collected, Discount, Status=Completed | summary{}, monthly[], discount_bands[], new_vs_repeat[] |
+| `compute_cohort_loss_waterfall` | L4 | Deal date, Purchase value, Denied by insurance, Collected | vintages[], totals{} |
+| `compute_recovery_analysis` | L4 | Deal date, Purchase value, Denied, Collected (loss deals) | by_vintage[], worst_deals[], best_deals[] |
+| `compute_vintage_loss_curves` | L4 | Deal date, Purchase value, Denied | available, curves[] |
+| `compute_loss_categorization` | L4 | Group, Purchase value, Denied | categories[], total_loss_deals |
+| `compute_expected_loss` | L4 | Status, Purchase value, Collected, Denied | portfolio{pd,lgd,ead,el}, by_vintage[] |
+| `compute_denial_funnel` | L4 | Purchase value, Collected, Pending, Denied, Provisions | stages[], net_loss, recovery_rate |
+| `compute_stress_test` | L5 | Group, Purchase value, Collected | scenarios[], base_collection_rate |
+| `compute_group_performance` | L1/L3 | Group, Purchase value, Collected, Denied, Deal date | groups[] with per-group metrics |
+| `compute_owner_breakdown` | L1 | Owner, Purchase value, Collected | available, owners[] |
+| `compute_underwriting_drift` | L5 | Deal date, Purchase value, Discount, Product | vintages[] with flags[] |
+| `compute_segment_analysis` | L1/L4 | Product/Group/Purchase value + dimension fields | segments[], segment_by, dimensions[] |
+| `compute_seasonality` | L5 | Deal date, Purchase value | months[], seasonal_index[], years[] |
+| `compute_hhi_for_snapshot` | L1 | Group, Purchase value | hhi value |
+| `compute_cdr_ccr` | L4/L5 | Deal date, Purchase value, Denied, Collected, Status | vintages[] with cdr/ccr rates |
+| `compute_methodology_log` | Cross | All available columns | corrections[], column_availability{} |
+| `compute_vat_summary` | L4 | VAT columns | available, vat_assets, vat_fees |
+
+### SILQ — `core/analysis_silq.py`
+
+| Function | Level | Required Columns | Output Key Fields |
+|----------|-------|------------------|-------------------|
+| `compute_silq_summary` | L1 | Agreement_ID, Status, Total_Loan_Amount, Principal_Amount, Total_Outstanding | total_loans, total_disbursed, collection_rate |
+| `compute_silq_delinquency` | L3 | DPD, Total_Outstanding, Status | dpd_buckets[], par_30/60/90{} |
+| `compute_silq_collections` | L2 | Disbursement_Date, Total_Loan_Amount, Repaid_Amount | monthly[] with rates |
+| `compute_silq_concentration` | L1 | Shop_Name, Total_Loan_Amount, Total_Outstanding | shops[], hhi{} |
+| `compute_silq_cohorts` | L2/L3 | Disbursement_Date, Total_Loan_Amount, Repaid_Amount, Total_Outstanding | cohorts[] |
+| `compute_silq_yield` | L4 | Total_Loan_Amount, Principal_Amount, Repaid_Amount, Status | summary{}, monthly[] |
+| `compute_silq_tenure` | L2 | Tenure_Days, Total_Loan_Amount, Status | bands[], avg_tenure |
+| `compute_silq_covenants` | L5 | DPD, Total_Outstanding, Repaid_Amount, Status | covenants[] |
+| `compute_silq_seasonality` | L5 | Disbursement_Date, Total_Loan_Amount | months[], seasonal_index[] |
+| `compute_silq_cohort_loss_waterfall` | L4 | Disbursement_Date, Total_Loan_Amount, DPD, Repaid_Amount | vintages[], totals{} |
+| `compute_silq_underwriting_drift` | L5 | Disbursement_Date, Total_Loan_Amount, Tenure_Days, Product | vintages[] with flags[] |
+| `compute_silq_cdr_ccr` | L4/L5 | Disbursement_Date, Total_Loan_Amount, DPD, Repaid_Amount | vintages[] with cdr/ccr rates |
+
+### Portfolio — `core/portfolio.py`
+
+| Function | Level | Context | Output Key Fields |
+|----------|-------|---------|-------------------|
+| `compute_borrowing_base` | L1/L5 | SILQ facility | waterfall{}, kpis{}, facility_capacity |
+| `compute_klaim_borrowing_base` | L1/L5 | Klaim facility | waterfall{}, kpis{}, facility_capacity |
+| `compute_concentration_limits` | L1 | Both | limits[], summary{} |
+| `compute_klaim_concentration_limits` | L1 | Klaim | limits[], summary{} |
+| `compute_covenants` | L5 | SILQ | covenants[] |
+| `compute_klaim_covenants` | L5 | Klaim | covenants[] |
+| `compute_portfolio_flow` | L2 | Both | monthly[], totals{} |
+
+---
+
+## 13. Column-to-Feature Dependency Map
+
+When a tape is loaded, the available columns determine which features are enabled. This map drives graceful degradation.
+
+### Universal Required Columns (all analysis_types)
+- **Deal/Loan ID** — unique identifier
+- **Origination date** — vintage construction, deployment charts
+- **Face value** — all monetary metrics
+- **Status** — active vs completed segmentation
+
+### Feature Activation by Column Presence
+
+| Column(s) | Features Enabled |
+|-----------|-----------------|
+| Collected amount | Collection rate, DSO, Revenue, Cohorts, Returns |
+| Denied/Default amount | Denial trend, Loss waterfall, PAR, EL model, CDR/CCR |
+| Pending amount | Denial funnel, Actual vs Expected |
+| Expected till date | PAR (primary method), Pacing, Expected rate line |
+| Collection curves (Expected/Actual at 30d intervals) | DSO (curve-based), DTFC (curve-based), Collections timing, Collection speed in cohorts |
+| Funded amount (Purchase price) | Returns, Capital recovery, Margins |
+| Discount / Interest rate | Returns (discount bands), Underwriting drift |
+| Group / Counterparty | Concentration, HHI, Group performance, Stress test, Loss categorization |
+| Product type | Deployment by product, Segment analysis |
+| New business flag | New vs repeat in Deployment, Returns, Segments |
+| Owner / SPV | Owner breakdown in Portfolio tab |
+| Fee columns | Revenue (fee income component) |
+| Due date / Repayment deadline | PAR (contractual DPD), DPD buckets |
+| DPD column | Delinquency tab, PAR (direct), Roll rates |
+| VAT columns | VAT summary in Revenue |
+
+### Graceful Degradation Pattern
+```python
+# Every compute function that depends on optional columns MUST follow this pattern:
+def compute_feature(df, mult, as_of_date=None):
+    if 'required_column' not in df.columns:
+        return {'available': False}
+    # ... compute ...
+    return {'available': True, ...data...}
+```
+
+Frontend checks: `if (!data.available) return null;` — section hidden entirely.
+
+---
+
+## 14. Asset Class Decision Tree
+
+When onboarding a new company, walk through this decision tree to classify the asset class and determine the analytical approach.
+
+```
+START
+  │
+  ├─ Is the data a raw loan tape (CSV/Excel)?
+  │   │
+  │   ├─ YES → Standard analysis pipeline
+  │   │   │
+  │   │   ├─ Does the obligor have contractual payment dates?
+  │   │   │   ├─ YES → Clock = Contractual DPD (like SILQ)
+  │   │   │   │   └─ PAR computable from DPD column directly
+  │   │   │   │
+  │   │   │   └─ NO → Does the tape have expected collection timelines?
+  │   │   │       ├─ YES → Clock = Operational Delay (like Klaim)
+  │   │   │       │   └─ PAR from Expected till date shortfall
+  │   │   │       │
+  │   │   │       └─ NO → Clock = Origination Age only
+  │   │   │           └─ PAR from empirical benchmarks (Option C) or hidden
+  │   │   │
+  │   │   ├─ Is this a factoring/receivables product?
+  │   │   │   ├─ YES → Loss = denial/dilution (Klaim pattern)
+  │   │   │   │   └─ Dilution framework applies (Section 9)
+  │   │   │   │
+  │   │   │   └─ NO → Is this consumer/commercial lending?
+  │   │   │       ├─ YES → Loss = DPD > threshold / charge-off (SILQ pattern)
+  │   │   │       │
+  │   │   │       └─ NO → Define loss event for this asset class
+  │   │   │
+  │   │   └─ Does a facility agreement govern this portfolio?
+  │   │       ├─ YES → Portfolio Analytics enabled
+  │   │       │   └─ Define: advance rates, concentration limits, covenants
+  │   │       │
+  │   │       └─ NO → Tape Analytics only
+  │   │           └─ Set hide_portfolio_tabs: false (can still compute tape-based portfolio metrics)
+  │   │
+  │   └─ NO → Pre-computed workbook (ODS/Excel)
+  │       └─ analysis_type = "{type}_summary"
+  │           ├─ hide_portfolio_tabs: true
+  │           ├─ Build parser (like analysis_ejari.py)
+  │           └─ Build dedicated dashboard component
+  │
+  └─ END
+```
