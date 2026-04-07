@@ -153,6 +153,9 @@ credit-platform/
 ├── core/
 │   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (14 sections: hierarchy, clocks, denominators, decision trees, compute registry)
 │   ├── FRAMEWORK_INDEX.md  # Quick reference index — section map, company registry, command lookup, core principles
+│   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
+│   ├── methodology_klaim.py # Klaim methodology metadata (16 sections, 29 metrics, 13 tables)
+│   ├── methodology_silq.py # SILQ methodology metadata (15 sections, 23 metrics, 2 tables)
 │   ├── analysis.py         # All pure Klaim data computation functions (no I/O) — 40+ compute functions
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── analysis_ejari.py   # Ejari ODS workbook parser (read-only summary, 12 sections)
@@ -254,7 +257,8 @@ credit-platform/
 │   └── test_analysis_silq.py   # Integration tests for SILQ analytics
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
-│   └── create_api_key.py   # CLI to generate API keys for portfolio companies
+│   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
+│   └── sync_framework_registry.py  # Auto-generate Section 12 in ANALYSIS_FRAMEWORK.md from metric registry
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
 └── reports/
@@ -540,6 +544,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Underwriting drift** — `compute_underwriting_drift()` compares per-vintage metrics (avg deal size, discount, collection rate) against historical norms (rolling mean of prior vintages). Flags vintages where metrics deviate beyond 1 standard deviation.
 - **Seasonality** — `compute_seasonality()` groups deployment by calendar month across years for YoY comparison. Computes seasonal index (month average / overall average) to identify seasonal patterns in origination.
 - **Methodology log** — `compute_methodology_log()` documents all data corrections, column availability checks, and data quality decisions applied during analysis. Provides audit trail for IC-level transparency.
+- **Living Methodology architecture** — Methodology page content is stored as structured Python dicts in companion files (`core/methodology_klaim.py`, `core/methodology_silq.py`) rather than hardcoded JSX. Backend serves via `GET /methodology/{analysis_type}`. Frontend renders dynamically using existing Metric/Table/Note/Section components. Companion files (not inline decorators) chosen because methodology metadata is large (multi-line strings, nested structures) — keeping `analysis.py` as pure computation. Ejari uses static JSON file at `data/Ejari/RNPL/methodology.json`. New companies: create `methodology_{type}.py`, register at startup → page works automatically.
 - **Ejari read-only summary pattern** — When `analysis_type` is `"ejari_summary"`, the platform bypasses all tape loading and computation. TapeAnalytics renders `EjariDashboard.jsx` which reads the URL `:tab` param and renders only the matching section. The `parse_ejari_workbook()` function in `core/analysis_ejari.py` reads the ODS file once (cached per session), extracting 12 structured sections. Config uses `hide_portfolio_tabs: true` to suppress Portfolio Analytics in sidebar, and sidebar header shows "Analysis" instead of "Tape Analytics". EjariDashboard uses shared `KpiCard` and `ChartPanel` components (same as Klaim/SILQ) for visual consistency. Only `DataTable` remains Ejari-specific (renders ODS tabular data). This pattern can be reused for any future company that provides pre-computed analysis instead of raw tapes.
 - **ODS file support** — `core/loader.py` `get_snapshots()` now accepts `.ods` files alongside `.csv` and `.xlsx`. Requires `odfpy` package (`pip install odfpy`).
 - **Overview page standardization** — All company overviews follow a consistent section structure guided by the L1-L5 analytical hierarchy: (1) Main KPIs (L1/L2, 5-col grid, bespoke per company), (2) "Credit Quality" section (L3, PAR 30+/60+/90+ as individual cards), (3) "Leading Indicators" section (L5, DTFC etc when available). PAR cards always use `{ccy} {amount}K at risk` subtitle format. Fixed 5-column grids prevent async reflow. Bespoke KPIs encouraged within each section.
@@ -828,6 +833,16 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `core/ANALYSIS_FRAMEWORK.md` expanded with 3 new sections: Compute Function Registry (Section 12), Column-to-Feature Dependency Map (Section 13), Asset Class Decision Tree (Section 14)
   - `core/FRAMEWORK_INDEX.md` — quick reference index for sessions (section map, company registry, command lookup, core principles)
   - CLAUDE.md updated with "Analysis Framework Authority" workflow rules making the framework binding for all analytical decisions
+- ✅ **Living Methodology (auto-generated from backend metadata):**
+  - `core/metric_registry.py` — decorator registry + `get_methodology()` + `get_registry()`
+  - `core/methodology_klaim.py` — 16 sections, 29 metrics, 13 tables (Klaim methodology content as structured data)
+  - `core/methodology_silq.py` — 15 sections, 23 metrics, 2 tables (SILQ methodology content as structured data)
+  - `data/Ejari/RNPL/methodology.json` — static Ejari methodology served from same endpoint
+  - `GET /methodology/{analysis_type}` — returns structured JSON consumed by frontend
+  - `GET /methodology-registry` — raw registry for auditing and Section 12 generation
+  - `frontend/src/pages/Methodology.jsx` rewritten: 1301 → 290 lines (data-driven renderer)
+  - `scripts/sync_framework_registry.py` — auto-generates Section 12 in ANALYSIS_FRAMEWORK.md from the metric registry
+  - Adding a new metric to methodology_*.py → Methodology page auto-updates, Section 12 auto-updates
 -----
 ## Known Gaps & Next Steps
 **Short term:**

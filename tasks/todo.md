@@ -8,6 +8,20 @@ _(none)_
 
 ---
 
+## Completed — 2026-04-07
+- [x] Living Methodology system — auto-generated from backend metadata
+  - `core/metric_registry.py` — decorator registry + `get_methodology()` + `get_registry()`
+  - `core/methodology_klaim.py` — 16 sections, 29 metrics, 13 tables (all Klaim methodology content)
+  - `core/methodology_silq.py` — 15 sections, 23 metrics, 2 tables (all SILQ methodology content)
+  - `data/Ejari/RNPL/methodology.json` — static Ejari methodology
+  - `GET /methodology/{analysis_type}` + `GET /methodology-registry` — new API endpoints
+  - `frontend/src/pages/Methodology.jsx` rewritten: 1301 → 290 lines (data-driven from API)
+  - `frontend/src/services/api.js` — added `getMethodology()` export
+  - `scripts/sync_framework_registry.py` — auto-generates Section 12 in ANALYSIS_FRAMEWORK.md
+  - Section 12 now auto-generated from the metric registry (no more manual tables)
+
+---
+
 ## Completed — 2026-04-06
 - [x] Framework-as-Brain system — 7 slash commands + framework expansion + hooks + memory
   - `/onboard-company` — full 6-phase onboarding (discovery, data inspection, config, backend, frontend, verification)

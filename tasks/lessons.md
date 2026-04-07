@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-07 — Companion metadata files beat inline decorators for large codebases
+**Decision:** Instead of adding @metric decorators to 48 compute functions (which would add ~500 lines of metadata inline, cluttering the pure-compute modules), created separate companion files (`methodology_klaim.py`, `methodology_silq.py`) that register metadata after import. This keeps `analysis.py` clean (pure computation) while making methodology content easily editable.
+**Rule:** When metadata is large (multi-line strings, nested structures), prefer companion registration files over inline decorators. Reserve decorators for small metadata (< 3 fields).
+
+---
+
 ## 2026-04-06 — No new lessons this session (Framework tooling)
 Session focused on creating framework slash commands, hooks, and documentation. No code errors or corrections — all deliverables were documentation/config.
 
