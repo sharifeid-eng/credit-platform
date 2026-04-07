@@ -51,6 +51,20 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-07 (session 3)
+- [x] AI response caching — file-based disk cache (`reports/ai_cache/`) for executive summary (~$0.48/call), commentary (~$0.06/call), and tab insights (~$0.02/call x 18 tabs). Cache key: `(endpoint, company, product, snapshot)`. One AI call per tape lifetime, served instantly to all users thereafter.
+- [x] Cache key normalization — `as_of_date` normalized: None, snapshot_date, and future dates all map to same key. Currency excluded (only affects numeric display, not analytical findings).
+- [x] `?refresh=true` parameter on all 3 AI endpoints for force-regeneration
+- [x] Frontend cache awareness — `CACHED` badges on AICommentary, TabInsight, ExecutiveSummary. Regenerate buttons for force-refresh. `getAICacheStatus` API function.
+- [x] Backdated view data integrity — `filter_by_date()` only filters deal selection, not balance columns. When `as_of_date < snapshot_date`:
+  - Backend: AI endpoints return HTTP 400 (misleading data)
+  - Frontend: KpiCard shows `TAPE DATE` badge with dimmed value (50% opacity)
+  - BackdatedBanner classifies metrics as ACCURATE vs TAPE DATE
+  - AICommentary, TabInsight, ExecutiveSummary disabled with explanation
+  - All 18 Klaim + 11 SILQ ChartTabs pass `isBackdated` to TabInsight
+- [x] ANALYSIS_FRAMEWORK.md Section 15 — As-of-Date Filtering & Data Integrity (metric classification table, enforcement rules)
+- [x] lessons.md — root cause analysis of as_of_date limitation with prevention rules
+
 ## Completed — 2026-04-07 (session 2)
 - [x] Fix SILQ Face Value blank on landing page — `compute_silq_summary()` returned `total_disbursed` but frontend expected `total_purchase_value`. Added `total_purchase_value` alias mapped to `total_disbursed`. Same pattern now consistent across Klaim, Ejari, SILQ.
 - [x] Removed tracked `backend/__pycache__/main.cpython-314.pyc` from git
