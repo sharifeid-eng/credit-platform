@@ -3,22 +3,24 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { getTabInsight } from '../services/api'
 
 /**
- * TabInsight — compact one-click AI insight bar with smooth expand/collapse
+ * TabInsight — compact one-click AI insight bar with smooth expand/collapse + cache awareness
  */
 export default function TabInsight({ company, product, snapshot, currency, tab }) {
   const [text, setText]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen]       = useState(false)
   const [error, setError]     = useState(null)
+  const [fromCache, setFromCache] = useState(false)
 
-  async function fetch() {
-    if (text) { setOpen(o => !o); return }
+  async function fetch(refresh = false) {
+    if (text && !refresh) { setOpen(o => !o); return }
     setLoading(true)
     setOpen(true)
     setError(null)
     try {
-      const result = await getTabInsight(company, product, snapshot, currency, tab)
-      setText(result)
+      const result = await getTabInsight(company, product, snapshot, currency, tab, undefined, { refresh })
+      setText(result.insight)
+      setFromCache(!!result.cached && !refresh)
     } catch {
       setError('Failed to load insight.')
     } finally {
@@ -42,26 +44,56 @@ export default function TabInsight({ company, product, snapshot, currency, tab }
       }}
     >
       {/* Trigger row */}
-      <button onClick={fetch} style={{
+      <div style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-        padding: '9px 14px', background: 'none', border: 'none',
-        cursor: 'pointer', textAlign: 'left',
+        padding: '9px 14px',
       }}>
-        <SparkIcon />
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          AI Insight
-        </span>
-        <span style={{ fontSize: 10, color: 'var(--text-faint)', flex: 1 }}>
-          {loading ? 'Analysing…' : text ? 'Click to toggle' : `Get AI insight for this view`}
-        </span>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-block' }}
-        >
-          ▾
-        </motion.span>
-      </button>
+        <button onClick={() => fetch(false)} style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'none', border: 'none',
+          cursor: 'pointer', textAlign: 'left', flex: 1, padding: 0,
+        }}>
+          <SparkIcon />
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            AI Insight
+          </span>
+          {text && fromCache && (
+            <span style={{
+              fontSize: 8, fontWeight: 600, color: 'var(--text-faint)',
+              background: 'rgba(201,168,76,0.1)', padding: '1px 5px',
+              borderRadius: 3, letterSpacing: '0.06em',
+            }}>
+              CACHED
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: 'var(--text-faint)', flex: 1 }}>
+            {loading ? 'Analysing...' : text ? 'Click to toggle' : `Get AI insight for this view`}
+          </span>
+          <motion.span
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ fontSize: 10, color: 'var(--text-muted)', display: 'inline-block' }}
+          >
+            ▾
+          </motion.span>
+        </button>
+        {text && (
+          <button
+            onClick={(e) => { e.stopPropagation(); fetch(true) }}
+            disabled={loading}
+            title="Regenerate insight (new AI call)"
+            style={{
+              fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
+              background: 'transparent', color: 'var(--text-faint)',
+              border: '1px solid var(--border)', cursor: loading ? 'default' : 'pointer',
+              fontFamily: 'var(--font-ui)', flexShrink: 0,
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            ↻
+          </button>
+        )}
+      </div>
 
       {/* Expanded body */}
       <AnimatePresence>
@@ -79,7 +111,7 @@ export default function TabInsight({ company, product, snapshot, currency, tab }
             }}>
               {loading && (
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: 8 }}>
-                  Generating…
+                  Generating...
                 </div>
               )}
               {error && (

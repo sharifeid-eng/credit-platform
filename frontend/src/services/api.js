@@ -31,17 +31,20 @@ export const getSummary          = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/summary`, { params: p(snap, cur, asOf) }).then(r => r.data);
 export const getPortfolioSummary = getSummary; // legacy alias
 
-export const getAICommentary     = (co, prod, snap, cur, asOf) =>
-  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: p(snap, cur, asOf) }).then(r => r.data.commentary);
+export const getAICommentary     = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
+  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
 
-export const getTabInsight       = (co, prod, snap, cur, tab, asOf) =>
-  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab } }).then(r => r.data.insight);
+export const getTabInsight       = (co, prod, snap, cur, tab, asOf, { refresh = false } = {}) =>
+  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab, ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
 
 export const postChat            = (co, prod, snap, cur, question, history = []) =>
   api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data.answer);
 
-export const getExecutiveSummary = (co, prod, snap, cur, asOf) =>
-  api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getExecutiveSummary = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
+  api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
+
+export const getAICacheStatus    = (co, prod, snap, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/ai-cache-status`, { params: { snapshot: snap, ...(asOf ? { as_of_date: asOf } : {}) } }).then(r => r.data);
 
 // ── PAR & DTFC ──────────────────────────────────────────────────────────────
 export const getParChart              = (co, prod, snap, cur, asOf) =>

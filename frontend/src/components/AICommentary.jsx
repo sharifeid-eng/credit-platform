@@ -3,19 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { getAICommentary } from '../services/api'
 
 /**
- * AICommentary — dark theme panel with slide-up animation
+ * AICommentary — dark theme panel with slide-up animation + cache awareness
  */
 export default function AICommentary({ company, product, snapshot, currency, cached, onCache }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  const [fromCache, setFromCache] = useState(false)
 
-  async function generate() {
-    if (cached) return
+  async function generate(refresh = false) {
+    if (cached && !refresh) return
     setLoading(true)
     setError(null)
     try {
-      const text = await getAICommentary(company, product, snapshot, currency)
-      onCache?.(text)
+      const data = await getAICommentary(company, product, snapshot, currency, undefined, { refresh })
+      setFromCache(!!data.cached && !refresh)
+      onCache?.(data.commentary)
     } catch (e) {
       setError('Failed to generate commentary.')
     } finally {
@@ -50,19 +52,45 @@ export default function AICommentary({ company, product, snapshot, currency, cac
           }}>
             AI Commentary
           </span>
+          {cached && fromCache && (
+            <span style={{
+              fontSize: 8, fontWeight: 600, color: 'var(--text-faint)',
+              background: 'rgba(201,168,76,0.1)', padding: '2px 6px',
+              borderRadius: 3, letterSpacing: '0.06em',
+            }}>
+              CACHED
+            </span>
+          )}
         </div>
-        {!cached && (
-          <button onClick={generate} disabled={loading} style={{
-            fontSize: 10, fontWeight: 700,
-            padding: '4px 12px', borderRadius: 5,
-            background: loading ? 'var(--gold-dim)' : 'var(--gold)',
-            color: '#000', border: 'none', cursor: loading ? 'default' : 'pointer',
-            fontFamily: 'var(--font-ui)',
-            transition: 'background var(--transition-fast)',
-          }}>
-            {loading ? 'Generating…' : 'Generate'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {cached && (
+            <button onClick={() => generate(true)} disabled={loading} style={{
+              fontSize: 9, fontWeight: 600,
+              padding: '3px 8px', borderRadius: 4,
+              background: 'transparent',
+              color: 'var(--text-muted)', border: '1px solid var(--border)',
+              cursor: loading ? 'default' : 'pointer',
+              fontFamily: 'var(--font-ui)',
+              transition: 'all var(--transition-fast)',
+            }}
+              title="Regenerate commentary (new AI call)"
+            >
+              Regenerate
+            </button>
+          )}
+          {!cached && (
+            <button onClick={() => generate(false)} disabled={loading} style={{
+              fontSize: 10, fontWeight: 700,
+              padding: '4px 12px', borderRadius: 5,
+              background: loading ? 'var(--gold-dim)' : 'var(--gold)',
+              color: '#000', border: 'none', cursor: loading ? 'default' : 'pointer',
+              fontFamily: 'var(--font-ui)',
+              transition: 'background var(--transition-fast)',
+            }}>
+              {loading ? 'Generating...' : 'Generate'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Body */}

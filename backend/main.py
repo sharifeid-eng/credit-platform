@@ -116,6 +116,51 @@ def _integrity_path(company, product, snap_old, snap_new, suffix=''):
     safe_new = snap_new.replace('/', '_').replace('\\', '_')
     return os.path.join(_integrity_dir(company, product), f'{safe_old}__vs__{safe_new}{suffix}.json')
 
+# ── AI Response Cache ─────────────────────────────────────────────────────────
+
+import hashlib
+
+def _ai_cache_dir():
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'reports', 'ai_cache')
+    os.makedirs(base, exist_ok=True)
+    return base
+
+def _ai_cache_key(endpoint: str, company: str, product: str,
+                  snapshot: str = '', as_of_date: str = '', tab: str = '') -> str:
+    """Build a deterministic cache filename from request parameters.
+    Currency is excluded because the analytical findings are identical —
+    currency only applies a numeric multiplier to displayed amounts."""
+    raw = f"{endpoint}|{company}|{product}|{snapshot}|{as_of_date}|{tab}"
+    h = hashlib.sha256(raw.encode()).hexdigest()[:16]
+    safe = f"{company}_{product}_{endpoint}"
+    if tab:
+        safe += f"_{tab}"
+    if snapshot:
+        safe_snap = snapshot.replace('/', '_').replace('\\', '_').replace('.', '_')
+        safe += f"_{safe_snap}"
+    # Append hash to guarantee uniqueness
+    return os.path.join(_ai_cache_dir(), f"{safe}_{h}.json")
+
+def _ai_cache_get(cache_path: str) -> dict | None:
+    """Return cached AI response or None if not cached."""
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+    return None
+
+def _ai_cache_put(cache_path: str, data: dict) -> None:
+    """Write AI response to disk cache."""
+    data['cached'] = True
+    data['cached_at'] = datetime.now().isoformat()
+    try:
+        with open(cache_path, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+    except OSError:
+        pass  # Silently fail — caching is best-effort
+
 def _extract_questions(text):
     """Extract numbered questions from AI analysis text."""
     questions = []
@@ -1069,6 +1114,51 @@ def get_integrity_notes(company: str, product: str,
             return json.load(f)
     return {"notes": {}}
 
+# ── AI Cache Management ───────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/ai-cache-status")
+def get_ai_cache_status(company: str, product: str,
+                        snapshot: Optional[str] = None,
+                        as_of_date: Optional[str] = None):
+    """Check which AI outputs are cached for this company/product/snapshot."""
+    sel = _resolve_snapshot(company, product, snapshot)
+    snap_key = sel.get('filename', snapshot or '')
+    aod = as_of_date or ''
+
+    endpoints = {
+        'commentary': _ai_cache_key('commentary', company, product, snap_key, aod),
+        'executive_summary': _ai_cache_key('executive_summary', company, product, snap_key, aod),
+    }
+
+    # Check common tab insights
+    at = _get_analysis_type(company, product)
+    if at == 'silq':
+        tabs = ['delinquency', 'collections', 'concentration', 'cohort', 'yield-margins', 'tenure']
+    elif at == 'ejari_summary':
+        tabs = []
+    else:
+        tabs = ['deployment', 'collection', 'denial-trend', 'ageing', 'revenue',
+                'concentration', 'cohort', 'actual-vs-expected', 'returns', 'risk-migration']
+
+    tab_cache = {}
+    for t in tabs:
+        path = _ai_cache_key('tab_insight', company, product, snap_key, aod, t)
+        c = _ai_cache_get(path)
+        if c:
+            tab_cache[t] = c.get('cached_at', True)
+
+    result = {}
+    for name, path in endpoints.items():
+        c = _ai_cache_get(path)
+        if c:
+            result[name] = {'cached': True, 'cached_at': c.get('cached_at', ''), 'generated_at': c.get('generated_at', '')}
+        else:
+            result[name] = {'cached': False}
+
+    result['tab_insights'] = tab_cache
+    result['total_cached'] = sum(1 for v in result.values() if isinstance(v, dict) and v.get('cached')) + len(tab_cache)
+    return result
+
 # ── AI endpoints ──────────────────────────────────────────────────────────────
 
 def _ai_client():
@@ -1081,7 +1171,18 @@ def _ai_client():
 def get_ai_commentary(company: str, product: str,
                       snapshot: Optional[str] = None,
                       as_of_date: Optional[str] = None,
-                      currency: Optional[str] = None):
+                      currency: Optional[str] = None,
+                      refresh: bool = False):
+    # Resolve snapshot first for consistent cache key
+    sel_for_key = _resolve_snapshot(company, product, snapshot)
+    snap_key = sel_for_key.get('filename', snapshot or '')
+    cache_path = _ai_cache_key('commentary', company, product, snap_key, as_of_date or '')
+
+    if not refresh:
+        cached = _ai_cache_get(cache_path)
+        if cached:
+            return cached
+
     at = _get_analysis_type(company, product)
 
     if at == 'silq':
@@ -1161,11 +1262,13 @@ Professional tone, suitable for an investment committee memo. Be specific and da
         model="claude-opus-4-6", max_tokens=1000,
         messages=[{"role": "user", "content": prompt}]
     )
-    return {
+    result = {
         'commentary':   msg.content[0].text,
         'generated_at': datetime.now().isoformat(),
         'as_of_date':   as_of_date or sel.get('date', ''),
     }
+    _ai_cache_put(cache_path, result)
+    return result
 
 
 # ── AI Executive Summary ─────────────────────────────────────────────────────
@@ -1547,11 +1650,23 @@ def _build_ejari_full_context(data):
 def get_executive_summary(company: str, product: str,
                           snapshot: Optional[str] = None,
                           as_of_date: Optional[str] = None,
-                          currency: Optional[str] = None):
+                          currency: Optional[str] = None,
+                          refresh: bool = False):
     """AI Executive Summary — holistic analysis of ALL computed metrics.
 
     Returns top 5-10 findings ranked by business impact with severity levels.
+    Cached per (company, product, snapshot, as_of_date) — currency excluded
+    since it only affects numeric display, not analytical findings.
     """
+    sel_for_key = _resolve_snapshot(company, product, snapshot)
+    snap_key = sel_for_key.get('filename', snapshot or '')
+    cache_path = _ai_cache_key('executive_summary', company, product, snap_key, as_of_date or '')
+
+    if not refresh:
+        cached = _ai_cache_get(cache_path)
+        if cached:
+            return cached
+
     at = _get_analysis_type(company, product)
 
     if at == 'ejari_summary':
@@ -1685,13 +1800,15 @@ Return ONLY the JSON object, no other text."""
         findings = [{'rank': 1, 'severity': 'warning', 'title': 'Summary generated',
                      'explanation': response_text, 'data_points': [], 'tab': 'overview'}]
 
-    return {
+    result = {
         'narrative': narrative,
         'findings': findings,
         'generated_at': datetime.now().isoformat(),
         'as_of_date': as_of_date or sel.get('date', ''),
         'context_coverage': n_metrics,
     }
+    _ai_cache_put(cache_path, result)
+    return result
 
 
 @app.get("/companies/{company}/products/{product}/ai-tab-insight")
@@ -1699,8 +1816,18 @@ def get_tab_insight(company: str, product: str,
                     tab: str,
                     snapshot: Optional[str] = None,
                     as_of_date: Optional[str] = None,
-                    currency: Optional[str] = None):
-    """Generate a short AI insight for a specific dashboard tab."""
+                    currency: Optional[str] = None,
+                    refresh: bool = False):
+    """Generate a short AI insight for a specific dashboard tab. Cached per (company, product, snapshot, as_of_date, tab)."""
+    sel_for_key = _resolve_snapshot(company, product, snapshot)
+    snap_key = sel_for_key.get('filename', snapshot or '')
+    cache_path = _ai_cache_key('tab_insight', company, product, snap_key, as_of_date or '', tab)
+
+    if not refresh:
+        cached = _ai_cache_get(cache_path)
+        if cached:
+            return cached
+
     at = _get_analysis_type(company, product)
 
     if at == 'silq':
@@ -1792,7 +1919,9 @@ Be direct and specific — no generic commentary. No headers, just prose."""
         model="claude-opus-4-6", max_tokens=300,
         messages=[{"role": "user", "content": prompt}]
     )
-    return {'insight': msg.content[0].text, 'tab': tab}
+    result = {'insight': msg.content[0].text, 'tab': tab}
+    _ai_cache_put(cache_path, result)
+    return result
 
 @app.post("/companies/{company}/products/{product}/chat")
 def chat_with_data(company: str, product: str, request: dict,

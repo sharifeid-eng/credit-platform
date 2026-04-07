@@ -196,15 +196,18 @@ export default function ExecutiveSummary() {
 
   const basePath = `/company/${company}/${product}`
 
-  const generate = async () => {
+  const [fromCache, setFromCache] = useState(false)
+
+  const generate = async (refresh = false) => {
     setLoading(true)
     setError(null)
     try {
       const snap = snapshot?.filename || snapshot
-      const data = await getExecutiveSummary(company, product, snap, currency, asOfDate)
+      const data = await getExecutiveSummary(company, product, snap, currency, asOfDate, { refresh })
       setNarrative(data.narrative || null)
       setFindings(data.findings || [])
-      setMeta({ generated_at: data.generated_at, coverage: data.context_coverage })
+      setFromCache(!!data.cached && !refresh)
+      setMeta({ generated_at: data.generated_at, coverage: data.context_coverage, cached_at: data.cached_at })
     } catch (e) {
       setError(e.response?.data?.detail || e.message || 'Failed to generate summary')
     } finally {
@@ -234,43 +237,71 @@ export default function ExecutiveSummary() {
           </p>
         </div>
 
-        <button
-          onClick={generate}
-          disabled={loading}
-          style={{
-            padding: '10px 24px',
-            borderRadius: 6,
-            border: loading ? '1px solid var(--border)' : '1px solid var(--gold)',
-            background: loading ? 'var(--bg-surface)' : 'transparent',
-            color: loading ? 'var(--text-muted)' : 'var(--gold)',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            transition: 'all var(--transition-fast)',
-          }}
-        >
-          {loading && (
-            <span style={{
-              width: 14, height: 14, border: '2px solid var(--border)',
-              borderTop: '2px solid var(--gold)', borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-            }} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {hasResults && (
+            <button
+              onClick={() => generate(true)}
+              disabled={loading}
+              style={{
+                padding: '8px 14px', borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'all var(--transition-fast)',
+              }}
+              title="Regenerate from scratch (new AI call)"
+            >
+              Regenerate
+            </button>
           )}
-          {loading ? 'Analyzing...' : hasResults ? 'Regenerate' : 'Generate Summary'}
-        </button>
+          <button
+            onClick={() => generate(false)}
+            disabled={loading}
+            style={{
+              padding: '10px 24px',
+              borderRadius: 6,
+              border: loading ? '1px solid var(--border)' : '1px solid var(--gold)',
+              background: loading ? 'var(--bg-surface)' : 'transparent',
+              color: loading ? 'var(--text-muted)' : 'var(--gold)',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            {loading && (
+              <span style={{
+                width: 14, height: 14, border: '2px solid var(--border)',
+                borderTop: '2px solid var(--gold)', borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }} />
+            )}
+            {loading ? 'Analyzing...' : hasResults ? 'Refresh' : 'Generate Summary'}
+          </button>
+        </div>
       </div>
 
       {/* Meta info */}
       {meta && (
         <div style={{
           display: 'flex', gap: 16, marginBottom: 20,
-          fontSize: 10, color: 'var(--text-muted)',
+          fontSize: 10, color: 'var(--text-muted)', alignItems: 'center',
         }}>
           <span>Analyzed {meta.coverage} metrics</span>
           <span>Generated {new Date(meta.generated_at).toLocaleString()}</span>
+          {fromCache && (
+            <span style={{
+              fontSize: 9, fontWeight: 600, color: 'var(--text-faint)',
+              background: 'rgba(201,168,76,0.1)', padding: '2px 8px',
+              borderRadius: 3, letterSpacing: '0.06em',
+            }}>
+              CACHED — loaded instantly
+            </span>
+          )}
         </div>
       )}
 
