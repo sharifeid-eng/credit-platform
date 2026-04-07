@@ -60,7 +60,19 @@ git push origin <feature-branch>
 git checkout main
 ```
 
-## Step 11 — Final verification
+## Step 11 — Production redeploy reminder
+
+If this session changed any backend, frontend, or core/ code (not just docs/CLAUDE.md/todo.md), remind the user:
+
+> **Code was pushed that affects the running app.** To update production, SSH into the server and redeploy:
+> ```
+> ssh root@204.168.252.26
+> cd /opt/credit-platform && ./deploy.sh
+> ```
+
+If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
+
+## Step 12 — Final verification
 
 Run `git log --oneline -5` and `git status` to confirm:
 - Working tree is clean
@@ -68,4 +80,4 @@ Run `git log --oneline -5` and `git status` to confirm:
 - No uncommitted changes remain
 - `.env` is not tracked (`git ls-files .env` returns nothing)
 
-Report the final commit hash and confirm the session is cleanly closed.
+Report the final commit hash, confirm the session is cleanly closed, and state whether a production redeploy is needed.
