@@ -871,23 +871,22 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] DB-optional fallback to tape data
 - [x] Frontend: 6 portfolio tabs with live data
 - [x] Seed script + API key generation CLI
-**Analytical Framework Expansion (from Ejari/RNPL deep-dive — applies to ALL companies):**
-Derived from detailed analysis of Ejari's loan tape analysis workbook and a lender-grade RNPL analytical framework. These improvements strengthen the platform for any asset class, not just RNPL.
-- [ ] **PAR as headline Overview KPIs** — PAR 30+/60+/90+ as % of active outstanding (Tape), % of eligible outstanding (Portfolio). Hidden on tapes without contractual benchmarks (graceful degradation). Option C: derived PAR from empirical completed-deal curves, clearly labeled "Derived from historical patterns" when used.
-- [ ] **Collections timing waterfall** — timing bucket distribution (Early/0-15d/15-30d/30-45d/45-60d/60-90d/90+). Two views: by payment month (liquidity quality) and by origination month (vintage behavior). Tape = retrospective; Portfolio = live + projected with expected overlay.
-- [ ] **Cohort loss waterfall** — per-vintage: Originated → Gross Default → Recovery → Net Loss. Separate fraud/anomaly share. Net loss rate and recovery rate (ex-fraud). Tape = retrospective dollar journey; Portfolio = exposure waterfall (Total → Eligible → At Risk → Impaired → Reserved).
-- [ ] **Credit quality / underwriting drift** — per-vintage origination characteristics (avg deal size, discount, term, product mix, group concentration). Tape = vintage quality trends over time; Portfolio = current book quality profile vs historical average.
-- [ ] **Enhanced segment analysis** — multi-dimensional performance cuts: product, provider size band, region, deal size band, new vs repeat. Each showing count, volume, collection/denial rates, margins, PAR. Tape = performance drivers; Portfolio = concentration risk matrix.
-- [ ] **Roll rate enhancement (cure/roll signals)** — per-DPD-bucket: avg days since last collection, % with recent activity (30d/60d), implied cure rate, implied roll rate. Tape = behavioral signals; Portfolio = early warning triggers feeding covenant monitoring.
-- [ ] **Recovery analysis post-default** — for deals hitting default status: recovery rate, recovery timing distribution, loan-level detail for worst/best. Informs LGD assumptions in EL model.
-- [ ] **Historical vintage performance curves** — cumulative gross/net default and recovery rate development over time per vintage (like collection curves but for losses). Projects immature vintage ultimate loss rates.
-- [ ] **Write-off / loss isolation (separation principle enhancement)** — all performance dashboards show clean portfolio; dedicated Loss Analysis section for written-off/fully-denied deals with reason code breakdown.
-- [ ] **Fraud/anomaly categorization enhancement** — reason codes: legitimate denial, documentation error, duplicate claim, provider fraud, coding error. Understanding *why* deals fail.
-- [ ] **HHI time series** — track concentration across all snapshots to show direction of travel, trend detection, warnings.
-- [ ] **DTFC (Days to First Cash)** — time from origination to first collection, median and P90. Leading indicator.
-- [ ] **DSO dual variants** — DSO Capital (from funding, capital duration) + DSO Operational (from due date, payer behavior).
-- [ ] **Seasonality dashboard enhancement** — YoY comparison + seasonal index + delinquency emergence overlay.
-- [ ] **Methodology transparency enhancement** — data corrections log, column availability audit trail.
+**Analytical Framework Expansion ✅ COMPLETE (from Ejari/RNPL deep-dive — applied to ALL companies):**
+- [x] PAR as headline Overview KPIs — dual perspective (active + lifetime), 3-method computation, Option C with "Derived" labeling
+- [x] Collections timing waterfall — timing bucket distribution using collection curve columns (tab 15)
+- [x] Cohort loss waterfall — per-vintage: Originated → Gross Default → Recovery → Net Loss (tab 13)
+- [x] Credit quality / underwriting drift — per-vintage quality metrics + z-score drift flags (tab 16)
+- [x] Enhanced segment analysis — multi-dimensional cuts: product, provider_size, deal_size, new_repeat (tab 17)
+- [x] Roll rate enhancement — roll-rate matrix + cure rates in Risk & Migration tab (tab 11)
+- [x] Recovery analysis post-default — recovery rates, timing, worst/best deals by vintage (tab 14)
+- [x] Historical vintage performance curves — vintage loss curves in Loss Waterfall tab
+- [x] Write-off / loss isolation — Separation Principle (`separate_portfolio()`) splits clean vs loss
+- [x] Fraud/anomaly categorization — rules-based heuristics (provider_issue, coding_error, credit/underwriting)
+- [x] HHI time series — concentration trend across all snapshots with trend detection + warnings
+- [x] DTFC (Days to First Cash) — curve-based + estimated methods, median + P90 on Overview
+- [x] DSO dual variants — DSO Capital + DSO Operational (weighted + median)
+- [x] Seasonality dashboard — YoY comparison by calendar month + seasonal index (tab 18)
+- [x] Methodology transparency — data corrections log, column availability audit trail
 - [x] **Analysis Framework document expansion** — formalized: Analytical Hierarchy, Metric Doctrine (denominator/weighting/confidence), Three Clocks, Collection Rate Disambiguation, Dilution Framework, Denominator Discipline, Methodology Onboarding Guide with hierarchy-level mapping. Served via Framework page with sticky TOC.
 - [x] **Company Methodology page updates** — Klaim: added PAR (dual denominator, 3 methods), Loss Waterfall (default def, categorization, recovery), Forward-Looking Signals (DTFC, HHI time series, DSO dual perspectives), Advanced Analytics (collections timing, underwriting drift, segment analysis, seasonality). Validation section updated with anomaly detection docs.
 **Key analytical design decisions (documented for consistency):**

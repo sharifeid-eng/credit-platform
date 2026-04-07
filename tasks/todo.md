@@ -196,9 +196,19 @@ _(none)_
 - [x] Executive Summary holistic narrative — single AI call now produces a credit memo-style narrative (company-specific sections with conclusions + metric pills) AND a summary table AND a bottom line verdict, displayed above the existing ranked findings. Ejari gets 9 sections (Portfolio Overview → Write-offs & Fraud), Klaim 7, SILQ 6. max_tokens 2000→8000.
 
 ## Up Next
-- [ ] Cloud deployment (Phase 3 gate)
-- [ ] RBAC, scheduled report delivery, real-time webhook notifications
-- [ ] AI covenant extraction — ingest facility PDFs → auto-populate facility_configs
+**Phase 3 — Team & Deployment:**
+- [ ] Cloud deployment (Phase 3 gate — prerequisite for everything below)
+- [ ] Role-based access (RBAC) — analyst vs IC vs read-only
+- [ ] Scheduled report delivery — automated PDF reports on cadence
+- [ ] Real-time webhook notifications to portfolio companies
+
+**Portfolio Analytics — Remaining enhancements:**
+- [ ] Portfolio company onboarding flow (self-service API key provisioning)
+- [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
+- [ ] Recovery discounting — PV-adjusted LGD using discount rate
+
+**AI-powered features:**
+- [ ] AI covenant extraction — ingest facility agreement PDFs → auto-populate facility_configs
 
 ## Completed — 2026-04-01
 - [x] Fix PAR KPI card sizing inconsistency — PAR 30+ subtitle was longer than PAR 60+/90+, causing uneven heights. Standardized all to `{ccy} {amount}K at risk`
