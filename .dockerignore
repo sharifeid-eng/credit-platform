@@ -1,0 +1,13 @@
+.env
+.env.production
+.git
+.gitignore
+.claude
+node_modules
+venv
+__pycache__
+reports
+*.pyc
+*.md
+!core/ANALYSIS_FRAMEWORK.md
+!core/FRAMEWORK_INDEX.md
