@@ -1,0 +1,27 @@
+{
+  "analysis_type": "ejari_summary",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Portfolio Overview",
+      "level": 1,
+      "order": 1,
+      "prose": "Ejari operates as a Rent Now Pay Later (RNPL) product in KSA. The platform displays pre-computed analysis from an ODS workbook -- no live computation is performed. All metrics shown are extracted from the workbook sheets.",
+      "metrics": [],
+      "tables": [],
+      "notes": ["This is a read-only summary dashboard. No raw loan tape is available for Ejari -- all analysis is pre-computed."],
+      "subsections": []
+    },
+    {
+      "id": "data-source",
+      "title": "Data Source",
+      "level": null,
+      "order": 2,
+      "prose": "Analysis is based on a pre-computed ODS workbook with 13 sheets covering portfolio overview, monthly cohorts, loss waterfall, roll rates, historical performance, collections by month and origination, segment analysis, credit quality trends, Najiz & legal recovery, write-offs & fraud, and data notes.",
+      "metrics": [],
+      "tables": [],
+      "notes": ["The ODS file is parsed once per session and cached. All monetary values are in USD."],
+      "subsections": []
+    }
+  ]
+}

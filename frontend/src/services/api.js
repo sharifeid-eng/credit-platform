@@ -7,6 +7,7 @@ export default api;
 
 // ── Framework ────────────────────────────────────────────────────────────────
 export const getFramework       = () => api.get('/framework').then(r => r.data.content);
+export const getMethodology     = (analysisType) => api.get(`/methodology/${analysisType}`).then(r => r.data);
 export const getAggregateStats  = ()  => api.get('/aggregate-stats').then(r => r.data);
 
 // ── Core ──────────────────────────────────────────────────────────────────────

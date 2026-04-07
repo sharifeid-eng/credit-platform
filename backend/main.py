@@ -41,6 +41,13 @@ from core.analysis_silq import (
     filter_silq_by_date,
 )
 from core.validation_silq import validate_silq_tape
+from core.metric_registry import get_methodology, get_registry
+from core.methodology_klaim import register_klaim_methodology
+from core.methodology_silq import register_silq_methodology
+
+# Register all methodology metadata at import time
+register_klaim_methodology()
+register_silq_methodology()
 from core.portfolio import (
     compute_borrowing_base as portfolio_borrowing_base,
     compute_concentration_limits as portfolio_concentration_limits,
@@ -163,6 +170,34 @@ def get_framework():
             return {'content': f.read()}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Framework document not found")
+
+# ── Methodology endpoints ─────────────────────────────────────────────────────
+
+@app.get("/methodology/{analysis_type}")
+def get_methodology_endpoint(analysis_type: str):
+    """Return structured methodology data for an analysis type.
+    Auto-generated from decorated compute functions + static sections."""
+    # For Ejari (read-only summary), serve static JSON
+    if analysis_type == 'ejari_summary':
+        ejari_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'data', 'Ejari', 'RNPL', 'methodology.json'
+        )
+        if os.path.exists(ejari_path):
+            with open(ejari_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        raise HTTPException(status_code=404, detail="Ejari methodology not found")
+
+    result = get_methodology(analysis_type)
+    if not result['sections']:
+        raise HTTPException(status_code=404, detail=f"No methodology registered for: {analysis_type}")
+    return result
+
+
+@app.get("/methodology-registry")
+def get_methodology_registry():
+    """Return the raw function registry for auditing and framework Section 12 generation."""
+    return get_registry()
 
 # ── FX rates endpoint ──────────────────────────────────────────────────────────
 

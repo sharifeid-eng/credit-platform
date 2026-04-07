@@ -481,73 +481,45 @@ Cross-Cutting
 
 ## 12. Compute Function Registry
 
-This section maps every backend compute function to its framework level, required columns, and output shape. It serves as the machine-readable reference for `/framework-audit`, `/methodology-sync`, and `/extend-framework` commands.
+This section is **auto-generated** from the metric registry. Run `python scripts/sync_framework_registry.py` to update.
 
-### Klaim — `core/analysis.py`
 
-| Function | Level | Required Columns | Output Key Fields |
-|----------|-------|------------------|-------------------|
-| `compute_summary` | L1 | Deal date, Status, Purchase value, Purchase price, Collected till date, Denied by insurance | total_deals, total_purchase_value, collection_rate, denial_rate |
-| `compute_deployment` | L1 | Deal date, Purchase value, New business | monthly[] with new/repeat breakdown |
-| `compute_deployment_by_product` | L1 | Deal date, Purchase value, Product | monthly[], products[] |
-| `compute_collection_velocity` | L2 | Deal date, Purchase value, Collected till date | monthly[] with rate, expected_rate, buckets[] |
-| `compute_actual_vs_expected` | L2 | Deal date, Purchase value, Collected till date, Expected total | cumulative series, today marker, KPI cards |
-| `compute_collections_timing` | L2 | Collection curve columns (Expected/Actual at intervals) | available, buckets[], by_vintage[] |
-| `compute_collection_curves` | L2 | Collection curve columns | available, curves[], aggregate{} |
-| `compute_dso` | L2 | Deal date, Collected till date (+ curve cols for curve-based) | available, weighted_dso, median_dso, p95_dso |
-| `compute_dtfc` | L5 | Deal date, Collected till date (+ curve cols for curve-based) | available, median_dtfc, p90_dtfc, by_vintage[] |
-| `compute_denial_trend` | L3 | Deal date, Purchase value, Denied by insurance | monthly[] with denial_rate |
-| `compute_ageing` | L3 | Deal date, Status, Purchase value, Collected till date, Denied by insurance | health_summary[], ageing_buckets[], monthly_health[] |
-| `compute_par` | L3 | Status, Purchase value, Collected, Denied, Expected till date (or empirical) | available, par_30{}, par_60{}, par_90{} |
-| `compute_cohorts` | L2/L3 | Deal date, Purchase value, Collected, Denied, Pending | cohorts[] with vintage metrics |
-| `compute_revenue` | L4 | Deal date, Purchase value, Purchase price, Collected, Gross revenue | monthly[], totals{} |
-| `compute_concentration` | L1 | Group, Purchase value, Collected, Denied | group[], top_deals[], hhi{} |
-| `compute_returns_analysis` | L4 | Purchase value, Purchase price, Collected, Discount, Status=Completed | summary{}, monthly[], discount_bands[], new_vs_repeat[] |
-| `compute_cohort_loss_waterfall` | L4 | Deal date, Purchase value, Denied by insurance, Collected | vintages[], totals{} |
-| `compute_recovery_analysis` | L4 | Deal date, Purchase value, Denied, Collected (loss deals) | by_vintage[], worst_deals[], best_deals[] |
-| `compute_vintage_loss_curves` | L4 | Deal date, Purchase value, Denied | available, curves[] |
-| `compute_loss_categorization` | L4 | Group, Purchase value, Denied | categories[], total_loss_deals |
-| `compute_expected_loss` | L4 | Status, Purchase value, Collected, Denied | portfolio{pd,lgd,ead,el}, by_vintage[] |
-| `compute_denial_funnel` | L4 | Purchase value, Collected, Pending, Denied, Provisions | stages[], net_loss, recovery_rate |
-| `compute_stress_test` | L5 | Group, Purchase value, Collected | scenarios[], base_collection_rate |
-| `compute_group_performance` | L1/L3 | Group, Purchase value, Collected, Denied, Deal date | groups[] with per-group metrics |
-| `compute_owner_breakdown` | L1 | Owner, Purchase value, Collected | available, owners[] |
-| `compute_underwriting_drift` | L5 | Deal date, Purchase value, Discount, Product | vintages[] with flags[] |
-| `compute_segment_analysis` | L1/L4 | Product/Group/Purchase value + dimension fields | segments[], segment_by, dimensions[] |
-| `compute_seasonality` | L5 | Deal date, Purchase value | months[], seasonal_index[], years[] |
-| `compute_hhi_for_snapshot` | L1 | Group, Purchase value | hhi value |
-| `compute_cdr_ccr` | L4/L5 | Deal date, Purchase value, Denied, Collected, Status | vintages[] with cdr/ccr rates |
-| `compute_methodology_log` | Cross | All available columns | corrections[], column_availability{} |
-| `compute_vat_summary` | L4 | VAT columns | available, vat_assets, vat_fees |
+### Klaim
 
-### SILQ — `core/analysis_silq.py`
+| Section | Level | Tab | Denominator | Confidence | Required Columns |
+|---------|-------|-----|-------------|------------|------------------|
+| Portfolio Overview Metrics | L1 | overview | total | A | Deal date, Status, Purchase value, Purchase price, ... |
+| Collection Performance | L2 | actual-vs-expected | total | A | Deal date, Purchase value, Collected till date, Expected total |
+| Collection Analysis | L2 | collection | total | A | Deal date, Purchase value, Collected till date, Status |
+| Health Classification | L3 | ageing | active | A | Deal date, Status, Purchase value, Collected till date, ... |
+| Portfolio at Risk (PAR) | L3 | overview | active | B | Status, Purchase value, Collected till date, Denied by insurance |
+| Cohort Analysis | -- | cohort-analysis | total | A | Deal date, Purchase value, Purchase price, Collected till date, ... |
+| Returns Analysis | L4 | returns | completed | A | Purchase value, Purchase price, Collected till date, Status |
+| Denial Funnel | L4 | denial-trend | total | A | Purchase value, Collected till date, Pending insurance response, Denied by insurance, ... |
+| Loss Waterfall | L4 | loss-waterfall | total | A | Deal date, Purchase value, Denied by insurance, Collected till date |
+| Stress Testing | L5 | risk-migration | total | B | Group, Purchase value, Collected till date |
+| Forward-Looking Signals | L5 | overview | active | B | Deal date, Collected till date |
+| Expected Loss Model | L4 | risk-migration | active | B | Status, Purchase value, Collected till date, Denied by insurance |
+| Roll-Rate Migration | L3 | risk-migration | active | B | Deal date, Status |
+| Advanced Analytics | -- | collections-timing | total | A | Deal date, Purchase value |
+| Data Quality Validation | -- | data-integrity | -- | -- |  |
 
-| Function | Level | Required Columns | Output Key Fields |
-|----------|-------|------------------|-------------------|
-| `compute_silq_summary` | L1 | Agreement_ID, Status, Total_Loan_Amount, Principal_Amount, Total_Outstanding | total_loans, total_disbursed, collection_rate |
-| `compute_silq_delinquency` | L3 | DPD, Total_Outstanding, Status | dpd_buckets[], par_30/60/90{} |
-| `compute_silq_collections` | L2 | Disbursement_Date, Total_Loan_Amount, Repaid_Amount | monthly[] with rates |
-| `compute_silq_concentration` | L1 | Shop_Name, Total_Loan_Amount, Total_Outstanding | shops[], hhi{} |
-| `compute_silq_cohorts` | L2/L3 | Disbursement_Date, Total_Loan_Amount, Repaid_Amount, Total_Outstanding | cohorts[] |
-| `compute_silq_yield` | L4 | Total_Loan_Amount, Principal_Amount, Repaid_Amount, Status | summary{}, monthly[] |
-| `compute_silq_tenure` | L2 | Tenure_Days, Total_Loan_Amount, Status | bands[], avg_tenure |
-| `compute_silq_covenants` | L5 | DPD, Total_Outstanding, Repaid_Amount, Status | covenants[] |
-| `compute_silq_seasonality` | L5 | Disbursement_Date, Total_Loan_Amount | months[], seasonal_index[] |
-| `compute_silq_cohort_loss_waterfall` | L4 | Disbursement_Date, Total_Loan_Amount, DPD, Repaid_Amount | vintages[], totals{} |
-| `compute_silq_underwriting_drift` | L5 | Disbursement_Date, Total_Loan_Amount, Tenure_Days, Product | vintages[] with flags[] |
-| `compute_silq_cdr_ccr` | L4/L5 | Disbursement_Date, Total_Loan_Amount, DPD, Repaid_Amount | vintages[] with cdr/ccr rates |
+### SILQ
 
-### Portfolio — `core/portfolio.py`
-
-| Function | Level | Context | Output Key Fields |
-|----------|-------|---------|-------------------|
-| `compute_borrowing_base` | L1/L5 | SILQ facility | waterfall{}, kpis{}, facility_capacity |
-| `compute_klaim_borrowing_base` | L1/L5 | Klaim facility | waterfall{}, kpis{}, facility_capacity |
-| `compute_concentration_limits` | L1 | Both | limits[], summary{} |
-| `compute_klaim_concentration_limits` | L1 | Klaim | limits[], summary{} |
-| `compute_covenants` | L5 | SILQ | covenants[] |
-| `compute_klaim_covenants` | L5 | Klaim | covenants[] |
-| `compute_portfolio_flow` | L2 | Both | monthly[], totals{} |
+| Section | Level | Tab | Denominator | Confidence | Required Columns |
+|---------|-------|-----|-------------|------------|------------------|
+| Portfolio Overview | L1 | overview | total | A | Agreement_ID, Disbursed_Amount (SAR), Outstanding_Amount (SAR), Status, ... |
+| Delinquency & PAR | L3 | delinquency | active | A | Repayment_Deadline, Outstanding_Amount (SAR), Status |
+| Collections | L2 | collections | total | A | Disbursement_Date, Amt_Repaid (SAR), Total_Collectable_Amount (SAR) |
+| Concentration | L1 | concentration | total | A | Shop_Name, Disbursed_Amount (SAR), Outstanding_Amount (SAR) |
+| Cohort Analysis | -- | cohort-analysis | total | A | Disbursement_Date, Disbursed_Amount (SAR), Amt_Repaid (SAR), Outstanding_Amount (SAR) |
+| Yield & Margins | L4 | yield-margins | completed | A | Disbursed_Amount (SAR), Margin Collected (SAR), Status |
+| Tenure Analysis | -- | tenure | total | A | Tenure_Days, Disbursed_Amount (SAR), Status |
+| Covenant Monitoring | L5 | covenants | eligible | A | Repayment_Deadline, Outstanding_Amount (SAR), Amt_Repaid (SAR), Status |
+| Seasonality | L5 | seasonality | total | A | Disbursement_Date, Disbursed_Amount (SAR) |
+| Loss Waterfall | L4 | loss-waterfall | total | A | Disbursement_Date, Disbursed_Amount (SAR), Repayment_Deadline, Amt_Repaid (SAR) |
+| Underwriting Drift | L5 | underwriting-drift | total | A | Disbursement_Date, Disbursed_Amount (SAR), Tenure_Days, Product |
+| CDR / CCR | L4 | cdr-ccr | total | A | Disbursement_Date, Disbursed_Amount (SAR), Repayment_Deadline, Amt_Repaid (SAR) |
 
 ---
 
