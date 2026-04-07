@@ -37,6 +37,7 @@ Review the full conversation for any: mistakes made and corrected, patterns to a
 ## Step 7 — Update `CLAUDE.md`
 
 - Update the **What's Working** section to reflect anything new that was built or changed.
+- **Reconcile "Known Gaps & Next Steps"** — scan every `- [ ]` item and check it off (`- [x]`) if it was implemented this session or previously. Cross-reference against "What's Working" entries. Mark completed sections with `✅ COMPLETE` when all items are done.
 - Update the file tree in **Project Structure** if any files were added or deleted.
 - Update any architectural decision notes in **Key Architectural Decisions** if relevant.
 - Remove any references to things that no longer exist.

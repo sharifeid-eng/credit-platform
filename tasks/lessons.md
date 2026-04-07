@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-07 — Roadmap Checklists Drift from "What's Working"
+**Mistake:** 15 items in CLAUDE.md's "Analytical Framework Expansion" checklist were still marked `- [ ]` despite all being implemented and documented in "What's Working". The `/eod` command updated "What's Working" (Step 7) but never cross-referenced the roadmap checklists to check off completed items.
+**Rule:** During `/eod` Step 7, always scan every `- [ ]` item in "Known Gaps & Next Steps" and check off any that were implemented. Cross-reference against "What's Working" entries. Mark entire sections `✅ COMPLETE` when all items are done. Two sources of truth = eventual drift.
+
+---
+
 ## 2026-04-07 — Worktree Edits Don't Affect Running Server
 **Mistake:** Edited `core/analysis_silq.py` in the worktree (`.claude/worktrees/serene-heisenberg/`) and expected the running uvicorn server to pick it up. The server was running from the main project root with different file paths. Also, the server was started without `--reload`, so even touching files in the correct directory wouldn't trigger a restart.
 **Rule:** When a running backend is serving from the main project root, edits in a worktree won't be picked up. Either: (1) apply the fix to the main project's files directly, or (2) restart the server from the worktree. Also verify `--reload` is enabled — check with `Get-WmiObject Win32_Process` to see the actual command line args.
