@@ -72,7 +72,17 @@ If this session changed any backend, frontend, or core/ code (not just docs/CLAU
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
-## Step 12 — Final verification
+## Step 12 — Local machine sync reminder
+
+Remind the user to pull changes to their local laptop so it stays in sync:
+
+> **Sync your local copy:** Changes were pushed to GitHub. To update your laptop:
+> ```powershell
+> cd C:\Users\SharifEid\credit-platform
+> git pull origin main
+> ```
+
+## Step 13 — Final verification
 
 Run `git log --oneline -5` and `git status` to confirm:
 - Working tree is clean
