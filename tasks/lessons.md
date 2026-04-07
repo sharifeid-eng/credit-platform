@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-07 — Never skip /eod even if "everything looks clean"
+**Mistake:** User asked "do I need eod?" and I said no because the working tree was clean and changes were pushed. But `/eod` Step 10 (sync feature branch to main) was not done — the feature branch with all Docker/deployment code was never merged into main. The server was running from the feature branch instead of main.
+**Rule:** Always run `/eod` or explicitly walk through every step. "Working tree is clean" doesn't mean the session is properly closed — branch merging, todo updates, and lessons are separate from commit status.
+
+---
+
 ## 2026-04-07 — Roadmap Checklists Drift from "What's Working"
 **Mistake:** 15 items in CLAUDE.md's "Analytical Framework Expansion" checklist were still marked `- [ ]` despite all being implemented and documented in "What's Working". The `/eod` command updated "What's Working" (Step 7) but never cross-referenced the roadmap checklists to check off completed items.
 **Rule:** During `/eod` Step 7, always scan every `- [ ]` item in "Known Gaps & Next Steps" and check off any that were implemented. Cross-reference against "What's Working" entries. Mark entire sections `✅ COMPLETE` when all items are done. Two sources of truth = eventual drift.
