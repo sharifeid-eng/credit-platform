@@ -126,11 +126,16 @@ def _ai_cache_dir():
     return base
 
 def _ai_cache_key(endpoint: str, company: str, product: str,
-                  snapshot: str = '', as_of_date: str = '', tab: str = '') -> str:
+                  snapshot: str = '', as_of_date: str = '', tab: str = '',
+                  snapshot_date: str = '') -> str:
     """Build a deterministic cache filename from request parameters.
     Currency is excluded because the analytical findings are identical —
-    currency only applies a numeric multiplier to displayed amounts."""
-    raw = f"{endpoint}|{company}|{product}|{snapshot}|{as_of_date}|{tab}"
+    currency only applies a numeric multiplier to displayed amounts.
+    as_of_date is normalized: if it matches the snapshot_date or is empty,
+    it maps to the same key (both mean 'use all data')."""
+    # Normalize: treat None/empty/snapshot_date as the same "default" state
+    norm_aod = as_of_date if (as_of_date and as_of_date != snapshot_date) else ''
+    raw = f"{endpoint}|{company}|{product}|{snapshot}|{norm_aod}|{tab}"
     h = hashlib.sha256(raw.encode()).hexdigest()[:16]
     safe = f"{company}_{product}_{endpoint}"
     if tab:
@@ -1123,11 +1128,12 @@ def get_ai_cache_status(company: str, product: str,
     """Check which AI outputs are cached for this company/product/snapshot."""
     sel = _resolve_snapshot(company, product, snapshot)
     snap_key = sel.get('filename', snapshot or '')
+    snap_date = sel.get('date', '')
     aod = as_of_date or ''
 
     endpoints = {
-        'commentary': _ai_cache_key('commentary', company, product, snap_key, aod),
-        'executive_summary': _ai_cache_key('executive_summary', company, product, snap_key, aod),
+        'commentary': _ai_cache_key('commentary', company, product, snap_key, aod, snapshot_date=snap_date),
+        'executive_summary': _ai_cache_key('executive_summary', company, product, snap_key, aod, snapshot_date=snap_date),
     }
 
     # Check common tab insights
@@ -1142,7 +1148,7 @@ def get_ai_cache_status(company: str, product: str,
 
     tab_cache = {}
     for t in tabs:
-        path = _ai_cache_key('tab_insight', company, product, snap_key, aod, t)
+        path = _ai_cache_key('tab_insight', company, product, snap_key, aod, t, snapshot_date=snap_date)
         c = _ai_cache_get(path)
         if c:
             tab_cache[t] = c.get('cached_at', True)
@@ -1176,7 +1182,8 @@ def get_ai_commentary(company: str, product: str,
     # Resolve snapshot first for consistent cache key
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
-    cache_path = _ai_cache_key('commentary', company, product, snap_key, as_of_date or '')
+    snap_date = sel_for_key.get('date', '')
+    cache_path = _ai_cache_key('commentary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date)
 
     if not refresh:
         cached = _ai_cache_get(cache_path)
@@ -1660,7 +1667,8 @@ def get_executive_summary(company: str, product: str,
     """
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
-    cache_path = _ai_cache_key('executive_summary', company, product, snap_key, as_of_date or '')
+    snap_date = sel_for_key.get('date', '')
+    cache_path = _ai_cache_key('executive_summary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date)
 
     if not refresh:
         cached = _ai_cache_get(cache_path)
@@ -1821,7 +1829,8 @@ def get_tab_insight(company: str, product: str,
     """Generate a short AI insight for a specific dashboard tab. Cached per (company, product, snapshot, as_of_date, tab)."""
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
-    cache_path = _ai_cache_key('tab_insight', company, product, snap_key, as_of_date or '', tab)
+    snap_date = sel_for_key.get('date', '')
+    cache_path = _ai_cache_key('tab_insight', company, product, snap_key, as_of_date or '', tab, snapshot_date=snap_date)
 
     if not refresh:
         cached = _ai_cache_get(cache_path)
