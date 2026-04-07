@@ -72,17 +72,19 @@ If this session changed any backend, frontend, or core/ code (not just docs/CLAU
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
-## Step 12 — Local machine sync reminder
+## Step 12 — Sync all environments
 
-**Only applies to cloud/web sessions** (claude.ai/code, not the local desktop app). If running locally on the user's machine, skip this step — the repo is already up to date.
+Changes were pushed to GitHub. Remind the user to sync any environment that wasn't the one running this session:
 
-Remind the user to pull changes to their local laptop so it stays in sync:
-
-> **Sync your local copy:** This was a cloud session, so your laptop still has the old code. Pull the changes:
+> **Sync other environments:**
+>
+> If this was a **cloud session**, pull to your laptop:
 > ```powershell
 > cd C:\Users\SharifEid\credit-platform
 > git pull origin main
 > ```
+>
+> If this was a **local laptop session**, the production server needs the code (if code changed — handled by Step 11's redeploy), and any future cloud sessions will auto-clone from GitHub so they're already covered.
 
 ## Step 13 — Final verification
 
