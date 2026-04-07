@@ -5,42 +5,42 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Active — Cloud Deployment (Phase 3 Gate)
 
-### Phase 0 — Domain & Provider Setup (manual, user-driven)
-- [ ] Register domain name (e.g. `laith.app`, `laithanalytics.com`, or similar — ~$10-15/yr)
-- [ ] Create Hetzner Cloud account (best value: 4GB/2vCPU ARM at ~€7/mo, or 8GB/4vCPU at ~€14/mo)
-- [ ] Provision a VPS (Ubuntu 24.04, 4GB+ RAM for Playwright), note the public IP
-- [ ] Point domain DNS A record to the VPS IP (via registrar or Cloudflare)
+### Phase 0 — Domain & Provider Setup ✅
+- [x] Register domain name — `laithanalytics.ai` via Cloudflare (~$12/yr)
+- [x] Create Hetzner Cloud account — CAX21 (4vCPU ARM, 8GB RAM, Helsinki)
+- [x] Provision VPS (Ubuntu 24.04) — IP: `204.168.252.26`
+- [x] Point domain DNS A record via Cloudflare (proxied, Flexible SSL)
 
-### Phase 1 — Dockerize the Application
-- [ ] Create `requirements.txt` from current venv (pin versions)
-- [ ] Fix hardcoded `API_BASE` in `frontend/src/services/api.js` → env-aware (`VITE_API_URL || ''`)
-- [ ] Create `backend/Dockerfile` (Python 3.14, Playwright + Chromium, system fonts for ReportLab)
-- [ ] Create `frontend/Dockerfile` (Node build → Nginx static serve)
-- [ ] Create `docker-compose.yml` (backend, frontend/nginx, postgres, volumes for data/)
-- [ ] Create `.env.production.example` (template with all required vars, no secrets)
-- [ ] Add `data/` to `.dockerignore` (tape data mounted as volume, not baked into image)
-- [ ] Test full stack locally with `docker compose up`
+### Phase 1 — Dockerize the Application ✅
+- [x] Pin `requirements.txt` versions
+- [x] Fix hardcoded `API_BASE` → env-aware (`VITE_API_URL`, undefined check)
+- [x] Fix hardcoded CORS origins → env-aware (`CORS_ORIGINS`)
+- [x] Fix hardcoded URLs in `generate_report.py` → env-aware
+- [x] Create `docker/backend.Dockerfile` (Python 3.12, Playwright + Chromium)
+- [x] Create `docker/frontend.Dockerfile` (Node 22 build → Nginx static)
+- [x] Create `docker/nginx.conf` (reverse proxy: static + API routes)
+- [x] Create `docker-compose.yml` (backend, frontend/nginx, postgres)
+- [x] Create `.env.production.example`, `.dockerignore`, `deploy.sh`
 
-### Phase 2 — Server Setup & Deploy
-- [ ] SSH into VPS, install Docker + Docker Compose
-- [ ] Clone repo, copy `.env.production`, upload `data/` directory
-- [ ] Configure Nginx reverse proxy (port 80/443 → backend:8000 + frontend static)
-- [ ] Set up SSL with Certbot (Let's Encrypt) + auto-renewal cron
-- [ ] Configure UFW firewall (allow 22, 80, 443 only)
-- [ ] Run `docker compose up -d` and verify site loads at `https://yourdomain.com`
+### Phase 2 — Server Setup & Deploy ✅
+- [x] Install Docker 29.4 + Compose 5.1 on VPS
+- [x] Configure UFW firewall (22, 80, 443)
+- [x] Clone repo, upload `data/` directory, create `.env.production`
+- [x] Build and launch containers — all 3 healthy
+- [x] SSL via Cloudflare Flexible mode (no Certbot needed)
+- [x] Site live at `https://laithanalytics.ai`
 
 ### Phase 3 — Operational Basics
 - [ ] Set up daily PostgreSQL backup cron (pg_dump → compressed file)
-- [ ] Optional: upload backups to S3/Backblaze B2 (~$1/mo)
-- [ ] Set up Docker restart policies (`restart: unless-stopped`)
-- [ ] Create simple deploy script (`git pull && docker compose build && docker compose up -d`)
+- [x] Docker restart policies (`restart: unless-stopped`) — already in docker-compose.yml
+- [x] Deploy script (`deploy.sh`) — already created
 - [ ] Test PDF generation works (Playwright + Chromium inside container)
 
 ### Phase 4 — CORS & Security Hardening
-- [ ] Update FastAPI CORS to allow only the production domain (not `*`)
-- [ ] Ensure `.env` and `data/` are not accessible via web
-- [ ] Set `X-API-Key` for integration endpoints (already built, just configure on server)
-- [ ] Basic rate limiting on AI endpoints (Anthropic API costs money)
+- [x] CORS locked to production domain (env-aware, set in docker-compose.yml)
+- [ ] Verify `.env` and `data/` are not accessible via web
+- [ ] Set `X-API-Key` for integration endpoints
+- [ ] Basic rate limiting on AI endpoints
 
 ### Decision Log
 - **Provider: Hetzner** — best price/performance for single VPS. 4GB ARM at €7/mo vs DigitalOcean $24/mo for comparable specs. EU data center acceptable (no UAE residency requirement confirmed).
