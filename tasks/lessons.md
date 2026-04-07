@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-07 — As-of-date only filters deals, not balances — AI must not run on backdated views
+**Mistake:** The as_of_date picker filters deals by `Deal date <= as_of_date` but all balance columns (`Collected till date`, `Denied by insurance`, `Outstanding`, etc.) still reflect the tape snapshot date. This means collection rates are inflated, outstanding is understated, PAR is artificially low, and margins are wrong for any backdated view. AI analysis on this data would produce confident but misleading commentary.
+**Rule:** (1) Every metric on a backdated view that depends on collection/denial/balance columns must be visually flagged as "reflects tape date". (2) AI endpoints (commentary, executive summary, tab insights) must refuse to run when `as_of_date < snapshot_date` — the AI has no way to distinguish safe from unsafe metrics and will present inflated numbers as fact. (3) When onboarding new tapes or companies, always verify: does `filter_by_date` affect only deal selection, or does it also adjust balances? For point-in-time tapes, the answer is always "deal selection only". (4) Safe metrics in a backdated view: deal count, originated volume, deployment, vintage composition. Unsafe: everything that uses Collected/Denied/Outstanding/Pending columns.
+
+---
+
 ## 2026-04-07 — Never skip /eod even if "everything looks clean"
 **Mistake:** User asked "do I need eod?" and I said no because the working tree was clean and changes were pushed. But `/eod` Step 10 (sync feature branch to main) was not done — the feature branch with all Docker/deployment code was never merged into main. The server was running from the feature branch instead of main.
 **Rule:** Always run `/eod` or explicitly walk through every step. "Working tree is clean" doesn't mean the session is properly closed — branch merging, todo updates, and lessons are separate from commit status.

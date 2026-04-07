@@ -84,16 +84,20 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         </div>
       )}
 
-      {/* Stale data indicator */}
+      {/* Stale data indicator — shown when as-of date is before snapshot date */}
       {stale && (
         <div
-          title="This metric reflects tape snapshot balances, not the as-of date"
+          title="Reflects tape snapshot date, not the as-of date. Deal selection is filtered but balances are not."
           style={{
-            position: 'absolute', top: 8, right: 10,
-            fontSize: 11, opacity: 0.55, cursor: 'help',
+            position: 'absolute', top: 6, right: 8,
+            fontSize: 8, fontWeight: 700, letterSpacing: '0.04em',
+            padding: '2px 6px', borderRadius: 3,
             color: 'var(--accent-gold)',
+            background: 'rgba(201,168,76,0.12)',
+            border: '1px solid rgba(201,168,76,0.2)',
+            cursor: 'help',
           }}
-        >&#x26A0;</div>
+        >TAPE DATE</div>
       )}
 
       {/* Label */}
@@ -111,6 +115,7 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         fontFamily: 'var(--font-mono)',
         letterSpacing: '-0.02em', lineHeight: 1,
         color: accent, marginBottom: 5,
+        opacity: stale ? 0.5 : 1,
       }}>
         {value}
       </div>

@@ -203,7 +203,7 @@ export default function TapeAnalytics() {
 
 /* ── SILQ Tab Content ── */
 function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots, currency, asOfDate, summary, summaryLoading, aiCache, onAiCache, isBackdated }) {
-  const chartProps = { company, product, snapshot, currency, asOfDate }
+  const chartProps = { company, product, snapshot, currency, asOfDate, isBackdated }
 
   if (tab === 'overview') {
     return (
@@ -250,88 +250,88 @@ function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, cur
         />
       )}
       {activeTab === 'Actual vs Expected' && (
-        <ChartTab tab="actual-vs-expected" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="actual-vs-expected" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <ActualVsExpectedChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Deployment' && (
-        <ChartTab tab="deployment" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="deployment" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <DeploymentChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Collection' && (
-        <ChartTab tab="collection-velocity" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="collection-velocity" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <CollectionVelocityChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Denial Trend' && (
-        <ChartTab tab="denial-trend" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="denial-trend" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <DenialFunnelChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
           <DenialTrendChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Ageing' && (
-        <ChartTab tab="ageing" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="ageing" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <AgeingChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Revenue' && (
-        <ChartTab tab="revenue" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="revenue" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <RevenueChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Portfolio' && (
-        <ChartTab tab="concentration" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="concentration" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <ConcentrationChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Cohort Analysis' && (
-        <ChartTab tab="cohort" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="cohort" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <CohortTable company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Returns' && (
-        <ChartTab tab="returns" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="returns" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <ReturnsAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Collections Timing' && (
-        <ChartTab tab="collections-timing" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="collections-timing" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <CollectionsTimingChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Loss Waterfall' && (
-        <ChartTab tab="loss-waterfall" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="loss-waterfall" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <CohortLossWaterfallChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Recovery Analysis' && (
-        <ChartTab tab="recovery-analysis" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="recovery-analysis" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <RecoveryAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Underwriting Drift' && (
-        <ChartTab tab="underwriting-drift" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="underwriting-drift" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <UnderwritingDriftChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Segment Analysis' && (
-        <ChartTab tab="segment-analysis" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="segment-analysis" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <SegmentAnalysisChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Seasonality' && (
-        <ChartTab tab="seasonality" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="seasonality" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <SeasonalityChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'CDR / CCR' && (
-        <ChartTab tab="cdr-ccr" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="cdr-ccr" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <CdrCcrChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
       {activeTab === 'Risk & Migration' && (
-        <ChartTab tab="risk-migration" company={company} product={product} snapshot={snapshot} currency={currency}>
+        <ChartTab tab="risk-migration" company={company} product={product} snapshot={snapshot} currency={currency} isBackdated={isBackdated}>
           <RiskMigrationChart company={company} product={product} snapshot={snapshot} currency={currency} asOfDate={asOfDate} />
         </ChartTab>
       )}
@@ -419,7 +419,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
         <PortfolioCommentaryPanel text={summary.portfolio_commentary} />
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} />
+        <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} isBackdated={isBackdated} />
         <DataChat company={company} product={product} snapshot={snapshot} currency={currency} />
       </div>
     </div>
@@ -590,7 +590,7 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} />
+        <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} isBackdated={isBackdated} />
         <DataChat company={company} product={product} snapshot={snapshot} currency={currency} />
       </div>
     </div>
@@ -608,10 +608,10 @@ function LoadingBar() {
 }
 
 /* ── Chart Tab wrapper ── */
-function ChartTab({ tab, company, product, snapshot, currency, children }) {
+function ChartTab({ tab, company, product, snapshot, currency, children, isBackdated }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <TabInsight company={company} product={product} snapshot={snapshot} currency={currency} tab={tab} />
+      <TabInsight company={company} product={product} snapshot={snapshot} currency={currency} tab={tab} isBackdated={isBackdated} />
       {children}
     </div>
   )

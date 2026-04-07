@@ -613,3 +613,35 @@ START
   │
   └─ END
 ```
+
+---
+
+## 15. As-of-Date Filtering & Data Integrity
+
+### The Core Limitation
+
+Loan tapes are **point-in-time snapshots**. Every balance column (`Collected till date`, `Denied by insurance`, `Pending insurance response`, `Outstanding`) reflects the state as of the **tape snapshot date**, not any arbitrary as-of date.
+
+When `filter_by_date(df, as_of_date)` is applied:
+- **What it does:** Filters deals by `Deal date <= as_of_date` (origination date)
+- **What it does NOT do:** Adjust collection, denial, or outstanding amounts to reflect what they were on the as-of date
+
+### Metric Classification
+
+| Category | Metrics | Safe for Backdated? |
+|----------|---------|---------------------|
+| **Deal Selection** | Deal count, originated volume, deployment, vintage composition, cohort membership | YES |
+| **Balance-Dependent** | Collection rate, denial rate, outstanding, margins, revenue (realized/unrealized), PAR, ageing health, CDR/CCR | NO — reflects tape date |
+| **Time-Based** | Days outstanding, deal age, DSO (when curve-based) | YES |
+| **Derived** | HHI (if based on originated volume), concentration by deal count | YES |
+
+### Enforcement Rules
+
+1. **Visual flagging:** Every KPI card that depends on balance columns must show a `TAPE DATE` badge and dim its value when `as_of_date < snapshot_date`. Implemented via the `stale` prop on `KpiCard`.
+2. **AI analysis blocked:** All AI endpoints (`ai-commentary`, `ai-executive-summary`, `ai-tab-insight`) return HTTP 400 when `as_of_date < snapshot_date`. The AI cannot distinguish safe from unsafe metrics and would present inflated numbers as fact.
+3. **Banner warning:** `BackdatedBanner` component shows a persistent (dismissible) warning classifying metrics as ACCURATE vs TAPE DATE.
+4. **No estimation:** Do not attempt to estimate historical balances from current data. The exception would be collection curves (30-day interval columns) which could theoretically reconstruct historical states, but this is not implemented and would only work on tapes with curve columns.
+
+### For New Companies
+
+When onboarding a new company, verify that `filter_by_date` only filters deal selection. If the new asset class has a way to reconstruct historical balances (e.g., transaction-level payment history), document it here and consider implementing date-aware metric adjustment.

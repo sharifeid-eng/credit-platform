@@ -1167,6 +1167,21 @@ def get_ai_cache_status(company: str, product: str,
 
 # ── AI endpoints ──────────────────────────────────────────────────────────────
 
+def _check_backdated(as_of_date: str | None, snapshot_date: str) -> None:
+    """Raise 400 if as_of_date is before the snapshot date.
+    AI analysis on backdated views is misleading because balance metrics
+    (collected, denied, outstanding) reflect the snapshot date, not the as-of date."""
+    if as_of_date and snapshot_date and as_of_date < snapshot_date:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"AI analysis is not available for backdated views. "
+                f"As-of date ({as_of_date}) is before tape date ({snapshot_date}). "
+                f"Balance metrics reflect the snapshot date, so AI commentary would be misleading. "
+                f"Remove the as-of date filter or set it to the snapshot date."
+            )
+        )
+
 def _ai_client():
     import anthropic
     from dotenv import load_dotenv
@@ -1183,6 +1198,7 @@ def get_ai_commentary(company: str, product: str,
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
     snap_date = sel_for_key.get('date', '')
+    _check_backdated(as_of_date, snap_date)
     cache_path = _ai_cache_key('commentary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date)
 
     if not refresh:
@@ -1668,6 +1684,7 @@ def get_executive_summary(company: str, product: str,
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
     snap_date = sel_for_key.get('date', '')
+    _check_backdated(as_of_date, snap_date)
     cache_path = _ai_cache_key('executive_summary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date)
 
     if not refresh:
@@ -1830,6 +1847,7 @@ def get_tab_insight(company: str, product: str,
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
     snap_date = sel_for_key.get('date', '')
+    _check_backdated(as_of_date, snap_date)
     cache_path = _ai_cache_key('tab_insight', company, product, snap_key, as_of_date or '', tab, snapshot_date=snap_date)
 
     if not refresh:

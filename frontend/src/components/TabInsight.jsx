@@ -5,7 +5,7 @@ import { getTabInsight } from '../services/api'
 /**
  * TabInsight — compact one-click AI insight bar with smooth expand/collapse + cache awareness
  */
-export default function TabInsight({ company, product, snapshot, currency, tab }) {
+export default function TabInsight({ company, product, snapshot, currency, tab, isBackdated = false }) {
   const [text, setText]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen]       = useState(false)
@@ -13,6 +13,7 @@ export default function TabInsight({ company, product, snapshot, currency, tab }
   const [fromCache, setFromCache] = useState(false)
 
   async function fetch(refresh = false) {
+    if (isBackdated) return
     if (text && !refresh) { setOpen(o => !o); return }
     setLoading(true)
     setOpen(true)
@@ -67,7 +68,7 @@ export default function TabInsight({ company, product, snapshot, currency, tab }
             </span>
           )}
           <span style={{ fontSize: 10, color: 'var(--text-faint)', flex: 1 }}>
-            {loading ? 'Analysing...' : text ? 'Click to toggle' : `Get AI insight for this view`}
+            {isBackdated ? 'Disabled for backdated views' : loading ? 'Analysing...' : text ? 'Click to toggle' : `Get AI insight for this view`}
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}

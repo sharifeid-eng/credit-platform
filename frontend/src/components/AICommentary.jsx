@@ -5,12 +5,13 @@ import { getAICommentary } from '../services/api'
 /**
  * AICommentary — dark theme panel with slide-up animation + cache awareness
  */
-export default function AICommentary({ company, product, snapshot, currency, cached, onCache }) {
+export default function AICommentary({ company, product, snapshot, currency, cached, onCache, isBackdated = false }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [fromCache, setFromCache] = useState(false)
 
   async function generate(refresh = false) {
+    if (isBackdated) return
     if (cached && !refresh) return
     setLoading(true)
     setError(null)
@@ -63,32 +64,40 @@ export default function AICommentary({ company, product, snapshot, currency, cac
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {cached && (
-            <button onClick={() => generate(true)} disabled={loading} style={{
-              fontSize: 9, fontWeight: 600,
-              padding: '3px 8px', borderRadius: 4,
-              background: 'transparent',
-              color: 'var(--text-muted)', border: '1px solid var(--border)',
-              cursor: loading ? 'default' : 'pointer',
-              fontFamily: 'var(--font-ui)',
-              transition: 'all var(--transition-fast)',
-            }}
-              title="Regenerate commentary (new AI call)"
-            >
-              Regenerate
-            </button>
-          )}
-          {!cached && (
-            <button onClick={() => generate(false)} disabled={loading} style={{
-              fontSize: 10, fontWeight: 700,
-              padding: '4px 12px', borderRadius: 5,
-              background: loading ? 'var(--gold-dim)' : 'var(--gold)',
-              color: '#000', border: 'none', cursor: loading ? 'default' : 'pointer',
-              fontFamily: 'var(--font-ui)',
-              transition: 'background var(--transition-fast)',
-            }}>
-              {loading ? 'Generating...' : 'Generate'}
-            </button>
+          {isBackdated ? (
+            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+              Disabled for backdated views
+            </span>
+          ) : (
+            <>
+              {cached && (
+                <button onClick={() => generate(true)} disabled={loading} style={{
+                  fontSize: 9, fontWeight: 600,
+                  padding: '3px 8px', borderRadius: 4,
+                  background: 'transparent',
+                  color: 'var(--text-muted)', border: '1px solid var(--border)',
+                  cursor: loading ? 'default' : 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  transition: 'all var(--transition-fast)',
+                }}
+                  title="Regenerate commentary (new AI call)"
+                >
+                  Regenerate
+                </button>
+              )}
+              {!cached && (
+                <button onClick={() => generate(false)} disabled={loading} style={{
+                  fontSize: 10, fontWeight: 700,
+                  padding: '4px 12px', borderRadius: 5,
+                  background: loading ? 'var(--gold-dim)' : 'var(--gold)',
+                  color: '#000', border: 'none', cursor: loading ? 'default' : 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  transition: 'background var(--transition-fast)',
+                }}>
+                  {loading ? 'Generating...' : 'Generate'}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -101,7 +110,9 @@ export default function AICommentary({ company, product, snapshot, currency, cac
 
         {!cached && !loading && !error && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            Click Generate to produce an AI-powered portfolio summary.
+            {isBackdated
+              ? 'AI commentary is only available at the tape snapshot date. Balance metrics in a backdated view reflect the snapshot date, not the as-of date.'
+              : 'Click Generate to produce an AI-powered portfolio summary.'}
           </div>
         )}
 

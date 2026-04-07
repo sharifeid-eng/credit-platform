@@ -187,7 +187,7 @@ function BottomLine({ text }) {
 }
 
 export default function ExecutiveSummary() {
-  const { company, product, snapshot, currency, asOfDate } = useCompany()
+  const { company, product, snapshot, currency, asOfDate, isBackdated } = useCompany()
   const [narrative, setNarrative] = useState(null)
   const [findings, setFindings] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -199,6 +199,7 @@ export default function ExecutiveSummary() {
   const [fromCache, setFromCache] = useState(false)
 
   const generate = async (refresh = false) => {
+    if (isBackdated) return
     setLoading(true)
     setError(null)
     try {
@@ -237,52 +238,58 @@ export default function ExecutiveSummary() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {hasResults && (
+        {isBackdated ? (
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic', maxWidth: 260, textAlign: 'right', lineHeight: 1.5 }}>
+            AI analysis is only available at the tape snapshot date. Balance metrics reflect the snapshot date, not the as-of date.
+          </span>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {hasResults && (
+              <button
+                onClick={() => generate(true)}
+                disabled={loading}
+                style={{
+                  padding: '8px 14px', borderRadius: 6,
+                  border: '1px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: 'all var(--transition-fast)',
+                }}
+                title="Regenerate from scratch (new AI call)"
+              >
+                Regenerate
+              </button>
+            )}
             <button
-              onClick={() => generate(true)}
+              onClick={() => generate(false)}
               disabled={loading}
               style={{
-                padding: '8px 14px', borderRadius: 6,
-                border: '1px solid var(--border)',
-                background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
+                padding: '10px 24px',
+                borderRadius: 6,
+                border: loading ? '1px solid var(--border)' : '1px solid var(--gold)',
+                background: loading ? 'var(--bg-surface)' : 'transparent',
+                color: loading ? 'var(--text-muted)' : 'var(--gold)',
+                fontSize: 12,
+                fontWeight: 600,
                 cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 transition: 'all var(--transition-fast)',
               }}
-              title="Regenerate from scratch (new AI call)"
             >
-              Regenerate
+              {loading && (
+                <span style={{
+                  width: 14, height: 14, border: '2px solid var(--border)',
+                  borderTop: '2px solid var(--gold)', borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }} />
+              )}
+              {loading ? 'Analyzing...' : hasResults ? 'Refresh' : 'Generate Summary'}
             </button>
-          )}
-          <button
-            onClick={() => generate(false)}
-            disabled={loading}
-            style={{
-              padding: '10px 24px',
-              borderRadius: 6,
-              border: loading ? '1px solid var(--border)' : '1px solid var(--gold)',
-              background: loading ? 'var(--bg-surface)' : 'transparent',
-              color: loading ? 'var(--text-muted)' : 'var(--gold)',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              transition: 'all var(--transition-fast)',
-            }}
-          >
-            {loading && (
-              <span style={{
-                width: 14, height: 14, border: '2px solid var(--border)',
-                borderTop: '2px solid var(--gold)', borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-              }} />
-            )}
-            {loading ? 'Analyzing...' : hasResults ? 'Refresh' : 'Generate Summary'}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Meta info */}
