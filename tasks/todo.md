@@ -3,8 +3,51 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
-## Active
-_(none)_
+## Active — Cloud Deployment (Phase 3 Gate)
+
+### Phase 0 — Domain & Provider Setup (manual, user-driven)
+- [ ] Register domain name (e.g. `laith.app`, `laithanalytics.com`, or similar — ~$10-15/yr)
+- [ ] Create Hetzner Cloud account (best value: 4GB/2vCPU ARM at ~€7/mo, or 8GB/4vCPU at ~€14/mo)
+- [ ] Provision a VPS (Ubuntu 24.04, 4GB+ RAM for Playwright), note the public IP
+- [ ] Point domain DNS A record to the VPS IP (via registrar or Cloudflare)
+
+### Phase 1 — Dockerize the Application
+- [ ] Create `requirements.txt` from current venv (pin versions)
+- [ ] Fix hardcoded `API_BASE` in `frontend/src/services/api.js` → env-aware (`VITE_API_URL || ''`)
+- [ ] Create `backend/Dockerfile` (Python 3.14, Playwright + Chromium, system fonts for ReportLab)
+- [ ] Create `frontend/Dockerfile` (Node build → Nginx static serve)
+- [ ] Create `docker-compose.yml` (backend, frontend/nginx, postgres, volumes for data/)
+- [ ] Create `.env.production.example` (template with all required vars, no secrets)
+- [ ] Add `data/` to `.dockerignore` (tape data mounted as volume, not baked into image)
+- [ ] Test full stack locally with `docker compose up`
+
+### Phase 2 — Server Setup & Deploy
+- [ ] SSH into VPS, install Docker + Docker Compose
+- [ ] Clone repo, copy `.env.production`, upload `data/` directory
+- [ ] Configure Nginx reverse proxy (port 80/443 → backend:8000 + frontend static)
+- [ ] Set up SSL with Certbot (Let's Encrypt) + auto-renewal cron
+- [ ] Configure UFW firewall (allow 22, 80, 443 only)
+- [ ] Run `docker compose up -d` and verify site loads at `https://yourdomain.com`
+
+### Phase 3 — Operational Basics
+- [ ] Set up daily PostgreSQL backup cron (pg_dump → compressed file)
+- [ ] Optional: upload backups to S3/Backblaze B2 (~$1/mo)
+- [ ] Set up Docker restart policies (`restart: unless-stopped`)
+- [ ] Create simple deploy script (`git pull && docker compose build && docker compose up -d`)
+- [ ] Test PDF generation works (Playwright + Chromium inside container)
+
+### Phase 4 — CORS & Security Hardening
+- [ ] Update FastAPI CORS to allow only the production domain (not `*`)
+- [ ] Ensure `.env` and `data/` are not accessible via web
+- [ ] Set `X-API-Key` for integration endpoints (already built, just configure on server)
+- [ ] Basic rate limiting on AI endpoints (Anthropic API costs money)
+
+### Decision Log
+- **Provider: Hetzner** — best price/performance for single VPS. 4GB ARM at €7/mo vs DigitalOcean $24/mo for comparable specs. EU data center acceptable (no UAE residency requirement confirmed).
+- **Architecture: Docker Compose on single VPS** — simplest path for 1-5 users. Nginx as reverse proxy handles SSL termination + static frontend + API routing. All services on one machine.
+- **Data strategy:** Loan tapes mounted as Docker volume from host filesystem. Not baked into images. Git tracks the data (it's not sensitive enough to require removal — internal fund data, not PII). If this changes, add `data/` to `.gitignore` and use volume-only.
+- **Why not Railway/Render/Fly.io:** These PaaS options are simpler but: (a) Playwright needs custom Docker with Chromium which complicates PaaS, (b) persistent file storage for loan tapes is awkward on ephemeral containers, (c) PostgreSQL add-ons are $15-30/mo alone. VPS is cheaper and gives full control.
+- **Upgrade path:** If IC usage grows, the move is: Hetzner VPS → Hetzner Load Balancer + 2 VPS nodes + Managed PostgreSQL. Same Docker images, just orchestrated differently.
 
 ---
 
