@@ -123,6 +123,7 @@ def compute_silq_summary(df, mult=1, ref_date=None):
     return {
         'total_deals': n,
         'total_disbursed': _safe(total_disbursed),
+        'total_purchase_value': _safe(total_disbursed),  # alias for landing page compatibility
         'total_outstanding': _safe(total_outstanding),
         'total_overdue': _safe(total_overdue),
         'total_repaid': _safe(total_repaid),

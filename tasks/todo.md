@@ -8,7 +8,11 @@ _(none)_
 
 ---
 
-## Completed — 2026-04-07
+## Completed — 2026-04-07 (session 2)
+- [x] Fix SILQ Face Value blank on landing page — `compute_silq_summary()` returned `total_disbursed` but frontend expected `total_purchase_value`. Added `total_purchase_value` alias mapped to `total_disbursed`. Same pattern now consistent across Klaim, Ejari, SILQ.
+- [x] Removed tracked `backend/__pycache__/main.cpython-314.pyc` from git
+
+## Completed — 2026-04-07 (session 1)
 - [x] Living Methodology system — auto-generated from backend metadata
   - `core/metric_registry.py` — decorator registry + `get_methodology()` + `get_registry()`
   - `core/methodology_klaim.py` — 16 sections, 29 metrics, 13 tables (all Klaim methodology content)

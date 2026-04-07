@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-07 — Worktree Edits Don't Affect Running Server
+**Mistake:** Edited `core/analysis_silq.py` in the worktree (`.claude/worktrees/serene-heisenberg/`) and expected the running uvicorn server to pick it up. The server was running from the main project root with different file paths. Also, the server was started without `--reload`, so even touching files in the correct directory wouldn't trigger a restart.
+**Rule:** When a running backend is serving from the main project root, edits in a worktree won't be picked up. Either: (1) apply the fix to the main project's files directly, or (2) restart the server from the worktree. Also verify `--reload` is enabled — check with `Get-WmiObject Win32_Process` to see the actual command line args.
+
+---
+
+## 2026-04-07 — Standardize Summary Field Names Across Companies
+**Mistake:** SILQ's `compute_silq_summary()` returned `total_disbursed` while the frontend expected `total_purchase_value` (the field name Klaim uses). This caused a blank Face Value on the landing page for SILQ. Each company used its own domain-specific field name without a common alias.
+**Rule:** When adding a new company, ensure the `/summary` endpoint returns all fields the frontend consumes. The canonical field names are: `total_purchase_value`, `total_deals`, `total_collected`, `total_denied`, `total_pending`, `collection_rate`. If the domain uses a different term (e.g. `total_disbursed`), return BOTH the domain-specific name AND the canonical alias.
+
+---
+
 ## 2026-04-07 — Companion metadata files beat inline decorators for large codebases
 **Decision:** Instead of adding @metric decorators to 48 compute functions (which would add ~500 lines of metadata inline, cluttering the pure-compute modules), created separate companion files (`methodology_klaim.py`, `methodology_silq.py`) that register metadata after import. This keeps `analysis.py` clean (pure computation) while making methodology content easily editable.
 **Rule:** When metadata is large (multi-line strings, nested structures), prefer companion registration files over inline decorators. Reserve decorators for small metadata (< 3 fields).
