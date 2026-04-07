@@ -131,10 +131,12 @@ def _ai_cache_key(endpoint: str, company: str, product: str,
     """Build a deterministic cache filename from request parameters.
     Currency is excluded because the analytical findings are identical —
     currency only applies a numeric multiplier to displayed amounts.
-    as_of_date is normalized: if it matches the snapshot_date or is empty,
-    it maps to the same key (both mean 'use all data')."""
-    # Normalize: treat None/empty/snapshot_date as the same "default" state
-    norm_aod = as_of_date if (as_of_date and as_of_date != snapshot_date) else ''
+    as_of_date is normalized: if it's empty or >= snapshot_date, it maps
+    to the same key (all mean 'use all data from this tape')."""
+    # Normalize: treat None/empty/snapshot_date/future as the same "full tape" state
+    norm_aod = ''
+    if as_of_date and snapshot_date and as_of_date < snapshot_date:
+        norm_aod = as_of_date  # genuinely backdated — different data slice
     raw = f"{endpoint}|{company}|{product}|{snapshot}|{norm_aod}|{tab}"
     h = hashlib.sha256(raw.encode()).hexdigest()[:16]
     safe = f"{company}_{product}_{endpoint}"
