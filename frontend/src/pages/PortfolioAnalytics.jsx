@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
+import useBreakpoint from '../hooks/useBreakpoint'
 import {
   getPortfolioBorrowingBase, getPortfolioConcentrationLimits, getPortfolioCovenants,
   getPortfolioCovenantDates,
@@ -19,6 +20,7 @@ const SELF_LOADING_TABS = ['invoices', 'payments', 'bank-statements']
 
 export default function PortfolioAnalytics() {
   const { tab } = useParams()
+  const { isMobile } = useBreakpoint()
   const { company, product, snapshot, currency, asOfDate, analysisType } = useCompany()
 
   const [bbData, setBbData] = useState(null)
@@ -111,7 +113,7 @@ export default function PortfolioAnalytics() {
 
       {/* Gear icon for facility params — positioned top-right of content area */}
       {showGear && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 28px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: isMobile ? '12px 14px 0' : '12px 28px 0' }}>
           <button
             onClick={() => setShowParams(true)}
             title="Facility Parameters"
@@ -134,7 +136,7 @@ export default function PortfolioAnalytics() {
         </div>
       )}
 
-      <div style={{ padding: '12px 28px 40px' }}>
+      <div style={{ padding: isMobile ? '12px 14px 28px' : '12px 28px 40px' }}>
         <AnimatePresence mode="wait">
         <motion.div
           key={tab}

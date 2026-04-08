@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useCompany } from '../contexts/CompanyContext'
 import { getMethodology } from '../services/api'
+import useBreakpoint from '../hooks/useBreakpoint'
 
 // level = Analytical Hierarchy level (see ANALYSIS_FRAMEWORK.md Section 1)
 // L1=Size & Composition, L2=Cash Conversion, L3=Credit Quality, L4=Loss Attribution, L5=Forward Signals
@@ -15,6 +16,7 @@ const LEVEL_COLORS = {
 export default function Methodology() {
   const { companyName } = useParams()
   const { analysisType } = useCompany()
+  const { isMobile } = useBreakpoint()
   const [sections, setSections] = useState([])
   const [active, setActive] = useState('')
   const [loading, setLoading] = useState(true)
@@ -81,14 +83,14 @@ export default function Methodology() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
-      {/* Sidebar TOC */}
-      <nav style={{
+    <div style={{ display: 'flex', minHeight: 'calc(100vh - var(--navbar-height))' }}>
+      {/* Sidebar TOC — hidden on mobile */}
+      {!isMobile && <nav style={{
         width: 220,
         flexShrink: 0,
         position: 'sticky',
         top: 104,
-        height: 'calc(100vh - 56px)',
+        height: 'calc(100vh - var(--navbar-height))',
         overflowY: 'auto',
         padding: '28px 0 28px 28px',
         borderRight: '1px solid var(--border)',
@@ -143,10 +145,10 @@ export default function Methodology() {
             )}
           </button>
         ))}
-      </nav>
+      </nav>}
 
       {/* Main content */}
-      <main style={{ flex: 1, padding: '36px 40px 80px', maxWidth: 820 }}>
+      <main style={{ flex: 1, padding: isMobile ? '20px 14px 40px' : '36px 40px 80px', maxWidth: 820 }}>
         {/* Back to dashboard */}
         <Link to={`/company/${companyName}`} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,

@@ -55,7 +55,7 @@ export default function YieldMarginsChart({ company, product, snapshot, currency
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI Cards */}
       {data && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
           <KpiCard
             label="Portfolio Margin Rate"
             value={fmtPct(data.margin_rate)}

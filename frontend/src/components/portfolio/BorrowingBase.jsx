@@ -26,7 +26,7 @@ export default function BorrowingBase({ data, company, product, snapshot, curren
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* KPI cards + BBC button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, flex: 1 }}>
           <KpiCard label="Total A/R"        value={fmt(d.kpis.total_ar)}          sub="Gross receivables"                color="gold" />
           <KpiCard label="Eligible A/R"     value={fmt(d.kpis.eligible_ar)}       sub={`${fmt(d.kpis.ineligible)} ineligible`} color="blue" />
           <KpiCard label="Borrowing Base"   value={fmt(d.kpis.borrowing_base)}    sub={`${((d.kpis.borrowing_base / d.kpis.facility_limit) * 100).toFixed(1)}% of facility`} color="teal" />
@@ -181,7 +181,7 @@ export default function BorrowingBase({ data, company, product, snapshot, curren
 
       {/* Sensitivity & Breakeven */}
       {d.analytics && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
           {/* Breakeven */}
           {d.analytics.breakeven && (
             <div style={{

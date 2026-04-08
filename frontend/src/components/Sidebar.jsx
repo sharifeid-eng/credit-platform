@@ -1,6 +1,8 @@
 import { Link, useParams, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence }       from 'framer-motion'
 import { useCompany }                    from '../contexts/CompanyContext'
+import useBreakpoint                     from '../hooks/useBreakpoint'
+import { useMobileMenu }                from '../contexts/MobileMenuContext'
 
 // Default Klaim tabs (fallback when config has no tabs array)
 const DEFAULT_TAPE_TABS = [
@@ -37,6 +39,8 @@ export default function Sidebar() {
   const { company, products, product, tapeTabs, config } = useCompany()
   const { tab } = useParams()
   const location = useLocation()
+  const { isMobile } = useBreakpoint()
+  const { isOpen, close } = useMobileMenu()
   const TAPE_TABS = tapeTabs || DEFAULT_TAPE_TABS
   const hidePortfolio = config?.hide_portfolio_tabs === true
 
@@ -46,21 +50,56 @@ export default function Sidebar() {
 
   const basePath = `/company/${company}/${product}`
 
+  const navStyle = isMobile ? {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: 280,
+    height: '100vh',
+    zIndex: 200,
+    transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+    transition: 'transform 0.25s ease',
+    overflowY: 'auto',
+    padding: '20px 0',
+    borderRight: '1px solid var(--border)',
+    background: 'var(--bg-nav)',
+    scrollbarWidth: 'thin',
+    scrollbarColor: 'var(--border) transparent',
+  } : {
+    width: 240,
+    flexShrink: 0,
+    position: 'sticky',
+    top: 'var(--navbar-height)',
+    height: 'calc(100vh - var(--navbar-height))',
+    overflowY: 'auto',
+    padding: '20px 0 20px 0',
+    borderRight: '1px solid var(--border)',
+    background: 'var(--bg-nav)',
+    scrollbarWidth: 'thin',
+    scrollbarColor: 'var(--border) transparent',
+    scrollBehavior: 'smooth',
+  }
+
   return (
-    <nav style={{
-      width: 240,
-      flexShrink: 0,
-      position: 'sticky',
-      top: 56,
-      height: 'calc(100vh - 56px)',
-      overflowY: 'auto',
-      padding: '20px 0 20px 0',
-      borderRight: '1px solid var(--border)',
-      background: 'var(--bg-nav)',
-      scrollbarWidth: 'thin',
-      scrollbarColor: 'var(--border) transparent',
-      scrollBehavior: 'smooth',
-    }}>
+    <nav style={navStyle}>
+      {/* Mobile close button */}
+      {isMobile && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 8px' }}>
+          <button
+            onClick={close}
+            aria-label="Close menu"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: 4,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Company name */}
       <div style={{
         padding: '0 20px',

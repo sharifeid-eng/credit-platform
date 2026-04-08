@@ -77,7 +77,7 @@ export default function EjariDashboard() {
       {/* ── Portfolio Overview ── */}
       {activeSection === 'overview' && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
             <KpiCard label="Total Contracts" value={km.total_contracts?.toLocaleString() ?? '—'} sub={`${km.active_loans ?? 0} active`} color="gold" index={0} />
             <KpiCard label="Active Loans" value={(km.active_loans ?? 0).toLocaleString()} color="teal" index={1} />
             <KpiCard label="Matured / Closed" value={(km.matured_loans ?? 0).toLocaleString()} color="blue" index={2} />
@@ -89,7 +89,7 @@ export default function EjariDashboard() {
           </div>
 
           <SectionHeader title="Credit Quality" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
             <KpiCard label="PAR 30+" value={fmtPct(km.par30)} sub={`${fmtDollar(km.outstanding_principal * (km.par30 || 0))} at risk`} color={km.par30 > 0.05 ? 'red' : 'teal'} index={0} />
             <KpiCard label="PAR 60+" value={fmtPct(km.par60)} sub={`${fmtDollar(km.outstanding_principal * (km.par60 || 0))} at risk`} color={km.par60 > 0.04 ? 'red' : 'teal'} index={1} />
             <KpiCard label="PAR 90+" value={fmtPct(km.par90)} sub={`${fmtDollar(km.outstanding_principal * (km.par90 || 0))} at risk`} color={km.par90 > 0.03 ? 'red' : 'teal'} index={2} />

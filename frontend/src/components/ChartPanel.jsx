@@ -45,7 +45,7 @@ export default function ChartPanel({ title, subtitle, action, loading, error, mi
       </div>
 
       {/* Body */}
-      <div style={{ padding: '20px', minHeight }}>
+      <div style={{ padding: '20px', minHeight, overflowX: 'auto' }}>
         <AnimatePresence mode="wait">
           {loading ? (
             <SkeletonChart key="skeleton" minHeight={minHeight} />

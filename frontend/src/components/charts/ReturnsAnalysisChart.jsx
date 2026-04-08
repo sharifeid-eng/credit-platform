@@ -35,7 +35,7 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
       {/* ── KPI Tiles ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
         <Tile label="Total Deployed" value={fmtCcy(s.total_deployed, ccy)} color="var(--gold)" />
         <Tile label="Wtd Avg Discount" value={`${s.weighted_avg_discount}%`} color="var(--blue)" />
         <Tile label="Realised Margin" value={`${s.realised_margin}%`} sub={`Expected: ${s.expected_margin}%`}
@@ -52,7 +52,7 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
       {s.has_irr && (
         <>
           {/* IRR KPI Tiles */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
             <Tile label="Avg Expected IRR" value={`${s.avg_expected_irr}%`} color="var(--blue)" />
             <Tile label="Avg Actual IRR" value={`${s.avg_actual_irr}%`} color="var(--teal)" />
             <Tile label="IRR Spread"
@@ -125,7 +125,7 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
 
       {/* ── Discount Band Analysis ── */}
       <ChartPanel title="Discount Band Performance" subtitle="Collection rate, denial rate, and margin by discount tier" minHeight={0}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
           {/* Chart */}
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={data.discount_bands}>

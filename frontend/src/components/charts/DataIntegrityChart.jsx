@@ -377,7 +377,7 @@ export default function DataIntegrityChart({ company, product, snapshots, curren
 
       {/* ── Section B: Validation Results ── */}
       {results && oldVal && newVal && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
           <ValidationCard title={snapOld} validation={oldVal} />
           <ValidationCard title={snapNew} validation={newVal} />
         </div>

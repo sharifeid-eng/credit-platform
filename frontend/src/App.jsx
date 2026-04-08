@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MobileMenuProvider } from './contexts/MobileMenuContext';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Framework from './pages/Framework';
@@ -17,6 +18,7 @@ function CompanyRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
+      <MobileMenuProvider>
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -47,6 +49,7 @@ export default function App() {
         {/* Legacy alias */}
         <Route path="/companies/:companyName/*" element={<Navigate to="/company/:companyName" replace />} />
       </Routes>
+      </MobileMenuProvider>
     </BrowserRouter>
   );
 }

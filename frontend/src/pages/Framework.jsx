@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getFramework } from '../services/api'
+import useBreakpoint from '../hooks/useBreakpoint'
 
 const SECTIONS = [
   { id: 'hierarchy', title: 'Analytical Hierarchy' },
@@ -15,6 +16,7 @@ export default function Framework() {
   const [content, setContent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState(SECTIONS[0].id)
+  const { isMobile } = useBreakpoint()
 
   useEffect(() => {
     getFramework()
@@ -54,14 +56,14 @@ export default function Framework() {
   )
 
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 56px)' }}>
-      {/* Sidebar TOC */}
-      <nav style={{
+    <div style={{ display: 'flex', minHeight: 'calc(100vh - var(--navbar-height))' }}>
+      {/* Sidebar TOC — hidden on mobile */}
+      {!isMobile && <nav style={{
         width: 220,
         flexShrink: 0,
         position: 'sticky',
-        top: 56,
-        height: 'calc(100vh - 56px)',
+        top: 'var(--navbar-height)',
+        height: 'calc(100vh - var(--navbar-height))',
         overflowY: 'auto',
         padding: '28px 0 28px 28px',
         borderRight: '1px solid var(--border)',
@@ -106,12 +108,12 @@ export default function Framework() {
             {s.title}
           </button>
         ))}
-      </nav>
+      </nav>}
 
       {/* Main content */}
       <div style={{
         flex: 1,
-        padding: '32px 40px 80px',
+        padding: isMobile ? '20px 14px 40px' : '32px 40px 80px',
         maxWidth: 900,
       }}>
         <h1 style={{
@@ -177,7 +179,7 @@ export default function Framework() {
 
         {/* Section 2: Tape vs Portfolio */}
         <Section id="tape-vs-portfolio" title="2. Tape Analytics vs Portfolio Analytics">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, margin: '16px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 20, margin: '16px 0' }}>
             <div style={styles.card}>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>
                 Tape Analytics
@@ -213,7 +215,7 @@ export default function Framework() {
 
         {/* Section 3: Asset Class Adaptations */}
         <Section id="asset-classes" title="3. Asset Class Adaptations">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, margin: '16px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 20, margin: '16px 0' }}>
             <div style={styles.card}>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>
                 Klaim — Healthcare Receivables
@@ -282,7 +284,7 @@ export default function Framework() {
             Performance metrics should not be contaminated by fully resolved loss events.
             The platform separates the portfolio into two populations:
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, margin: '16px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 20, margin: '16px 0' }}>
             <div style={{ ...styles.card, borderColor: 'var(--teal)', borderWidth: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--teal)', marginBottom: 8 }}>
                 Clean Portfolio

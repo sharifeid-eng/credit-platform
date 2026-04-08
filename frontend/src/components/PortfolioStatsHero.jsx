@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { getAggregateStats } from '../services/api'
+import useBreakpoint from '../hooks/useBreakpoint'
 
 // ── Ease-out expo count-up ────────────────────────────────────────────────────
 function useCountUp(target, duration = 1400) {
@@ -29,7 +30,7 @@ function useCountUp(target, duration = 1400) {
 }
 
 // ── Single stat cell ──────────────────────────────────────────────────────────
-function StatCell({ label, rawValue, format, loading, empty, index, valueColor }) {
+function StatCell({ label, rawValue, format, loading, empty, index, valueColor, isMobile }) {
   const animated = useCountUp(loading || empty ? null : rawValue)
   const display  = empty ? '—' : loading ? null : format(animated)
 
@@ -38,25 +39,26 @@ function StatCell({ label, rawValue, format, loading, empty, index, valueColor }
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.06, ease: 'easeOut' }}
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 110 }}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: isMobile ? 70 : 110 }}
     >
       <div style={{
         fontFamily:    'var(--font-mono)',
-        fontSize:      26,
+        fontSize:      isMobile ? 18 : 26,
         fontWeight:    500,
         letterSpacing: '-0.03em',
         color:         valueColor,
         lineHeight:    1,
-        minHeight:     30,
+        minHeight:     isMobile ? 22 : 30,
       }}>
         {display ?? <Skeleton />}
       </div>
       <div style={{
-        fontSize:      9,
+        fontSize:      isMobile ? 7 : 9,
         fontWeight:    600,
         textTransform: 'uppercase',
         letterSpacing: '0.12em',
         color:         'var(--text-muted)',
+        textAlign:     'center',
       }}>
         {label}
       </div>
@@ -81,7 +83,7 @@ function Divider({ color }) {
 }
 
 // ── Banner shell ──────────────────────────────────────────────────────────────
-function Banner({ label, children, variant }) {
+function Banner({ label, children, variant, isMobile }) {
   const isGold = variant === 'gold'
   return (
     <div style={{
@@ -89,14 +91,14 @@ function Banner({ label, children, variant }) {
       background:    isGold
         ? 'linear-gradient(to bottom, rgba(201,168,76,0.07), rgba(201,168,76,0.01) 70%, transparent)'
         : 'transparent',
-      padding: '16px 48px',
+      padding: isMobile ? '12px 14px' : '16px 48px',
       position: 'relative',
     }}>
       {/* Section label — top-left */}
       <div style={{
         position:      'absolute',
         top:           10,
-        left:          28,
+        left:          isMobile ? 14 : 28,
         fontSize:      8,
         fontWeight:    700,
         textTransform: 'uppercase',
@@ -110,7 +112,7 @@ function Banner({ label, children, variant }) {
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
-        gap:            56,
+        gap:            isMobile ? 12 : 56,
         flexWrap:       'wrap',
         paddingTop:     8,
       }}>
@@ -124,6 +126,7 @@ function Banner({ label, children, variant }) {
 export default function PortfolioStatsHero() {
   const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
+  const { isMobile } = useBreakpoint()
 
   useEffect(() => {
     getAggregateStats()
@@ -138,8 +141,8 @@ export default function PortfolioStatsHero() {
   const fmtSnaps      = v => Math.round(v).toString()
   const fmtCompanies  = v => Math.round(v).toString()
 
-  const goldDiv    = <Divider color="rgba(201,168,76,0.18)" />
-  const neutralDiv = <Divider color="var(--border)" />
+  const goldDiv    = isMobile ? null : <Divider color="rgba(201,168,76,0.18)" />
+  const neutralDiv = isMobile ? null : <Divider color="var(--border)" />
 
   return (
     <div style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
@@ -151,30 +154,32 @@ export default function PortfolioStatsHero() {
       `}</style>
 
       {/* Banner 1 — Data Analyzed */}
-      <Banner label="Data Analyzed" variant="gold">
-        <StatCell label="Face Value Analyzed" rawValue={stats?.total_face_value_usd} format={fmtValue}      loading={loading} index={0} valueColor="var(--gold)" />
+      <Banner label="Data Analyzed" variant="gold" isMobile={isMobile}>
+        <StatCell label="Face Value Analyzed" rawValue={stats?.total_face_value_usd} format={fmtValue}      loading={loading} index={0} valueColor="var(--gold)" isMobile={isMobile} />
         {goldDiv}
-        <StatCell label="Deals Processed"     rawValue={stats?.total_deals}          format={fmtDeals}      loading={loading} index={1} valueColor="var(--gold)" />
+        <StatCell label="Deals Processed"     rawValue={stats?.total_deals}          format={fmtDeals}      loading={loading} index={1} valueColor="var(--gold)" isMobile={isMobile} />
         {goldDiv}
-        <StatCell label="Data Points"         rawValue={stats?.total_data_points}    format={fmtDataPoints} loading={loading} index={2} valueColor="var(--gold)" />
+        <StatCell label="Data Points"         rawValue={stats?.total_data_points}    format={fmtDataPoints} loading={loading} index={2} valueColor="var(--gold)" isMobile={isMobile} />
         {goldDiv}
-        <StatCell label="Snapshots Loaded"    rawValue={stats?.total_snapshots}      format={fmtSnaps}      loading={loading} index={3} valueColor="var(--gold)" />
+        <StatCell label="Snapshots Loaded"    rawValue={stats?.total_snapshots}      format={fmtSnaps}      loading={loading} index={3} valueColor="var(--gold)" isMobile={isMobile} />
         {goldDiv}
-        <StatCell label="Portfolio Companies" rawValue={stats?.total_companies}      format={fmtCompanies}  loading={loading} index={4} valueColor="var(--gold)" />
+        <StatCell label="Portfolio Companies" rawValue={stats?.total_companies}      format={fmtCompanies}  loading={loading} index={4} valueColor="var(--gold)" isMobile={isMobile} />
       </Banner>
 
-      {/* Banner 2 — Live Portfolio (empty until DB connected) */}
-      <Banner label="Live Portfolio" variant="neutral">
-        <StatCell label="Active Exposure"     empty index={0} valueColor="var(--text-muted)" />
-        {neutralDiv}
-        <StatCell label="PAR 30+"             empty index={1} valueColor="var(--text-muted)" />
-        {neutralDiv}
-        <StatCell label="PAR 90+"             empty index={2} valueColor="var(--text-muted)" />
-        {neutralDiv}
-        <StatCell label="Covenants in Breach" empty index={3} valueColor="var(--text-muted)" />
-        {neutralDiv}
-        <StatCell label="Concentration (HHI)" empty index={4} valueColor="var(--text-muted)" />
-      </Banner>
+      {/* Banner 2 — Live Portfolio (hidden on mobile since all dashes) */}
+      {!isMobile && (
+        <Banner label="Live Portfolio" variant="neutral" isMobile={isMobile}>
+          <StatCell label="Active Exposure"     empty index={0} valueColor="var(--text-muted)" isMobile={isMobile} />
+          {neutralDiv}
+          <StatCell label="PAR 30+"             empty index={1} valueColor="var(--text-muted)" isMobile={isMobile} />
+          {neutralDiv}
+          <StatCell label="PAR 90+"             empty index={2} valueColor="var(--text-muted)" isMobile={isMobile} />
+          {neutralDiv}
+          <StatCell label="Covenants in Breach" empty index={3} valueColor="var(--text-muted)" isMobile={isMobile} />
+          {neutralDiv}
+          <StatCell label="Concentration (HHI)" empty index={4} valueColor="var(--text-muted)" isMobile={isMobile} />
+        </Banner>
+      )}
     </div>
   )
 }

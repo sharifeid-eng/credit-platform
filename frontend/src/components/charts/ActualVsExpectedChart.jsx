@@ -169,7 +169,7 @@ export default function ActualVsExpectedChart({ company, product, snapshot, curr
       {kpis && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
           gap: 12,
           marginTop: 2,
         }}>

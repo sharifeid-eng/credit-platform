@@ -57,7 +57,7 @@ export default function RiskMigrationChart({ company, product, snapshot, currenc
 
       {/* Migration Summary KPIs */}
       {!migrationError && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
           <MiniKpi label="Matched Deals" value={summary.total_matched_deals ?? '—'} color="var(--gold)" />
           <MiniKpi label="Improved" value={summary.improved_pct ? `${summary.improved_pct}%` : '—'} sub={`${summary.improved ?? 0} deals`} color="var(--teal)" />
           <MiniKpi label="Stable" value={summary.stable ?? '—'} color="var(--blue)" />
@@ -124,7 +124,7 @@ export default function RiskMigrationChart({ company, product, snapshot, currenc
       {/* Expected Loss Model */}
       <ChartPanel title="Expected Loss Model" subtitle="PD × LGD × Exposure derived from completed deal outcomes" loading={loading} error={error} minHeight={100}>
         {expectedLoss.portfolio && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             <ELMetric label="PD (Prob. Default)" value={`${expectedLoss.portfolio.pd}%`} />
             <ELMetric label="LGD (Loss Given Default)" value={`${expectedLoss.portfolio.lgd}%`} />
             <ELMetric label="EAD (Exposure)" value={fmtMoney(expectedLoss.portfolio.ead, currency)} />

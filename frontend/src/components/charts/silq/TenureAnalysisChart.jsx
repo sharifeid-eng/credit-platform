@@ -222,7 +222,7 @@ export default function TenureAnalysisChart({ company, product, snapshot, curren
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginTop: 12 }}>
                   <div>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Average</div>
                     <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#C9A84C' }}>

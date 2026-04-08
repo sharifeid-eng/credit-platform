@@ -43,7 +43,7 @@ export default function SilqLossWaterfallChart({ company, product, snapshot, cur
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Portfolio KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
         <KpiCard label="Total Originated" value={fmt(totals.originated)} color="blue" />
         <KpiCard label="Gross Default Rate" value={fmtPct(totals.default_rate)} sub="DPD > 90 days" color="red" />
         <KpiCard label="Recovery Rate" value={fmtPct(totals.recovery_rate)} sub="Recovered from defaulted" color="teal" />

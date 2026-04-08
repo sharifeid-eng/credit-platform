@@ -69,7 +69,7 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* KPI Row: HHI + top shop stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
         <KpiCard
           label="HHI Index"
           value={hhi.toFixed(4)}
@@ -93,7 +93,7 @@ export default function SilqConcentrationChart({ company, product, snapshot, cur
       </div>
 
       {/* Two pie charts side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
 
         {/* Shop Concentration Pie */}
         <ChartPanel title="Shop Concentration" subtitle="Top 10 shops by disbursed amount" loading={loading} error={error} minHeight={300}>

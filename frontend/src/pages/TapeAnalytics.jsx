@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
+import useBreakpoint from '../hooks/useBreakpoint'
 import { generatePDFReport, getParChart, getDtfcChart, getSummary, getCollectionVelocityChart, getDeploymentChart } from '../services/api'
 
 import KpiCard       from '../components/KpiCard'
@@ -53,6 +54,7 @@ const SLUG_TO_LABEL = Object.fromEntries(TAPE_TABS.map(t => [t.slug, t.label]))
 
 export default function TapeAnalytics() {
   const { tab } = useParams()
+  const { isMobile } = useBreakpoint()
 
   const {
     company, product, snapshots, snapshot, setSnapshot,
@@ -72,7 +74,7 @@ export default function TapeAnalytics() {
   // Ejari: render read-only summary dashboard instead of normal tabs
   if (analysisType === 'ejari_summary') {
     return (
-      <div style={{ padding: '16px 28px' }}>
+      <div style={{ padding: isMobile ? '12px 14px' : '16px 28px' }}>
         <EjariDashboard />
       </div>
     )
@@ -81,7 +83,7 @@ export default function TapeAnalytics() {
   return (
     <div>
       {/* Controls bar */}
-      <div style={{ padding: '16px 28px 0', display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <div style={{ padding: isMobile ? '12px 14px 0' : '16px 28px 0', display: 'flex', gap: isMobile ? 8 : 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         {/* Snapshot selector */}
         <ControlGroup label="Tape">
           <DarkSelect value={snapshot ?? ''} onChange={v => { setSnapshot(v); setAiCache(null) }}>
@@ -163,7 +165,7 @@ export default function TapeAnalytics() {
       </div>
 
       {/* Tab content */}
-      <div style={{ padding: '20px 28px 40px' }}>
+      <div style={{ padding: isMobile ? '14px 14px 28px' : '20px 28px 40px' }}>
         {isBackdated && <BackdatedBanner asOfDate={asOfDate} snapshotDate={snapshotDate} />}
         <AnimatePresence mode="wait">
         <motion.div
@@ -391,7 +393,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {summaryLoading && <LoadingBar />}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
         {showSkeleton
           ? Array(10).fill(null).map((_, i) => <SkeletonKpi key={i} />)
           : kpis.map((k, i) => <KpiCard key={i} {...k} index={i} />)
@@ -409,7 +411,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
               vs Active Outstanding
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
             {parKpis.map((k, i) => <KpiCard key={`par-${i}`} {...k} index={i} />)}
           </div>
         </div>
@@ -418,7 +420,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
       {summary?.portfolio_commentary && (
         <PortfolioCommentaryPanel text={summary.portfolio_commentary} />
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
         <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} isBackdated={isBackdated} />
         <DataChat company={company} product={product} snapshot={snapshot} currency={currency} />
       </div>
@@ -540,7 +542,7 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {summaryLoading && <LoadingBar />}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
         {showSkeleton
           ? Array(10).fill(null).map((_, i) => <SkeletonKpi key={i} />)
           : kpis.map((k, i) => <KpiCard key={i} {...k} index={i} />)
@@ -567,7 +569,7 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
               </span>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
             {parKpis.map((k, i) => (
               <div key={`par-${i}`} style={k.derived ? { borderStyle: 'dashed' } : undefined}>
                 <KpiCard {...k} index={i} />
@@ -583,13 +585,13 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
             Leading Indicators
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
             {dtfcKpis.map((k, i) => <KpiCard key={`dtfc-${i}`} {...k} index={i} />)}
           </div>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
         <AICommentary company={company} product={product} snapshot={snapshot} currency={currency} cached={aiCache} onCache={onAiCache} isBackdated={isBackdated} />
         <DataChat company={company} product={product} snapshot={snapshot} currency={currency} />
       </div>

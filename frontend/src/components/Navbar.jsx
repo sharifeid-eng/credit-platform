@@ -1,7 +1,13 @@
 import { Link, useLocation } from 'react-router-dom'
+import useBreakpoint from '../hooks/useBreakpoint'
+import { useMobileMenu } from '../contexts/MobileMenuContext'
 
 export default function Navbar() {
   const { pathname } = useLocation()
+  const { isMobile } = useBreakpoint()
+  const { toggle } = useMobileMenu()
+  const isCompanyPage = pathname.startsWith('/company/')
+
   return (
     <nav style={{
       background: 'var(--bg-nav)',
@@ -9,43 +15,65 @@ export default function Navbar() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0 28px',
-      height: '80px',
+      padding: isMobile ? '0 14px' : '0 28px',
+      height: 'var(--navbar-height)',
       position: 'sticky',
       top: 0,
       zIndex: 100,
     }}>
-      {/* Left — Logo */}
-      <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <LaithLogo size="nav" />
-        <div style={{
-          fontSize: 15,
-          fontWeight: 600,
-          color: 'var(--gold)',
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-        }}>
-          Data Analytics
-        </div>
-      </Link>
+      {/* Left — Hamburger (mobile company pages) + Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14 }}>
+        {isMobile && isCompanyPage && (
+          <button
+            onClick={toggle}
+            aria-label="Toggle sidebar"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: 4, display: 'flex',
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
+        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14 }}>
+          <LaithLogo size={isMobile ? 'mobile' : 'nav'} />
+          {!isMobile && (
+            <div style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: 'var(--gold)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}>
+              Data Analytics
+            </div>
+          )}
+        </Link>
+      </div>
 
       {/* Right — Nav links + Status chips */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Link to="/framework" style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: pathname === '/framework' ? 'var(--gold)' : 'var(--text-muted)',
-          textDecoration: 'none',
-          padding: '4px 10px',
-          borderRadius: 6,
-          transition: 'color var(--transition-fast)',
-          fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.02em',
-        }}>
-          Framework
-        </Link>
-        <LiveDot />
-        <Chip>v0.5</Chip>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 12 }}>
+        {!isMobile && (
+          <>
+            <Link to="/framework" style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: pathname === '/framework' ? 'var(--gold)' : 'var(--text-muted)',
+              textDecoration: 'none',
+              padding: '4px 10px',
+              borderRadius: 6,
+              transition: 'color var(--transition-fast)',
+              fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.02em',
+            }}>
+              Framework
+            </Link>
+            <LiveDot />
+            <Chip>v0.5</Chip>
+          </>
+        )}
         <Chip highlight>Sharif Eid</Chip>
       </div>
     </nav>
@@ -53,21 +81,23 @@ export default function Navbar() {
 }
 
 function LaithLogo({ size = 'nav' }) {
+  const isMob = size === 'mobile'
   const isNav = size === 'nav'
-  const h = isNav ? 54 : 44
+  const h = isMob ? 36 : isNav ? 54 : 44
+  const fs = isMob ? 22 : isNav ? 33 : 28
 
   return (
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: isNav ? 12 : 10,
+      gap: isMob ? 8 : isNav ? 12 : 10,
       height: h,
     }}>
       {/* Icon mark — lion */}
       <div style={{
         width: h,
         height: h,
-        borderRadius: isNav ? 12 : 10,
+        borderRadius: isMob ? 8 : isNav ? 12 : 10,
         overflow: 'hidden',
         flexShrink: 0,
         boxShadow: '0 2px 8px rgba(201,168,76,0.25)',
@@ -88,7 +118,7 @@ function LaithLogo({ size = 'nav' }) {
       {/* Wordmark */}
       <div style={{ display: 'flex', alignItems: 'baseline' }}>
         <span style={{
-          fontSize: isNav ? 33 : 28,
+          fontSize: fs,
           fontWeight: 800,
           letterSpacing: '-0.02em',
           color: 'var(--text-primary)',
@@ -97,7 +127,7 @@ function LaithLogo({ size = 'nav' }) {
           L
         </span>
         <span style={{
-          fontSize: isNav ? 33 : 28,
+          fontSize: fs,
           fontWeight: 800,
           letterSpacing: '-0.02em',
           color: 'var(--gold)',
@@ -106,7 +136,7 @@ function LaithLogo({ size = 'nav' }) {
           AI
         </span>
         <span style={{
-          fontSize: isNav ? 33 : 28,
+          fontSize: fs,
           fontWeight: 800,
           letterSpacing: '-0.02em',
           color: 'var(--text-primary)',

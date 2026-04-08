@@ -32,7 +32,7 @@ export default function BankStatementsView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
         <KpiCard label="Cash Account" value={fmtBal(summary.cash_balance)} sub="Operating cash" color="gold" />
         <KpiCard label="Collection Account" value={fmtBal(summary.collection_balance)} sub="Dedicated collections" color="teal" />
         <KpiCard label="Last Upload" value={summary.last_upload || 'None'} sub="Most recent statement" color="blue" />

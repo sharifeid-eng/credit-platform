@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
 import { getExecutiveSummary } from '../services/api'
+import useBreakpoint from '../hooks/useBreakpoint'
 
 const SEVERITY_STYLES = {
   critical: { border: '#F06060', bg: 'rgba(240,96,96,0.06)', badge: '#F06060', label: 'Critical' },
@@ -188,6 +189,7 @@ function BottomLine({ text }) {
 
 export default function ExecutiveSummary() {
   const { company, product, snapshot, currency, asOfDate, isBackdated } = useCompany()
+  const { isMobile } = useBreakpoint()
   const [narrative, setNarrative] = useState(null)
   const [findings, setFindings] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -227,8 +229,8 @@ export default function ExecutiveSummary() {
   const hasResults = narrative || (findings && findings.length > 0)
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 900 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+    <div style={{ padding: isMobile ? '16px 14px' : '24px 32px', maxWidth: 900 }}>
+      <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', marginBottom: 24, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 12 : 0 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
             Executive Summary

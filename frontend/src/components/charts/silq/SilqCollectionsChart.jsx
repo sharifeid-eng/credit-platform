@@ -49,7 +49,7 @@ export default function SilqCollectionsChart({ company, product, snapshot, curre
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
         <KpiCard label="Total Repaid" value={fmt(totalRepaid)} color="teal" />
         <KpiCard label="Repayment Rate" value={fmtPct(repaymentRate)} color="gold" />
         <KpiCard label="Total Margin" value={fmt(totalMargin)} sub="Revenue from interest & fees" color="blue" />
@@ -107,7 +107,7 @@ export default function SilqCollectionsChart({ company, product, snapshot, curre
             No product breakdown available
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
             {/* Repaid Amount bars */}
             <div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>

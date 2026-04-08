@@ -49,7 +49,7 @@ export default function DelinquencyChart({ company, product, snapshot, currency,
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
         <KpiCard label="PAR 30+" value={fmtPct(par30)} sub="Portfolio at risk > 30 DPD" color="gold" />
         <KpiCard label="PAR 60+" value={fmtPct(par60)} sub="Portfolio at risk > 60 DPD" color="red" />
         <KpiCard label="PAR 90+" value={fmtPct(par90)} sub="Portfolio at risk > 90 DPD" color="red" />

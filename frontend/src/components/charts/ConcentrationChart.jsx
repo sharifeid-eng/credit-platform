@@ -131,7 +131,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
       {/* ── Owner / SPV Concentration ── */}
       {ownerAvailable && ownerList.length > 0 && (
         <ChartPanel title="Owner / SPV Concentration" subtitle="Capital deployment and performance by fund entity" loading={loading} error={error} minHeight={260}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
             {/* Owner Donut */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ position: 'relative', width: 180, height: 180, flexShrink: 0 }}>
@@ -199,7 +199,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
 
       {/* ── Portfolio Health + Ageing by Purchase Date (side by side) ── */}
       {healthDonut.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
           {/* Portfolio Health Donut */}
           <ChartPanel title="Portfolio Health" subtitle="Outstanding amount by health classification" loading={loading} error={error} minHeight={260}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

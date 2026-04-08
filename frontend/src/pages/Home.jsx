@@ -3,6 +3,7 @@ import { useNavigate, Link }                        from 'react-router-dom'
 import { motion }                                   from 'framer-motion'
 import { getCompanies, getSummary, getSnapshots }   from '../services/api'
 import PortfolioStatsHero                           from '../components/PortfolioStatsHero'
+import useBreakpoint                                from '../hooks/useBreakpoint'
 
 // ── Derive region + asset class from known company / product names ───────────
 function getCompanyMeta(companyName) {
@@ -75,6 +76,7 @@ export default function Home() {
   const [companies,  setCompanies]  = useState([])
   const [summaries,  setSummaries]  = useState({})
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
 
   useEffect(() => {
     getCompanies().then(async (data) => {
@@ -131,7 +133,7 @@ export default function Home() {
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ position: 'relative', zIndex: 1, padding: '44px 28px 60px', maxWidth: 1280, margin: '0 auto' }}>
+      <div style={{ position: 'relative', zIndex: 1, padding: isMobile ? '24px 14px 40px' : '44px 28px 60px', maxWidth: 1280, margin: '0 auto' }}>
 
         {/* Hero — logo pulse + headline + typewriter */}
         <motion.div
@@ -176,7 +178,7 @@ export default function Home() {
         {/* ── Company grid ── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? '260px' : '320px'}, 1fr))`,
           gap: 16,
           marginBottom: 52,
         }}>
@@ -187,6 +189,7 @@ export default function Home() {
               summary={summaries[`${co.name}:${co.products?.[0]}`]}
               index={i}
               onClick={() => handleOpen(co)}
+              isMobile={isMobile}
             />
           ))}
           {companies.length === 0 && <EmptyState />}
@@ -205,7 +208,7 @@ export default function Home() {
           </div>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? '260px' : '320px'}, 1fr))`,
             gap: 16,
           }}>
             <FrameworkCard />
@@ -281,7 +284,7 @@ function CardRow({ label, children, loading }) {
 }
 
 // ── Company card ─────────────────────────────────────────────────────────────
-function CompanyCard({ company, summary, index, onClick }) {
+function CompanyCard({ company, summary, index, onClick, isMobile }) {
   const [hovered, setHovered] = useState(false)
   const safeName = typeof company.name === 'string' ? company.name : String(company.name ?? '')
   const initials = safeName.slice(0, 2).toUpperCase()
@@ -307,9 +310,9 @@ function CompanyCard({ company, summary, index, onClick }) {
         background:    'var(--bg-surface)',
         border:        `1px solid ${hovered ? 'rgba(201,168,76,0.45)' : 'var(--border)'}`,
         borderRadius:  'var(--radius-md)',
-        padding:       '22px 22px 18px',
+        padding:       isMobile ? '16px 14px 12px' : '22px 22px 18px',
         cursor:        'pointer',
-        minHeight:     210,
+        minHeight:     isMobile ? 180 : 210,
         display:       'flex',
         flexDirection: 'column',
         position:      'relative',

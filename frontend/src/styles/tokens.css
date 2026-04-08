@@ -65,6 +65,16 @@
   /* ── Transitions ── */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
+
+  /* ── Layout ── */
+  --sidebar-width: 240px;
+  --navbar-height: 80px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --navbar-height: 56px;
+  }
 }
 
 /* ── Base Reset ── */
@@ -107,4 +117,13 @@ body {
   border: none;
   border-top: 1px solid var(--border);
   margin: 0;
+}
+
+/* ── Responsive overrides ── */
+@media (max-width: 767px) {
+  /* Force tables to scroll horizontally on mobile */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Reduce chart minimum heights on mobile */
+  .recharts-responsive-container { min-height: 200px !important; }
 }
