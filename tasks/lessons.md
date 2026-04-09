@@ -3,6 +3,24 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-09 — Summary endpoint must pass through ALL fields from KPI builder, not cherry-pick
+**Mistake:** `get_tamara_summary_kpis()` returned `face_value_label` and `deals_label` fields, but the `/summary` endpoint hardcoded a return dict that only picked specific fields (`total_deals`, `total_purchase_value`, `facility_limit`, etc.) and didn't include the label fields. The frontend received no label overrides and fell back to "Face Value" / "Deals".
+**Rule:** When adding new fields to a KPI builder function, always check the endpoint that consumes it — if the endpoint constructs a hardcoded return dict (not `**kpis`), the new fields won't pass through. Either use `**kpis` spread or explicitly add every new field. Grep for the field name in the endpoint response to verify it's included.
+
+---
+
+## 2026-04-09 — Metrics with different semantics must not share the same label
+**Mistake:** Tamara's `total_purchase_value` was outstanding AR (a point-in-time balance) but was displayed as "Face Value" (which for Klaim/SILQ means total originated — a cumulative metric). This inflated the aggregate banner from $308M to $665M by mixing fundamentally different metrics. The user caught it.
+**Rule:** When onboarding a new company, audit every metric that feeds into shared display components (landing page cards, aggregate stats banner). If the metric has a different semantic meaning than what the label implies, either: (1) use a different field name, (2) pass a custom label, or (3) exclude it from aggregates. Never assume "total_purchase_value" means the same thing across all analysis types.
+
+---
+
+## 2026-04-09 — Uvicorn --reload only watches the --app-dir, not parent imports
+**Mistake:** Changed `core/analysis_tamara.py` and `core/loader.py` expecting uvicorn's `--reload` to pick them up. It didn't — the server was started from `backend/` with `--reload` which only watches files in the `backend/` directory, not `core/` (which is a sibling). Had to manually restart the server multiple times.
+**Rule:** When running `uvicorn main:app --reload` from `backend/`, file changes in `core/` will NOT trigger a reload. Either: (1) restart the server manually after changing `core/` files, (2) start uvicorn with `--reload-dir ../core` to add the watch path, or (3) touch `backend/main.py` after editing core files (but this is unreliable — the import cache may not refresh).
+
+---
+
 ## 2026-04-09 — Adding file extensions to the loader catches unintended files
 **Mistake:** Added `.json` to `get_snapshots()` for Tamara data room JSON files. This also matched `config.json` and `methodology.json` in the same directory — they have no date prefix (returning `date: null`) and aren't data snapshots. The frontend saw these extra entries and failed to pass a valid snapshot filename to `/summary`, causing a 404 that broke the Tamara card on the landing page.
 **Rule:** When extending `get_snapshots()` to support new file extensions, always add an exclusion list for known non-data files in the same directory. Pattern: `_EXCLUDE = {'config.json', 'methodology.json'}` checked before the extension test. More generally: any time a file-discovery function is broadened, test it against ALL existing directories to check for false positives, not just the new one.
