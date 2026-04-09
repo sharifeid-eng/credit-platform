@@ -527,7 +527,9 @@ def get_summary(company: str, product: str,
                 'top_1_group_pct': 0, 'analysis_type': 'tamara_summary',
                 'facility_limit': kpis.get('facility_limit', 0),
                 'registered_users': kpis.get('registered_users', 0),
-                'merchants': kpis.get('merchants', 0)}
+                'merchants': kpis.get('merchants', 0),
+                'face_value_label': kpis.get('face_value_label', 'Face Value'),
+                'deals_label': kpis.get('deals_label', 'Deals')}
     if at == 'silq':
         df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
