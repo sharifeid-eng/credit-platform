@@ -360,44 +360,68 @@ def parse_investor_reporting(country='KSA'):
 
     result = {'kpis': [], 'financials': [], 'gmv_monthly': []}
 
-    # Parse KPI sheet
+    # Parse KPI sheet — labels are in column 1 (col 0 is blank spacer)
+    # Date headers are in row ~5, values start at col 3+
     try:
         kpi_sheet = sheet_map.get(country, cons_sheet)
         df = pd.read_excel(fpath, sheet_name=kpi_sheet, header=None)
 
-        # Extract rows as key-value pairs
-        # These sheets have metric names in col 0 and monthly values across columns
+        # Find date header row and build column mapping
+        date_headers = {}
+        for r in range(min(10, len(df))):
+            for c in range(3, min(30, df.shape[1])):
+                val = df.iloc[r, c]
+                if pd.notna(val) and hasattr(val, 'strftime'):
+                    date_headers[c] = val.strftime('%Y-%m')
+                elif pd.notna(val) and re.match(r'\d{4}', str(val)):
+                    date_headers[c] = str(val)[:7]
+
         kpi_records = []
-        for row_idx in range(min(100, len(df))):
-            label = df.iloc[row_idx, 0]
+        for row_idx in range(min(105, len(df))):
+            # Labels in column 1 (col 0 is empty)
+            label = df.iloc[row_idx, 1] if df.shape[1] > 1 else None
             if pd.isna(label):
                 continue
             label = str(label).strip()
-            if not label or label.startswith('Unnamed'):
-                continue
+            if not label or label.startswith('Unnamed') or label.startswith('#'):
+                # '#' prefix rows are section headers, keep the label but strip #
+                if label.startswith('#'):
+                    label = label.lstrip('# ').strip()
+                else:
+                    continue
 
             values = {}
-            for col_idx in range(1, min(28, df.shape[1])):
+            for col_idx in range(3, min(30, df.shape[1])):
                 val = df.iloc[row_idx, col_idx]
                 if pd.notna(val):
-                    values[f"col_{col_idx}"] = _safe(val)
+                    col_key = date_headers.get(col_idx, f"col_{col_idx}")
+                    values[col_key] = _safe(val)
 
             if values:
                 kpi_records.append({'metric': label, 'values': values})
 
         result['kpis'] = kpi_records
+        print(f"    -> {len(kpi_records)} KPI metrics extracted")
     except Exception as e:
         print(f"  WARN: KPI parse error: {e}")
 
-    # Parse financial statements
+    # Parse financial statements — same column offset (labels in col 1)
     try:
         fs_map = {'KSA': '2.2 FS KSA', 'UAE': '2.3 FS UAE'}
         fs_sheet = fs_map.get(country, '2.1 FS Cons')
         df = pd.read_excel(fpath, sheet_name=fs_sheet, header=None)
 
+        # Build date headers
+        fs_date_headers = {}
+        for r in range(min(10, len(df))):
+            for c in range(3, min(35, df.shape[1])):
+                val = df.iloc[r, c]
+                if pd.notna(val) and hasattr(val, 'strftime'):
+                    fs_date_headers[c] = val.strftime('%Y-%m')
+
         fs_records = []
-        for row_idx in range(min(200, len(df))):
-            label = df.iloc[row_idx, 0]
+        for row_idx in range(min(210, len(df))):
+            label = df.iloc[row_idx, 1] if df.shape[1] > 1 else None
             if pd.isna(label):
                 continue
             label = str(label).strip()
@@ -405,15 +429,17 @@ def parse_investor_reporting(country='KSA'):
                 continue
 
             values = {}
-            for col_idx in range(1, min(33, df.shape[1])):
+            for col_idx in range(3, min(35, df.shape[1])):
                 val = df.iloc[row_idx, col_idx]
                 if pd.notna(val):
-                    values[f"col_{col_idx}"] = _safe(val)
+                    col_key = fs_date_headers.get(col_idx, f"col_{col_idx}")
+                    values[col_key] = _safe(val)
 
             if values:
                 fs_records.append({'line_item': label, 'values': values})
 
         result['financials'] = fs_records
+        print(f"    -> {len(fs_records)} financial line items extracted")
     except Exception as e:
         print(f"  WARN: FS parse error: {e}")
 
@@ -425,37 +451,60 @@ def parse_investor_reporting(country='KSA'):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def parse_demographics(country='KSA'):
-    """Parse the Portfolio Breakdowns workbook (demographics + Ever-90)."""
+    """Parse the Portfolio Breakdowns workbook (demographics + Ever-90).
+
+    The sheet is pivoted: each row has BOTH AE and SA values side-by-side.
+    Columns: [category, Outstanding_AR_AE, Outstanding_AR_SA, Ever90_AE, Ever90_SA]
+    Dimension groups are separated by section headers (rows starting with "1.", "2.", etc.)
+    """
     fpath = DR_ADD / "Portfolio Performance Breakdowns" / "Portfolio Breakdowns.xlsx"
     if not fpath.exists():
         return {}
 
     print(f"  Parsing demographics ({country})...")
-    df = pd.read_excel(fpath, sheet_name='Portfolio Demographics')
+    df = pd.read_excel(fpath, sheet_name='Portfolio Demographics', header=None)
 
-    country_code = 'SA' if country == 'KSA' else 'AE'
-    result = {}
+    # Determine column indices for the target country
+    # Layout: col 0 = category, col 1 = AR (AE), col 2 = AR (SA), col 3 = Ever90 (AE), col 4 = Ever90 (SA)
+    ar_col = 2 if country == 'KSA' else 1  # SA=col2, AE=col1
+    ever90_col = 4 if country == 'KSA' else 3  # SA=col4, AE=col3
 
-    # The dataset has columns: category_type, category_value, country, outstanding_ar, ever_90_rate
-    # Parse by identifying dimension groups
-    current_dimension = None
-    dimension_data = []
+    dimensions = {}
+    current_dim = None
 
-    for _, row in df.iterrows():
-        row_dict = {str(k): _safe(v) for k, v in row.items()}
+    for row_idx in range(len(df)):
+        cell0 = df.iloc[row_idx, 0]
+        if pd.isna(cell0):
+            continue
+        cell0 = str(cell0).strip()
 
-        # Filter by country column
-        country_val = None
-        for k, v in row_dict.items():
-            if v in ['SA', 'AE', country_code]:
-                country_val = v
-                break
+        # Detect dimension headers (e.g., "1. By Age Group", "2. By Gender")
+        dim_match = re.match(r'^\d+\.\s*(.+)', cell0)
+        if dim_match:
+            current_dim = dim_match.group(1).strip().lower().replace(' ', '_')
+            dimensions[current_dim] = []
+            continue
 
-        if country_val and country_val == country_code:
-            dimension_data.append(row_dict)
+        # Skip sub-headers (AE/SA labels, "Outstanding AR", "Ever-90" etc.)
+        if cell0 in ('AE', 'SA', 'Outstanding AR', 'Ever-90 Rate', 'Ever 90 Rate',
+                      'Outstanding AR ', 'Metric', '') or 'outstanding' in cell0.lower():
+            continue
 
-    result['raw'] = dimension_data
-    return result
+        # Data row
+        if current_dim and df.shape[1] >= 5:
+            ar_val = df.iloc[row_idx, ar_col]
+            ever90_val = df.iloc[row_idx, ever90_col]
+
+            if pd.notna(ar_val) or pd.notna(ever90_val):
+                dimensions[current_dim].append({
+                    'category': cell0,
+                    'outstanding_ar': _safe(ar_val),
+                    'ever_90_rate': _safe(ever90_val),
+                })
+
+    total_records = sum(len(v) for v in dimensions.values())
+    print(f"    -> {len(dimensions)} dimensions, {total_records} records")
+    return {'dimensions': dimensions}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -464,36 +513,54 @@ def parse_demographics(country='KSA'):
 
 def parse_financial_master():
     """Parse the Financial Master workbook for actuals through Nov 2025."""
-    fpath = DR_NEW / "54.2 Financials" / "54.2.2 Management Financials" / \
-            "2025-11-30_Financial Master (New Version) - VF.xlsx"
-    if not fpath.exists():
+    search_dir = DR_NEW / "54.2 Financials" / "54.2.2 Management Financials"
+    fpath = None
+    if search_dir.exists():
+        # Find any file containing "Financial Master"
+        for f in search_dir.iterdir():
+            if 'Financial Master' in f.name and f.suffix == '.xlsx':
+                fpath = f
+                break
+    if not fpath:
         print("  WARN: Financial Master not found")
         return {}
 
-    print("  Parsing Financial Master...")
+    print(f"  Parsing Financial Master ({fpath.name})...")
     result = {}
 
     try:
         xl = pd.ExcelFile(fpath)
-        # Read the summary/executive sheet
+        # Read the first 5 sheets — labels in col 1 (col 0 blank)
         for sheet_name in xl.sheet_names[:5]:
             df = pd.read_excel(fpath, sheet_name=sheet_name, header=None)
+
+            # Build date headers
+            fm_date_headers = {}
+            for r in range(min(5, len(df))):
+                for c in range(2, min(20, df.shape[1])):
+                    val = df.iloc[r, c]
+                    if pd.notna(val) and hasattr(val, 'strftime'):
+                        fm_date_headers[c] = val.strftime('%Y-%m')
+
             records = []
-            for row_idx in range(min(50, len(df))):
-                label = df.iloc[row_idx, 0]
+            for row_idx in range(min(60, len(df))):
+                label = df.iloc[row_idx, 1] if df.shape[1] > 1 else None
                 if pd.isna(label):
                     continue
                 label = str(label).strip()
                 if not label:
                     continue
                 values = {}
-                for col_idx in range(1, min(20, df.shape[1])):
+                for col_idx in range(2, min(20, df.shape[1])):
                     val = df.iloc[row_idx, col_idx]
                     if pd.notna(val):
-                        values[f"col_{col_idx}"] = _safe(val)
+                        col_key = fm_date_headers.get(col_idx, f"col_{col_idx}")
+                        values[col_key] = _safe(val)
                 if values:
                     records.append({'metric': label, 'values': values})
             result[sheet_name] = records
+        total = sum(len(v) for v in result.values())
+        print(f"    -> {len(result)} sheets, {total} metrics extracted")
     except Exception as e:
         print(f"  WARN: Financial Master parse error: {e}")
 
@@ -520,25 +587,36 @@ def parse_business_plan():
 
     try:
         xl = pd.ExcelFile(fpath)
-        # Read Summary sheet
+        # Read Summary sheet — labels in col 1 (col 0 blank), year headers in row 1
         if 'Summary' in xl.sheet_names:
             df = pd.read_excel(fpath, sheet_name='Summary', header=None)
+
+            # Build year headers from row 1 (col 4+: 2023, 2024, 2025, ...)
+            year_headers = {}
+            for c in range(4, min(20, df.shape[1])):
+                val = df.iloc[1, c] if len(df) > 1 else None
+                if pd.notna(val):
+                    yr = str(int(float(str(val)))) if str(val).replace('.', '').isdigit() else str(val)
+                    year_headers[c] = yr
+
             records = []
-            for row_idx in range(min(80, len(df))):
-                label = df.iloc[row_idx, 0]
+            for row_idx in range(min(100, len(df))):
+                label = df.iloc[row_idx, 1] if df.shape[1] > 1 else None
                 if pd.isna(label):
                     continue
                 label = str(label).strip()
                 if not label:
                     continue
                 values = {}
-                for col_idx in range(1, min(30, df.shape[1])):
+                for col_idx in range(4, min(20, df.shape[1])):
                     val = df.iloc[row_idx, col_idx]
                     if pd.notna(val):
-                        values[f"col_{col_idx}"] = _safe(val)
+                        col_key = year_headers.get(col_idx, f"col_{col_idx}")
+                        values[col_key] = _safe(val)
                 if values:
                     records.append({'metric': label, 'values': values})
             result['summary'] = records
+            print(f"    -> {len(records)} projection metrics extracted")
     except Exception as e:
         print(f"  WARN: Business Plan parse error: {e}")
 

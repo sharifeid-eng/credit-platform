@@ -1677,6 +1677,121 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
     return '\n'.join(sections)
 
 
+def _build_tamara_full_context(data):
+    """Build comprehensive analytics context from parsed Tamara BNPL JSON snapshot."""
+    sections = []
+
+    # Overview
+    ov = data.get('overview', {})
+    co = data.get('company_overview', {})
+    ft = data.get('facility_terms', {})
+    sections.append(f"COMPANY: {co.get('full_name', 'Tamara')}, founded {co.get('founded', '?')}, "
+                   f"{co.get('registered_users', 0)/1e6:.0f}M users, {co.get('merchants', 0):,} merchants, "
+                   f"valuation ${co.get('valuation', 0)/1e9:.1f}B, {co.get('employees', 0)} employees")
+    sections.append(f"PORTFOLIO: Outstanding {ov.get('total_pending', 0)/1e6:.1f}M, "
+                   f"{ov.get('months_of_data', 0)} months of data, "
+                   f"{ov.get('vintage_count', 0)} vintage cohorts tracked")
+    sections.append(f"FACILITY: {ft.get('facility_name', '?')}, total limit ${ft.get('total_limit', 0)/1e9:.2f}B, "
+                   f"max advance rate {ft.get('max_advance_rate', 0)*100:.0f}%, "
+                   f"maturity {ft.get('final_maturity', '?')}")
+
+    # Tranches
+    tranches = ft.get('tranches', [])
+    if tranches:
+        tr_str = ', '.join([f"{t['name']} ${t['limit']/1e6:.0f}M ({t['rate']})" for t in tranches])
+        sections.append(f"TRANCHES: {tr_str}")
+
+    # Products & APR
+    products = co.get('products', {})
+    bnpl_plus = products.get('bnpl_plus', {})
+    apr = bnpl_plus.get('apr', {})
+    if apr:
+        apr_str = ', '.join([f"{k}={v*100:.0f}%" for k, v in apr.items()])
+        sections.append(f"BNPL+ APR SCHEDULE: {apr_str}")
+
+    # Covenant compliance
+    cs = data.get('covenant_status', {})
+    triggers = cs.get('triggers', [])
+    for t in triggers:
+        status = t.get('status', 'unknown')
+        current = t.get('current_value')
+        sections.append(f"COVENANT {t.get('name', '?').upper()}: "
+                       f"current={current:.2f}% " if current else f"COVENANT {t.get('name', '?').upper()}: current=N/A "
+                       f"(L1={t.get('l1_threshold', 0):.1f}%, L2={t.get('l2_threshold', 0):.1f}%, L3={t.get('l3_threshold', 0):.1f}%), "
+                       f"status={status}, headroom={t.get('headroom_pct', 'N/A')}pp")
+
+    # Corporate covenants
+    corp = ft.get('corporate_covenants', {})
+    if corp:
+        corp_items = [f"{k.replace('_', ' ')}: L1={v.get('threshold')}" for k, v in corp.items()]
+        sections.append(f"CORPORATE COVENANTS: {'; '.join(corp_items)}")
+
+    # Vintage performance summary
+    vp = data.get('vintage_performance', {})
+    for metric in ['default', 'delinquency']:
+        portfolio = vp.get(metric, {}).get('portfolio', [])
+        if not portfolio:
+            continue
+        scale = vp.get(metric, {}).get('_color_scale', {})
+        label = 'DEFAULT (+120DPD)' if metric == 'default' else 'DELINQUENCY (+7DPD)'
+        sections.append(f"VINTAGE {label}: {len(portfolio)} vintages, "
+                       f"range {scale.get('min', 0)*100:.2f}%-{scale.get('max', 0)*100:.2f}%, "
+                       f"median ~{scale.get('p25', 0)*100:.2f}%-{scale.get('p75', 0)*100:.2f}% IQR")
+
+        # Recent 3 vintages with latest values
+        for v in portfolio[-3:]:
+            cols = sorted([k for k in v if k != 'vintage'])
+            latest_col = cols[-1] if cols else None
+            latest_val = v.get(latest_col) if latest_col else None
+            if latest_val is not None:
+                sections.append(f"  Vintage {v['vintage']}: latest {metric} rate = {latest_val*100:.2f}%")
+
+    # Deloitte FDD summary
+    fdd = data.get('deloitte_fdd', {})
+    ts = fdd.get('dpd_timeseries', [])
+    if ts:
+        latest = ts[-1]
+        dpd = latest.get('dpd_distribution', {})
+        total = sum(v for v in dpd.values() if v) or 1
+        not_late_pct = (dpd.get('Not Late', 0) or 0) / total * 100
+        sections.append(f"DPD SNAPSHOT: {len(ts)} months, latest {latest.get('date', '?')}, "
+                       f"current rate {100 - not_late_pct:.1f}% past due, "
+                       f"total pending {latest.get('total_pending', 0)/1e6:.1f}M, "
+                       f"written off {latest.get('total_written_off', 0)/1e6:.1f}M")
+
+    # Product breakdown
+    pb = fdd.get('product_breakdown', [])
+    if pb:
+        top_prods = sorted(pb, key=lambda x: x.get('pending_amount', 0), reverse=True)[:5]
+        prod_str = ', '.join([f"{p['product']}: {p.get('pending_amount', 0)/1e6:.1f}M ({p.get('writeoff_pct', 0)*100:.1f}% WO)" for p in top_prods])
+        sections.append(f"TOP PRODUCTS: {prod_str}")
+
+    # Demographics
+    demo = data.get('demographics', {})
+    dims = demo.get('dimensions', {})
+    for dim_name, records in dims.items():
+        if records:
+            top = sorted(records, key=lambda x: x.get('outstanding_ar', 0) or 0, reverse=True)[:3]
+            dim_str = ', '.join([f"{r['category']}: AR={r.get('outstanding_ar', '?')}, Ever90={r.get('ever_90_rate', '?')}" for r in top])
+            sections.append(f"DEMOGRAPHICS ({dim_name}): {dim_str}")
+
+    # Investor reporting KPIs (latest values)
+    ir = data.get('investor_reporting', {})
+    kpis = ir.get('kpis', [])
+    for k in kpis[:15]:
+        vals = k.get('values', {})
+        if vals:
+            latest_key = sorted(vals.keys())[-1]
+            sections.append(f"KPI {k['metric']}: {vals[latest_key]} (as of {latest_key})")
+
+    # HSBC report summary
+    hsbc = data.get('hsbc_reports', [])
+    if hsbc:
+        sections.append(f"HSBC REPORTS: {len(hsbc)} monthly investor reports available")
+
+    return '\n'.join(sections)
+
+
 def _build_ejari_full_context(data):
     """Build comprehensive analytics context from parsed Ejari ODS workbook."""
     sections = []
@@ -1803,7 +1918,17 @@ def get_executive_summary(company: str, product: str,
 
     at = _get_analysis_type(company, product)
 
-    if at == 'ejari_summary':
+    if at == 'tamara_summary':
+        sel = _resolve_snapshot(company, product, snapshot)
+        filepath = sel['filepath']
+        if filepath not in _tamara_cache:
+            _tamara_cache[filepath] = parse_tamara_data(filepath)
+        tamara_data = _tamara_cache[filepath]
+        context = _build_tamara_full_context(tamara_data)
+        company_desc = f"Tamara Buy Now Pay Later (BNPL + BNPL+) portfolio in {product}"
+        disp = 'SAR' if product == 'KSA' else 'AED'
+        n_metrics = len([l for l in context.split('\n') if l.strip()])
+    elif at == 'ejari_summary':
         sel = _resolve_snapshot(company, product, snapshot)
         filepath = sel['filepath']
         if filepath not in _ejari_cache:
@@ -1829,6 +1954,13 @@ def get_executive_summary(company: str, product: str,
 
     # Company-specific narrative section guidance
     section_guidance = {
+        'tamara_summary': (
+            "Portfolio Overview & Scale, Vintage Default Performance, "
+            "Delinquency Trends & DPD Analysis, Dilution & Refund Analysis, "
+            "Covenant Compliance & Facility Health, Concentration Risk, "
+            "Financial Performance & Unit Economics, BNPL+ Risk Assessment, "
+            "Demographics & Segmentation, Forward Outlook"
+        ),
         'ejari_summary': (
             "Portfolio Overview, Monthly Cohorts, Loss Waterfall, Roll Rates, "
             "Historical Performance, Segment Analysis, Credit Quality Trends, "
@@ -1846,6 +1978,7 @@ def get_executive_summary(company: str, product: str,
     )
 
     tab_slugs = {
+        'tamara_summary': "overview, vintage, delinquency, default-analysis, dilution, collections, concentration, covenant-compliance, facility-structure, demographics, financial-performance, business-plan, bnpl-plus, notes",
         'ejari_summary': "overview, cohort, loss-waterfall, roll-rates, historical, collections-month, collections-orig, segments, credit-quality, najiz, writeoffs, notes",
         'silq': "overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, covenants",
     }

@@ -523,6 +523,22 @@ export default function TamaraDashboard() {
         const latestReport = hsbc[hsbc.length - 1] || {}
         const strats = latestReport.stratifications || {}
         const limits = facilityTerms.concentration_limits || []
+        const hsbc_limits = latestReport.concentration_limits || []
+
+        // Try to extract actual values from HSBC concentration limits
+        const limitActuals = {}
+        hsbc_limits.forEach(l => {
+          const name = l.criterion || ''
+          const vals = l.values || []
+          // Try to find a percentage value
+          for (const v of vals) {
+            const num = parseFloat((v || '').replace(/[%,$]/g, '').trim())
+            if (!isNaN(num) && num >= 0 && num <= 100) {
+              limitActuals[name.slice(0, 30)] = num
+              break
+            }
+          }
+        })
 
         // Find merchant category stratification
         const catStrat = strats['Category'] || strats['Merchant Category'] || null
@@ -530,29 +546,60 @@ export default function TamaraDashboard() {
           name: r[0]?.slice(0, 20) || '', value: parseFloat((r[1] || '0').replace(/[,$]/g, '')) || 0,
         })).filter(d => d.value > 0) || []
 
+        // Also show instalment type and obligor type stratifications
+        const instStrat = strats['Instalments'] || strats['Instalment Type'] || null
+        const instData = instStrat?.rows?.map(r => ({
+          name: r[0] || '', value: parseFloat((r[1] || '0').replace(/[,$]/g, '')) || 0,
+          pct: r[2] || '',
+        })).filter(d => d.value > 0) || []
+
+        const obligorStrat = strats['Obligors'] || strats['Obligor Type'] || null
+
         return (
           <div>
             {limits.length > 0 && (
-              <ChartPanel title="Concentration Limit Compliance" subtitle={`${limits.length} limits monitored`}>
-                {limits.map((l, i) => (
-                  <ConcentrationGauge key={i} name={l.name} actual={0} threshold={parseFloat(l.threshold?.replace(/[^0-9.]/g, '') || '0')} type={l.type} />
-                ))}
+              <ChartPanel title="Concentration Limit Compliance" subtitle={`${limits.length} limits from facility agreement | ${hsbc_limits.length} reported by HSBC`}>
+                {limits.map((l, i) => {
+                  const threshold = parseFloat(l.threshold?.replace(/[^0-9.]/g, '') || '0')
+                  // Try to match actual from HSBC data
+                  const matchKey = Object.keys(limitActuals).find(k => k.toLowerCase().includes(l.name.toLowerCase().slice(0, 10)))
+                  const actual = matchKey ? limitActuals[matchKey] : null
+                  return <ConcentrationGauge key={i} name={l.name} actual={actual || 0} threshold={threshold} type={l.type} />
+                })}
               </ChartPanel>
             )}
 
-            {catData.length > 0 && (
-              <ChartPanel title="Portfolio by Merchant Category" subtitle="Top categories by outstanding balance" style={{ marginTop: 16 }}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={catData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                    <XAxis type="number" tick={{ fill: MUTED, fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: MUTED, fontSize: 10 }} width={150} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="value" fill={GOLD} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartPanel>
-            )}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginTop: 16 }}>
+              {catData.length > 0 && (
+                <ChartPanel title="Portfolio by Merchant Category" subtitle="Top categories by outstanding">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={catData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                      <XAxis type="number" tick={{ fill: MUTED, fontSize: 10 }} />
+                      <YAxis type="category" dataKey="name" tick={{ fill: MUTED, fontSize: 10 }} width={130} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="value" fill={GOLD} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartPanel>
+              )}
+
+              {instData.length > 0 && (
+                <ChartPanel title="Portfolio by Instalment Type" subtitle="Outstanding by Pay-in-N plan">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={instData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                        innerRadius={50} outerRadius={90} paddingAngle={2}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        labelLine={{ stroke: MUTED, strokeWidth: 1 }}>
+                        {instData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartPanel>
+              )}
+            </div>
           </div>
         )
       }
@@ -632,15 +679,46 @@ export default function TamaraDashboard() {
 
       // ── DEMOGRAPHICS ─────────────────────────────────────────────────────
       case 'demographics': {
-        const raw = demographics.raw || []
-        if (!raw.length) return <ChartPanel title="Demographics"><div style={{ color: MUTED, padding: 20 }}>No demographic data available for this product</div></ChartPanel>
+        const dims = demographics.dimensions || {}
+        const dimNames = Object.keys(dims)
+        const [activeDim, setActiveDim] = useState(dimNames[0] || '')
+        const dimData = dims[activeDim] || []
+
+        if (!dimNames.length) return <ChartPanel title="Demographics"><div style={{ color: MUTED, padding: 20 }}>No demographic data available for this product</div></ChartPanel>
+
+        const chartData = dimData.map(d => ({
+          category: String(d.category || '').slice(0, 18),
+          'Outstanding AR': typeof d.outstanding_ar === 'number' ? d.outstanding_ar : parseFloat(d.outstanding_ar) || 0,
+          'Ever-90 Rate': typeof d.ever_90_rate === 'number' ? d.ever_90_rate * 100 : parseFloat(d.ever_90_rate) * 100 || 0,
+        }))
 
         return (
           <ChartPanel title="Portfolio Demographics" subtitle="Outstanding AR and Ever-90 loss rates by borrower segment">
-            <DataTable
-              headers={Object.keys(raw[0] || {})}
-              rows={raw.map(r => Object.values(r).map(v => v != null ? String(v) : '--'))}
-            />
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+              {dimNames.map(d => (
+                <button key={d} onClick={() => setActiveDim(d)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                    border: `1px solid ${d === activeDim ? GOLD : BORDER}`,
+                    background: d === activeDim ? 'rgba(201,168,76,0.15)' : 'transparent',
+                    color: d === activeDim ? GOLD : MUTED, textTransform: 'capitalize',
+                  }}>{d.replace(/_/g, ' ')}</button>
+              ))}
+            </div>
+
+            {chartData.length > 0 && (
+              <ResponsiveContainer width="100%" height={Math.max(250, chartData.length * 35)}>
+                <ComposedChart data={chartData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 10 }} />
+                  <YAxis type="category" dataKey="category" tick={{ fill: MUTED, fontSize: 10 }} width={120} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend />
+                  <Bar dataKey="Outstanding AR" fill={BLUE} opacity={0.7} name="Outstanding AR %" />
+                  <Line type="monotone" dataKey="Ever-90 Rate" stroke={RED} strokeWidth={2} dot={{ r: 4 }} name="Ever-90 Loss %" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </ChartPanel>
         )
       }
@@ -650,22 +728,73 @@ export default function TamaraDashboard() {
         const kpis = investorReporting.kpis || []
         const financials = investorReporting.financials || []
 
+        // Extract key metrics for trend chart
+        const findKpi = (keyword) => kpis.find(k => k.metric?.toLowerCase().includes(keyword.toLowerCase()))
+        const gmvRow = findKpi('Total GMV') || findKpi('GMV')
+        const revenueRow = findKpi('Total Operating Revenue') || findKpi('Revenue') || findKpi('Net MDR')
+        const marginRow = findKpi('Contribution Margin') || findKpi('EBTDA')
+
+        // Build time-series from monthly values
+        const trendData = []
+        if (gmvRow) {
+          const vals = gmvRow.values || {}
+          Object.entries(vals).sort(([a], [b]) => a.localeCompare(b)).forEach(([month, val]) => {
+            if (typeof val === 'number' && month.match(/^\d{4}/)) {
+              const existing = trendData.find(d => d.month === month)
+              if (existing) existing.GMV = val / 1e6
+              else trendData.push({ month: month.slice(0, 7), GMV: val / 1e6 })
+            }
+          })
+        }
+        if (revenueRow) {
+          const vals = revenueRow.values || {}
+          Object.entries(vals).sort(([a], [b]) => a.localeCompare(b)).forEach(([month, val]) => {
+            if (typeof val === 'number' && month.match(/^\d{4}/)) {
+              const existing = trendData.find(d => d.month === month.slice(0, 7))
+              if (existing) existing.Revenue = val / 1e6
+              else trendData.push({ month: month.slice(0, 7), Revenue: val / 1e6 })
+            }
+          })
+        }
+
         return (
           <div>
-            <ChartPanel title="Key Performance Indicators" subtitle="From Investor Monthly Reporting">
+            {trendData.length > 3 && (
+              <ChartPanel title="Financial Trends" subtitle="GMV and Revenue (monthly, $M)">
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                    <XAxis dataKey="month" tick={{ fill: MUTED, fontSize: 10 }} />
+                    <YAxis tick={{ fill: MUTED, fontSize: 10 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Bar dataKey="GMV" fill={BLUE} opacity={0.5} name="GMV ($M)" />
+                    <Line type="monotone" dataKey="Revenue" stroke={GOLD} strokeWidth={2} dot={{ r: 3 }} name="Revenue ($M)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            )}
+
+            <ChartPanel title="Key Performance Indicators" subtitle={`${kpis.length} metrics from Investor Monthly Reporting`} style={{ marginTop: 16 }}>
               {kpis.length > 0 ? (
                 <DataTable
-                  headers={['Metric', ...Object.keys(kpis[0]?.values || {}).slice(0, 12)]}
-                  rows={kpis.slice(0, 30).map(k => [k.metric, ...Object.values(k.values).slice(0, 12).map(v => typeof v === 'number' ? v.toLocaleString() : String(v || ''))])}
+                  headers={['Metric', ...Object.keys(kpis[0]?.values || {}).slice(-8)]}
+                  rows={kpis.slice(0, 30).map(k => {
+                    const vals = Object.entries(k.values || {}).slice(-8)
+                    return [k.metric, ...vals.map(([, v]) => typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 1 }) : String(v || ''))]
+                  })}
                 />
               ) : <div style={{ color: MUTED, padding: 20 }}>No KPI data available</div>}
             </ChartPanel>
 
             {financials.length > 0 && (
-              <ChartPanel title="Financial Statements" subtitle="P&L / Balance Sheet" style={{ marginTop: 16 }}>
+              <ChartPanel title="Financial Statements" subtitle={`${financials.length} line items`} style={{ marginTop: 16 }}>
                 <DataTable
-                  headers={['Line Item', ...Object.keys(financials[0]?.values || {}).slice(0, 12)]}
-                  rows={financials.slice(0, 40).map(f => [f.line_item, ...Object.values(f.values).slice(0, 12).map(v => typeof v === 'number' ? v.toLocaleString() : String(v || ''))])}
+                  headers={['Line Item', ...Object.keys(financials[0]?.values || {}).slice(-8)]}
+                  rows={financials.slice(0, 40).map(f => {
+                    const vals = Object.entries(f.values || {}).slice(-8)
+                    return [f.line_item, ...vals.map(([, v]) => typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : String(v || ''))]
+                  })}
                 />
               </ChartPanel>
             )}
@@ -678,13 +807,51 @@ export default function TamaraDashboard() {
         const summary = businessPlan.summary || []
         if (!summary.length) return <ChartPanel title="Business Plan"><div style={{ color: MUTED, padding: 20 }}>No business plan data available</div></ChartPanel>
 
+        // Extract GMV and Revenue projections for chart
+        const findRow = (keyword) => summary.find(s => s.metric?.toLowerCase().includes(keyword.toLowerCase()))
+        const gmvRow = findRow('Total GMV') || findRow('GMV')
+        const revRow = findRow('Revenue') && !findRow('Revenue')?.metric?.includes('Margin') ? findRow('Revenue') : findRow('Total Revenue')
+        const ebtdaRow = findRow('EBTDA') || findRow('EBITDA')
+
+        const projData = []
+        const allRows = [gmvRow, revRow, ebtdaRow].filter(Boolean)
+        if (allRows.length > 0) {
+          const years = [...new Set(allRows.flatMap(r => Object.keys(r.values || {})))].sort()
+          years.forEach(yr => {
+            const point = { year: yr }
+            if (gmvRow?.values?.[yr]) point.GMV = gmvRow.values[yr] / 1e6
+            if (revRow?.values?.[yr]) point.Revenue = revRow.values[yr] / 1e6
+            if (ebtdaRow?.values?.[yr]) point.EBTDA = ebtdaRow.values[yr] / 1e6
+            if (Object.keys(point).length > 1) projData.push(point)
+          })
+        }
+
         return (
-          <ChartPanel title="Business Plan FY26-FY30" subtitle="Management projections">
-            <DataTable
-              headers={['Metric', ...Object.keys(summary[0]?.values || {}).slice(0, 12)]}
-              rows={summary.slice(0, 30).map(s => [s.metric, ...Object.values(s.values).slice(0, 12).map(v => typeof v === 'number' ? v.toLocaleString() : String(v || ''))])}
-            />
-          </ChartPanel>
+          <div>
+            {projData.length > 2 && (
+              <ChartPanel title="Business Plan Projections" subtitle="GMV, Revenue, EBTDA ($M)">
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={projData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                    <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 11 }} />
+                    <YAxis tick={{ fill: MUTED, fontSize: 10 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Bar dataKey="GMV" fill={BLUE} opacity={0.4} name="GMV ($M)" />
+                    <Line type="monotone" dataKey="Revenue" stroke={GOLD} strokeWidth={2} dot={{ r: 4 }} name="Revenue ($M)" />
+                    <Line type="monotone" dataKey="EBTDA" stroke={TEAL} strokeWidth={2} dot={{ r: 4 }} name="EBTDA ($M)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            )}
+
+            <ChartPanel title="Business Plan Detail" subtitle={`${summary.length} projection metrics (FY26-FY30)`} style={{ marginTop: 16 }}>
+              <DataTable
+                headers={['Metric', ...Object.keys(summary[0]?.values || {})]}
+                rows={summary.slice(0, 40).map(s => [s.metric, ...Object.values(s.values).map(v => typeof v === 'number' ? (Math.abs(v) >= 1e6 ? `${(v/1e6).toFixed(0)}M` : v.toLocaleString(undefined, { maximumFractionDigits: 1 })) : String(v || ''))])}
+              />
+            </ChartPanel>
+          </div>
         )
       }
 
