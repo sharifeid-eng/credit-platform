@@ -91,33 +91,45 @@ function Banner({ label, children, variant, isMobile }) {
       background:    isGold
         ? 'linear-gradient(to bottom, rgba(201,168,76,0.07), rgba(201,168,76,0.01) 70%, transparent)'
         : 'transparent',
-      padding: isMobile ? '12px 14px' : '16px 48px',
+      padding: isMobile ? '20px 14px 14px' : '16px 48px',
       position: 'relative',
     }}>
       {/* Section label — top-left */}
       <div style={{
-        position:      'absolute',
-        top:           10,
-        left:          isMobile ? 14 : 28,
+        position:      isMobile ? 'relative' : 'absolute',
+        top:           isMobile ? undefined : 10,
+        left:          isMobile ? undefined : 28,
         fontSize:      8,
         fontWeight:    700,
         textTransform: 'uppercase',
         letterSpacing: '0.16em',
         color:         isGold ? 'rgba(201,168,76,0.5)' : 'rgba(132,148,167,0.4)',
+        marginBottom:  isMobile ? 10 : 0,
       }}>
         {label}
       </div>
 
-      <div style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        gap:            isMobile ? 12 : 56,
-        flexWrap:       'wrap',
-        paddingTop:     8,
-      }}>
-        {children}
-      </div>
+      {isMobile ? (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '14px 8px',
+          justifyItems: 'center',
+        }}>
+          {children}
+        </div>
+      ) : (
+        <div style={{
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          gap:            56,
+          flexWrap:       'wrap',
+          paddingTop:     8,
+        }}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
