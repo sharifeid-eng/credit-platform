@@ -150,5 +150,35 @@ Session focused on aligning Ejari dashboard formatting with Klaim/SILQ. Straight
 ---
 
 
+## 2026-04-09 — Data room ingestion is a distinct third pattern, not a variant of tape or summary
+**Context:** Tamara has ~100 files across PDF, Excel, and mixed formats — nothing like a loan tape or a single ODS workbook. The initial instinct was to force it into the Ejari "summary" pattern, but the parser complexity was totally different. The solution was a three-layer architecture: (1) ETL script that reads raw data room files and produces structured JSON, (2) runtime parser that reads JSON and enriches with presentation fields, (3) frontend dashboard that renders from the enriched JSON. This separation means the messy multi-format parsing runs once (not per-request), the JSON is version-controlled and portable, and the runtime serving is fast.
+**Rule:** When onboarding a company whose data is a data room (not a single tape or workbook), always use the ETL → JSON → parser pattern. Never try to parse PDFs or heterogeneous Excel files at runtime. The ETL script lives in `scripts/prepare_{company}_data.py`, the JSON lives in `data/{Company}/{Product}/`, and the parser lives in `core/analysis_{company}.py`. Re-run the ETL when new data arrives in the data room.
+
+---
+
+## 2026-04-09 — Research reports should be a platform capability, not per-company scripts
+**Context:** Started to build `scripts/generate_tamara_report.py` as a one-off, but the user correctly identified that this should be a reusable platform feature. Every company benefits from a professional PDF credit research report — the data context, section structure, and AI narrative generation are all parameterizable by analysis_type.
+**Rule:** When building a feature that works against a company's parsed data, always ask: "Does this generalize to all companies?" If yes, put it in `core/` with a backend endpoint, not in `scripts/`. The pattern: `core/{capability}.py` with company-specific builders dispatched by analysis_type, plus a `POST` endpoint in `main.py`.
+
+---
+
+## 2026-04-09 — HSBC PDF table parsing requires pdfplumber not PyPDF
+**Context:** The HSBC investor reports have structured tables (BB waterfall, trigger tests, concentration limits, stratifications) that need tabular extraction. pdfplumber handles this well — it extracts tables as lists of lists. The table positions and headers are consistent across all 20 reports, making batch processing reliable. PyPDF only extracts raw text without table structure.
+**Rule:** For PDF files with structured tables (investor reports, compliance certificates, facility agreements), use pdfplumber. For PDF files with only narrative text, raw text extraction (pypdf) is sufficient. Always test the parser against 2-3 sample files before batch-processing the full set.
+
+---
+
+## 2026-04-09 — Vintage cohort matrices have a consistent structure: header detection matters
+**Context:** The ~50 vintage cohort Excel files all follow the same structure (triangular vintage × MOB matrix) but have slight variations: some have a year row above the month row, some don't; some use date strings, others use month names; the vintage column can be labeled "Breakdown D1" or just be the first column. A rigid parser that assumed exact headers would break on half the files.
+**Rule:** When parsing Excel files from external sources, build header detection that searches the first 5 rows for known patterns (month names, date formats, keywords) rather than assuming a fixed row. Handle both date-string and month-name column headers. Always log warnings (not errors) for files that don't parse, and continue processing the rest.
+
+---
+
+## 2026-04-09 — Unicode arrows in print statements fail on Windows cp1252 console
+**Mistake:** Used `→` (U+2192) in a Python print statement. Crashed on Windows because the console uses cp1252 encoding which doesn't support that character. Quick fix: replace with `->`.
+**Rule:** In Python scripts that will run on Windows, never use Unicode arrows, em-dashes, or other non-ASCII symbols in print/log statements. Use ASCII equivalents: `->` not `→`, `--` not `—`, `*` not `•`. Or set `sys.stdout.reconfigure(encoding='utf-8')` at the top of the script, but the ASCII approach is more portable.
+
+---
+
 **Mistake:** SILQ's Overview crammed PAR30/PAR60 into inline KPI cards (PAR60 hidden as PAR30's subtitle), while Klaim had a dedicated "Portfolio at Risk" section with individual PAR cards. The Analysis Framework already defined a 5-level hierarchy (L1-L5) that should guide page structure, but it wasn't being applied to the frontend layout.
 **Rule:** When adding a new company or tab, follow the established section structure (Main KPIs → Credit Quality → Leading Indicators). Use the Analysis Framework hierarchy to decide which section a metric belongs in. Don't inline L3 (Credit Quality) metrics with L1 (Size) KPIs. Consistency in section structure, bespoke content within sections.

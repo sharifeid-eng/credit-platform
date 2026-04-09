@@ -249,7 +249,28 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
-## Completed — 2026-04-09
+## Completed — 2026-04-09 (session 2)
+- [x] **Tamara BNPL onboarded** — Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants)
+  - Data room ingestion pipeline: `scripts/prepare_tamara_data.py` reads ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models, demographics) from OneDrive data room → structured JSON snapshots
+  - Two products: KSA (SAR, 14 tabs) and UAE (AED, 10 tabs)
+  - `analysis_type: "tamara_summary"` — third data ingestion pattern (ETL → JSON → parser)
+  - Novel visualizations: VintageHeatmap (CSS-grid vintage × MOB matrix), CovenantTriggerCard (3-level L1/L2/L3 zones), ConcentrationGauge
+  - `TamaraDashboard.jsx` (821 lines): Overview, Vintage Performance, Delinquency, Default Analysis, Dilution, Collections, Concentration, Covenant Compliance, Facility Structure, Demographics, Financial Performance, Business Plan, BNPL+ Deep Dive, Data Notes
+  - `core/analysis_tamara.py`: JSON parser + enrichment (covenant status, heatmap colors, DPD summary)
+  - Backend: `/tamara-summary` endpoint + `tamara_summary` branches in 7 existing endpoints + `/research-report` endpoint
+  - 16 files changed, 34,522 insertions, 134 tests passing
+- [x] **Credit Research Report — platform capability** (not per-company script)
+  - `core/research_report.py`: generates professional dark-themed PDF credit research reports for ANY company
+  - `POST /companies/{co}/products/{prod}/research-report` endpoint
+  - 8-section Tamara report: Executive Summary, Company Overview, Portfolio Analytics, Vintage Cohort Performance, Covenant Compliance, Facility Structure, DPD Analysis, Data Sources
+  - Extensible: generic fallback for non-Tamara companies, `ai_narrative` parameter for Claude-powered narrative
+  - Laith dark theme branding (navy, gold, teal/red, ReportLab Platypus)
+- [x] **Three data ingestion patterns formalized:**
+  - Raw Tape (Klaim, SILQ): CSV/Excel → live computation per request
+  - Pre-computed Summary (Ejari): Single ODS → parse once, render
+  - Data Room Ingestion (Tamara): ~100 multi-format files → ETL script → JSON → parser → dashboard
+
+## Completed — 2026-04-09 (session 1)
 - [x] Mobile responsiveness — comprehensive overhaul across 29 files (2 new, 27 modified):
   - `useBreakpoint` hook — `{ isMobile, isTablet, isDesktop }` via matchMedia listeners
   - `MobileMenuContext` — sidebar drawer state coordination (open/close/toggle), route-change auto-close, body scroll lock
@@ -268,8 +289,28 @@ Track active work here. Claude updates this as tasks progress.
 - [x] Executive Summary holistic narrative — single AI call now produces a credit memo-style narrative (company-specific sections with conclusions + metric pills) AND a summary table AND a bottom line verdict, displayed above the existing ranked findings. Ejari gets 9 sections (Portfolio Overview → Write-offs & Fraud), Klaim 7, SILQ 6. max_tokens 2000→8000.
 
 ## Up Next
+**Tamara — Near-term enhancements:**
+- [ ] AI-powered research report — wire `ai_narrative` parameter in `/research-report` endpoint to Claude API with full Tamara context for narrative sections (currently generates without AI for zero API cost during dev)
+- [ ] Frontend "Generate Research Report" button — add to TamaraDashboard alongside existing overview, streaming PDF response
+- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components — reusable for any securitized portfolio (Klaim, SILQ could benefit)
+- [ ] BNPL+ deep dive enrichment — parse the Question 5 PDFs (Nov 2025 data with BNPL+ breakdown) for more recent per-product vintage data
+- [ ] Financial Master parsing — fix path resolution for the 66-sheet management accounts workbook (actuals through Nov 2025)
+- [ ] Wire AI Executive Summary for Tamara — add `_build_tamara_full_context()` to main.py executive summary endpoint (section guidance for BNPL analysis)
+
+**Data Room Ingestion — Platform capability:**
+- [ ] **Data room ingestion tool / command** — generalize the Tamara ETL pattern into a platform-level `/ingest-data-room` command. Given a folder path with mixed files (PDFs, Excel, DOCX), automatically detect file types, parse tabular data, extract key metrics, and produce a structured JSON snapshot. The prepare_tamara_data.py script is the proof-of-concept; the generalized version would handle any new company's data room with minimal custom code.
+- [ ] Data room file inventory — auto-discover and catalog all files in a data room folder (type, size, sheet count, date), present to analyst for review before parsing
+- [ ] PDF table extraction library — standardize pdfplumber table extraction patterns across investor reports, compliance certs, facility agreements
+- [ ] Incremental data room updates — detect new/changed files and re-parse only those, merging into existing JSON snapshot
+
+**Research Report — Platform capability expansion:**
+- [ ] Company-specific report builders for Ejari, Klaim, SILQ (currently only Tamara has a rich builder; others use the generic fallback)
+- [ ] AI-powered narrative for all companies — common `_build_full_context()` pattern per analysis_type → Claude prompt → narrative sections injected into PDF
+- [ ] Report template customization — allow analyst to select which sections to include, add custom commentary sections
+- [ ] Historical report versioning — save generated reports with timestamps, allow comparison of reports across dates
+
 **Phase 3 — Team & Deployment:**
-- [ ] Cloud deployment (Phase 3 gate — prerequisite for everything below)
+- [x] Cloud deployment (Phase 3 gate) — live at laithanalytics.ai
 - [ ] Role-based access (RBAC) — analyst vs IC vs read-only
 - [ ] Scheduled report delivery — automated PDF reports on cadence
 - [ ] Real-time webhook notifications to portfolio companies
