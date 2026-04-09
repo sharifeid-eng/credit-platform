@@ -34,6 +34,7 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 | Klaim | `klaim` | Operational Delay | Insurance denial | `core/analysis.py` (34 fn) | 19 | 66 |
 | SILQ | `silq` | Contractual DPD | DPD > 90 | `core/analysis_silq.py` (14 fn) | 13 | 68 |
 | Ejari | `ejari_summary` | Pre-computed | Pre-computed | `core/analysis_ejari.py` (parser) | 12 | 0 |
+| Tamara | `tamara_summary` | Contractual DPD | DPD > 120 (covenant), WO at DPD 90 | `core/analysis_tamara.py` (ETL+parser) | 14 KSA / 10 UAE | 0 |
 
 ---
 

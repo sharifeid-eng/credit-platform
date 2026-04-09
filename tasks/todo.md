@@ -289,13 +289,31 @@ Track active work here. Claude updates this as tasks progress.
 - [x] Executive Summary holistic narrative — single AI call now produces a credit memo-style narrative (company-specific sections with conclusions + metric pills) AND a summary table AND a bottom line verdict, displayed above the existing ranked findings. Ejari gets 9 sections (Portfolio Overview → Write-offs & Fraud), Klaim 7, SILQ 6. max_tokens 2000→8000.
 
 ## Up Next
-**Tamara — Near-term enhancements:**
-- [ ] AI-powered research report — wire `ai_narrative` parameter in `/research-report` endpoint to Claude API with full Tamara context for narrative sections (currently generates without AI for zero API cost during dev)
-- [ ] Frontend "Generate Research Report" button — add to TamaraDashboard alongside existing overview, streaming PDF response
-- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components — reusable for any securitized portfolio (Klaim, SILQ could benefit)
-- [ ] BNPL+ deep dive enrichment — parse the Question 5 PDFs (Nov 2025 data with BNPL+ breakdown) for more recent per-product vintage data
-- [ ] Financial Master parsing — fix path resolution for the 66-sheet management accounts workbook (actuals through Nov 2025)
-- [ ] Wire AI Executive Summary for Tamara — add `_build_tamara_full_context()` to main.py executive summary endpoint (section guidance for BNPL analysis)
+**Tamara — P0 Critical (must fix before showing to IC):**
+- [ ] **AI Executive Summary context** — implement `_build_tamara_full_context()` (~100 lines) in main.py. Add `elif at == 'tamara_summary':` branch in ai-executive-summary endpoint. Add Tamara to `section_guidance` and `tab_slugs` dicts. Currently falls through to Klaim context (healthcare receivables framing — completely wrong for BNPL).
+- [ ] **Fix concentration gauge wiring** — `ConcentrationGauge` in TamaraDashboard hardcodes `actual={0}`. Extract actual values from `hsbc_reports[-1].concentration_limits` and pass to gauge. 17 limits available but all show empty.
+- [ ] **Fix empty data sections** — Investor Reporting (KPIs + Financials), Demographics, Business Plan all parse to empty arrays. Root causes: sheet name mismatches, column layout assumptions. Add logging to identify which files/sheets fail. These 4 tabs currently show "No data available."
+
+**Tamara — P1 Showcase Visualizations (transform tables into charts):**
+- [ ] **Financial Performance trend lines** — add LineChart for revenue, EBTDA margin, write-off rate across 25 months (data exists in investor reporting once extraction fixed)
+- [ ] **Business Plan projection chart** — LineChart with historical actuals + forward projections + scenario bars (once extraction fixed)
+- [ ] **Demographics grouped bars** — create `DemographicBars` component: dimension selector (age/gender/income/nationality/salary), grouped bars with Ever-90 loss rate overlay (once extraction fixed)
+- [ ] **Facility payment waterfall** — create `FacilityWaterfall` component: 17-step horizontal waterfall showing cash flow from collections through senior/mezz/junior tranches (26 waterfall steps available in Oct HSBC report)
+- [ ] **Dilution time-series** — replace single-value bar with vintage timeline showing dilution progression per cohort
+- [ ] **Collections buyer breakdown** — replace pending/writeoff trend with BB amounts by delinquency bucket from HSBC reports
+- [ ] **HSBC trigger trend heatmap** — 6 metrics × 10 months showing which covenants are tightening/loosening
+- [ ] **HSBC stratification rendering** — render all 6 stratification dimensions (only merchant category shown; Instalments, Obligors, Pending Amount Buckets, Outstanding Balance repeat/non-repeat all unused)
+
+**Tamara — P2 Polish & Completeness:**
+- [ ] AI-powered research report — wire `ai_narrative` parameter to Claude API for narrative sections
+- [ ] Frontend "Generate Research Report" button on TamaraDashboard
+- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components
+- [ ] BNPL+ deep dive enrichment — parse Question 5 PDFs (Nov 2025 BNPL+ data)
+- [ ] Financial Master parsing — fix path for 66-sheet management accounts
+- [ ] Product-level DPD trends — 13 products available in Deloitte FDD but dashboard shows portfolio aggregate only
+- [ ] Daily DPD7 visualization — parsed but not consumed by any tab
+- [ ] Historical covenant evolution — 10 monthly snapshots of compliance but only latest rendered
+- [ ] Extract component files from TamaraDashboard — VintageHeatmap, CovenantTriggerCard, ConcentrationGauge currently inlined (821 lines in one file)
 
 **Data Room Ingestion — Platform capability:**
 - [ ] **Data room ingestion tool / command** — generalize the Tamara ETL pattern into a platform-level `/ingest-data-room` command. Given a folder path with mixed files (PDFs, Excel, DOCX), automatically detect file types, parse tabular data, extract key metrics, and produce a structured JSON snapshot. The prepare_tamara_data.py script is the proof-of-concept; the generalized version would handle any new company's data room with minimal custom code.

@@ -150,6 +150,24 @@ Session focused on aligning Ejari dashboard formatting with Klaim/SILQ. Straight
 ---
 
 
+## 2026-04-09 — Showcase tabs must lead with charts, not tables — tables alone aren't a "showcase"
+**Context:** The Tamara plan specified "rich interactive Recharts visualizations" for all 14 tabs, calling them "showcase highlights." In execution, 9 of 14 tabs were downgraded to raw data tables due to time pressure. The plan promised trend lines for financial performance, grouped bars for demographics, projection charts for business plan, and a 17-step waterfall for facility payments. None of these materialized. The result is functional but not the "best possible demonstration of Laith" the user requested.
+**Rule:** When a task is explicitly flagged as a showcase or demo, prioritize the 5-6 highest-impact visualizations over completeness. Build the novel/impressive charts first (heatmap, covenant triggers, waterfall), then fill remaining tabs with tables. A dashboard with 5 stunning charts and 9 tables is more impressive than 14 mediocre tables. Also: estimate visualization complexity upfront — a Recharts LineChart takes 15 minutes, a CSS-grid heatmap takes 45, a custom waterfall takes 60. Budget accordingly.
+
+---
+
+## 2026-04-09 — Data extraction failures should be caught and reported, not silently empty
+**Context:** The investor reporting, demographics, business plan, and financial master sections all parsed to empty arrays. The prepare script's `try/except` blocks swallowed errors, and the dashboard showed "No data available" without explaining why. The root causes were: (1) investor reporting sheet names don't match the hardcoded expectations, (2) demographics workbook has a different structure than assumed, (3) business plan summary sheet column layout varies. These were all fixable but invisible.
+**Rule:** Data preparation scripts must log every extraction attempt with success/failure and row counts. At minimum: `print(f"  Parsed {len(records)} records from {source}")`. When a section returns 0 records, log a WARNING with the attempted file path and expected format. The dashboard should distinguish "data not available" (no source file) from "data extraction failed" (source exists but parser failed) — different colors, different messages.
+
+---
+
+## 2026-04-09 — AI Executive Summary context must be wired before marking a company "onboarded"
+**Context:** Tamara was marked as onboarded and committed, but `_build_tamara_full_context()` was never implemented. The AI Executive Summary endpoint falls through to the generic Klaim context builder, which frames Tamara as "healthcare claims factoring" — completely wrong. This would produce a misleading IC-grade document if a user generates an executive summary.
+**Rule:** A company is NOT fully onboarded until: (1) all tabs render with data, (2) AI Executive Summary works with correct context, (3) methodology serves correctly, (4) the company appears in FRAMEWORK_INDEX.md. Add these as checklist items in the `/onboard-company` command.
+
+---
+
 ## 2026-04-09 — Data room ingestion is a distinct third pattern, not a variant of tape or summary
 **Context:** Tamara has ~100 files across PDF, Excel, and mixed formats — nothing like a loan tape or a single ODS workbook. The initial instinct was to force it into the Ejari "summary" pattern, but the parser complexity was totally different. The solution was a three-layer architecture: (1) ETL script that reads raw data room files and produces structured JSON, (2) runtime parser that reads JSON and enriches with presentation fields, (3) frontend dashboard that renders from the enriched JSON. This separation means the messy multi-format parsing runs once (not per-request), the JSON is version-controlled and portable, and the runtime serving is fast.
 **Rule:** When onboarding a company whose data is a data room (not a single tape or workbook), always use the ETL → JSON → parser pattern. Never try to parse PDFs or heterogeneous Excel files at runtime. The ETL script lives in `scripts/prepare_{company}_data.py`, the JSON lives in `data/{Company}/{Product}/`, and the parser lives in `core/analysis_{company}.py`. Re-run the ETL when new data arrives in the data room.

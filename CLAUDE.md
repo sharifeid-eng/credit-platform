@@ -981,12 +981,18 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Portfolio company onboarding flow (self-service API key provisioning)
 - [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
 - [ ] Recovery discounting — PV-adjusted LGD using discount rate (undiscounted LGD overstates recovery value)
-**Tamara — Near-term:**
+**Tamara — P0 (must fix before IC demo):**
+- [ ] AI Executive Summary broken — `_build_tamara_full_context()` not implemented; falls through to Klaim context (healthcare framing)
+- [ ] Concentration gauges hardcoded to 0 — HSBC data extracted but not wired to UI
+- [ ] 4 empty sections (Investor Reporting, Demographics, Business Plan, Financial Master) — data extraction failures silently returning empty arrays
+**Tamara — P1 (showcase visualizations):**
+- [ ] 9 of 14 tabs render as data tables, not planned interactive charts — need: financial trend lines, business plan projections, demographic grouped bars, facility payment waterfall, dilution time-series, HSBC trigger trend heatmap, collections by BB bucket
+- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components for all securitized portfolios
+**Tamara — P2 (polish):**
 - [ ] AI-powered research report narrative — wire `ai_narrative` to Claude in `/research-report` endpoint
 - [ ] Frontend "Generate Research Report" button on TamaraDashboard
-- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components for all securitized portfolios
-- [ ] Wire AI Executive Summary for Tamara — `_build_tamara_full_context()` + section guidance
-- [ ] Financial Master parsing — fix path for 66-sheet management accounts workbook
+- [ ] Product-level DPD trends (13 products available but only aggregate rendered)
+- [ ] HSBC stratification rendering (only 1 of 6 dimensions visualized)
 **Data Room Ingestion — Platform capability:**
 - [ ] Generalized `/ingest-data-room` command — given a folder of mixed files (PDFs, Excel, DOCX), auto-detect types, parse tabular data, produce structured JSON. `prepare_tamara_data.py` is the proof-of-concept.
 - [ ] Data room file inventory — auto-discover and catalog files (type, size, sheets, dates) before parsing
