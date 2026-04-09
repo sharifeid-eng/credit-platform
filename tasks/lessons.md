@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-09 — Adding file extensions to the loader catches unintended files
+**Mistake:** Added `.json` to `get_snapshots()` for Tamara data room JSON files. This also matched `config.json` and `methodology.json` in the same directory — they have no date prefix (returning `date: null`) and aren't data snapshots. The frontend saw these extra entries and failed to pass a valid snapshot filename to `/summary`, causing a 404 that broke the Tamara card on the landing page.
+**Rule:** When extending `get_snapshots()` to support new file extensions, always add an exclusion list for known non-data files in the same directory. Pattern: `_EXCLUDE = {'config.json', 'methodology.json'}` checked before the extension test. More generally: any time a file-discovery function is broadened, test it against ALL existing directories to check for false positives, not just the new one.
+
+---
+
 ## 2026-04-07 — As-of-date only filters deals, not balances — AI must not run on backdated views
 **Mistake:** The as_of_date picker filters deals by `Deal date <= as_of_date` but all balance columns (`Collected till date`, `Denied by insurance`, `Outstanding`, etc.) still reflect the tape snapshot date. This means collection rates are inflated, outstanding is understated, PAR is artificially low, and margins are wrong for any backdated view. AI analysis on this data would produce confident but misleading commentary.
 **Rule:** (1) Every metric on a backdated view that depends on collection/denial/balance columns must be visually flagged as "reflects tape date". (2) AI endpoints (commentary, executive summary, tab insights) must refuse to run when `as_of_date < snapshot_date` — the AI has no way to distinguish safe from unsafe metrics and will present inflated numbers as fact. (3) When onboarding new tapes or companies, always verify: does `filter_by_date` affect only deal selection, or does it also adjust balances? For point-in-time tapes, the answer is always "deal selection only". (4) Safe metrics in a backdated view: deal count, originated volume, deployment, vintage composition. Unsafe: everything that uses Collected/Denied/Outstanding/Pending columns.
