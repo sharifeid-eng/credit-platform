@@ -97,6 +97,16 @@ Session focused on aligning Ejari dashboard formatting with Klaim/SILQ. Straight
 
 ---
 
+## 2026-04-09 — Inline styles + responsive design = useBreakpoint hook, not CSS media queries
+**Context:** The entire frontend uses inline `style={{}}` objects (not CSS classes or Tailwind). Inline styles cannot use `@media` queries. The architectural choice for mobile responsiveness was a JS-based `useBreakpoint()` hook that returns `{ isMobile, isTablet, isDesktop }` via `matchMedia` listeners, with components branching their inline style values conditionally. An alternative was migrating everything to Tailwind classes, but that would have required rewriting hundreds of style objects across 40+ files.
+**Rule:** When adding responsive behavior to an inline-style codebase, prefer a shared `useBreakpoint` hook over migrating to CSS classes. But for grid columns, prefer CSS `auto-fill`/`auto-fit` with `minmax()` — these are intrinsically responsive and don't need JS breakpoint detection at all. `repeat(auto-fill, minmax(140px, 1fr))` replaces `repeat(5, 1fr)` and works at any viewport width without importing any hook.
+
+## 2026-04-09 — Fixed sidebar widths are the #1 mobile killer
+**Context:** A 240px fixed sidebar consumed ~50% of a 375px mobile screen, making all company page content unreadable. The fix was converting it to a slide-in drawer with backdrop overlay, coordinated via a React context between the Navbar (hamburger button) and CompanyLayout (drawer).
+**Rule:** Any persistent sidebar > 200px must have a mobile-drawer alternative. The pattern: (1) `MobileMenuContext` shared between navbar and layout, (2) sidebar becomes `position: fixed` + `transform: translateX(-100%)` on mobile, (3) backdrop overlay with click-to-close, (4) auto-close on route change, (5) body scroll lock when open.
+
+---
+
 ## 2026-04-04 — Emoji Flags Don't Render on Windows Chrome
 **Mistake:** Used regional indicator emoji (🇦🇪, 🇸🇦) for country flags on company cards. They render correctly on macOS/Linux but show as two-letter codes (AE, SA) on Windows Chrome — Windows has no built-in emoji flag support.
 **Rule:** Never use emoji flags for flags that need to be visually correct across platforms. Use `<img src="https://flagcdn.com/16x12/{cc}.png">` with ISO 3166-1 alpha-2 country codes (ae, sa, us). flagcdn.com is free, fast, and renders consistently everywhere.

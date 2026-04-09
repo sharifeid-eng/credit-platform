@@ -181,9 +181,10 @@ credit-platform/
 │   ├── src/
 │   │   ├── App.jsx                  # Nested routes with CompanyLayout
 │   │   ├── contexts/
-│   │   │   └── CompanyContext.jsx    # Shared state provider (company, product, snapshots, config)
+│   │   │   ├── CompanyContext.jsx    # Shared state provider (company, product, snapshots, config)
+│   │   │   └── MobileMenuContext.jsx # Sidebar drawer state (open/close/toggle) + body scroll lock
 │   │   ├── layouts/
-│   │   │   └── CompanyLayout.jsx    # Sidebar + <Outlet> wrapper with CompanyProvider
+│   │   │   └── CompanyLayout.jsx    # Sidebar + <Outlet> wrapper with CompanyProvider + mobile backdrop
 │   │   ├── pages/
 │   │   │   ├── Home.jsx             # Landing page — company grid + resources section
 │   │   │   ├── TapeAnalytics.jsx    # 18-tab tape dashboard (extracted from old Company.jsx)
@@ -192,15 +193,17 @@ credit-platform/
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
 │   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
+│   │   ├── hooks/
+│   │   │   └── useBreakpoint.js         # Mobile/tablet/desktop detection via matchMedia listeners
 │   │   ├── components/
-│   │   │   ├── Sidebar.jsx              # 240px persistent sidebar nav — Framer Motion animated active border
+│   │   │   ├── Sidebar.jsx              # Persistent nav — 240px desktop, slide-in drawer on mobile
 │   │   │   ├── KpiCard.jsx              # Framer Motion stagger + hover effects + optional sparklineData prop
-│   │   │   ├── Navbar.jsx               # Contains LaithLogo component (exported)
+│   │   │   ├── Navbar.jsx               # Responsive — hamburger menu on mobile, contains LaithLogo
 │   │   │   ├── AICommentary.jsx         # Slide-up animation on commentary
 │   │   │   ├── DataChat.jsx
 │   │   │   ├── TabInsight.jsx           # Smooth expand/collapse with AnimatePresence
-│   │   │   ├── ChartPanel.jsx           # Fade-in + skeleton chart loading
-│   │   │   ├── PortfolioStatsHero.jsx   # Landing page stats strip — count-up aggregates across all companies
+│   │   │   ├── ChartPanel.jsx           # Fade-in + skeleton chart loading + overflowX auto
+│   │   │   ├── PortfolioStatsHero.jsx   # Landing page stats strip — responsive gap/sizing for mobile
 │   │   │   ├── charts/
 │   │   │   │   ├── ActualVsExpectedChart.jsx
 │   │   │   │   ├── AgeingChart.jsx
@@ -518,7 +521,8 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Outstanding amount pattern** — Ageing and Portfolio health charts use `outstanding = PV - Collected - Denied` (clipped at 0) instead of face value. Shows actual risk exposure. Health `percentage` based on outstanding share.
 - **Completed-only margins** — All margin calculations in Returns use completed deals only to avoid penalising vintages still collecting. `realised_margin` = `completed_margin`. Discount band, new vs repeat, and monthly margins also filtered to completed.
 - **Expected collection rate** — Collection velocity endpoint returns `expected_rate = Expected till date / Purchase value` per month when column available (`has_forecast` flag). Frontend renders as blue dashed line alongside actual rate bars.
-- **Sidebar navigation architecture** — Company pages use a persistent 240px sidebar (`Sidebar.jsx`) within `CompanyLayout`. Tabs are `<Link>` elements (not buttons). Active state: gold left border + text. Sidebar follows Methodology page's original pattern.
+- **Sidebar navigation architecture** — Company pages use a persistent 240px sidebar (`Sidebar.jsx`) within `CompanyLayout`. On mobile, sidebar becomes a slide-in drawer (fixed position, `translateX` animation) with dark backdrop overlay, coordinated via `MobileMenuContext`. Hamburger button in Navbar toggles the drawer. Auto-closes on route change, locks body scroll when open. Tabs are `<Link>` elements (not buttons). Active state: gold left border + text.
+- **Mobile responsiveness architecture** — All styling uses inline `style={{}}` objects (no Tailwind classes). Responsive behavior uses a `useBreakpoint()` hook (`frontend/src/hooks/useBreakpoint.js`) returning `{ isMobile, isTablet, isDesktop }` via `matchMedia` listeners. For grid columns, CSS `auto-fill`/`auto-fit` with `minmax()` is preferred over JS breakpoints — intrinsically responsive. Breakpoints: mobile < 768px, tablet 768-1023px, desktop >= 1024px. `--navbar-height` CSS variable responds to viewport.
 - **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
 - **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
 - **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
@@ -792,6 +796,19 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Base background shifted from `#0C1018` to `#121C27` (ACP navy)
   - All surfaces, borders, and hardcoded colors updated proportionally
   - Warmer, more institutional feel while preserving gold/teal/red/blue semantic palette
+- ✅ **Mobile responsiveness (comprehensive, 29 files):**
+  - `useBreakpoint` hook — `{ isMobile, isTablet, isDesktop }` via matchMedia listeners
+  - `MobileMenuContext` — sidebar drawer coordination (open/close/toggle), route-change auto-close, body scroll lock
+  - Sidebar: 240px fixed → slide-in drawer on mobile (fixed position, translateX animation, dark backdrop overlay, close button)
+  - Navbar: 80px → 56px on mobile, hamburger menu on company pages, hidden Framework/Live/v0.5 chips, scaled-down logo
+  - All KPI grids (`repeat(5,1fr)`, `repeat(4,1fr)`, `repeat(3,1fr)`) → `repeat(auto-fill, minmax(140-150px, 1fr))`
+  - All 2-column layouts (`1fr 1fr`) → `repeat(auto-fit, minmax(280px, 1fr))` — single column on mobile
+  - PortfolioStatsHero: gap 56px → 12px, values/labels scaled down, dividers hidden, empty Live Portfolio banner hidden on mobile
+  - Padding reduced 28px → 14px on all pages for mobile
+  - Framework/Methodology: sidebar TOC hidden on mobile (content takes full width)
+  - ChartPanel: added `overflowX: auto` for wide table horizontal scrolling
+  - CSS tokens: `--navbar-height` responsive variable, table scroll override
+  - Desktop layout preserved identically — zero regressions
 - ✅ **As-of date fix:** Defaults to snapshot date (from filename), not max deal date in data
 - ✅ **Analysis Framework (Phase 0):**
   - `core/ANALYSIS_FRAMEWORK.md` — analytical philosophy document with 5-level hierarchy (Size → Cash Conversion → Credit Quality → Loss Attribution → Forward Signals)

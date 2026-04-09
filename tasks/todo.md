@@ -249,6 +249,21 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-09
+- [x] Mobile responsiveness — comprehensive overhaul across 29 files (2 new, 27 modified):
+  - `useBreakpoint` hook — `{ isMobile, isTablet, isDesktop }` via matchMedia listeners
+  - `MobileMenuContext` — sidebar drawer state coordination (open/close/toggle), route-change auto-close, body scroll lock
+  - Sidebar: 240px fixed → slide-in drawer on mobile with dark backdrop overlay + close button
+  - Navbar: 80px → 56px on mobile, hamburger menu on company pages, hide Framework/Live/v0.5 chips, smaller logo
+  - All KPI grids converted to responsive auto-fill/auto-fit with minmax breakpoints
+  - All 2-column layouts → `repeat(auto-fit, minmax(280px, 1fr))` — stacks on mobile
+  - PortfolioStatsHero: gap 56px → 12px, scaled-down values, hidden empty Live Portfolio banner
+  - Padding reduced 28px → 14px on all pages for mobile
+  - Framework/Methodology sidebar TOC hidden on mobile
+  - ChartPanel: added overflowX auto for wide tables
+  - CSS tokens: `--navbar-height` responsive var, table scroll override
+  - Build verified, all desktop layouts preserved
+
 ## Completed — 2026-04-02
 - [x] Executive Summary holistic narrative — single AI call now produces a credit memo-style narrative (company-specific sections with conclusions + metric pills) AND a summary table AND a bottom line verdict, displayed above the existing ranked findings. Ejari gets 9 sections (Portfolio Overview → Write-offs & Fraud), Klaim 7, SILQ 6. max_tokens 2000→8000.
 
