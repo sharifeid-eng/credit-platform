@@ -32,6 +32,7 @@ from core.validation import validate_tape
 from core.consistency import run_consistency_check
 from core.reporter import generate_ai_analysis, save_pdf_report
 from core.analysis_ejari import parse_ejari_workbook
+from core.analysis_tamara import parse_tamara_data, get_tamara_summary_kpis
 from core.analysis_silq import (
     compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
@@ -229,7 +230,7 @@ def get_framework():
 def get_methodology_endpoint(analysis_type: str):
     """Return structured methodology data for an analysis type.
     Auto-generated from decorated compute functions + static sections."""
-    # For Ejari (read-only summary), serve static JSON
+    # For Ejari and Tamara (read-only summaries), serve static JSON
     if analysis_type == 'ejari_summary':
         ejari_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -239,6 +240,16 @@ def get_methodology_endpoint(analysis_type: str):
             with open(ejari_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         raise HTTPException(status_code=404, detail="Ejari methodology not found")
+
+    if analysis_type == 'tamara_summary':
+        # Try KSA first, then UAE
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for product in ['KSA', 'UAE']:
+            mpath = os.path.join(base, 'data', 'Tamara', product, 'methodology.json')
+            if os.path.exists(mpath):
+                with open(mpath, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        raise HTTPException(status_code=404, detail="Tamara methodology not found")
 
     result = get_methodology(analysis_type)
     if not result['sections']:
@@ -344,6 +355,27 @@ def get_aggregate_stats():
                         pass
                     continue
 
+                if analysis_type == 'tamara_summary':
+                    try:
+                        import json as _json
+                        with open(snap['filepath'], 'r', encoding='utf-8') as _f:
+                            tdata = _json.load(_f)
+                        fdd = tdata.get('deloitte_fdd', {})
+                        ts = fdd.get('dpd_timeseries', [])
+                        total_data_points += len(ts) * 12  # ~12 DPD buckets per month
+                        if ts and i == len(snaps) - 1:
+                            total_value_usd += float(ts[-1].get('total_pending', 0) or 0) * fx
+                        vp = tdata.get('vintage_performance', {})
+                        for metric_data in vp.values():
+                            if isinstance(metric_data, dict):
+                                for product_records in metric_data.values():
+                                    if isinstance(product_records, list):
+                                        total_deals += len(product_records)
+                                        total_data_points += sum(len(r) for r in product_records)
+                    except Exception:
+                        pass
+                    continue
+
                 try:
                     if analysis_type == 'silq':
                         df, _ = load_silq_snapshot(snap['filepath'])
@@ -415,7 +447,7 @@ def get_product_config(company: str, product: str):
 @app.get("/companies/{company}/products/{product}/date-range")
 def get_date_range(company: str, product: str, snapshot: Optional[str] = None):
     at = _get_analysis_type(company, product)
-    if at == 'ejari_summary':
+    if at in ('ejari_summary', 'tamara_summary'):
         snaps = get_snapshots(company, product)
         snap_date = snaps[-1]['date'] if snaps else ''
         return {'min_date': snap_date, 'max_date': snap_date, 'snapshot_date': snap_date}
@@ -472,6 +504,28 @@ def get_summary(company: str, product: str,
                 'pending_rate': 0, 'active_deals': 0, 'completed_deals': 0,
                 'avg_discount': 0, 'dso_available': False, 'hhi_group': 0,
                 'top_1_group_pct': 0, 'analysis_type': 'ejari_summary'}
+    if at == 'tamara_summary':
+        try:
+            snaps = get_snapshots(company, product)
+            if snaps:
+                filepath = snaps[-1]['filepath']
+                if filepath not in _tamara_cache:
+                    _tamara_cache[filepath] = parse_tamara_data(filepath)
+                kpis = get_tamara_summary_kpis(_tamara_cache[filepath])
+            else:
+                kpis = {'total_purchase_value': 0, 'total_deals': 0, 'analysis_type': 'tamara_summary'}
+        except Exception:
+            kpis = {'total_purchase_value': 0, 'total_deals': 0, 'analysis_type': 'tamara_summary'}
+        return {'company': company, 'product': product, 'display_currency': 'SAR' if product == 'KSA' else 'AED',
+                'total_deals': kpis.get('total_deals', 0), 'total_purchase_value': kpis.get('total_purchase_value', 0),
+                'total_collected': 0, 'total_denied': 0, 'total_pending': 0,
+                'total_expected': 0, 'collection_rate': 0, 'denial_rate': 0,
+                'pending_rate': 0, 'active_deals': 0, 'completed_deals': 0,
+                'avg_discount': 0, 'dso_available': False, 'hhi_group': 0,
+                'top_1_group_pct': 0, 'analysis_type': 'tamara_summary',
+                'facility_limit': kpis.get('facility_limit', 0),
+                'registered_users': kpis.get('registered_users', 0),
+                'merchants': kpis.get('merchants', 0)}
     if at == 'silq':
         df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
@@ -947,6 +1001,59 @@ def get_ejari_summary(company: str, product: str, snapshot: Optional[str] = None
         _ejari_cache[filepath] = parse_ejari_workbook(filepath)
     return _ejari_cache[filepath]
 
+# ── Tamara endpoint ─────────────────────────────────────────────────────────
+
+_tamara_cache = {}
+
+@app.get("/companies/{company}/products/{product}/tamara-summary")
+def get_tamara_summary(company: str, product: str, snapshot: Optional[str] = None):
+    """Return parsed Tamara BNPL data as structured JSON (pre-computed summary)."""
+    sel = _resolve_snapshot(company, product, snapshot)
+    filepath = sel['filepath']
+    if filepath not in _tamara_cache:
+        _tamara_cache[filepath] = parse_tamara_data(filepath)
+    return _tamara_cache[filepath]
+
+# ── Research Report endpoint (platform-level) ───────────────────────────────
+
+@app.post("/companies/{company}/products/{product}/research-report")
+def generate_research_report_endpoint(company: str, product: str,
+                                       snapshot: Optional[str] = None):
+    """Generate a comprehensive credit research report PDF for any company."""
+    from fastapi.responses import Response
+    from core.research_report import generate_research_report
+
+    at = _get_analysis_type(company, product)
+    sel = _resolve_snapshot(company, product, snapshot)
+    filepath = sel['filepath']
+
+    # Load data based on analysis type
+    if at == 'tamara_summary':
+        if filepath not in _tamara_cache:
+            _tamara_cache[filepath] = parse_tamara_data(filepath)
+        data = _tamara_cache[filepath]
+    elif at == 'ejari_summary':
+        if filepath not in _ejari_cache:
+            _ejari_cache[filepath] = parse_ejari_workbook(filepath)
+        data = _ejari_cache[filepath]
+    else:
+        data = {'meta': {'company': company, 'product': product}}
+
+    config = load_config(company, product) or {}
+    ccy = config.get('currency', 'USD')
+
+    # Generate PDF
+    pdf_bytes = generate_research_report(
+        company=company, product=product, data=data,
+        analysis_type=at, ai_narrative=None, currency=ccy,
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type='application/pdf',
+        headers={'Content-Disposition': f'inline; filename="{company}_{product}_Research_Report.pdf"'},
+    )
+
 # ── SILQ chart endpoints ─────────────────────────────────────────────────────
 
 SILQ_CHART_MAP = {
@@ -1142,7 +1249,7 @@ def get_ai_cache_status(company: str, product: str,
     at = _get_analysis_type(company, product)
     if at == 'silq':
         tabs = ['delinquency', 'collections', 'concentration', 'cohort', 'yield-margins', 'tenure']
-    elif at == 'ejari_summary':
+    elif at in ('ejari_summary', 'tamara_summary'):
         tabs = []
     else:
         tabs = ['deployment', 'collection', 'denial-trend', 'ageing', 'revenue',

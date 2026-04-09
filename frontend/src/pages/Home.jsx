@@ -11,6 +11,7 @@ function getCompanyMeta(companyName) {
   if (n.includes('klaim'))  return { countryCode: 'ae', region: 'UAE', assetClass: 'Healthcare Receivables' }
   if (n.includes('silq'))   return { countryCode: 'sa', region: 'KSA', assetClass: 'POS Lending'            }
   if (n.includes('ejari'))  return { countryCode: 'sa', region: 'KSA', assetClass: 'Rent Finance'           }
+  if (n.includes('tamara')) return { countryCode: 'sa', region: 'KSA & UAE', assetClass: 'BNPL'              }
   return { countryCode: null, region: '', assetClass: '' }
 }
 

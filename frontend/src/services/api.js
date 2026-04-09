@@ -56,6 +56,10 @@ export const getDtfcChart             = (co, prod, snap, cur, asOf) =>
 export const getEjariSummary          = (co, prod, snap) =>
   api.get(`/companies/${co}/products/${prod}/ejari-summary`, { params: { snapshot: snap } }).then(r => r.data);
 
+// ── Tamara summary ──────────────────────────────────────────────────────────
+export const getTamaraSummary         = (co, prod, snap) =>
+  api.get(`/companies/${co}/products/${prod}/tamara-summary`, { params: { snapshot: snap } }).then(r => r.data);
+
 // ── New analytical endpoints ────────────────────────────────────────────────
 export const getCohortLossWaterfall   = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/cohort-loss-waterfall`, { params: p(snap, cur, asOf) }).then(r => r.data);

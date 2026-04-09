@@ -47,6 +47,7 @@ import SilqLossWaterfallChart  from '../components/charts/silq/SilqLossWaterfall
 import SilqUnderwritingDriftChart from '../components/charts/silq/SilqUnderwritingDriftChart'
 import SilqCdrCcrChart           from '../components/charts/silq/SilqCdrCcrChart'
 import EjariDashboard          from './EjariDashboard'
+import TamaraDashboard         from './TamaraDashboard'
 
 import { TAPE_TABS } from '../components/Sidebar'
 
@@ -76,6 +77,15 @@ export default function TapeAnalytics() {
     return (
       <div style={{ padding: isMobile ? '12px 14px' : '16px 28px' }}>
         <EjariDashboard />
+      </div>
+    )
+  }
+
+  // Tamara: render BNPL summary dashboard
+  if (analysisType === 'tamara_summary') {
+    return (
+      <div style={{ padding: isMobile ? '12px 14px' : '16px 28px' }}>
+        <TamaraDashboard />
       </div>
     )
   }

@@ -1,0 +1,25 @@
+{
+  "currency": "SAR",
+  "usd_rate": 0.2667,
+  "company": "Tamara",
+  "product": "KSA",
+  "description": "Buy Now Pay Later — Saudi Arabia (BNPL + BNPL+)",
+  "analysis_type": "tamara_summary",
+  "hide_portfolio_tabs": true,
+  "tabs": [
+    { "slug": "overview", "label": "Overview" },
+    { "slug": "vintage", "label": "Vintage Performance" },
+    { "slug": "delinquency", "label": "Delinquency" },
+    { "slug": "default-analysis", "label": "Default Analysis" },
+    { "slug": "dilution", "label": "Dilution" },
+    { "slug": "collections", "label": "Collections" },
+    { "slug": "concentration", "label": "Concentration" },
+    { "slug": "covenant-compliance", "label": "Covenant Compliance" },
+    { "slug": "facility-structure", "label": "Facility Structure" },
+    { "slug": "demographics", "label": "Demographics" },
+    { "slug": "financial-performance", "label": "Financial Performance" },
+    { "slug": "business-plan", "label": "Business Plan" },
+    { "slug": "bnpl-plus", "label": "BNPL+ Deep Dive" },
+    { "slug": "notes", "label": "Data Notes" }
+  ]
+}

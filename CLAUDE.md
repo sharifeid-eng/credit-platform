@@ -80,8 +80,9 @@ The platform allows analysts and investment committee members to:
 - **Klaim** — medical insurance claims factoring, UAE. Data in AED. Live dataset: `data/klaim/UAE_healthcare/`
 - **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (2 tapes: Jan 2026, Feb 2026). Three product types: BNPL, RBF, RCL (Revolving Credit Line). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
 - **Ejari** — Rent Now Pay Later (RNPL), KSA. Data in USD. **Read-only summary** — no raw loan tape, only a pre-computed ODS workbook with 13 sheets of analysis. Rendered as a dedicated dashboard (`EjariDashboard.jsx`) without live computation. Parser: `core/analysis_ejari.py`. Config: `analysis_type: "ejari_summary"`. Live dataset: `data/Ejari/RNPL/`
-**Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, and rent payment financing (RNPL).
-**Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook).
+- **Tamara** — Buy Now Pay Later (BNPL + BNPL+), KSA & UAE. Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants). **Data room ingestion** — ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models) parsed by `scripts/prepare_tamara_data.py` into structured JSON snapshots. Two products: KSA (SAR, 14 tabs) and UAE (AED, 10 tabs). Dashboard: `TamaraDashboard.jsx`. Parser: `core/analysis_tamara.py`. Config: `analysis_type: "tamara_summary"`. Securitisation: KSA $2.375B (Goldman, Citi, Apollo), UAE $131M (Goldman). Live dataset: `data/Tamara/{KSA,UAE}/`
+**Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, rent payment financing (RNPL), and BNPL consumer instalment lending.
+**Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook) and JSON files (Tamara data room ingestion).
 **Data notes:**
 - **Tapes available:** Sep 2025 (25 cols), Dec 2025 (xlsx), Feb 2026 (25 cols), Mar 2026 (60 cols — latest)
 - Sep 2025 tape has `Expected IRR` and `Actual IRR` columns; Dec 2025 and Feb 2026 do not
@@ -159,6 +160,8 @@ credit-platform/
 │   ├── analysis.py         # All pure Klaim data computation functions (no I/O) — 40+ compute functions
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── analysis_ejari.py   # Ejari ODS workbook parser (read-only summary, 12 sections)
+│   ├── analysis_tamara.py  # Tamara BNPL JSON parser + enrichment (data room ingestion pattern)
+│   ├── research_report.py  # Platform-level credit research report PDF generator (any company)
 │   ├── database.py         # SQLAlchemy 2.0 engine/session setup (DB-optional mode)
 │   ├── db_loader.py        # DB → tape-compatible DataFrame bridge (Klaim + SILQ mappers)
 │   ├── loader.py           # File discovery, snapshot loading
@@ -192,7 +195,8 @@ credit-platform/
 │   │   │   ├── Framework.jsx        # Analysis Framework page (/framework) — analytical philosophy with sticky TOC
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
-│   │   │   └── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
+│   │   │   ├── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
+│   │   │   └── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
 │   │   ├── hooks/
 │   │   │   └── useBreakpoint.js         # Mobile/tablet/desktop detection via matchMedia listeners
 │   │   ├── components/
@@ -261,7 +265,8 @@ credit-platform/
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
-│   └── sync_framework_registry.py  # Auto-generate Section 12 in ANALYSIS_FRAMEWORK.md from metric registry
+│   ├── sync_framework_registry.py  # Auto-generate Section 12 in ANALYSIS_FRAMEWORK.md from metric registry
+│   └── prepare_tamara_data.py  # Data room ETL: reads ~100 source files → structured JSON snapshots for Tamara
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
 └── reports/
@@ -337,6 +342,8 @@ Key columns in loan tape files:
 |`GET /fx-rates`                                              |Foreign exchange rates              |
 |`GET /companies/{co}/products/{p}/charts/silq/{chart_name}`  |Dynamic SILQ chart routing          |
 |`GET /companies/{co}/products/{p}/ejari-summary`             |Parsed Ejari ODS workbook (12 sections, cached)|
+|`GET /companies/{co}/products/{p}/tamara-summary`            |Parsed Tamara BNPL JSON (data room ingestion, cached)|
+|`POST /companies/{co}/products/{p}/research-report`          |Generate credit research report PDF (any company)|
 |`GET /companies/{co}/products/{p}/charts/par`                |PAR 30+/60+/90+ (Portfolio at Risk)  |
 |`GET /companies/{co}/products/{p}/charts/dtfc`               |Days to First Cash (leading indicator)|
 |`GET /companies/{co}/products/{p}/charts/cohort-loss-waterfall`|Cohort loss waterfall (per-vintage)  |
@@ -876,6 +883,30 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `frontend/src/pages/Methodology.jsx` rewritten: 1301 → 290 lines (data-driven renderer)
   - `scripts/sync_framework_registry.py` — auto-generates Section 12 in ANALYSIS_FRAMEWORK.md from the metric registry
   - Adding a new metric to methodology_*.py → Methodology page auto-updates, Section 12 auto-updates
+- ✅ **Tamara BNPL onboarded (data room ingestion — third pattern):**
+  - Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants)
+  - **Data room ingestion pipeline:** `scripts/prepare_tamara_data.py` reads ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models, demographics) from OneDrive data room → structured JSON snapshots
+  - **Two products:** KSA (SAR, 14 tabs) and UAE (AED, 10 tabs) — geography-based split matching securitization facilities
+  - `analysis_type: "tamara_summary"` — follows Ejari read-only summary pattern but with much richer data
+  - **14 KSA tabs:** Overview, Vintage Performance, Delinquency, Default Analysis, Dilution, Collections, Concentration, Covenant Compliance, Facility Structure, Demographics, Financial Performance, Business Plan, BNPL+ Deep Dive, Data Notes
+  - **Novel visualizations:** VintageHeatmap (CSS-grid color-coded vintage × MOB matrix with toggle for default/delinquency/dilution), CovenantTriggerCard (3-level L1/L2/L3 trigger zone visualization), ConcentrationGauge (horizontal gauge bars)
+  - **Securitisation facilities:** KSA $2.375B (Goldman, Citi, Atlas/Apollo, Morgan Stanley — 5 tranches), UAE $131M (Goldman — 2 tranches)
+  - **Products:** BNPL (Pi2-6, up to SAR 5K), BNPL+ (Pi4-24, SAR 5K-20K, Murabaha profit APR 21-40%)
+  - **Data sources parsed:** ~50 vintage cohort Excel files, Deloitte FDD loan portfolio (12,799 rows), 20 HSBC PDF investor reports, monthly investor reporting (25 months), portfolio demographics, 5-year business plan
+  - Frontend: `TamaraDashboard.jsx` (821 lines, all components inline), Recharts interactive charts
+  - Backend: `core/analysis_tamara.py` parser, `/tamara-summary` endpoint, `tamara_summary` branches in 7 existing endpoints
+- ✅ **Credit Research Report — platform capability:**
+  - `core/research_report.py` — generates comprehensive dark-themed PDF credit research reports for ANY company
+  - Backend endpoint: `POST /companies/{co}/products/{prod}/research-report`
+  - 8-section structure for Tamara: Executive Summary, Company Overview, Portfolio Analytics, Vintage Cohort Performance, Covenant Compliance, Facility Structure, DPD Analysis, Data Sources
+  - Laith dark theme branding (navy background, gold headers, teal/red metrics)
+  - ReportLab Platypus composition with styled tables, cover page, page numbering
+  - Accepts optional `ai_narrative` parameter for Claude-powered narrative sections
+  - Extensible: generic fallback builder for non-Tamara companies, company-specific builders can be added
+- ✅ **Three data ingestion patterns now supported:**
+  - **Raw Tape** (Klaim, SILQ): CSV/Excel loan-level data → live computation per request
+  - **Pre-computed Summary** (Ejari): Single ODS workbook → parse once, render
+  - **Data Room Ingestion** (Tamara): ~100 multi-format files → ETL script → JSON snapshot → parser → dashboard
 -----
 ## Known Gaps & Next Steps
 **Short term:**

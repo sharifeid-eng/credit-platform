@@ -1,0 +1,49 @@
+{
+  "analysis_type": "tamara_summary",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Portfolio Overview",
+      "level": 1,
+      "order": 1,
+      "prose": "UAE BNPL portfolio overview. Smaller and newer than KSA — $77M outstanding across 981K loans. Single securitization facility ($131M, Goldman Sachs only). All monetary values in AED unless otherwise stated.",
+      "metrics": [
+        {"name": "Total Outstanding AR", "formula": "Gross trade receivables from UAE entity", "rationale": "Size of UAE collateral pool — roughly 5% of KSA portfolio."},
+        {"name": "Repeat Customer Rate", "formula": "Repeat obligor balance / Total obligor balance", "rationale": "UAE at 80% repeat — slightly lower than KSA (83%)."},
+        {"name": "Average Balance", "formula": "Total outstanding / Number of active loans", "rationale": "UAE avg $79 vs KSA $133 — smaller transaction sizes."}
+      ],
+      "tables": [],
+      "notes": ["UAE facility consistently shows Senior Advance Rate breach requiring monthly repayment — structural feature, not alarm signal."],
+      "subsections": []
+    },
+    {
+      "id": "covenant-compliance",
+      "title": "Covenant Compliance",
+      "level": 5,
+      "order": 8,
+      "prose": "UAE facility has wider covenant thresholds than KSA reflecting the newer, smaller portfolio. Delinquency L1: 10% (vs KSA 9%), Default L1: 8% (vs KSA 5%), Dilution L1: 15% (vs KSA 7.5%). Corporate covenants: Min Liquidity $30M, Min TNW $30M, Max D/E 2.0x.",
+      "metrics": [
+        {"name": "Dilution Rate", "formula": "Refunded receivables / Original balance (3-month rolling)", "rationale": "UAE dilution runs 7.7-8.6% — structurally higher than KSA (~1.5%), driven by cross-border e-commerce returns. Well within 15% L1 threshold."}
+      ],
+      "tables": [],
+      "notes": ["UAE default rates were elevated for May-Jul 2025 vintages (2.6-3.7%) but improving rapidly. UAE facility tenor is only 2 years (vs KSA 3 years)."],
+      "subsections": []
+    },
+    {
+      "id": "notes",
+      "title": "Data Notes & Sources",
+      "level": 0,
+      "order": 10,
+      "prose": "UAE data sourced from same data room as KSA. Fewer data dimensions available — no demographic breakdowns, no BNPL+ deep dive (product not yet launched in UAE as of data room date), no separate business plan.",
+      "metrics": [],
+      "tables": [],
+      "notes": [
+        "UAE BNPL+ launch planned for Oct 2025 per Product & Regulation deck",
+        "UAE facility: 2 tranches only (Senior $100M + Junior $1M), Goldman Sachs sole lender",
+        "UAE dilution structurally higher (~8% vs ~1.5%) — likely cross-border e-commerce returns",
+        "UAE Ever-90 rate: 5.47% (vs KSA 2.46%) — higher credit risk in UAE portfolio"
+      ],
+      "subsections": []
+    }
+  ]
+}

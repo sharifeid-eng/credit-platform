@@ -1,0 +1,127 @@
+{
+  "analysis_type": "tamara_summary",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Portfolio Overview",
+      "level": 1,
+      "order": 1,
+      "prose": "Key portfolio metrics including GMV, outstanding receivables, active users and merchants, product mix (BNPL vs BNPL+), and repeat customer rates. Data sourced from monthly investor reporting and Deloitte FDD loan portfolio dataset. All monetary values in SAR unless otherwise stated.",
+      "metrics": [
+        {"name": "Total GMV", "formula": "Sum of monthly Gross Merchandise Value originated", "rationale": "Primary measure of origination volume and business scale."},
+        {"name": "Outstanding AR", "formula": "Gross trade receivables after write-offs (from AFS)", "rationale": "Size of the collateral pool backing the securitization facility."},
+        {"name": "Repeat Customer Rate", "formula": "Repeat obligor balance / Total obligor balance", "rationale": "Measures portfolio maturity and customer quality — repeat customers have lower loss rates."},
+        {"name": "Average Balance", "formula": "Total outstanding / Number of active loans", "rationale": "Indicates granularity — lower balances mean better diversification."}
+      ],
+      "tables": [],
+      "notes": ["GMV figures are annualized run-rate from monthly data. Outstanding AR reconciled between AFS and loan portfolio datasets — variance of $134M at Dec 2025 due to timing differences."],
+      "subsections": []
+    },
+    {
+      "id": "vintage",
+      "title": "Vintage Cohort Performance",
+      "level": 2,
+      "order": 2,
+      "prose": "Triangular cohort matrices showing default (+120DPD), delinquency (+7DPD), and dilution (refund) rates by origination vintage and months on book (MOB). Data from ~50 Excel cohort matrix files covering Jan 2024 through Feb 2026, split by BNPL and BNPL+ products.",
+      "metrics": [
+        {"name": "Default Rate (+120DPD)", "formula": "Receivables >120 days past due / Total cohort originated balance", "rationale": "The primary credit loss metric — receivables past 120 DPD are effectively write-off candidates."},
+        {"name": "Delinquency Rate (+7DPD)", "formula": "Receivables >7 days past due / Total cohort originated balance", "rationale": "Early warning indicator — captures all past-due receivables including those that may cure."},
+        {"name": "Dilution Rate", "formula": "Refunded or cancelled receivables / Total eligible originated balance", "rationale": "Non-credit loss — measures customer returns and order cancellations that reduce the collateral pool."}
+      ],
+      "tables": [],
+      "notes": ["Vintage matrices are triangular — NaN values below the diagonal indicate the vintage had not yet existed at that reporting date. KSA defaults peaked at ~2.0% for H1-2024 vintages, declining to ~0.8-1.0% for H2-2024 onwards."],
+      "subsections": []
+    },
+    {
+      "id": "delinquency",
+      "title": "Delinquency Analysis",
+      "level": 3,
+      "order": 3,
+      "prose": "DPD bucket distribution over time from the Deloitte FDD loan portfolio (12,799 rows, Feb 2023 to Jan 2026). Tracks the migration of receivables through DPD buckets: Not Late, 1-7, 8-15, 16-30, 31-60, 61-90, 91-120, 121-150, 151-180, 181-365, >365. Also includes daily +7DPD rates from Oct 2025 to Mar 2026.",
+      "metrics": [
+        {"name": "DPD 7+ Rate", "formula": "Balance in DPD buckets 1-7 and above / Total pending balance", "rationale": "Broad delinquency measure used in securitization covenant triggers (L1 threshold: 9%)."},
+        {"name": "Write-Off Rate", "formula": "Written-off amount / Total outstanding", "rationale": "Write-off occurs at DPD 90. Recovery efforts continue post write-off."}
+      ],
+      "tables": [],
+      "notes": ["DPD buckets from Deloitte FDD show 100% write-off for 121+ DPD buckets in most segments."],
+      "subsections": []
+    },
+    {
+      "id": "covenant-compliance",
+      "title": "Covenant Compliance & Triggers",
+      "level": 5,
+      "order": 8,
+      "prose": "Three-level trigger system from the securitization facility: L1 (Stop Funding), L2 (Cash Sweep Amortisation), L3 (Event of Default). Three performance triggers tracked: Delinquency Ratio (+7DPD, 3-month lookback), Default Ratio (+120DPD, 6-month lookback), Dilution/Refund Ratio (3-month rolling). Corporate covenants: Minimum Liquidity ($20M), Minimum Tangible Net Worth ($60M), Maximum D/E (3.0x), Sovereign CDS (1.5%).",
+      "metrics": [
+        {"name": "Delinquency Trigger", "formula": "Delinquent receivables / Original balance (3-month lookback)", "rationale": "L1: 9%, L2: 12%, L3: 15%. Currently running at 3-5% — ample headroom."},
+        {"name": "Default Trigger", "formula": "Defaulted receivables / Original balance (6-month lookback)", "rationale": "L1: 5%, L2: 7.5%, L3: 9%. Currently running at 0-1.4%."},
+        {"name": "Dilution Trigger", "formula": "Refunded receivables / Original balance (3-month rolling)", "rationale": "L1: 7.5%, L2: 10%, L3: 12.5%. Currently running at 1.1-1.5%."}
+      ],
+      "tables": [],
+      "notes": ["Trigger thresholds are from the KSA facility (Project Gasoline). UAE has wider thresholds reflecting the smaller, newer portfolio."],
+      "subsections": []
+    },
+    {
+      "id": "facility-structure",
+      "title": "Facility Structure",
+      "level": 5,
+      "order": 9,
+      "prose": "KSA securitization via Tamara Capital DAC (Irish SPV). Total facility: $2.375B. 5 tranches: Senior A ($620M, SOFR+265bp), Senior B ($280M, SOFR+265bp), Senior C ($300M, 6.158% fixed), Mezzanine ($243.75M, SOFR+725bp), Junior ($22.94M). Senior lenders: Goldman Sachs, Citibank, Atlas (Apollo), Morgan Stanley. Mezzanine: Apollo. Tenor: 3 years to Aug 2028. Max advance rate: 95% of eligible receivables.",
+      "metrics": [],
+      "tables": [],
+      "notes": ["Facility restructured Aug 2025 from original $525M (Mar 2023). Priority of payments waterfall has 16 steps from corporation tax to surplus to originator."],
+      "subsections": []
+    },
+    {
+      "id": "demographics",
+      "title": "Portfolio Demographics",
+      "level": 1,
+      "order": 10,
+      "prose": "Borrower composition analysis across 5 dimensions: age group, gender, income band, nationality (national vs expat), and salary income source. Each dimension shows outstanding AR distribution and Ever-90 loss rate. Data from Portfolio Breakdowns workbook covering Jan-Sep 2025 cohorts.",
+      "metrics": [
+        {"name": "Ever-90 Rate", "formula": "Receivables that have ever been 90+ days past due / Total originated balance for cohort", "rationale": "Lifetime credit quality metric by segment — identifies which borrower segments drive losses."}
+      ],
+      "tables": [],
+      "notes": ["KSA Ever-90 rate: 2.46%. UAE Ever-90 rate: 5.47%. UAE expats (71.7% of AR) have higher Ever-90 (6.57%) vs nationals (2.93%)."],
+      "subsections": []
+    },
+    {
+      "id": "financial-performance",
+      "title": "Financial Performance",
+      "level": 1,
+      "order": 11,
+      "prose": "Monthly financial data from Investor Monthly Reporting (25 months, Jan 2024 to Jan 2026) and Financial Master (actuals through Nov 2025). Covers revenue decomposition (MDR, CPF, Murabaha profit, membership), transaction costs (processing, servicing, financing, credit losses), contribution margin, OPEX, and EBTDA. Both IFRS and Cohort views available — IFRS accrues revenue/costs over loan lifetime, Cohort records on origination month.",
+      "metrics": [
+        {"name": "MDR", "formula": "Merchant Discount Rate — net merchant commission as % of GMV", "rationale": "Core revenue line. Running ~4.3% with planned decline as BNPL+ grows (merchant MDR discounted to incentivize longer-tenor product adoption)."},
+        {"name": "Contribution Margin", "formula": "Revenue - Transaction Costs (processing + servicing + financing + credit losses)", "rationale": "Unit economics per transaction. Improving from ~1% (2023) to ~3% (2025) as credit losses decline."},
+        {"name": "Recovery Rate", "formula": "Post-write-off recoveries / Gross write-offs", "rationale": "Improving from 27% (Q1 2024) to 50% (Q4 2025) — major driver of profitability improvement."}
+      ],
+      "tables": [],
+      "notes": ["IFRS EBTDA for FY25: $42.4M (post-audit). Cohort EBTDA may differ due to ECL methodology. Company turned profitable in 2025 after years of losses."],
+      "subsections": []
+    },
+    {
+      "id": "notes",
+      "title": "Data Notes & Sources",
+      "level": 0,
+      "order": 14,
+      "prose": "All data sourced from Tamara's virtual data room provided during ACP due diligence process. No raw loan-level tape — analytics derived from aggregated cohort matrices, investor reporting, Deloitte FDD workbook, and HSBC securitization reports.",
+      "metrics": [],
+      "tables": [],
+      "notes": [
+        "Cohort matrices: ~50 Excel files covering default/delinquency/dilution by vintage, product type, and geography",
+        "Deloitte FDD: 12,799 rows of monthly snapshots (Feb 2023 to Jan 2026) by country, customer type, product, DPD bucket",
+        "HSBC Investor Reports: 10 monthly reports per geography (Jan-Oct 2025) with borrowing base, triggers, concentration, stratifications",
+        "Investor Monthly Reporting: 25 months of KPIs, financials, and covenant tracking",
+        "Financial Master: 66+ sheets of management accounts through Nov 2025",
+        "Business Plan: 46-sheet 5-year projection model (FY26-FY30)",
+        "Default = +120DPD, Delinquency = +7DPD, Dilution = refunds/cancellations",
+        "Write-off occurs at DPD 90. Recovery efforts continue post write-off.",
+        "BNPL vs BNPL+ boundary: Pi6 exists in both segments. Some Pi3 under BNPL+ flow but without profit charge.",
+        "APR rates (Jan 2026): Pi4=21%, Pi6=24%, Pi9=35%, Pi12=38%, Pi24=40%",
+        "Subvention BNPL+ (15% of BNPL+ GMV): merchant covers Murabaha profit — customer transacts free"
+      ],
+      "subsections": []
+    }
+  ]
+}

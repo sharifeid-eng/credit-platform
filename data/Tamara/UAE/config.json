@@ -1,0 +1,21 @@
+{
+  "currency": "AED",
+  "usd_rate": 0.2723,
+  "company": "Tamara",
+  "product": "UAE",
+  "description": "Buy Now Pay Later — United Arab Emirates (BNPL)",
+  "analysis_type": "tamara_summary",
+  "hide_portfolio_tabs": true,
+  "tabs": [
+    { "slug": "overview", "label": "Overview" },
+    { "slug": "vintage", "label": "Vintage Performance" },
+    { "slug": "delinquency", "label": "Delinquency" },
+    { "slug": "default-analysis", "label": "Default Analysis" },
+    { "slug": "dilution", "label": "Dilution" },
+    { "slug": "collections", "label": "Collections" },
+    { "slug": "concentration", "label": "Concentration" },
+    { "slug": "covenant-compliance", "label": "Covenant Compliance" },
+    { "slug": "facility-structure", "label": "Facility Structure" },
+    { "slug": "notes", "label": "Data Notes" }
+  ]
+}
