@@ -262,28 +262,34 @@ def get_tamara_summary_kpis(data):
     """Extract headline KPIs for the /summary endpoint.
 
     Returns dict matching the canonical field names expected by the frontend.
+
+    IMPORTANT: Tamara has no raw loan tape, so metrics differ from Klaim/SILQ:
+    - total_purchase_value = outstanding AR (point-in-time), NOT total originated
+    - total_deals = number of HSBC monthly reports (data points), NOT loan count
+    - face_value_label = "Outstanding AR" (not "Face Value") for display purposes
+    The frontend should check `face_value_label` to show the right label on cards.
     """
     overview = data.get('overview', {})
     fdd = data.get('deloitte_fdd', {})
     ft = data.get('facility_terms', {})
+    co = data.get('company_overview', {})
+    hsbc = data.get('hsbc_reports', [])
 
     total_pending = overview.get('total_pending', 0) or 0
-    total_writeoff = overview.get('total_written_off', 0) or 0
 
-    # Count loans from product breakdown
-    total_deals = 0
-    product_breakdown = fdd.get('product_breakdown', [])
-    for p in product_breakdown:
-        # pending_amount is the balance, not count — we don't have loan count from FDD
-        pass
+    # Use HSBC report count as "data points" (more meaningful than vintage count)
+    data_points = len(hsbc) or overview.get('months_of_data', 0) or overview.get('vintage_count', 0)
 
     return {
         'total_purchase_value': total_pending,
-        'total_deals': overview.get('vintage_count', 0),
+        'total_deals': data_points,
         'collection_rate': 0,
         'denial_rate': 0,
         'analysis_type': 'tamara_summary',
         'facility_limit': ft.get('total_limit', 0),
         'registered_users': overview.get('registered_users', 0),
         'merchants': overview.get('merchants', 0),
+        # Tamara-specific: tells the frontend to use different labels
+        'face_value_label': 'Outstanding AR',
+        'deals_label': 'Reports',
     }
