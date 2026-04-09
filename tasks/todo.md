@@ -289,15 +289,16 @@ Track active work here. Claude updates this as tasks progress.
 - [x] Executive Summary holistic narrative — single AI call now produces a credit memo-style narrative (company-specific sections with conclusions + metric pills) AND a summary table AND a bottom line verdict, displayed above the existing ranked findings. Ejari gets 9 sections (Portfolio Overview → Write-offs & Fraud), Klaim 7, SILQ 6. max_tokens 2000→8000.
 
 ## Up Next
-**Tamara — P0 Critical (must fix before showing to IC):**
-- [ ] **AI Executive Summary context** — implement `_build_tamara_full_context()` (~100 lines) in main.py. Add `elif at == 'tamara_summary':` branch in ai-executive-summary endpoint. Add Tamara to `section_guidance` and `tab_slugs` dicts. Currently falls through to Klaim context (healthcare receivables framing — completely wrong for BNPL).
-- [ ] **Fix concentration gauge wiring** — `ConcentrationGauge` in TamaraDashboard hardcodes `actual={0}`. Extract actual values from `hsbc_reports[-1].concentration_limits` and pass to gauge. 17 limits available but all show empty.
-- [ ] **Fix empty data sections** — Investor Reporting (KPIs + Financials), Demographics, Business Plan all parse to empty arrays. Root causes: sheet name mismatches, column layout assumptions. Add logging to identify which files/sheets fail. These 4 tabs currently show "No data available."
+**Tamara — P0 Critical ✅ COMPLETE:**
+- [x] **AI Executive Summary context** — `_build_tamara_full_context()` implemented (40 context lines), `tamara_summary` branch + section_guidance + tab_slugs added
+- [x] **Concentration gauge wiring** — HSBC concentration_limits data wired to gauges, instalment type pie chart added
+- [x] **Empty data sections fixed** — column-offset bug (labels col 1 not col 0), demographics pivot, Financial Master filename. Now: 73 KPIs, 136 financials, 5 demographic dims, 51 business plan metrics, 152 financial master metrics
+- [x] **Landing page carousel** — dual flags (SA+AE), auto-rotating product stats every 3.5s with crossfade, dot indicators, pause-on-hover
 
-**Tamara — P1 Showcase Visualizations (transform tables into charts):**
-- [ ] **Financial Performance trend lines** — add LineChart for revenue, EBTDA margin, write-off rate across 25 months (data exists in investor reporting once extraction fixed)
-- [ ] **Business Plan projection chart** — LineChart with historical actuals + forward projections + scenario bars (once extraction fixed)
-- [ ] **Demographics grouped bars** — create `DemographicBars` component: dimension selector (age/gender/income/nationality/salary), grouped bars with Ever-90 loss rate overlay (once extraction fixed)
+**Tamara — P1 Showcase Visualizations ✅ MOSTLY COMPLETE:**
+- [x] **Financial Performance trend lines** — GMV/Revenue ComposedChart added above KPI tables
+- [x] **Business Plan projection chart** — GMV/Revenue/EBTDA chart with bars + lines above detail table
+- [x] **Demographics grouped bars** — dimension selector + ComposedChart (AR bars + Ever-90 rate line overlay)
 - [ ] **Facility payment waterfall** — create `FacilityWaterfall` component: 17-step horizontal waterfall showing cash flow from collections through senior/mezz/junior tranches (26 waterfall steps available in Oct HSBC report)
 - [ ] **Dilution time-series** — replace single-value bar with vintage timeline showing dilution progression per cohort
 - [ ] **Collections buyer breakdown** — replace pending/writeoff trend with BB amounts by delinquency bucket from HSBC reports

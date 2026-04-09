@@ -909,6 +909,21 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **Raw Tape** (Klaim, SILQ): CSV/Excel loan-level data → live computation per request
   - **Pre-computed Summary** (Ejari): Single ODS workbook → parse once, render
   - **Data Room Ingestion** (Tamara): ~100 multi-format files → ETL script → JSON snapshot → parser → dashboard
+- ✅ **Tamara P0 fixes — data extraction, AI context, dashboard charts:**
+  - Fixed column-offset bug (labels in col 1 not col 0) across investor reporting, business plan, financial master parsers
+  - Fixed demographics pivot (AE+SA side-by-side → per-country dimension extraction)
+  - Fixed Financial Master filename mismatch (54.2.2.2 prefix)
+  - Now populated: 73 KPIs, 136 financial line items, 5 demographic dimensions (26 records), 51 BP metrics, 152 FM metrics
+  - `_build_tamara_full_context()` — 40 context lines for BNPL-specific AI Executive Summary
+  - Dashboard upgraded 821→988 lines, 8→23 Recharts containers: financial trend chart, business plan projection chart, demographics grouped bars with dimension selector
+  - Concentration gauges wired to HSBC data + instalment type pie chart
+- ✅ **Landing page multi-product card carousel:**
+  - Dual flags: `countryCode` supports arrays (`['sa', 'ae']`) — renders both flags side-by-side
+  - Auto-rotating carousel for multi-product companies: cycles stats every 3.5s with Framer Motion crossfade
+  - Dot indicators (click to manually switch), pause on hover, resume on leave
+  - Row 2 adapts: "Facility" row for multi-product (Limit, Merchants, Users) vs "Live Portfolio" for single-product
+  - All product summaries fetched (not just first) to populate carousel data
+  - Single-product cards (Klaim, SILQ, Ejari) completely unaffected
 -----
 ## Known Gaps & Next Steps
 **Short term:**
@@ -981,18 +996,23 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Portfolio company onboarding flow (self-service API key provisioning)
 - [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
 - [ ] Recovery discounting — PV-adjusted LGD using discount rate (undiscounted LGD overstates recovery value)
-**Tamara — P0 (must fix before IC demo):**
-- [ ] AI Executive Summary broken — `_build_tamara_full_context()` not implemented; falls through to Klaim context (healthcare framing)
-- [ ] Concentration gauges hardcoded to 0 — HSBC data extracted but not wired to UI
-- [ ] 4 empty sections (Investor Reporting, Demographics, Business Plan, Financial Master) — data extraction failures silently returning empty arrays
-**Tamara — P1 (showcase visualizations):**
-- [ ] 9 of 14 tabs render as data tables, not planned interactive charts — need: financial trend lines, business plan projections, demographic grouped bars, facility payment waterfall, dilution time-series, HSBC trigger trend heatmap, collections by BB bucket
-- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components for all securitized portfolios
+**Tamara — P0 ✅ COMPLETE:**
+- [x] AI Executive Summary — `_build_tamara_full_context()` (40 context lines), section_guidance, tab_slugs
+- [x] Concentration gauges wired to HSBC data + instalment type pie chart added
+- [x] Data extraction fixed — 73 KPIs, 136 financials, 5 demographic dims, 51 BP metrics, 152 FM metrics
+- [x] Landing page — dual flags (SA+AE), auto-rotating carousel (3.5s crossfade, dot indicators, pause-on-hover)
+- [x] Financial Performance trend chart + Business Plan projection chart + Demographics grouped bars
+**Tamara — P1 (remaining showcase items):**
+- [ ] Facility payment waterfall (17-step horizontal waterfall)
+- [ ] Dilution time-series by vintage
+- [ ] HSBC trigger trend heatmap (6 metrics x 10 months)
+- [ ] Collections by BB delinquency bucket
+- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components
 **Tamara — P2 (polish):**
-- [ ] AI-powered research report narrative — wire `ai_narrative` to Claude in `/research-report` endpoint
-- [ ] Frontend "Generate Research Report" button on TamaraDashboard
-- [ ] Product-level DPD trends (13 products available but only aggregate rendered)
-- [ ] HSBC stratification rendering (only 1 of 6 dimensions visualized)
+- [ ] AI-powered research report narrative — wire `ai_narrative` to Claude
+- [ ] Frontend "Generate Research Report" button
+- [ ] Product-level DPD trends (13 products, only aggregate rendered)
+- [ ] HSBC stratification rendering (2 of 6 dimensions visualized, need remaining 4)
 **Data Room Ingestion — Platform capability:**
 - [ ] Generalized `/ingest-data-room` command — given a folder of mixed files (PDFs, Excel, DOCX), auto-detect types, parse tabular data, produce structured JSON. `prepare_tamara_data.py` is the proof-of-concept.
 - [ ] Data room file inventory — auto-discover and catalog files (type, size, sheets, dates) before parsing
