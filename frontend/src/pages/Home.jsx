@@ -11,7 +11,7 @@ function getCompanyMeta(companyName) {
   if (n.includes('klaim'))  return { countryCode: 'ae', region: 'UAE', assetClass: 'Healthcare Receivables' }
   if (n.includes('silq'))   return { countryCode: 'sa', region: 'KSA', assetClass: 'POS Lending'            }
   if (n.includes('ejari'))  return { countryCode: 'sa', region: 'KSA', assetClass: 'Rent Finance'           }
-  if (n.includes('tamara')) return { countryCode: 'sa', region: 'KSA & UAE', assetClass: 'BNPL'              }
+  if (n.includes('tamara')) return { countryCode: ['sa', 'ae'], region: 'KSA & UAE', assetClass: 'BNPL'     }
   return { countryCode: null, region: '', assetClass: '' }
 }
 
@@ -88,21 +88,20 @@ export default function Home() {
       )
       setCompanies(normalized)
 
-      // Fetch summaries in parallel (for stats hero + card metrics)
+      // Fetch summaries in parallel — ALL products, not just first (for multi-product cards)
       const result = {}
-      await Promise.allSettled(normalized.map(async co => {
-        const product = co.products?.[0]
-        if (!product) return
-        try {
-          const snaps    = await getSnapshots(co.name, product)
-          const last     = snaps?.[snaps.length - 1]
-          const snapFile = last?.filename ?? last ?? null
-          const summary  = await getSummary(co.name, product, snapFile, 'USD')
-          result[`${co.name}:${product}`] = summary
-        } catch (_) {
-          // summary fetch failed — card will show dashes
-        }
-      }))
+      const fetchJobs = normalized.flatMap(co =>
+        (co.products || []).map(async product => {
+          try {
+            const snaps    = await getSnapshots(co.name, product)
+            const last     = snaps?.[snaps.length - 1]
+            const snapFile = last?.filename ?? last ?? null
+            const summary  = await getSummary(co.name, product, snapFile, 'USD')
+            result[`${co.name}:${product}`] = summary
+          } catch (_) {}
+        })
+      )
+      await Promise.allSettled(fetchJobs)
       setSummaries(result)
     })
   }, [])
@@ -183,16 +182,23 @@ export default function Home() {
           gap: 16,
           marginBottom: 52,
         }}>
-          {companies.map((co, i) => (
+          {companies.map((co, i) => {
+            // Collect summaries for ALL products (for multi-product carousel)
+            const productSummaries = (co.products || []).map(p => ({
+              product: p,
+              summary: summaries[`${co.name}:${p}`],
+            })).filter(ps => ps.summary)
+            return (
             <CompanyCard
               key={co.name}
               company={co}
               summary={summaries[`${co.name}:${co.products?.[0]}`]}
+              productSummaries={productSummaries}
               index={i}
               onClick={() => handleOpen(co)}
               isMobile={isMobile}
             />
-          ))}
+          )})}
           {companies.length === 0 && <EmptyState />}
         </div>
 
@@ -285,17 +291,30 @@ function CardRow({ label, children, loading }) {
 }
 
 // ── Company card ─────────────────────────────────────────────────────────────
-function CompanyCard({ company, summary, index, onClick, isMobile }) {
+function CompanyCard({ company, summary, productSummaries = [], index, onClick, isMobile }) {
   const [hovered, setHovered] = useState(false)
+  const [carouselIdx, setCarouselIdx] = useState(0)
   const safeName = typeof company.name === 'string' ? company.name : String(company.name ?? '')
   const initials = safeName.slice(0, 2).toUpperCase()
   const meta     = getCompanyMeta(safeName)
+  const isMultiProduct = productSummaries.length > 1
 
-  const faceValue = summary?.total_purchase_value != null
-    ? `$${(summary.total_purchase_value / 1_000_000).toFixed(0)}M`
+  // Auto-rotate carousel for multi-product companies
+  useEffect(() => {
+    if (!isMultiProduct || hovered) return
+    const timer = setInterval(() => setCarouselIdx(i => (i + 1) % productSummaries.length), 3500)
+    return () => clearInterval(timer)
+  }, [isMultiProduct, hovered, productSummaries.length])
+
+  // Active product summary for carousel
+  const activePS = isMultiProduct ? productSummaries[carouselIdx] : null
+  const activeSummary = activePS?.summary || summary
+
+  const faceValue = activeSummary?.total_purchase_value != null
+    ? `$${(activeSummary.total_purchase_value / 1_000_000).toFixed(0)}M`
     : null
-  const deals     = summary?.total_deals != null
-    ? summary.total_deals.toLocaleString()
+  const deals     = activeSummary?.total_deals != null
+    ? activeSummary.total_deals.toLocaleString()
     : null
   const since     = fmtSince(company.since)
 
@@ -373,7 +392,7 @@ function CompanyCard({ company, summary, index, onClick, isMobile }) {
           </div>
         </div>
 
-        {/* Country flag + region */}
+        {/* Country flag(s) + region */}
         {meta.region && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 5,
@@ -382,14 +401,18 @@ function CompanyCard({ company, summary, index, onClick, isMobile }) {
             borderRadius: 20, padding: '3px 9px',
             flexShrink: 0,
           }}>
-            {meta.countryCode && (
-              <img
-                src={`https://flagcdn.com/16x12/${meta.countryCode}.png`}
-                width="16" height="12"
-                alt={meta.region}
-                style={{ borderRadius: 2, display: 'block' }}
-              />
-            )}
+            {Array.isArray(meta.countryCode)
+              ? meta.countryCode.map(cc => (
+                  <img key={cc} src={`https://flagcdn.com/16x12/${cc}.png`}
+                    width="16" height="12" alt={cc}
+                    style={{ borderRadius: 2, display: 'block' }} />
+                ))
+              : meta.countryCode && (
+                  <img src={`https://flagcdn.com/16x12/${meta.countryCode}.png`}
+                    width="16" height="12" alt={meta.region}
+                    style={{ borderRadius: 2, display: 'block' }} />
+                )
+            }
             <span style={{
               fontSize: 9, fontWeight: 600,
               textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -401,22 +424,64 @@ function CompanyCard({ company, summary, index, onClick, isMobile }) {
         )}
       </div>
 
-      {/* Row 1 — Tape Analytics */}
-      <CardRow label="Tape Analytics" loading={!summary}>
-        <CardStat value={faceValue} label="Face Value" color="var(--gold)" />
-        <CardDivider />
-        <CardStat value={deals}     label="Deals"      color="var(--gold)" />
-        <CardDivider />
-        <CardStat value={since}     label="Since"      color="var(--gold)" />
-      </CardRow>
+      {/* Row 1 — Tape Analytics (with carousel for multi-product) */}
+      <div style={{ position: 'relative', overflow: 'hidden' }}>
+        {isMultiProduct && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 4, paddingRight: 4,
+          }}>
+            <span style={{
+              fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.12em', color: 'var(--gold)', opacity: 0.7,
+            }}>
+              {activePS?.product || ''}
+            </span>
+            {/* Dot indicators */}
+            <div style={{ display: 'flex', gap: 4 }}>
+              {productSummaries.map((_, di) => (
+                <div key={di} onClick={(e) => { e.stopPropagation(); setCarouselIdx(di) }}
+                  style={{
+                    width: 6, height: 6, borderRadius: '50%', cursor: 'pointer',
+                    background: di === carouselIdx ? 'var(--gold)' : 'var(--border)',
+                    transition: 'background 0.2s',
+                  }} />
+              ))}
+            </div>
+          </div>
+        )}
+        <motion.div
+          key={isMultiProduct ? carouselIdx : 'single'}
+          initial={isMultiProduct ? { opacity: 0, x: 20 } : false}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <CardRow label={isMultiProduct ? null : "Tape Analytics"} loading={!activeSummary}>
+            <CardStat value={faceValue} label="Face Value" color="var(--gold)" />
+            <CardDivider />
+            <CardStat value={deals}     label={isMultiProduct ? 'Vintages' : 'Deals'} color="var(--gold)" />
+            <CardDivider />
+            <CardStat value={since}     label="Since"      color="var(--gold)" />
+          </CardRow>
+        </motion.div>
+      </div>
 
-      {/* Row 2 — Live Portfolio */}
-      <CardRow label="Live Portfolio">
-        <CardStat value="—" label="Borr. Base"  color="var(--text-faint)" />
-        <CardDivider />
-        <CardStat value="—" label="PAR 30+"     color="var(--text-faint)" />
-        <CardDivider />
-        <CardStat value="—" label="Covenants"   color="var(--text-faint)" />
+      {/* Row 2 — Live Portfolio / Facility (context-aware) */}
+      <CardRow label={isMultiProduct ? "Facility" : "Live Portfolio"}>
+        {isMultiProduct ? (<>
+          <CardStat value={activeSummary?.facility_limit ? `$${(activeSummary.facility_limit / 1e9).toFixed(1)}B` : '--'} label="Limit" color="var(--teal)" />
+          <CardDivider />
+          <CardStat value={activeSummary?.merchants ? `${(activeSummary.merchants / 1e3).toFixed(0)}K` : '--'} label="Merchants" color="var(--teal)" />
+          <CardDivider />
+          <CardStat value={activeSummary?.registered_users ? `${(activeSummary.registered_users / 1e6).toFixed(0)}M` : '--'} label="Users" color="var(--teal)" />
+        </>) : (<>
+          <CardStat value="--" label="Borr. Base"  color="var(--text-faint)" />
+          <CardDivider />
+          <CardStat value="--" label="PAR 30+"     color="var(--text-faint)" />
+          <CardDivider />
+          <CardStat value="--" label="Covenants"   color="var(--text-faint)" />
+        </>)}
       </CardRow>
 
       {/* Footer */}
