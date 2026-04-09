@@ -26,7 +26,11 @@ def get_snapshots(company, product):
     product_path = os.path.join(DATA_DIR, company, product)
     snapshots = []
     
+    # Known non-data files to exclude from snapshot discovery
+    _EXCLUDE = {'config.json', 'methodology.json'}
     for file in os.listdir(product_path):
+        if file in _EXCLUDE:
+            continue
         if file.endswith('.csv') or file.endswith('.xlsx') or file.endswith('.ods') or file.endswith('.json'):
             filepath = os.path.join(product_path, file)
             snapshots.append({
