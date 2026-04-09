@@ -300,15 +300,21 @@ function CompanyCard({ company, summary, productSummaries = [], index, onClick, 
   const isMultiProduct = productSummaries.length > 1
 
   // Auto-rotate carousel for multi-product companies
+  // Uses a ref to avoid re-creating interval on every render
+  const productCount = productSummaries.length
   useEffect(() => {
-    if (!isMultiProduct || hovered) return
-    const timer = setInterval(() => setCarouselIdx(i => (i + 1) % productSummaries.length), 3500)
+    if (productCount <= 1 || hovered) return
+    const timer = setInterval(() => setCarouselIdx(i => (i + 1) % productCount), 3500)
     return () => clearInterval(timer)
-  }, [isMultiProduct, hovered, productSummaries.length])
+  }, [productCount, hovered])
 
   // Active product summary for carousel
   const activePS = isMultiProduct ? productSummaries[carouselIdx] : null
   const activeSummary = activePS?.summary || summary
+
+  // Use custom labels from summary if provided (Tamara returns face_value_label, deals_label)
+  const fvLabel   = activeSummary?.face_value_label || 'Face Value'
+  const dlLabel   = activeSummary?.deals_label || 'Deals'
 
   const faceValue = activeSummary?.total_purchase_value != null
     ? `$${(activeSummary.total_purchase_value / 1_000_000).toFixed(0)}M`
@@ -458,9 +464,9 @@ function CompanyCard({ company, summary, productSummaries = [], index, onClick, 
           transition={{ duration: 0.3 }}
         >
           <CardRow label={isMultiProduct ? null : "Tape Analytics"} loading={!activeSummary}>
-            <CardStat value={faceValue} label="Face Value" color="var(--gold)" />
+            <CardStat value={faceValue} label={fvLabel} color="var(--gold)" />
             <CardDivider />
-            <CardStat value={deals}     label={isMultiProduct ? 'Vintages' : 'Deals'} color="var(--gold)" />
+            <CardStat value={deals}     label={dlLabel} color="var(--gold)" />
             <CardDivider />
             <CardStat value={since}     label="Since"      color="var(--gold)" />
           </CardRow>

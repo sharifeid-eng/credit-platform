@@ -293,7 +293,7 @@ def get_aggregate_stats():
     FX = {'AED': rates.get('AED', 0.2723), 'SAR': rates.get('SAR', 0.2667)}
 
     # Schema version — bump this whenever the stats fields change
-    STATS_SCHEMA_VERSION = "4"
+    STATS_SCHEMA_VERSION = "5"  # v5: exclude Tamara outstanding from face value sum
 
     # Build fingerprint from schema version + all snapshot filenames
     all_snap_ids = [f"schema:{STATS_SCHEMA_VERSION}"]
@@ -356,6 +356,9 @@ def get_aggregate_stats():
                     continue
 
                 if analysis_type == 'tamara_summary':
+                    # Tamara has outstanding AR (point-in-time), NOT total originated.
+                    # Do NOT add to total_value_usd (which is "Face Value Analyzed" = originated).
+                    # Only count data points and vintage records.
                     try:
                         import json as _json
                         with open(snap['filepath'], 'r', encoding='utf-8') as _f:
@@ -363,8 +366,7 @@ def get_aggregate_stats():
                         fdd = tdata.get('deloitte_fdd', {})
                         ts = fdd.get('dpd_timeseries', [])
                         total_data_points += len(ts) * 12  # ~12 DPD buckets per month
-                        if ts and i == len(snaps) - 1:
-                            total_value_usd += float(ts[-1].get('total_pending', 0) or 0) * fx
+                        # NOT adding to total_value_usd — outstanding != originated
                         vp = tdata.get('vintage_performance', {})
                         for metric_data in vp.values():
                             if isinstance(metric_data, dict):
