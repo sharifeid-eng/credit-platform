@@ -3,6 +3,44 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-10 (session 5: Research Hub + Living Mind + Memo Engine)
+- [x] **Phase 1: Foundation** — Data Room Engine, Living Mind, Analytics Snapshots, Frontend skeleton
+  - `core/dataroom/` (12 files, 3,500 lines) — engine, parsers (PDF/Excel/CSV/JSON/DOCX/ODS), chunker, classifier, analytics_snapshot
+  - `core/mind/` (3 files, 1,627 lines) — MasterMind (fund-level), CompanyMind (per-company), build_mind_context() 4-layer injector
+  - Frontend: DocumentLibrary.jsx, ResearchChat.jsx, MemoArchive.jsx placeholder
+  - Sidebar.jsx: Research section added (3 nav items)
+  - App.jsx: 6 research routes added
+  - api.js: 4 research API functions
+  - Master Mind seeded from CLAUDE.md + ANALYSIS_FRAMEWORK.md
+  - Mind context wired into ALL 4 `_build_*_full_context()` functions in main.py
+- [x] **Phase 2: Research Intelligence** — Dual-engine queries, NotebookLM integration
+  - `core/research/` (6 files, 1,917 lines) — ClaudeQueryEngine, DualResearchEngine, ResearchSynthesizer, NotebookLMEngine, extractors
+  - `notebooklm-py` installed and authenticated (9 notebooks detected)
+  - `scikit-learn` installed for TF-IDF search
+  - 15+ backend endpoints for dataroom, research, mind
+- [x] **Phase 3: IC Memo Engine** — Templates, generation, versioning, PDF export
+  - `core/memo/` (6 files, 2,797 lines) — templates (4 IC types), analytics_bridge, generator, storage, pdf_export
+  - Frontend: MemoBuilder.jsx (4-step wizard), MemoEditor.jsx, MemoArchive.jsx (real data)
+  - 10+ memo endpoints in main.py
+- [x] **Legal Analysis merge** — Merged `claude/nervous-bardeen` into Research Hub
+  - 3 merge conflicts resolved (main.py, App.jsx, api.js)
+  - Legal findings seeded into Klaim Company Mind (6 data quality, 4 findings, 2 IC feedback)
+  - Legal analysis doc registered in data room (18 chunks, searchable)
+  - Master Mind updated with legal methodology preferences
+- [x] **Assessment + P0 fixes** — Full audit, scored 5.6→6.9/10 after fixes
+  - Registry format conflict fixed (AnalyticsSnapshotEngine → dict format)
+  - Directory exclusion added (prevents self-referential ingestion)
+  - CSV tape classifier fixed (date-named files → portfolio_tape)
+  - sklearn installed for TF-IDF search
+- [x] **Documentation finalization**
+  - ANALYSIS_FRAMEWORK.md: sections 16-20 (Living Mind, Legal, Data Room, Research Hub, Memos)
+  - FRAMEWORK_INDEX.md: 3 new commands, 3 new principles
+  - CLAUDE.md: comprehensive updates across all sections
+  - .gitignore: dataroom chunks/index, mind JSONL, .notebooklm excluded
+- **Total: 27+ new Python modules, 14 React files, ~17,000 lines of new code, 156 tests passing**
+
+---
+
 ## Completed — 2026-04-07 (session 4)
 - [x] Legal Analysis — third analytical pillar (AI-powered facility agreement analysis)
   - `core/legal_schemas.py` — Pydantic models (FacilityTerms, EligibilityCriterion, AdvanceRate, ConcentrationLimit, FinancialCovenant, EventOfDefault, ReportingRequirement, RiskFlag, LegalExtractionResult)

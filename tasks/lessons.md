@@ -3,6 +3,36 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-10 — Registry format must be consistent across all engines writing to the same file
+**Mistake:** `AnalyticsSnapshotEngine` wrote `registry.json` as `list[dict]` while `DataRoomEngine` expected `dict[str, dict]`. Running both on the same company corrupted the registry — all DataRoomEngine operations (catalog, search, stats) crashed with `AttributeError: 'list' object has no attribute 'items'`.
+**Rule:** When multiple modules read/write the same file, they MUST use the same schema. Either: (1) share a common `_load_registry`/`_save_registry`, (2) add a migration path in the reader (handle both old and new formats), or (3) use separate files. We chose option (2): the snapshot engine now auto-migrates list→dict on read.
+
+---
+
+## 2026-04-10 — Data room ingestion must exclude its own output directories
+**Mistake:** `DataRoomEngine.ingest()` recursively scanned a directory and ingested files inside `dataroom/chunks/` — its own output. This created self-referential documents (chunk metadata tables appearing as searchable content), polluting search results and inflating document counts.
+**Rule:** Any recursive file scanner MUST exclude directories it writes to. Add `_EXCLUDE_DIRS = {"dataroom", "mind", "__pycache__"}` and check path parts during traversal. More generally: write paths and read paths should never overlap without explicit exclusion.
+
+---
+
+## 2026-04-10 — Living Mind methodology layer requires registration at startup
+**Mistake:** `build_mind_context()` Layer 3 (Methodology) returned empty during standalone tests. The methodology data only exists after `register_klaim_methodology()` is called at import time by `main.py`. Standalone scripts don't trigger this registration.
+**Rule:** The metric registry is populated at import time via explicit `register_*()` calls in `main.py`. Any code that reads from the registry outside of the FastAPI app (scripts, tests, CLI) must call the registration functions first. This is by design — not a bug — but should be documented.
+
+---
+
+## 2026-04-10 — NotebookLM Python API is fully async with context manager
+**Mistake:** First attempts to use `notebooklm-py` failed: `NotebookLMClient()` requires `auth` parameter, methods are coroutines needing `await`, and the client requires `async with` context manager. Took 5 attempts to find the correct pattern: `client = await NotebookLMClient.from_storage(); async with client: ...`
+**Rule:** When integrating a new third-party library, inspect its API surface (`dir(module)`, `inspect.signature()`) before writing integration code. For async libraries called from sync code, use `asyncio.run()` with a wrapper function, and handle the "event loop already running" case via `ThreadPoolExecutor`.
+
+---
+
+## 2026-04-10 — Parallel worktree sessions need careful merge planning
+**Mistake:** Two Claude sessions (Research Hub + Legal Analysis) worked in parallel on different worktrees, both modifying `main.py`, `Sidebar.jsx`, `App.jsx`, and `api.js`. Merge required resolving 3 conflicts.
+**Rule:** When running parallel worktree sessions: (1) document which files each session will modify upfront, (2) have the session with fewer shared-file changes commit first, (3) use the handoff prompt pattern to transfer context between sessions. The merge was clean because both sessions added to different sections — additive changes merge well, overlapping edits don't.
+
+---
+
 ## 2026-04-09 — Summary endpoint must pass through ALL fields from KPI builder, not cherry-pick
 **Mistake:** `get_tamara_summary_kpis()` returned `face_value_label` and `deals_label` fields, but the `/summary` endpoint hardcoded a return dict that only picked specific fields (`total_deals`, `total_purchase_value`, `facility_limit`, etc.) and didn't include the label fields. The frontend received no label overrides and fell back to "Face Value" / "Deals".
 **Rule:** When adding new fields to a KPI builder function, always check the endpoint that consumes it — if the endpoint constructs a hardcoded return dict (not `**kpis`), the new fields won't pass through. Either use `**kpis` spread or explicitly add every new field. Grep for the field name in the endpoint response to verify it's included.
