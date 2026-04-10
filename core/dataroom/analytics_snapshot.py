@@ -628,7 +628,7 @@ class AnalyticsSnapshotEngine:
         )
 
         results: list[dict] = []
-        for doc in registry:
+        for doc_id, doc in registry.items():
             dtype = doc.get("doc_type", "")
             if not any(dtype.startswith(p) for p in analytics_prefix):
                 continue
@@ -716,25 +716,28 @@ class AnalyticsSnapshotEngine:
         else:
             safe_content = _make_serialisable(content)
 
-        # --- De-duplicate against existing registry ---
+        # --- De-duplicate against existing registry (dict format) ---
         registry = self._load_registry(company, product)
-        existing_idx: int | None = None
-        for i, existing in enumerate(registry):
+        existing_id: str | None = None
+        for doc_id, existing in registry.items():
             if (
                 existing.get("doc_type") == doc["doc_type"]
                 and existing.get("snapshot_date") == doc.get("snapshot_date")
                 and existing.get("tab_slug", None) == doc.get("tab_slug", None)
             ):
-                existing_idx = i
+                existing_id = doc_id
                 break
 
-        if existing_idx is not None:
+        if existing_id is not None:
             # Update in place: keep old id, update content + metadata
-            old_id = registry[existing_idx]["id"]
-            doc["id"] = old_id
-            registry[existing_idx] = doc
+            doc["id"] = existing_id
+            doc["doc_id"] = existing_id
+            registry[existing_id] = doc
         else:
-            registry.append(doc)
+            doc_id = doc.get("id") or doc.get("doc_id") or str(uuid.uuid4())[:12]
+            doc["doc_id"] = doc_id
+            doc["id"] = doc_id
+            registry[doc_id] = doc
 
         # --- Write content JSON ---
         content_path = analytics_dir / f"{doc['id']}.json"
@@ -915,23 +918,36 @@ class AnalyticsSnapshotEngine:
     def _registry_path(self, company: str, product: str) -> Path:
         return self._dataroom_dir(company, product) / "registry.json"
 
-    def _load_registry(self, company: str, product: str) -> list[dict]:
-        """Load the document registry. Returns empty list if not found."""
+    def _load_registry(self, company: str, product: str) -> dict:
+        """Load the document registry as dict keyed by doc_id.
+
+        Matches DataRoomEngine format: {doc_id: {record...}, ...}
+        Handles migration from old list format if encountered.
+        """
         path = self._registry_path(company, product)
         if not path.exists():
-            return []
+            return {}
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return data if isinstance(data, list) else []
+            if isinstance(data, dict):
+                return data
+            # Migrate from old list format
+            if isinstance(data, list):
+                migrated = {}
+                for item in data:
+                    doc_id = item.get("id") or item.get("doc_id") or str(uuid.uuid4())[:12]
+                    item["doc_id"] = doc_id
+                    migrated[doc_id] = item
+                return migrated
+            return {}
         except (json.JSONDecodeError, OSError):
-            return []
+            return {}
 
-    def _save_registry(self, company: str, product: str, registry: list[dict]) -> None:
-        """Persist the registry to disk."""
+    def _save_registry(self, company: str, product: str, registry: dict) -> None:
+        """Persist the registry to disk as dict keyed by doc_id."""
         path = self._registry_path(company, product)
         path.parent.mkdir(parents=True, exist_ok=True)
-        # Make everything serialisable before writing
         safe = _make_serialisable(registry)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(safe, f, indent=2, ensure_ascii=False, default=str)

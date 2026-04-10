@@ -77,12 +77,19 @@ _SUPPORTED_EXTENSIONS = {
 # Files to exclude from data room ingestion (config files, not data)
 _EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json"}
 
+# Directories to skip during recursive scan (prevents self-referential ingestion)
+_EXCLUDE_DIRS = {"dataroom", "__pycache__", "node_modules", ".git", "mind"}
+
 
 def _is_supported(filepath: str) -> bool:
     """Check if a file has a supported extension for parsing."""
     p = Path(filepath)
     if p.name in _EXCLUDE_FILENAMES:
         return False
+    # Skip files inside excluded directories
+    for part in p.parts:
+        if part in _EXCLUDE_DIRS:
+            return False
     return p.suffix.lower() in _SUPPORTED_EXTENSIONS
 
 
