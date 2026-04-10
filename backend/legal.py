@@ -31,6 +31,7 @@ from core.legal_compliance import (
     build_compliance_comparison,
     build_legal_context_for_executive_summary,
 )
+from core.activity_log import log_activity, LEGAL_UPLOAD, LEGAL_EXTRACTION
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +62,10 @@ async def upload_legal_document(
 
     file_size = len(content)
     logger.info(f"Uploaded legal document: {file_path} ({file_size} bytes)")
+    log_activity(LEGAL_UPLOAD, company, product, f"Uploaded legal doc: {file.filename} ({file_size} bytes)")
 
     # Trigger background extraction
-    background_tasks.add_task(_background_extract, file_path, document_type)
+    background_tasks.add_task(_background_extract, file_path, document_type, company, product)
 
     return {
         'filename': file.filename,
@@ -75,12 +77,13 @@ async def upload_legal_document(
     }
 
 
-def _background_extract(file_path: str, document_type: str):
+def _background_extract(file_path: str, document_type: str, company: str = None, product: str = None):
     """Run extraction in background task."""
     try:
         logger.info(f"Background extraction starting: {file_path}")
         extract_legal_terms(file_path, document_type=document_type, refresh=True)
         logger.info(f"Background extraction complete: {file_path}")
+        log_activity(LEGAL_EXTRACTION, company, product, f"Extracted terms from: {os.path.basename(file_path)}")
     except Exception as e:
         logger.error(f"Background extraction failed: {file_path}: {e}")
 

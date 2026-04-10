@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.loader import get_companies, get_products, get_snapshots, load_snapshot, load_silq_snapshot
 from core.config import load_config, SUPPORTED_CURRENCIES
+from core.activity_log import log_activity, AI_COMMENTARY, AI_EXECUTIVE_SUMMARY, AI_TAB_INSIGHT, AI_CHAT, REPORT_GENERATED, COMPLIANCE_CERT, BREACH_NOTIFICATION, FACILITY_PARAMS_SAVED, DATAROOM_INGEST, MEMO_GENERATED, MEMO_EXPORTED, MIND_ENTRY_RECORDED, RESEARCH_QUERY, LEGAL_UPLOAD
 from core.analysis import (
     compute_summary, compute_deployment, compute_deployment_by_product,
     compute_collection_velocity,
@@ -1420,6 +1421,7 @@ Professional tone, suitable for an investment committee memo. Be specific and da
         'as_of_date':   as_of_date or sel.get('date', ''),
     }
     _ai_cache_put(cache_path, result)
+    log_activity(AI_COMMENTARY, company, product, f"Generated AI commentary for {snap_key}")
     return result
 
 
@@ -2150,6 +2152,7 @@ Return ONLY the JSON object, no other text."""
         'context_coverage': n_metrics,
     }
     _ai_cache_put(cache_path, result)
+    log_activity(AI_EXECUTIVE_SUMMARY, company, product, f"Generated executive summary for {snap_key}")
     return result
 
 
@@ -2265,6 +2268,7 @@ Be direct and specific — no generic commentary. No headers, just prose."""
     )
     result = {'insight': msg.content[0].text, 'tab': tab}
     _ai_cache_put(cache_path, result)
+    log_activity(AI_TAB_INSIGHT, company, product, f"Generated tab insight: {tab}")
     return result
 
 @app.post("/companies/{company}/products/{product}/chat")
@@ -2469,6 +2473,7 @@ INSTRUCTIONS:
         model="claude-opus-4-6", max_tokens=1000,
         system=system, messages=msgs
     )
+    log_activity(AI_CHAT, company, product, f"Chat: {request.get('question', '')[:80]}")
     return {'answer': resp.content[0].text, 'question': request.get('question', '')}
 
 
@@ -2534,6 +2539,7 @@ INSTRUCTIONS:
         model="claude-opus-4-6", max_tokens=1000,
         system=system, messages=msgs
     )
+    log_activity(AI_CHAT, company, product, f"Chat: {request.get('question', '')[:80]}")
     return {'answer': resp.content[0].text, 'question': request.get('question', '')}
 # ── Portfolio Analytics endpoints ─────────────────────────────────────────────
 
@@ -2869,6 +2875,7 @@ def save_facility_params(company: str, product: str, request: dict):
     with open(path, 'w') as f:
         json.dump(params, f, indent=2)
 
+    log_activity(FACILITY_PARAMS_SAVED, company, product, f"Updated facility params: {', '.join(params.keys())}")
     return {'saved': True, 'params': params}
 
 
@@ -2913,6 +2920,7 @@ def generate_compliance_certificate(company: str, product: str,
     )
 
     filename = f"BBC_{company}_{product}_{sel['date']}.pdf"
+    log_activity(COMPLIANCE_CERT, company, product, f"Generated compliance cert: {filename}")
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type='application/pdf',
@@ -2996,6 +3004,7 @@ def notify_breaches(company: str, product: str,
     if status != 200:
         raise HTTPException(status_code=502, detail=f'Slack returned HTTP {status}')
 
+    log_activity(BREACH_NOTIFICATION, company, product, f"Sent Slack alert: {total_breach} breach(es)")
     return {
         'sent': True,
         'breach_count': total_breach,
@@ -3003,7 +3012,6 @@ def notify_breaches(company: str, product: str,
         'concentration_breaches': len(breach_concs),
         'snapshot': sel['date'],
     }
-
 
 # ── Portfolio Dashboard Data endpoints ───────────────────────────────────────
 
@@ -3228,6 +3236,7 @@ def generate_pdf_report(company: str, product: str, request: dict = {}):
         os.unlink(tmp.name)
         raise HTTPException(status_code=504, detail="Report generation timed out (>3 min)")
 
+    log_activity(REPORT_GENERATED, company, product, f"Generated PDF report: {filename}")
     from starlette.background import BackgroundTask
     return FileResponse(
         tmp.name,
@@ -3363,6 +3372,7 @@ def dataroom_ingest(company: str, product: str, source_dir: Optional[str] = None
                               detail=f"No data room directory found for {company}. Provide source_dir parameter.")
 
     result = _dataroom_engine.ingest(company, product, source_dir)
+    log_activity(DATAROOM_INGEST, company, product, f"Ingested data room: {result.get('documents_ingested', '?')} documents")
     return result
 
 
@@ -3417,6 +3427,7 @@ def research_query(company: str, product: str, question: str,
         use_notebooklm=use_notebooklm,
         include_analytics=include_analytics,
     )
+    log_activity(RESEARCH_QUERY, company, product, f"Research: {question[:80]}")
     return result
 
 
@@ -3492,6 +3503,7 @@ def mind_record(company: str, product: str,
                           detail=f"Unknown category: {category}. "
                                  f"Valid: correction, finding, ic_feedback, data_quality, session_lesson")
 
+    log_activity(MIND_ENTRY_RECORDED, company, product, f"Recorded {category}: {content[:60]}")
     return {'recorded': True, 'entry_id': entry.id, 'category': entry.category}
 
 
@@ -3583,6 +3595,7 @@ def generate_memo(company: str, product: str, body: dict = {}):
         memo_id = _memo_storage.save(memo)
         memo['id'] = memo_id
 
+        log_activity(MEMO_GENERATED, company, product, f"Generated {template_key} memo: {memo_id}")
         return memo
 
     except Exception as e:
@@ -3676,6 +3689,7 @@ def export_memo_to_pdf(company: str, product: str, memo_id: str):
         pdf_bytes = export_memo_pdf(memo, company, product)
         from fastapi.responses import Response
         filename = f"{company}_{product}_{memo.get('template', 'memo')}_{memo_id[:8]}.pdf"
+        log_activity(MEMO_EXPORTED, company, product, f"Exported memo PDF: {filename}")
         return Response(
             content=pdf_bytes,
             media_type='application/pdf',
