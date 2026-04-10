@@ -61,6 +61,15 @@ from core.portfolio import (
 from core.database import engine, get_db
 from core.db_loader import has_db_data, load_from_db, get_facility_config as db_facility_config
 from backend.integration import router as integration_router
+from core.dataroom.engine import DataRoomEngine
+from core.dataroom.analytics_snapshot import AnalyticsSnapshotEngine
+from core.mind import MasterMind, CompanyMind, build_mind_context
+from core.research.dual_engine import DualResearchEngine
+from core.research.extractors import extract_insights
+from core.memo.templates import get_template, list_templates
+from core.memo.generator import MemoGenerator
+from core.memo.storage import MemoStorage
+from core.memo.pdf_export import export_memo_pdf
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
@@ -1605,6 +1614,17 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
     except Exception:
         pass
 
+    # Inject Living Mind context (Layer 2 + Layer 4)
+    try:
+        mind_ctx = build_mind_context('klaim', config.get('product', 'UAE_healthcare'),
+                                       'executive_summary', analysis_type='klaim')
+        if not mind_ctx.is_empty:
+            sections.append("")
+            sections.append("PLATFORM MEMORY:")
+            sections.append(mind_ctx.formatted)
+    except Exception:
+        pass
+
     return '\n'.join(sections)
 
 
@@ -1675,6 +1695,17 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
         if bands:
             tb_str = ', '.join([f"{b.get('band','?')}: {b.get('count',0)} loans" for b in bands[:4]])
             sections.append(f"TENURE DISTRIBUTION: {tb_str}")
+    except Exception:
+        pass
+
+    # Inject Living Mind context (Layer 2 + Layer 4)
+    try:
+        mind_ctx = build_mind_context('SILQ', config.get('product', 'KSA'),
+                                       'executive_summary', analysis_type='silq')
+        if not mind_ctx.is_empty:
+            sections.append("")
+            sections.append("PLATFORM MEMORY:")
+            sections.append(mind_ctx.formatted)
     except Exception:
         pass
 
@@ -1793,6 +1824,17 @@ def _build_tamara_full_context(data):
     if hsbc:
         sections.append(f"HSBC REPORTS: {len(hsbc)} monthly investor reports available")
 
+    # Inject Living Mind context (Layer 2 + Layer 4)
+    try:
+        mind_ctx = build_mind_context('Tamara', 'KSA',
+                                       'executive_summary', analysis_type='tamara_summary')
+        if not mind_ctx.is_empty:
+            sections.append("")
+            sections.append("PLATFORM MEMORY:")
+            sections.append(mind_ctx.formatted)
+    except Exception:
+        pass
+
     return '\n'.join(sections)
 
 
@@ -1893,6 +1935,17 @@ def _build_ejari_full_context(data):
     if recent_hist:
         h_str = ', '.join([f"{h.get('vintage', '?')}: gross_default={h.get('gross_default_pct', '?')}, LGD={h.get('lgd', '?')}" for h in recent_hist])
         sections.append(f"HISTORICAL PERFORMANCE: {h_str}")
+
+    # Inject Living Mind context (Layer 2 + Layer 4)
+    try:
+        mind_ctx = build_mind_context('Ejari', 'RNPL',
+                                       'executive_summary', analysis_type='ejari_summary')
+        if not mind_ctx.is_empty:
+            sections.append("")
+            sections.append("PLATFORM MEMORY:")
+            sections.append(mind_ctx.formatted)
+    except Exception:
+        pass
 
     return '\n'.join(sections)
 
@@ -3100,3 +3153,451 @@ def generate_pdf_report(company: str, product: str, request: dict = {}):
         filename=filename,
         background=BackgroundTask(os.unlink, tmp.name),
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Research Hub — Data Room, Research Intelligence, Living Mind
+# ══════════════════════════════════════════════════════════════════════════════
+
+_dataroom_engine = DataRoomEngine()
+_analytics_snapshot = AnalyticsSnapshotEngine()
+_research_engine = DualResearchEngine()
+_memo_generator = MemoGenerator()
+_memo_storage = MemoStorage()
+
+
+# ── Data Room endpoints ──────────────────────────────────────────────────────
+
+@app.post("/companies/{company}/products/{product}/dataroom/snapshot-analytics")
+def dataroom_snapshot_analytics(company: str, product: str,
+                                 snapshot: Optional[str] = None,
+                                 currency: Optional[str] = None):
+    """Snapshot current analytics (tape summary, PAR, DSO, etc.) into the data room.
+
+    This makes platform-computed analytics searchable alongside data room documents.
+    Call once per snapshot to capture the analytical state.
+    """
+    at = _get_analysis_type(company, product)
+
+    if at in ('ejari_summary', 'tamara_summary'):
+        # For read-only summaries, snapshot the parsed data
+        try:
+            snaps = get_snapshots(company, product)
+            if not snaps:
+                return {'snapshotted': 0, 'message': 'No snapshots found'}
+            snap_filename = snaps[-1]['filename']
+
+            if at == 'tamara_summary':
+                filepath = snaps[-1]['filepath']
+                if filepath not in _tamara_cache:
+                    _tamara_cache[filepath] = parse_tamara_data(filepath)
+                data = _tamara_cache[filepath]
+                docs = _analytics_snapshot.snapshot_ai_output(
+                    company, product, 'parsed_summary', data, snap_filename)
+                return {'snapshotted': 1 if docs else 0, 'snapshot': snap_filename}
+            else:
+                return {'snapshotted': 0, 'message': 'Ejari snapshot not yet supported'}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # For tape-based companies (Klaim, SILQ): snapshot key analytics
+    try:
+        if at == 'silq':
+            df, sel, config, disp, mult, _, ref_date = _silq_load(company, product, snapshot, None, currency)
+            summary = compute_silq_summary(df, mult, ref_date=ref_date)
+            docs = _analytics_snapshot.snapshot_tape_analytics(
+                company, product, sel['filename'], summary=summary)
+        else:
+            df, sel = _load(company, product, snapshot)
+            config, disp = _currency(company, product, currency)
+            mult = apply_multiplier(config, disp)
+            summary = compute_summary(df, config, disp, sel['date'], None)
+
+            # Compute additional key analytics for the snapshot
+            par_data = None
+            dso_data = None
+            try:
+                par_data = compute_par(df, mult, None)
+            except Exception:
+                pass
+            try:
+                dso_data = compute_dso(df, mult, None)
+            except Exception:
+                pass
+
+            docs = _analytics_snapshot.snapshot_tape_analytics(
+                company, product, sel['filename'],
+                summary=summary, par=par_data, dso=dso_data)
+
+        return {'snapshotted': len(docs), 'snapshot': sel['filename']}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/companies/{company}/products/{product}/dataroom/analytics-timeline")
+def dataroom_analytics_timeline(company: str, product: str,
+                                  doc_type: Optional[str] = None):
+    """Get all analytics snapshots over time for trend analysis."""
+    return _analytics_snapshot.get_analytics_timeline(company, product, doc_type)
+
+
+@app.get("/companies/{company}/products/{product}/dataroom/documents")
+def dataroom_documents(company: str, product: str):
+    """List all ingested documents from the data room registry."""
+    return _dataroom_engine.catalog(company, product)
+
+
+@app.get("/companies/{company}/products/{product}/dataroom/stats")
+def dataroom_stats(company: str, product: str):
+    """Aggregate data room stats: total docs, chunks, pages, by type."""
+    return _dataroom_engine.get_stats(company, product)
+
+
+@app.get("/companies/{company}/products/{product}/dataroom/documents/{doc_id}")
+def dataroom_document_detail(company: str, product: str, doc_id: str):
+    """Get a single document with its chunks and metadata."""
+    result = _dataroom_engine.get_document(company, product, doc_id)
+    if result.get('error'):
+        raise HTTPException(status_code=404, detail=result['error'])
+    return result
+
+
+@app.post("/companies/{company}/products/{product}/dataroom/ingest")
+def dataroom_ingest(company: str, product: str, source_dir: Optional[str] = None):
+    """Scan and ingest a data room directory.
+
+    If source_dir not provided, uses a default path pattern based on company.
+    """
+    if not source_dir:
+        # Try common data room paths
+        candidates = [
+            os.path.join(os.path.expanduser('~'), 'OneDrive - Amwal Capital Partners',
+                        'Resources', 'Private Credit', company),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', company, product),
+        ]
+        source_dir = next((c for c in candidates if os.path.exists(c)), None)
+        if not source_dir:
+            raise HTTPException(status_code=400,
+                              detail=f"No data room directory found for {company}. Provide source_dir parameter.")
+
+    result = _dataroom_engine.ingest(company, product, source_dir)
+    return result
+
+
+@app.post("/companies/{company}/products/{product}/dataroom/upload")
+def dataroom_upload_file(company: str, product: str, filepath: str):
+    """Ingest a single file into the data room."""
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=400, detail=f"File not found: {filepath}")
+    result = _dataroom_engine.ingest_file(company, product, filepath)
+    if result.get('error'):
+        raise HTTPException(status_code=400, detail=result['error'])
+    return result
+
+
+@app.post("/companies/{company}/products/{product}/dataroom/refresh")
+def dataroom_refresh(company: str, product: str, source_dir: Optional[str] = None):
+    """Incremental re-scan of the data room directory."""
+    if not source_dir:
+        raise HTTPException(status_code=400, detail="source_dir parameter required for refresh")
+    result = _dataroom_engine.refresh(company, product, source_dir)
+    if result.get('error'):
+        raise HTTPException(status_code=400, detail=result['error'])
+    return result
+
+
+@app.get("/companies/{company}/products/{product}/dataroom/search")
+def dataroom_search(company: str, product: str, q: str, top_k: int = 10):
+    """Search across all ingested documents."""
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
+    return _dataroom_engine.search(company, product, q.strip(), top_k=min(top_k, 50))
+
+
+# ── Research Intelligence endpoints ──────────────────────────────────────────
+
+@app.post("/companies/{company}/products/{product}/research/query")
+def research_query(company: str, product: str, question: str,
+                   include_analytics: bool = True, top_k: int = 10,
+                   use_notebooklm: bool = True):
+    """Ask a question across all ingested documents using dual-engine research.
+
+    Primary: Claude RAG (internal chunks + analytics + mind context)
+    Secondary: NotebookLM (if available, runs in parallel for second opinion)
+    Synthesis: merges best insights from both engines
+
+    Falls back gracefully at each level if a component is unavailable.
+    """
+    result = _research_engine.query(
+        company=company,
+        product=product,
+        question=question,
+        use_notebooklm=use_notebooklm,
+        include_analytics=include_analytics,
+    )
+    return result
+
+
+@app.post("/companies/{company}/products/{product}/research/chat")
+def research_chat(company: str, product: str, body: dict = {}):
+    """Research chat endpoint — matches frontend postResearchChat() signature.
+    Body: {question: str, history: list}
+    """
+    question = body.get('question', '')
+    if not question or len(question.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Question required")
+    # Delegate to the query endpoint logic
+    return research_query(company, product, question.strip())
+
+
+# ── Living Mind endpoints ────────────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/mind/profile")
+def mind_profile(company: str, product: str):
+    """Get the company mind profile — synthesized knowledge about this company."""
+    cm = CompanyMind(company, product)
+    return cm.get_company_profile()
+
+
+@app.get("/companies/{company}/products/{product}/mind/context")
+def mind_context_preview(company: str, product: str,
+                          task_type: str = "executive_summary"):
+    """Preview what the 4-layer mind context looks like for a given task type."""
+    ctx = build_mind_context(company, product, task_type)
+    return {
+        'framework_length': len(ctx.framework),
+        'master_mind_length': len(ctx.master_mind),
+        'methodology_length': len(ctx.methodology),
+        'company_mind_length': len(ctx.company_mind),
+        'total_entries': ctx.total_entries,
+        'is_empty': ctx.is_empty,
+        'formatted_preview': ctx.formatted[:2000] if ctx.formatted else '',
+    }
+
+
+@app.post("/companies/{company}/products/{product}/mind/record")
+def mind_record(company: str, product: str,
+                category: str, content: str,
+                metadata: Optional[str] = None):
+    """Record an entry in the company mind.
+
+    category: correction, finding, ic_feedback, data_quality, session_lesson
+    """
+    cm = CompanyMind(company, product)
+    meta = json.loads(metadata) if metadata else {}
+
+    if category == 'correction':
+        entry = cm.record_correction(
+            meta.get('correction_category', 'general'),
+            meta.get('original', ''),
+            meta.get('corrected', content),
+            meta.get('reason', ''),
+        )
+    elif category == 'finding':
+        entry = cm.record_research_finding(
+            content,
+            confidence=meta.get('confidence', 'medium'),
+            source_docs=meta.get('source_docs', []),
+        )
+    elif category == 'ic_feedback':
+        entry = cm.record_ic_feedback(content, memo_id=meta.get('memo_id'))
+    elif category == 'data_quality':
+        entry = cm.record_data_quality_note(content, meta.get('tape_or_doc', ''))
+    elif category == 'session_lesson':
+        entry = cm.record_session_lesson(content, meta.get('lesson_category', 'general'))
+    else:
+        raise HTTPException(status_code=400,
+                          detail=f"Unknown category: {category}. "
+                                 f"Valid: correction, finding, ic_feedback, data_quality, session_lesson")
+
+    return {'recorded': True, 'entry_id': entry.id, 'category': entry.category}
+
+
+@app.get("/mind/master/context")
+def master_mind_context(task_type: str = "executive_summary"):
+    """Preview the master mind (fund-level) context."""
+    master = MasterMind()
+    ctx = master.get_context_for_prompt(task_type)
+    return {
+        'entry_count': ctx.entry_count,
+        'categories': ctx.categories_included,
+        'formatted_preview': ctx.formatted[:2000] if ctx.formatted else '',
+    }
+
+
+@app.post("/mind/master/record")
+def master_mind_record(category: str, content: str,
+                        source: Optional[str] = None,
+                        metadata: Optional[str] = None):
+    """Record an entry in the master mind (fund-level).
+
+    category: preference, cross_company, framework_evolution, ic_norm, writing_style
+    """
+    master = MasterMind()
+    meta = json.loads(metadata) if metadata else {}
+
+    if category == 'preference':
+        entry = master.record_analytical_preference(content, source or 'manual')
+    elif category == 'cross_company':
+        entry = master.record_cross_company_pattern(
+            content,
+            companies=meta.get('companies', []),
+            evidence=meta.get('evidence', ''),
+        )
+    elif category == 'framework_evolution':
+        entry = master.record_framework_evolution(content, meta.get('reason', ''), meta.get('date', ''))
+    elif category == 'ic_norm':
+        entry = master.record_ic_norm(content, meta.get('norm_category', 'general'))
+    elif category == 'writing_style':
+        entry = master.record_writing_style(content, source or 'manual')
+    else:
+        raise HTTPException(status_code=400,
+                          detail=f"Unknown category: {category}. "
+                                 f"Valid: preference, cross_company, framework_evolution, ic_norm, writing_style")
+
+    return {'recorded': True, 'entry_id': entry.id, 'category': entry.category}
+
+
+# ── Memo Engine endpoints ────────────────────────────────────────────────────
+
+@app.get("/memo-templates")
+def get_memo_templates():
+    """List all available IC memo templates."""
+    return list_templates()
+
+
+@app.get("/companies/{company}/products/{product}/memos")
+def list_company_memos(company: str, product: str, status: Optional[str] = None):
+    """List all memos for a company/product."""
+    return _memo_storage.list_memos(company=company, product=product, status=status)
+
+
+@app.post("/companies/{company}/products/{product}/memos/generate")
+def generate_memo(company: str, product: str, body: dict = {}):
+    """Generate a full IC memo using AI.
+
+    Body: {template: str, custom_sections: list[str] | null, title: str | null}
+    """
+    template_key = body.get('template', 'credit_memo')
+    custom_sections = body.get('custom_sections')
+    title = body.get('title')
+
+    tmpl = get_template(template_key)
+    if not tmpl:
+        raise HTTPException(status_code=400, detail=f"Unknown template: {template_key}")
+
+    try:
+        memo = _memo_generator.generate_full_memo(
+            company=company,
+            product=product,
+            template_key=template_key,
+            custom_sections=custom_sections,
+        )
+
+        if title:
+            memo['title'] = title
+
+        # Save to storage
+        memo_id = _memo_storage.save(memo)
+        memo['id'] = memo_id
+
+        return memo
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Memo generation failed: {str(e)[:500]}")
+
+
+@app.get("/companies/{company}/products/{product}/memos/{memo_id}")
+def get_memo_endpoint(company: str, product: str, memo_id: str,
+             version: Optional[int] = None):
+    """Get a memo (latest version by default)."""
+    memo = _memo_storage.load(company, product, memo_id, version=version)
+    if not memo or memo.get('error'):
+        raise HTTPException(status_code=404, detail=memo.get('error', 'Memo not found'))
+    return memo
+
+
+@app.get("/companies/{company}/products/{product}/memos/{memo_id}/versions")
+def list_memo_versions(company: str, product: str, memo_id: str):
+    """List all versions of a memo."""
+    memo = _memo_storage.load(company, product, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail='Memo not found')
+    return {'memo_id': memo_id, 'current_version': memo.get('version', 1),
+            'versions': list(range(1, memo.get('version', 1) + 1))}
+
+
+@app.patch("/companies/{company}/products/{product}/memos/{memo_id}/sections/{section_key}")
+def update_memo_section_endpoint(company: str, product: str, memo_id: str,
+                         section_key: str, body: dict = {}):
+    """Update a single section (creates new version)."""
+    content = body.get('content', '')
+    if not content:
+        raise HTTPException(status_code=400, detail="Content required")
+
+    result = _memo_storage.update_section(memo_id, section_key, content)
+    if not result or result.get('error'):
+        raise HTTPException(status_code=404, detail=result.get('error', 'Update failed'))
+
+    # Record the edit in the company mind for learning
+    try:
+        cm = CompanyMind(company, product)
+        cm.record_memo_edit(memo_id, section_key, '', content)
+    except Exception:
+        pass
+
+    return result
+
+
+@app.post("/companies/{company}/products/{product}/memos/{memo_id}/sections/{section_key}/regenerate")
+def regenerate_memo_section_endpoint(company: str, product: str, memo_id: str,
+                             section_key: str):
+    """Regenerate one section using AI while preserving the rest."""
+    memo = _memo_storage.load(company, product, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail='Memo not found')
+
+    try:
+        new_section = _memo_generator.regenerate_section(memo, section_key)
+        if not new_section:
+            raise HTTPException(status_code=500, detail="Section regeneration returned empty")
+
+        _memo_storage.update_section(memo_id, section_key, new_section.get('content', ''))
+        return new_section
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Regeneration failed: {str(e)[:500]}")
+
+
+@app.patch("/companies/{company}/products/{product}/memos/{memo_id}/status")
+def update_memo_status_endpoint(company: str, product: str, memo_id: str, body: dict = {}):
+    """Change memo status (draft->review->final->archived)."""
+    new_status = body.get('status', '')
+    valid = ('draft', 'review', 'final', 'archived')
+    if new_status not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {valid}")
+
+    result = _memo_storage.update_status(memo_id, new_status)
+    if not result or result.get('error'):
+        raise HTTPException(status_code=404, detail=result.get('error', 'Status update failed'))
+    return result
+
+
+@app.post("/companies/{company}/products/{product}/memos/{memo_id}/export-pdf")
+def export_memo_to_pdf(company: str, product: str, memo_id: str):
+    """Export a memo as a dark-themed PDF."""
+    memo = _memo_storage.load(company, product, memo_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail='Memo not found')
+
+    try:
+        pdf_bytes = export_memo_pdf(memo, company, product)
+        from fastapi.responses import Response
+        filename = f"{company}_{product}_{memo.get('template', 'memo')}_{memo_id[:8]}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type='application/pdf',
+            headers={'Content-Disposition': f'inline; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF export failed: {str(e)[:500]}")

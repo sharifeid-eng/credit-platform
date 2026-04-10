@@ -143,6 +143,44 @@ export default function Sidebar() {
       />
       <Divider />
 
+      {/* Research */}
+      <SectionHeader>Research</SectionHeader>
+      <NavItem
+        label="Document Library"
+        to={`${basePath}/research/library`}
+        active={location.pathname.includes('/research/library')}
+        icon={
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            <line x1="8" y1="7" x2="16" y2="7" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
+        }
+      />
+      <NavItem
+        label="Research Chat"
+        to={`${basePath}/research/chat`}
+        active={location.pathname.includes('/research/chat')}
+        icon={
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        }
+      />
+      <NavItem
+        label="Investment Memos"
+        to={`${basePath}/research/memos`}
+        active={location.pathname.includes('/research/memos')}
+        icon={
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+        }
+      />
+      <Divider />
+
       {/* Tape Analytics */}
       <SectionHeader>{hidePortfolio ? 'Analysis' : 'Tape Analytics'}</SectionHeader>
       {TAPE_TABS.map(t => (

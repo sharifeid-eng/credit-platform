@@ -203,6 +203,56 @@ export const notifyBreaches = (co, prod, snap, cur) =>
     { params: p(snap, cur) },
   ).then(r => r.data);
 
+// ── Research Hub (Data Room & Research Chat) ────────────────────────────────
+export const getDataroomDocuments = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/dataroom/documents`).then(r => r.data);
+export const getDataroomStats = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/dataroom/stats`).then(r => r.data);
+export const ingestDataroom = (co, prod) =>
+  api.post(`/companies/${co}/products/${prod}/dataroom/ingest`).then(r => r.data);
+export const postResearchChat = (co, prod, question, history = []) =>
+  api.post(`/companies/${co}/products/${prod}/research/chat`, { question, history }).then(r => r.data);
+
+// ── Memo Engine ──────────────────────────────────────────────────────────────
+export const getMemoTemplates = () =>
+  api.get('/memo-templates').then(r => r.data);
+
+export const listMemos = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/memos`).then(r => r.data);
+
+export const createMemo = (co, prod, template, title, sections) =>
+  api.post(`/companies/${co}/products/${prod}/memos`, { template, title, sections }).then(r => r.data);
+
+export const getMemo = (co, prod, memoId) =>
+  api.get(`/companies/${co}/products/${prod}/memos/${memoId}`).then(r => r.data);
+
+export const generateMemo = (co, prod, template, customSections) =>
+  api.post(`/companies/${co}/products/${prod}/memos/generate`,
+    { template, custom_sections: customSections },
+    { timeout: 300_000 }
+  ).then(r => r.data);
+
+export const regenerateSection = (co, prod, memoId, sectionKey) =>
+  api.post(`/companies/${co}/products/${prod}/memos/${memoId}/sections/${sectionKey}/regenerate`,
+    {}, { timeout: 120_000 }
+  ).then(r => r.data);
+
+export const updateMemoSection = (co, prod, memoId, sectionKey, content) =>
+  api.patch(`/companies/${co}/products/${prod}/memos/${memoId}/sections/${sectionKey}`, { content }).then(r => r.data);
+
+export const updateMemoStatus = (co, prod, memoId, status) =>
+  api.patch(`/companies/${co}/products/${prod}/memos/${memoId}/status`, { status }).then(r => r.data);
+
+export const exportMemoPdf = (co, prod, memoId) =>
+  api.post(`/companies/${co}/products/${prod}/memos/${memoId}/export-pdf`, {},
+    { timeout: 120_000, responseType: 'blob' }
+  ).then(r => {
+    const blob = new Blob([r.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

@@ -8,6 +8,11 @@ import TapeAnalytics from './pages/TapeAnalytics';
 import PortfolioAnalytics from './pages/PortfolioAnalytics';
 import Methodology from './pages/Methodology';
 import ExecutiveSummary from './pages/ExecutiveSummary';
+import DocumentLibrary from './pages/research/DocumentLibrary';
+import ResearchChat from './pages/research/ResearchChat';
+import MemoArchive from './pages/research/MemoArchive';
+import MemoBuilder from './pages/research/MemoBuilder';
+import MemoEditor from './pages/research/MemoEditor';
 
 function CompanyRedirect() {
   // Redirect /company/:name to first product's tape overview
@@ -32,6 +37,12 @@ export default function App() {
           <Route path="portfolio" element={<Navigate to="borrowing-base" replace />} />
           <Route path="portfolio/:tab" element={<PortfolioAnalytics />} />
           <Route path="executive-summary" element={<ExecutiveSummary />} />
+          <Route path="research" element={<Navigate to="library" replace />} />
+          <Route path="research/library" element={<DocumentLibrary />} />
+          <Route path="research/chat" element={<ResearchChat />} />
+          <Route path="research/memos" element={<MemoArchive />} />
+          <Route path="research/memos/new" element={<MemoBuilder />} />
+          <Route path="research/memos/:memoId" element={<MemoEditor />} />
           <Route path="methodology" element={<Methodology />} />
         </Route>
 
@@ -43,6 +54,12 @@ export default function App() {
           <Route path="portfolio" element={<Navigate to="borrowing-base" replace />} />
           <Route path="portfolio/:tab" element={<PortfolioAnalytics />} />
           <Route path="executive-summary" element={<ExecutiveSummary />} />
+          <Route path="research" element={<Navigate to="library" replace />} />
+          <Route path="research/library" element={<DocumentLibrary />} />
+          <Route path="research/chat" element={<ResearchChat />} />
+          <Route path="research/memos" element={<MemoArchive />} />
+          <Route path="research/memos/new" element={<MemoBuilder />} />
+          <Route path="research/memos/:memoId" element={<MemoEditor />} />
           <Route path="methodology" element={<Methodology />} />
         </Route>
 
