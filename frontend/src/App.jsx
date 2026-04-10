@@ -7,6 +7,7 @@ import TapeAnalytics from './pages/TapeAnalytics';
 import PortfolioAnalytics from './pages/PortfolioAnalytics';
 import Methodology from './pages/Methodology';
 import ExecutiveSummary from './pages/ExecutiveSummary';
+import LegalAnalytics from './pages/LegalAnalytics';
 
 function CompanyRedirect() {
   // Redirect /company/:name to first product's tape overview
@@ -29,6 +30,8 @@ export default function App() {
           <Route path="tape/:tab" element={<TapeAnalytics />} />
           <Route path="portfolio" element={<Navigate to="borrowing-base" replace />} />
           <Route path="portfolio/:tab" element={<PortfolioAnalytics />} />
+          <Route path="legal" element={<Navigate to="documents" replace />} />
+          <Route path="legal/:tab" element={<LegalAnalytics />} />
           <Route path="executive-summary" element={<ExecutiveSummary />} />
           <Route path="methodology" element={<Methodology />} />
         </Route>
@@ -40,6 +43,8 @@ export default function App() {
           <Route path="tape/:tab" element={<TapeAnalytics />} />
           <Route path="portfolio" element={<Navigate to="borrowing-base" replace />} />
           <Route path="portfolio/:tab" element={<PortfolioAnalytics />} />
+          <Route path="legal" element={<Navigate to="documents" replace />} />
+          <Route path="legal/:tab" element={<LegalAnalytics />} />
           <Route path="executive-summary" element={<ExecutiveSummary />} />
           <Route path="methodology" element={<Methodology />} />
         </Route>

@@ -199,6 +199,41 @@ export const notifyBreaches = (co, prod, snap, cur) =>
     { params: p(snap, cur) },
   ).then(r => r.data);
 
+// ── Legal Analysis ───────────────────────────────────────────────────────────
+export const uploadLegalDocument = (co, prod, file, documentType = 'credit_agreement') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/companies/${co}/products/${prod}/legal/upload`, formData, {
+    params: { document_type: documentType },
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300_000,
+  }).then(r => r.data);
+};
+export const getLegalDocuments          = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/documents`).then(r => r.data);
+export const getLegalDocument           = (co, prod, filename) =>
+  api.get(`/companies/${co}/products/${prod}/legal/documents/${filename}`).then(r => r.data);
+export const reExtractLegalDocument     = (co, prod, filename, docType = 'credit_agreement') =>
+  api.post(`/companies/${co}/products/${prod}/legal/documents/${filename}/re-extract`, null, { params: { document_type: docType } }).then(r => r.data);
+export const deleteLegalDocument        = (co, prod, filename) =>
+  api.delete(`/companies/${co}/products/${prod}/legal/documents/${filename}`).then(r => r.data);
+export const getLegalFacilityTerms      = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/facility-terms`).then(r => r.data);
+export const getLegalEligibility        = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/eligibility`).then(r => r.data);
+export const getLegalCovenantsExtracted = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/covenants-extracted`).then(r => r.data);
+export const getLegalEventsOfDefault    = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/events-of-default`).then(r => r.data);
+export const getLegalReporting          = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/reporting`).then(r => r.data);
+export const getLegalRiskFlags          = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/risk-flags`).then(r => r.data);
+export const getLegalComplianceComparison = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/legal/compliance-comparison`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getLegalAmendmentDiff      = (co, prod, oldFile, newFile) =>
+  api.get(`/companies/${co}/products/${prod}/legal/amendment-diff`, { params: { filename_old: oldFile, filename_new: newFile } }).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

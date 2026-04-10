@@ -33,6 +33,17 @@ const PORTFOLIO_TABS = [
   { slug: 'bank-statements',     label: 'Bank Statements' },
 ]
 
+const LEGAL_TABS = [
+  { slug: 'documents',          label: 'Documents' },
+  { slug: 'facility-terms',     label: 'Facility Terms' },
+  { slug: 'eligibility',        label: 'Eligibility & Rates' },
+  { slug: 'covenants-legal',    label: 'Covenants & Limits' },
+  { slug: 'events-of-default',  label: 'Events of Default' },
+  { slug: 'reporting',          label: 'Reporting' },
+  { slug: 'risk-assessment',    label: 'Risk Assessment' },
+  { slug: 'amendments',         label: 'Amendment History' },
+]
+
 export default function Sidebar() {
   const { company, products, product, tapeTabs, config } = useCompany()
   const { tab } = useParams()
@@ -42,6 +53,7 @@ export default function Sidebar() {
 
   const isTape = location.pathname.includes('/tape/')
   const isPortfolio = location.pathname.includes('/portfolio/')
+  const isLegal = location.pathname.includes('/legal/')
   const currentSlug = tab || ''
 
   const basePath = `/company/${company}/${product}`
@@ -127,6 +139,22 @@ export default function Sidebar() {
               label={t.label}
               to={`${basePath}/portfolio/${t.slug}`}
               active={isPortfolio && currentSlug === t.slug}
+            />
+          ))}
+          <Divider />
+        </>
+      )}
+
+      {/* Legal Analysis — shown when portfolio tabs are shown */}
+      {!hidePortfolio && (
+        <>
+          <SectionHeader>Legal Analysis</SectionHeader>
+          {LEGAL_TABS.map(t => (
+            <NavItem
+              key={t.slug}
+              label={t.label}
+              to={`${basePath}/legal/${t.slug}`}
+              active={isLegal && currentSlug === t.slug}
             />
           ))}
           <Divider />
@@ -226,4 +254,4 @@ function Divider() {
   return <div style={{ height: 1, background: 'var(--border)', margin: '12px 20px' }} />
 }
 
-export { DEFAULT_TAPE_TABS as TAPE_TABS, PORTFOLIO_TABS }
+export { DEFAULT_TAPE_TABS as TAPE_TABS, PORTFOLIO_TABS, LEGAL_TABS }

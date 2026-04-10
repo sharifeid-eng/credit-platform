@@ -3,6 +3,27 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-07 (session 4)
+- [x] Legal Analysis — third analytical pillar (AI-powered facility agreement analysis)
+  - `core/legal_schemas.py` — Pydantic models (FacilityTerms, EligibilityCriterion, AdvanceRate, ConcentrationLimit, FinancialCovenant, EventOfDefault, ReportingRequirement, RiskFlag, LegalExtractionResult)
+  - `core/legal_parser.py` — PDF → markdown (pymupdf4llm) + table extraction (pdfplumber) + section chunking
+  - `core/legal_extractor.py` — 5-pass Claude extraction (definitions, facility+eligibility+rates, covenants+limits, EOD+reporting+waterfall, risk assessment). ~$1.25/doc, cached forever.
+  - `core/legal_compliance.py` — Compliance comparison (doc terms vs live portfolio), 3-tier facility params merge (document → manual → hardcoded), executive summary context builder
+  - `core/LEGAL_EXTRACTION_SCHEMA.md` — Extraction taxonomy (7 sections), confidence grading, param mapping
+  - `backend/legal.py` — FastAPI router, 12 endpoints (upload, documents, facility-terms, eligibility, covenants-extracted, events-of-default, reporting, risk-flags, compliance-comparison, amendment-diff)
+  - `backend/main.py` — legal router included, `_load_facility_params()` updated for 3-tier priority, executive summary wired with legal context
+  - `core/portfolio.py` — parameterized `ineligibility_age_days` (was 365) and `cash_ratio_limit` (was 3.0) via `facility_params.get()`
+  - `frontend/src/pages/LegalAnalytics.jsx` — main page with AnimatePresence tab transitions
+  - 8 tab components in `frontend/src/components/legal/`: DocumentUpload, FacilityTerms, EligibilityView, CovenantComparison, EventsOfDefault, ReportingCalendar, RiskAssessment, AmendmentHistory
+  - `frontend/src/components/Sidebar.jsx` — LEGAL_TABS added, Legal Analysis section between Portfolio and Methodology
+  - `frontend/src/App.jsx` — legal/:tab routes added
+  - `frontend/src/services/api.js` — 12 legal API functions added
+  - `tests/test_legal.py` — 22 tests (schemas, mapping, compliance comparison, parser utils), all passing
+  - Total: 156 tests pass (134 existing + 22 new)
+  - **Next steps:** Upload real Klaim facility agreement → validate extraction → compare against external legal tool via Chrome
+
+---
+
 ## Active — Cloud Deployment (Phase 3 Gate)
 
 ### Phase 0 — Domain & Provider Setup ✅
