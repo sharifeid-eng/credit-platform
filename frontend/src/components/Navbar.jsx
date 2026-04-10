@@ -57,6 +57,19 @@ export default function Navbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 12 }}>
         {!isMobile && (
           <>
+            <Link to="/operator" style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: pathname === '/operator' ? 'var(--gold)' : 'var(--text-muted)',
+              textDecoration: 'none',
+              padding: '4px 10px',
+              borderRadius: 6,
+              transition: 'color var(--transition-fast)',
+              fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.02em',
+            }}>
+              Ops
+            </Link>
             <Link to="/framework" style={{
               fontSize: 12,
               fontWeight: 600,

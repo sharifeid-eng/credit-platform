@@ -97,6 +97,9 @@ app.include_router(integration_router)
 from backend.legal import router as legal_router
 app.include_router(legal_router)
 
+from backend.operator import router as operator_router
+app.include_router(operator_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174,http://localhost:5175").split(","),

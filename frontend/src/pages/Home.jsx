@@ -218,6 +218,7 @@ export default function Home() {
             gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? '260px' : '320px'}, 1fr))`,
             gap: 16,
           }}>
+            <OperatorCard />
             <FrameworkCard />
           </div>
         </div>
@@ -506,6 +507,82 @@ function CompanyCard({ company, summary, productSummaries = [], index, onClick, 
         }}>→</span>
       </div>
     </motion.div>
+  )
+}
+
+// ── Operator resource card ───────────────────────────────────────────────────
+function OperatorCard() {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <Link
+      to="/operator"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        textDecoration: 'none', display: 'block',
+        background:    'var(--bg-surface)',
+        border:        `1px solid ${hovered ? 'rgba(201,168,76,0.4)' : 'var(--border)'}`,
+        borderRadius:  'var(--radius-md)',
+        padding:       '22px 22px 18px',
+        cursor:        'pointer',
+        position:      'relative', overflow: 'hidden',
+        transition:    'border-color 0.2s, box-shadow 0.2s, transform 0.18s',
+        boxShadow:     hovered ? 'var(--shadow-glow-gold)' : 'none',
+        transform:     hovered ? 'translateY(-2px)' : 'translateY(0)',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 0, left: 0, height: 2, right: 0,
+        background: hovered ? 'linear-gradient(90deg, var(--gold), transparent)' : 'transparent',
+        transition: 'background 0.2s',
+      }} />
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: 'var(--gold)', borderRadius: '10px 0 0 10px',
+        opacity: hovered ? 1 : 0.35, transition: 'opacity 0.2s',
+      }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div style={{
+          width: 38, height: 38,
+          background: 'linear-gradient(135deg, var(--gold), rgba(201,168,76,0.4))',
+          borderRadius: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, flexShrink: 0,
+        }}>
+          &#9881;
+        </div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Command Center
+          </div>
+          <div style={{
+            fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
+            letterSpacing: '0.1em', color: 'var(--gold)', marginTop: 3,
+          }}>
+            Operator
+          </div>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: '0 0 16px' }}>
+        Platform health, data gaps, follow-ups, operations menu,
+        and institutional memory — your cockpit for running the fund.
+      </p>
+
+      <div style={{
+        paddingTop: 14, borderTop: '1px solid var(--border)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Open Command Center</span>
+        <span style={{
+          color: hovered ? 'var(--gold)' : 'var(--text-faint)',
+          transition: 'color 0.15s, transform 0.15s',
+          transform: hovered ? 'translateX(3px)' : 'translateX(0)',
+          display: 'inline-block', fontSize: 15,
+        }}>→</span>
+      </div>
+    </Link>
   )
 }
 

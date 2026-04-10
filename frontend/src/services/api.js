@@ -280,6 +280,18 @@ export const getLegalComplianceComparison = (co, prod, snap, cur, asOf) =>
 export const getLegalAmendmentDiff      = (co, prod, oldFile, newFile) =>
   api.get(`/companies/${co}/products/${prod}/legal/amendment-diff`, { params: { filename_old: oldFile, filename_new: newFile } }).then(r => r.data);
 
+// ── Operator Command Center ──────────────────────────────────────────────────
+export const getOperatorStatus       = () => api.get('/operator/status').then(r => r.data);
+export const getOperatorTodos        = () => api.get('/operator/todo').then(r => r.data);
+export const createOperatorTodo      = (item) => api.post('/operator/todo', item).then(r => r.data);
+export const updateOperatorTodo      = (id, update) => api.patch(`/operator/todo/${id}`, update).then(r => r.data);
+export const deleteOperatorTodo      = (id) => api.delete(`/operator/todo/${id}`).then(r => r.data);
+export const getOperatorMind         = (company = null, category = null) =>
+  api.get('/operator/mind', { params: { ...(company ? { company } : {}), ...(category ? { category } : {}) } }).then(r => r.data);
+export const updateOperatorMindEntry = (id, update) => api.patch(`/operator/mind/${id}`, update).then(r => r.data);
+export const sendOperatorDigest      = (webhookUrl = null) =>
+  api.post('/operator/digest', null, { params: webhookUrl ? { webhook_url: webhookUrl } : {} }).then(r => r.data);
+
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;
 export const getDenialTrend        = getDenialTrendChart;

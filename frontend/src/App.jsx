@@ -14,6 +14,7 @@ import MemoArchive from './pages/research/MemoArchive';
 import MemoBuilder from './pages/research/MemoBuilder';
 import MemoEditor from './pages/research/MemoEditor';
 import LegalAnalytics from './pages/LegalAnalytics';
+import OperatorCenter from './pages/OperatorCenter';
 
 function CompanyRedirect() {
   // Redirect /company/:name to first product's tape overview
@@ -29,6 +30,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/framework" element={<Framework />} />
+        <Route path="/operator" element={<OperatorCenter />} />
 
         {/* Company routes with sidebar layout */}
         <Route path="/company/:companyName/:product" element={<CompanyLayout />}>
