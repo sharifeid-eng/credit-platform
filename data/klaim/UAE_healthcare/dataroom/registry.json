@@ -75,5 +75,15 @@
       "separator": ","
     },
     "ingested_at": "2026-04-10T11:56:27"
+  },
+  "0a4338e4-9b0": {
+    "doc_id": "0a4338e4-9b0",
+    "filename": "DOCUMENT_ANALYSIS.md",
+    "filepath": "data\\klaim\\UAE_healthcare\\legal\\DOCUMENT_ANALYSIS.md",
+    "document_type": "legal_document",
+    "sha256": "02e7138baa1af216fa8b6098ed3d2c49ae5c2c187648d422e3217eb4cf2f4cb9",
+    "chunk_count": 18,
+    "text_length": 14646,
+    "ingested_at": "2026-04-10T14:59:14"
   }
 }
