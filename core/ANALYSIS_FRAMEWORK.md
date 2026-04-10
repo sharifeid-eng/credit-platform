@@ -645,3 +645,423 @@ When `filter_by_date(df, as_of_date)` is applied:
 ### For New Companies
 
 When onboarding a new company, verify that `filter_by_date` only filters deal selection. If the new asset class has a way to reconstruct historical balances (e.g., transaction-level payment history), document it here and consider implementing date-aware metric adjustment.
+
+---
+
+## 16. Living Mind Architecture
+
+The Living Mind is the platform's institutional memory system. It captures analyst preferences, corrections, IC feedback, and cross-company patterns — then feeds them into every AI prompt so that Claude never repeats a corrected mistake and progressively aligns with the fund's analytical voice.
+
+### Two-Tier Structure
+
+| Tier | Scope | Location | Purpose |
+|------|-------|----------|---------|
+| **Master Mind** | Fund-level | `data/_master_mind/` | Cross-company preferences, IC norms, writing style, framework evolution |
+| **Company Mind** | Per-position | `data/{co}/{prod}/mind/` | Position-specific corrections, findings, memo edits, data quality notes |
+
+Both tiers use **append-only JSONL** files (one JSON object per line). This format is audit-friendly, git-trackable, and supports incremental reads without parsing the entire history.
+
+### Master Mind Categories
+
+| Category File | What It Stores | Example Entry |
+|---------------|---------------|---------------|
+| `preferences.jsonl` | Formatting, terminology, display conventions | `{"rule": "Always show PAR as lifetime headline, active as subtitle"}` |
+| `cross_company.jsonl` | Patterns observed across 2+ companies | `{"pattern": "BNPL portfolios season in Q4", "companies": ["SILQ", "Tamara"]}` |
+| `framework_evolution.jsonl` | Changes to analytical methodology | `{"change": "Added DTFC as L5 leading indicator", "date": "2026-03-15"}` |
+| `ic_norms.jsonl` | Investment committee expectations | `{"norm": "IC wants PAR 30+ below 5% for approval"}` |
+| `writing_style.jsonl` | Tone and structure preferences | `{"rule": "Use 'deterioration' not 'worsening'. Quantify every claim."}` |
+
+### Company Mind Categories
+
+| Category File | What It Stores | Trigger |
+|---------------|---------------|---------|
+| `corrections.jsonl` | Metric fixes, label changes, data reinterpretations | Post-correction (automatic) |
+| `memo_edits.jsonl` | Tracked changes between memo versions | Post-memo-edit (automatic) |
+| `findings.jsonl` | Notable analytical observations | During executive summary generation |
+| `ic_feedback.jsonl` | Comments from IC review | Manual entry via `/mind-review` |
+| `data_quality.jsonl` | Column issues, outliers, exclusion decisions | During `/validate-tape` |
+| `session_lessons.jsonl` | End-of-session learnings | During `/eod` |
+
+### 4-Layer Prompt Injection
+
+Every AI call (`_build_*_full_context()`) assembles context in this order:
+
+```
+Layer 1: Analysis Framework (non-negotiable rules from this document)
+   ↓
+Layer 2: Master Mind (fund-level preferences and cross-company patterns)
+   ↓
+Layer 3: Methodology (company-specific metric definitions and formulas)
+   ↓
+Layer 4: Company Mind (position-specific corrections and IC feedback)
+```
+
+Later layers override earlier ones for the same topic. A Company Mind correction like `"Tamara outstanding is AR not originated"` overrides any generic assumption from the Framework layer.
+
+**Implementation:** `core/mind/mind_loader.py` exposes `build_mind_context(company, product)` which reads both tiers, deduplicates, and returns a formatted string block. Called by all `_build_*_full_context()` functions in `backend/main.py`.
+
+### Knowledge Lifecycle
+
+```
+Company Mind entry (single company)
+   ↓ appears in 2+ companies
+Master Mind promotion (fund-level pattern)
+   ↓ becomes permanent rule
+Framework codification (added to ANALYSIS_FRAMEWORK.md)
+```
+
+**Consolidation:** Periodic summarization (`/mind-review`) compresses accumulated entries into higher-order patterns, archives raw entries, and promotes cross-company patterns to the Master Mind.
+
+### When to Record
+
+| Event | Target Tier | Mechanism |
+|-------|-------------|-----------|
+| Analyst corrects a metric label or formula | Company Mind → `corrections.jsonl` | Automatic on edit |
+| Analyst edits a generated memo section | Company Mind → `memo_edits.jsonl` | Automatic diff capture |
+| IC reviews memo and provides feedback | Company Mind → `ic_feedback.jsonl` | Manual via `/mind-review` |
+| Data quality issue found during validation | Company Mind → `data_quality.jsonl` | During `/validate-tape` |
+| Session ends with learnings | Company Mind → `session_lessons.jsonl` | During `/eod` |
+| Pattern appears across multiple companies | Master Mind → `cross_company.jsonl` | During `/mind-review` |
+
+---
+
+## 17. Legal Extraction & Facility Params Binding
+
+AI-powered extraction of facility agreement terms — the third analytical pillar alongside tape analytics and portfolio monitoring. Instead of manually keying covenant thresholds and advance rates, Claude reads the facility agreement PDF and populates the system.
+
+### 5-Pass Extraction Pipeline
+
+Each pass targets a specific section of the facility agreement, with Claude returning structured JSON:
+
+| Pass | Focus | Output Schema |
+|------|-------|--------------|
+| 1 — Definitions | Defined terms, eligible receivable criteria, exclusion list | `FacilityTerms`, `EligibilityCriterion[]` |
+| 2 — Facility & Rates | Facility size, advance rates by region/product, interest rate, fees | `AdvanceRate[]`, fee structures |
+| 3 — Covenants & Concentration | Financial covenants, concentration limits, portfolio tests | `FinancialCovenant[]`, `ConcentrationLimit[]` |
+| 4 — EOD & Reporting | Events of default, cure periods, reporting requirements, waterfall | `EventOfDefault[]`, `ReportingRequirement[]` |
+| 5 — Risk Assessment | Structural risks, unusual provisions, comparison to market norms | `RiskFlag[]` |
+
+### Pydantic Schemas
+
+All extracted data validated through strict Pydantic models defined in `core/legal/schemas.py`:
+
+- `FacilityTerms` — top-level: facility_amount, currency, maturity, revolving_period, interest_rate
+- `EligibilityCriterion` — field, operator, value, description (e.g., `age_days <= 91`)
+- `AdvanceRate` — region, product_type, rate, conditions
+- `ConcentrationLimit` — limit_type (single_borrower, geography, product, sector), threshold, tiered_schedule
+- `FinancialCovenant` — name, formula, threshold, frequency, cure_period
+- `EventOfDefault` — trigger, cure_period_days, cross_default, severity
+- `ReportingRequirement` — report_type, frequency, deadline_days, recipient
+- `RiskFlag` — category, description, severity (high/medium/low), recommendation
+
+### 3-Tier Facility Params Merge
+
+When computing borrowing base, concentration limits, and covenants, parameters are resolved in priority order:
+
+```
+1. Document-extracted params (from legal extraction)     ← highest priority
+   ↓ override
+2. Manual analyst overrides (from FacilityParamsPanel)   ← mid priority
+   ↓ fallback
+3. Hardcoded defaults (in core/portfolio.py)             ← lowest priority
+```
+
+**Implementation:** `core/legal/extraction.py` exposes `extraction_to_facility_params()` which maps extracted schemas to the `facility_configs` JSONB structure consumed by `core/portfolio.py`.
+
+### Confidence Grading
+
+| Grade | Meaning | Example |
+|-------|---------|---------|
+| **HIGH** | Verbatim from document, exact number/formula | `"Advance rate: 85% for UAE receivables"` |
+| **MEDIUM** | Inferred from context, reasonable interpretation | `"WAL limit appears to be 70 days based on eligibility section"` |
+| **LOW** | Estimated, not explicitly stated, or ambiguous | `"Cure period not specified, assumed 5 business days"` |
+
+Each extracted field carries its confidence grade. The UI displays amber badges on MEDIUM and red badges on LOW fields, prompting analyst review.
+
+### Caching & Storage
+
+- Extraction runs once per document: results cached as `{filename}_extracted.json` alongside the source PDF in `data/{co}/{prod}/dataroom/`
+- Re-extraction only on explicit request or when source file hash changes
+- Extraction results are immutable — analyst overrides stored separately in `facility_configs`
+
+### Klaim Facility Agreement Findings
+
+Initial extraction from the Klaim facility agreement revealed discrepancies vs hardcoded defaults:
+
+| Parameter | Previously Hardcoded | Extracted from Agreement |
+|-----------|---------------------|-------------------------|
+| Aging cutoff | 365 days | **91 days** |
+| WAL limit | 60 days | **70 days** |
+| Geography | UAE + international | **UAE only** (Non-UAE excluded) |
+| EoD rules | Uniform | **Vary per covenant** (different cure periods) |
+| Covenants | 6 | **7** (Parent Cash Balance added) |
+
+**Reference:** `core/LEGAL_EXTRACTION_SCHEMA.md` for full field definitions and extraction prompt templates.
+
+---
+
+## 18. Data Room & Document Classification
+
+Generalized data room ingestion for any company's document collection. The Tamara onboarding proved that ~100 heterogeneous files can be parsed, classified, and indexed into a searchable research corpus. This section formalizes the pattern as a platform capability.
+
+### DataRoomEngine
+
+`core/dataroom/engine.py` provides the `DataRoomEngine` class:
+
+```python
+engine = DataRoomEngine(company="Tamara", product="KSA")
+engine.scan()       # Discover all files in data/{co}/{prod}/dataroom/
+engine.parse()      # Extract text/tables from each file
+engine.chunk()      # Split into ~800-token chunks
+engine.index()      # Build TF-IDF search index
+engine.save()       # Persist registry + index to disk
+```
+
+### Supported File Types
+
+| Type | Library | Extraction Strategy |
+|------|---------|-------------------|
+| PDF | `pdfplumber` | Page-by-page text + table detection. Tables preserved as markdown. |
+| Excel (.xlsx/.xls) | `pandas` | All sheets read. Numeric sheets → tables. Text-heavy sheets → paragraphs. |
+| ODS | `pandas` + `odfpy` | Same as Excel. |
+| CSV | `pandas` | Single table per file. |
+| JSON | `json` | Structured data preserved. Nested objects flattened for search. |
+| DOCX | `python-docx` | Paragraph-by-paragraph. Tables extracted separately. |
+
+### Document Classification
+
+`core/dataroom/classifier.py` assigns a `doc_type` to each file based on filename patterns, content heuristics, and sheet names:
+
+| doc_type | Detection Signal | Example |
+|----------|-----------------|---------|
+| `facility_agreement` | "facility", "credit agreement", legal language density | `Klaim_Facility_Agreement_2024.pdf` |
+| `investor_report` | "investor", "monthly report", standardized sections | `HSBC_Tamara_Monthly_Oct2025.pdf` |
+| `fdd_report` | "due diligence", "FDD", "Deloitte"/"EY"/"KPMG" | `Deloitte_FDD_Tamara_2024.xlsx` |
+| `financial_model` | "model", "projection", "forecast", multiple formula sheets | `Tamara_Financial_Master_2025.xlsx` |
+| `vintage_cohort` | "vintage", "cohort", "MOB", matrix-shaped sheets | `KSA_Default_Vintage_Matrix.xlsx` |
+| `portfolio_tape` | "tape", "loan", "receivable", row-per-deal structure | `2026-03-03_uae_healthcare.csv` |
+| `legal_document` | "amendment", "waiver", "consent", "side letter" | `First_Amendment_2025.pdf` |
+| `company_presentation` | "presentation", "pitch", "overview", slide-like structure | `Tamara_Investor_Deck_2025.pdf` |
+| `demographics` | "demographic", "customer", "merchant", "segment" | `Portfolio_Demographics_Q4.xlsx` |
+| `business_plan` | "business plan", "BP", "5-year", projection tables | `Tamara_5Y_Business_Plan.xlsx` |
+| `analytics_tape` | Generated by platform tape analytics | `_analytics_tape_2026-03.json` |
+| `analytics_portfolio` | Generated by platform portfolio analytics | `_analytics_portfolio_2026-03.json` |
+| `analytics_ai` | Generated by platform AI summaries | `_analytics_ai_executive_2026-03.json` |
+| `memo_draft` / `memo_final` | Generated by memo engine | `memo_v1_draft.json` / `memo_v3_final.json` |
+
+### Chunking Strategy
+
+- Target chunk size: ~800 tokens (~3,200 characters)
+- Split boundaries: paragraph breaks, section headers, page breaks
+- Tables preserved as single chunks (never split mid-table)
+- Overlap: 100 tokens between consecutive chunks for continuity
+- Each chunk carries metadata: `{doc_id, chunk_index, page_number, doc_type, section_title}`
+
+### Registry & Incremental Updates
+
+Each product maintains a registry at `data/{co}/{prod}/dataroom/registry.json`:
+
+```json
+{
+  "doc_001": {
+    "filename": "Klaim_Facility_Agreement_2024.pdf",
+    "doc_type": "facility_agreement",
+    "sha256": "a1b2c3...",
+    "chunks": 47,
+    "parsed_at": "2026-04-10T14:30:00Z"
+  }
+}
+```
+
+- **Change detection:** SHA-256 hash comparison on `refresh()` — only re-parses new or modified files
+- **Removals:** Files deleted from disk are marked `"status": "removed"` in registry (never hard-deleted from index)
+- **Analytics snapshots:** Platform-computed analytics (tape summary, portfolio metrics, AI narratives) are captured as JSON documents in the data room, making them searchable alongside source documents
+
+### Exclusions
+
+- Directories: `dataroom/`, `mind/`, `__pycache__/` excluded from recursive scan
+- Files: `config.json`, `methodology.json`, `registry.json` excluded to prevent non-data files from entering the index
+
+---
+
+## 19. Research Hub & Query Engine
+
+Dual-engine research intelligence combining Claude RAG and NotebookLM, accessible through a dedicated Research page in the frontend. The Research Hub answers natural-language questions across all ingested documents, analytics snapshots, and mind entries.
+
+### Claude RAG Pipeline
+
+The primary research engine uses the platform's own data room index:
+
+```
+Query → TF-IDF retrieval (top 10 chunks) → Rerank by relevance
+   ↓
+Build prompt: retrieved chunks + mind context + analytics context
+   ↓
+Claude synthesis → answer with inline citations [Doc: filename, p.X]
+```
+
+**Implementation:** `core/research/claude_rag.py` exposes `research_query(company, product, question)`. The retrieval step uses the TF-IDF index built by `DataRoomEngine`. Mind context is injected via `build_mind_context()` so that answers respect accumulated corrections and preferences.
+
+### NotebookLM Bridge
+
+A second-opinion engine powered by Google's Gemini RAG via the NotebookLM API:
+
+- **Python import** (preferred): `from notebooklm import NotebookLMClient`
+- **CLI fallback**: `notebooklm query --notebook {id} --question "..."`
+- **Authentication**: browser-based login (`notebooklm login`), token cached locally
+- **Graceful degradation**: when NotebookLM is unavailable (no auth, API down, package not installed), the platform falls back to Claude-only mode with no error — just a note that dual-engine was unavailable
+
+### Dual-Engine Synthesis
+
+When both engines are available, the Research Hub runs them in parallel and merges results:
+
+| Step | Action |
+|------|--------|
+| 1 | Run Claude RAG and NotebookLM query concurrently |
+| 2 | Compare answers for agreement/contradiction |
+| 3 | Merge complementary insights (Claude may find data room details, NotebookLM may surface PDF passages) |
+| 4 | Flag contradictions with `"⚠ Engines disagree"` badge and show both perspectives |
+| 5 | Note source strength: `"Claude cited 3 data room docs"` / `"NotebookLM cited 2 investor reports"` |
+
+### Insight Extraction (Rules-Based)
+
+At document ingest time, `core/research/insight_extractor.py` runs regex-based extraction to identify key facts without AI calls:
+
+| Pattern Type | Regex Examples | Extracted As |
+|-------------|---------------|-------------|
+| Metrics | `PAR\s*\d+\+?\s*[:=]\s*[\d.]+%`, `default rate.*?[\d.]+%` | `{metric, value, context}` |
+| Facility amounts | `\$[\d,.]+[MBK]`, `SAR\s*[\d,.]+\s*(million|M)` | `{currency, amount, context}` |
+| Covenant thresholds | `(not exceed|minimum|maximum|at least).*?[\d.]+%?` | `{covenant, threshold, direction}` |
+| Maturity dates | `(maturity|expiry|termination).*?\d{4}` | `{event, date, context}` |
+| Risk flags | `(material adverse|event of default|breach|downgrade)` | `{flag, severity, context}` |
+| Entities | Known company/bank names, counterparty patterns | `{entity, role, context}` |
+
+These extracted insights are stored in the registry and surfaced in the Document Library as filterable tags.
+
+### Frontend Pages
+
+| Page | Route | Purpose |
+|------|-------|---------|
+| **Research Chat** | `/company/:co/:product/research` | Natural-language queries across all documents |
+| **Document Library** | `/company/:co/:product/research/documents` | Browse, filter, search ingested files with type badges and stats |
+
+### Integration with Analytics
+
+Research answers can cite both data room documents AND platform-computed analytics snapshots. When a query asks about "collection rate trend," the engine retrieves both the tape analytics snapshot and any investor reports discussing collections — providing a cross-referenced answer.
+
+---
+
+## 20. IC Memo Generation Pipeline
+
+AI-powered investment memo generation with structured templates, analytics integration, versioned workflow, and feedback loop. The memo engine produces investment-committee-ready documents where every number matches the dashboard.
+
+### 4 Templates
+
+| Template | Sections | Typical Length | When Used |
+|----------|----------|---------------|-----------|
+| **Credit Memo** | 12 sections | 15–25 pages | New investment / facility approval |
+| **Due Diligence Report** | 9 sections | 10–18 pages | Pre-investment deep-dive |
+| **Monthly Monitoring Update** | 6 sections | 4–8 pages | Recurring portfolio update |
+| **Quarterly Review** | 5 sections | 6–12 pages | Quarterly IC presentation |
+
+### Section Source Types
+
+Each section in a template declares its data source:
+
+| Source Type | Origin | Example |
+|-------------|--------|---------|
+| `DATAROOM` | From ingested data room documents via RAG | Company background, facility terms, market context |
+| `ANALYTICS` | From tape/portfolio compute functions | Portfolio metrics, cohort tables, PAR, collection rates |
+| `AI_NARRATIVE` | From prior AI summaries (executive summary, tab insights) | Synthesized commentary, trend analysis |
+| `MIXED` | Cross-references documents + analytics | Credit quality section citing both data and facility terms |
+| `MANUAL` | Analyst writes or dictates | Investment thesis, recommendation, custom commentary |
+| `AUTO` | Auto-generated appendix (data tables, methodology notes) | Appendix: metric definitions, data sources, caveats |
+
+### Analytics Bridge
+
+`core/research/analytics_bridge.py` maps memo sections to backend compute functions:
+
+| Memo Section | Compute Functions | Data |
+|-------------|-------------------|------|
+| Portfolio Overview | `compute_summary()` | KPIs, deal counts, originated volume |
+| Credit Quality | `compute_par()`, `compute_cohort_loss_waterfall()` | PAR 30+/60+/90+, default rates, loss waterfall |
+| Collections & Liquidity | `compute_collection_velocity()`, `compute_dso()`, `compute_dtfc()` | Collection rate, DSO, DTFC, timing distribution |
+| Concentration | `compute_concentration()`, `compute_hhi_for_snapshot()` | HHI, top exposures, group performance |
+| Vintage Performance | `compute_cohort()`, `compute_vintage_loss_curves()` | Cohort table, loss curves, collection speed |
+| Covenant Compliance | `compute_covenants()`, `compute_borrowing_base()` | Covenant status, borrowing base, headroom |
+| Risk Assessment | `compute_expected_loss()`, `compute_stress_test()` | EL model, stress scenarios, roll rates |
+
+**Critical rule:** Every number in the memo MUST match the dashboard. The analytics bridge calls the same compute functions that power the charts — no separate calculation path.
+
+### AI Section Generation
+
+Each section is generated sequentially by Claude:
+
+```
+For each section in template:
+  1. Gather source data (DATAROOM chunks + ANALYTICS results + prior sections)
+  2. Build prompt: section instructions + source data + mind context + prior sections (for narrative coherence)
+  3. Claude generates section text with inline metric citations
+  4. Validate: check that cited numbers match analytics bridge output
+  5. Store section in memo version
+```
+
+**Narrative coherence:** Each section prompt includes the full text of all prior sections, so Claude maintains a consistent analytical thread throughout the memo. The mind context ensures the writing style matches IC expectations.
+
+### Versioning & Status Workflow
+
+Memos are stored as immutable versions in `reports/memos/{co}_{prod}/{memo_id}/`:
+
+```
+reports/memos/klaim_UAE_healthcare/memo_20260410/
+├── v1.json          # First draft
+├── v2.json          # After analyst edits
+├── v3.json          # Final version
+├── v3_final.pdf     # Exported PDF
+└── metadata.json    # Status, template, created_at, author
+```
+
+**Status workflow:**
+
+```
+draft → review → final → archived
+  ↑       │
+  └───────┘  (revisions send back to draft)
+```
+
+- **draft:** Being generated or edited. Analyst can regenerate individual sections.
+- **review:** Submitted for IC review. Read-only except for comments.
+- **final:** Approved by IC. PDF exported with no DRAFT watermark. Locked.
+- **archived:** Superseded by a newer memo. Retained for audit trail.
+
+### PDF Export
+
+Dark-themed ReportLab output matching the existing `core/research_report.py` styling:
+
+- Navy background, gold section headers, teal/red metric highlighting
+- Cover page with LAITH branding, memo title, date, status badge
+- Table of contents with page numbers
+- `DRAFT` watermark on non-final versions (diagonal, semi-transparent)
+- Page headers (company name + memo type) and footers (page number + generation date)
+
+### Feedback Loop
+
+Every analyst edit to a generated memo section is captured:
+
+```
+1. Analyst edits Section 3 text in MemoEditor
+2. Diff computed: original AI text vs edited text
+3. Diff stored in Company Mind → memo_edits.jsonl
+4. Next memo generation for this company incorporates edit patterns
+5. If similar edits appear across 2+ companies → Master Mind promotion
+```
+
+This creates a self-improving cycle: the first memo for a new company may need heavy editing, but subsequent memos converge toward the analyst's preferred style and emphasis.
+
+### Frontend Components
+
+| Component | Purpose |
+|-----------|---------|
+| `MemoBuilder` | 4-step wizard: select template → choose sections → configure sources → generate |
+| `MemoEditor` | Section navigation panel + rich text editor + regenerate button per section |
+| `MemoArchive` | History of all memos with status filters, search, and version comparison |

@@ -66,6 +66,8 @@ The platform allows analysts and investment committee members to:
 - View interactive dashboards with 18 analysis tabs (including institutional risk analytics, loss attribution, and forward-looking signals)
 - Explore the Analysis Framework — a structured analytical philosophy guiding all metrics
 - Generate AI-powered portfolio commentary and ask natural language questions about the data
+- Generate AI-powered IC investment memos with data room research integration
+- Query documents across data rooms using dual-engine research (Claude + NotebookLM)
 -----
 ## Branding
 - **Platform name:** Laith (لَيث — Arabic for "lion"; the AI in L-**AI**-th is intentional)
@@ -160,6 +162,27 @@ credit-platform/
 │   ├── legal_parser.py     # PDF-to-markdown conversion (PyMuPDF + pymupdf4llm + pdfplumber)
 │   ├── legal_extractor.py  # Multi-pass Claude extraction engine (5 passes, cached)
 │   ├── legal_compliance.py # Compliance comparison: doc terms vs live portfolio metrics
+│   ├── dataroom/              # Data room ingestion engine
+│   │   ├── engine.py          # Main orchestrator: ingest, catalog, search, refresh
+│   │   ├── analytics_snapshot.py  # Snapshot tape/portfolio/AI outputs as research sources
+│   │   ├── chunker.py         # Document chunking for search (800-token chunks)
+│   │   ├── classifier.py      # Document type classification (16 types)
+│   │   └── parsers/           # Pluggable parsers: PDF, Excel, CSV, JSON, DOCX, ODS
+│   ├── research/              # Research intelligence layer
+│   │   ├── query_engine.py    # Claude RAG: retrieve + synthesize with citations
+│   │   ├── dual_engine.py     # Dual-engine orchestrator (Claude + NotebookLM)
+│   │   ├── synthesizer.py     # Merges answers from dual engines
+│   │   ├── notebooklm_bridge.py  # NotebookLM integration (Python + CLI fallback)
+│   │   └── extractors.py      # Rules-based insight extraction at ingest time
+│   ├── memo/                  # IC Memo Engine
+│   │   ├── templates.py       # 4 IC memo templates (credit, DD, monitoring, quarterly)
+│   │   ├── analytics_bridge.py    # Pulls live analytics into memo sections
+│   │   ├── generator.py       # AI section generator with analytics + research + mind
+│   │   ├── storage.py         # File-based versioning (draft → review → final)
+│   │   └── pdf_export.py      # Dark-themed PDF export for memos
+│   ├── mind/                  # Living Mind — institutional memory
+│   │   ├── master_mind.py     # Fund-level: preferences, IC norms, cross-company patterns
+│   │   └── company_mind.py    # Per-company: corrections, findings, IC feedback, data quality
 │   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
 │   ├── methodology_klaim.py # Klaim methodology metadata (16 sections, 29 metrics, 13 tables)
 │   ├── methodology_silq.py # SILQ methodology metadata (15 sections, 23 metrics, 2 tables)
@@ -180,10 +203,18 @@ credit-platform/
 │   ├── validation_silq.py  # SILQ-specific data quality checks
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── data/
+│   ├── _master_mind/          # Fund-level Living Mind (JSONL files)
 │   └── {company}/
 │       └── {product}/
 │           ├── config.json
-│           └── YYYY-MM-DD_{name}.csv
+│           ├── YYYY-MM-DD_{name}.csv
+│           ├── mind/              # Company-level Living Mind (JSONL files)
+│           ├── dataroom/          # Ingested documents, chunks, search index
+│           │   ├── registry.json
+│           │   ├── chunks/
+│           │   ├── analytics/
+│           │   └── index.pkl
+│           └── legal/             # Legal documents and extraction cache
 ├── frontend/
 │   ├── public/
 │   │   └── logo.svg        # Original logo (white bg — not used in dark theme)
@@ -204,6 +235,12 @@ credit-platform/
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
 │   │   │   ├── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   │   └── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
+│   │   │   ├── research/          # Research Hub pages
+│   │   │   │   ├── DocumentLibrary.jsx   # Browse ingested documents
+│   │   │   │   ├── ResearchChat.jsx      # AI chat across all documents
+│   │   │   │   ├── MemoBuilder.jsx       # 4-step memo creation wizard
+│   │   │   │   ├── MemoEditor.jsx        # View/edit/regenerate memo sections
+│   │   │   │   └── MemoArchive.jsx       # Historical memos with filter
 │   │   ├── hooks/
 │   │   │   └── useBreakpoint.js         # Mobile/tablet/desktop detection via matchMedia listeners
 │   │   ├── components/
@@ -282,11 +319,13 @@ credit-platform/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
 │   ├── sync_framework_registry.py  # Auto-generate Section 12 in ANALYSIS_FRAMEWORK.md from metric registry
-│   └── prepare_tamara_data.py  # Data room ETL: reads ~100 source files → structured JSON snapshots for Tamara
+│   ├── prepare_tamara_data.py  # Data room ETL: reads ~100 source files → structured JSON snapshots for Tamara
+│   └── seed_master_mind.py     # Seeds master mind from ANALYSIS_FRAMEWORK.md + CLAUDE.md lessons
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
 └── reports/
-    └── ai_cache/           # Disk cache for AI responses (auto-generated, gitignored)
+    ├── ai_cache/           # Disk cache for AI responses (auto-generated, gitignored)
+    └── memos/              # Generated memos (versioned JSON)
 ```
 -----
 ## Data Model
@@ -403,6 +442,32 @@ Key columns in loan tape files:
 |`GET /api/integration/bank-statements`            |Paginated bank statements                |
 |`POST /api/integration/bank-statements`           |Create bank statement (optional PDF)     |
 
+**Research Hub endpoints:**
+|Endpoint                                                     |Description                        |
+|-------------------------------------------------------------|-----------------------------------|
+|`POST /companies/{co}/products/{p}/dataroom/ingest`          |Scan & ingest data room directory  |
+|`GET /companies/{co}/products/{p}/dataroom/documents`        |List all ingested documents        |
+|`GET /companies/{co}/products/{p}/dataroom/stats`            |Data room aggregate stats          |
+|`GET /companies/{co}/products/{p}/dataroom/search?q=...`     |Search across all documents        |
+|`POST /companies/{co}/products/{p}/dataroom/snapshot-analytics`|Snapshot current analytics       |
+|`POST /companies/{co}/products/{p}/research/query`           |Dual-engine research query         |
+|`POST /companies/{co}/products/{p}/research/chat`            |Research chat (for frontend)       |
+|`GET /companies/{co}/products/{p}/mind/profile`              |Company mind profile               |
+|`POST /companies/{co}/products/{p}/mind/record`              |Record mind entry                  |
+|`GET /mind/master/context`                                   |Preview master mind context        |
+
+**Memo Engine endpoints:**
+|Endpoint                                                     |Description                        |
+|-------------------------------------------------------------|-----------------------------------|
+|`GET /memo-templates`                                        |List all IC memo templates         |
+|`POST /companies/{co}/products/{p}/memos/generate`           |Generate full IC memo              |
+|`GET /companies/{co}/products/{p}/memos`                     |List memos for company             |
+|`GET /companies/{co}/products/{p}/memos/{id}`                |Get memo (latest version)          |
+|`PATCH /companies/{co}/products/{p}/memos/{id}/sections/{key}`|Update single section             |
+|`POST /companies/{co}/products/{p}/memos/{id}/sections/{key}/regenerate`|Regenerate section      |
+|`PATCH /companies/{co}/products/{p}/memos/{id}/status`       |Change status                      |
+|`POST /companies/{co}/products/{p}/memos/{id}/export-pdf`    |Export memo as PDF                 |
+
 All tape chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
@@ -419,9 +484,15 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 | `/company/:co/:product/legal/:tab` | `LegalAnalytics` | 8-tab legal document analysis |
 | `/company/:co/:product/executive-summary` | `ExecutiveSummary` | AI-powered holistic findings from all metrics |
 | `/company/:co/:product/methodology` | `Methodology` | Definitions & formulas reference |
+| `/company/:co/:product/research/library` | `DocumentLibrary` | Browse ingested data room documents |
+| `/company/:co/:product/research/chat` | `ResearchChat` | AI research queries across documents |
+| `/company/:co/:product/research/memos` | `MemoArchive` | Historical investment memos |
+| `/company/:co/:product/research/memos/new` | `MemoBuilder` | Create new IC memo (4-step wizard) |
+| `/company/:co/:product/research/memos/:memoId` | `MemoEditor` | View/edit/regenerate memo |
+| `/company/:co/:product/legal/:tab` | `LegalAnalytics` | Legal analysis 8-tab dashboard |
 | `/framework` | `Framework` | Analysis Framework — analytical philosophy with sticky TOC |
 
-**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Legal Analysis (8 links), Methodology. Active state: gold left border + gold text.
+**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Legal Analysis (8 links), Research Hub (Document Library, Research Chat, IC Memos), Methodology. Active state: gold left border + gold text.
 
 **URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `loss-waterfall`, `recovery-analysis`, `collections-timing`, `underwriting-drift`, `segment-analysis`, `seasonality`, `cdr-ccr`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
 
@@ -526,6 +597,52 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 | `facility_configs` | Per-facility lending terms in JSONB (advance_rates, concentration_limits, covenants) |
 
 -----
+## Research Hub & Memo Engine
+The platform includes an AI-powered research and memo generation system built on three layers:
+
+**Data Room Engine** (`core/dataroom/`):
+- Ingests any directory of files (PDF, Excel, CSV, JSON, DOCX, ODS)
+- Chunks documents for search, builds TF-IDF index
+- Classifies documents by type (16 categories)
+- Snapshots platform analytics as searchable research sources
+- Registry: `data/{co}/{prod}/dataroom/registry.json`
+
+**Research Intelligence** (`core/research/`):
+- Claude RAG query engine with source citations
+- NotebookLM bridge for second-opinion research (authenticated, requires `notebooklm login`)
+- Dual-engine synthesis: merges best insights from both engines
+- Rules-based insight extraction at ingest time (metrics, covenants, dates, risk flags)
+
+**IC Memo Engine** (`core/memo/`):
+- 4 templates: Credit Memo (12 sections), Due Diligence (9), Monthly Monitoring (6), Quarterly Review (5)
+- Analytics Bridge: injects live tape/portfolio metrics into memo sections
+- AI section generation with prior section coherence + mind context
+- Versioning: draft → review → final (immutable versions)
+- PDF export in dark theme matching existing research reports
+
+-----
+## Living Mind — Institutional Memory
+Two-tier knowledge system that makes every AI output smarter over time.
+
+**Master Mind** (`data/_master_mind/`):
+- Fund-level knowledge: analytical preferences, IC norms, cross-company patterns, writing style
+- Seeded from ANALYSIS_FRAMEWORK.md principles and existing CLAUDE.md lessons
+- Feeds into ALL AI prompts as Layer 2 (between Framework and Methodology)
+
+**Company Mind** (`data/{co}/{prod}/mind/`):
+- Per-company: corrections, memo edits, research findings, IC feedback, data quality notes
+- Auto-populated: legal findings, data quality discoveries, analyst corrections
+- Feeds into AI prompts as Layer 4 (most specific context)
+
+**4-Layer Prompt Context:**
+1. Analysis Framework (codified rules) — always included
+2. Master Mind (fund-level lessons) — filtered by task type
+3. Company Methodology (codified company rules) — key formulas and caveats
+4. Company Mind (position-level notes) — most recent and relevant
+
+**Knowledge Lifecycle:** Company Mind → Master Mind promotion (cross-company pattern) → Framework codification (permanent rule)
+
+-----
 ## Currency System
 Supported: `AED (0.2723)`, `USD (1.0)`, `EUR (1.08)`, `GBP (1.27)`, `SAR (0.2667)`, `KWD (3.26)`.
 Each product has a `config.json` with its reported currency. Frontend shows toggle between reported currency and USD. Backend applies multiplier via `apply_multiplier()` in `core/analysis.py`.
@@ -621,6 +738,12 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Legal compliance comparison** — `core/legal_compliance.py` `build_compliance_comparison()` matches extracted covenant thresholds against live portfolio values from `compute_klaim_covenants()`. Returns breach distance (% headroom), discrepancy flags (document vs hardcoded default), and overall compliance summary. Fed into executive summary AI context.
 - **PDF parsing pipeline** — `core/legal_parser.py` uses PyMuPDF (`pymupdf4llm`) for markdown conversion preserving headers/structure, plus `pdfplumber` for table extraction (advance rate schedules, concentration tier tables). Semantic chunking by article/section headers (legal docs are well-structured). Definitions section isolated first as context for all subsequent extraction passes.
 - **Legal extraction schema** — `core/LEGAL_EXTRACTION_SCHEMA.md` defines extraction taxonomy (7 sections), Pydantic models in `core/legal_schemas.py`, confidence grading (HIGH >= 0.85, MED >= 0.70, LOW < 0.70), and facility_params mapping table (12 fields). Companion to ANALYSIS_FRAMEWORK.md Section 16.
+- **Living Mind 4-layer architecture** — Framework (codified rules) → Master Mind (fund lessons) → Methodology (company rules) → Company Mind (position notes). Every AI prompt sees all 4 layers. Knowledge flows upward: fast corrections → consolidation → codification.
+- **Dual-engine research** — Claude RAG (primary) + NotebookLM (second opinion). Both run on every query when available, synthesis merges best insights. Graceful fallback to Claude-only.
+- **Analytics-as-source** — Platform-computed analytics (tape summaries, PAR, DSO) snapshotted into the data room as searchable documents. Memos can cite "Tape Analytics — PAR Analysis, Mar 2026" alongside "HSBC Investor Report, Jan 2026".
+- **Memo feedback loop** — Analyst edits to AI-generated memo sections are recorded in Company Mind. Future memos benefit from accumulated style preferences and corrections.
+- **Legal extraction caching** — Extract once per PDF, cache forever. 5-pass Claude pipeline (~$1.25/doc). 3-tier merge: document > manual > hardcoded.
+- **Registry format** — Both DataRoomEngine and AnalyticsSnapshotEngine use dict[str, dict] registry format (keyed by doc_id). Auto-migrates old list format on read.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -990,6 +1113,32 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Row 2 adapts: "Facility" row for multi-product (Limit, Merchants, Users) vs "Live Portfolio" for single-product
   - All product summaries fetched (not just first) to populate carousel data
   - Single-product cards (Klaim, SILQ, Ejari) completely unaffected
+- ✅ **Research Hub (data room ingestion + dual-engine research):**
+  - Data room engine: ingest any directory (PDF, Excel, CSV, JSON, DOCX), chunk, index, search
+  - Claude RAG query engine with source citations
+  - NotebookLM bridge (authenticated, dual-engine synthesis)
+  - Rules-based insight extraction at ingest time
+  - Analytics snapshots as searchable research sources
+  - Frontend: DocumentLibrary, ResearchChat pages
+- ✅ **Living Mind (institutional memory):**
+  - Master Mind: fund-level preferences, IC norms, cross-company patterns
+  - Company Mind: per-company corrections, findings, IC feedback, data quality
+  - 4-layer context injected into ALL AI prompts
+  - Klaim seeded with legal analysis findings (6 data quality + 4 findings + 2 IC feedback)
+- ✅ **IC Memo Engine:**
+  - 4 templates: Credit Memo, Due Diligence, Monthly Monitoring, Quarterly Review
+  - Analytics Bridge: live metrics from tape/portfolio analytics
+  - AI section generator with mind context
+  - Versioning: draft → review → final
+  - PDF export in dark theme
+  - Frontend: MemoBuilder wizard, MemoEditor, MemoArchive
+- ✅ **Legal Analysis (third analytical pillar):**
+  - 5-pass Claude extraction from facility agreement PDFs
+  - Pydantic schemas for all extracted terms
+  - 3-tier facility params merge (document > manual > hardcoded)
+  - Compliance comparison (extracted vs live analytics)
+  - 8-tab frontend dashboard
+  - Klaim: 4 documents reviewed, 7 parameter updates from MMA/MRPA
 -----
 ## Known Gaps & Next Steps
 **Short term:**
@@ -1068,6 +1217,12 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Data extraction fixed — 73 KPIs, 136 financials, 5 demographic dims, 51 BP metrics, 152 FM metrics
 - [x] Landing page — dual flags (SA+AE), auto-rotating carousel (3.5s crossfade, dot indicators, pause-on-hover)
 - [x] Financial Performance trend chart + Business Plan projection chart + Demographics grouped bars
+**Research Hub & Memo — Near-term:**
+- [ ] CSV tape classifier improvement (currently classified as "other" instead of "portfolio_tape")
+- [ ] Seed Tamara Company Mind from data room findings
+- [ ] Insight extraction integration tests with real investor reports
+- [ ] Amendment memo template (facility size changes, covenant modifications)
+- [ ] Add framework sections 16-20 to ANALYSIS_FRAMEWORK.md (documenting new systems)
 **Tamara — P1 (remaining showcase items):**
 - [ ] Facility payment waterfall (17-step horizontal waterfall)
 - [ ] Dilution time-series by vintage
@@ -1079,10 +1234,10 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Frontend "Generate Research Report" button
 - [ ] Product-level DPD trends (13 products, only aggregate rendered)
 - [ ] HSBC stratification rendering (2 of 6 dimensions visualized, need remaining 4)
-**Data Room Ingestion — Platform capability:**
-- [ ] Generalized `/ingest-data-room` command — given a folder of mixed files (PDFs, Excel, DOCX), auto-detect types, parse tabular data, produce structured JSON. `prepare_tamara_data.py` is the proof-of-concept.
-- [ ] Data room file inventory — auto-discover and catalog files (type, size, sheets, dates) before parsing
-- [ ] PDF table extraction library — standardize pdfplumber patterns for investor reports and facility agreements
+**Data Room Ingestion — Platform capability ✅ COMPLETE (generalized via Research Hub):**
+- [x] Generalized data room ingestion — `core/dataroom/engine.py` ingests any directory of mixed files (PDF, Excel, CSV, JSON, DOCX, ODS), auto-classifies (16 types), chunks for search, builds TF-IDF index. Replaces `prepare_tamara_data.py` proof-of-concept.
+- [x] Data room file inventory — `registry.json` catalogs all files (type, size, page count, chunk count, classification)
+- [x] PDF table extraction — pluggable parsers in `core/dataroom/parsers/` standardize extraction
 - [ ] Incremental data room updates — detect new/changed files, re-parse only those
 **Research Report — Platform capability expansion:**
 - [ ] Company-specific report builders for Ejari, Klaim, SILQ (currently Tamara-only)

@@ -24,6 +24,12 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 | 12 | Compute Function Registry | Backend function → level mapping | `/methodology-sync`, `/framework-audit` |
 | 13 | Column-to-Feature Dependency | Graceful degradation map | `/add-tape`, `/validate-tape` |
 | 14 | Asset Class Decision Tree | Classification flowchart | `/onboard-company` |
+| 15 | As-of-Date Filtering & Data Integrity | Backdated view rules, metric classification | `/validate-tape`, `/framework-audit` |
+| 16 | Living Mind Architecture | Two-tier institutional memory, prompt injection layers | `/mind-review`, `/eod`, all AI endpoints |
+| 17 | Legal Extraction & Facility Params Binding | AI extraction pipeline, 3-tier params merge | `/onboard-company`, portfolio analytics |
+| 18 | Data Room & Document Classification | File ingestion, chunking, TF-IDF indexing | `/onboard-company`, `/research-query` |
+| 19 | Research Hub & Query Engine | Dual-engine RAG (Claude + NotebookLM), citations | `/research-query` |
+| 20 | IC Memo Generation Pipeline | 4 templates, analytics bridge, versioned workflow | `/generate-memo` |
 
 ---
 
@@ -62,6 +68,9 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 | `/methodology-sync` | Drift detection | Verify methodology ↔ backend alignment |
 | `/company-health` | Quick diagnostic | Coverage, freshness, gaps at a glance |
 | `/eod` | Session close | Tests, docs, commit, push |
+| `/research-query` | Research question | Query data room + analytics via dual-engine RAG |
+| `/generate-memo` | IC memo creation | Generate memo from template with analytics bridge |
+| `/mind-review` | Review institutional memory | Consolidate, promote, and audit mind entries |
 
 ---
 
@@ -74,3 +83,6 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 5. **Confidence grading** — A (observed), B (inferred), C (derived)
 6. **Three clocks** — wrong clock = false PAR and false ineligibles
 7. **Asset-class-centric** — methodology organized by asset class, not company name
+8. **Living Mind feeds every AI prompt** — corrections, preferences, and IC feedback injected into all AI calls via 4-layer context
+9. **Legal extraction before hardcoded defaults** — facility params resolved document > manual > hardcoded
+10. **Memo numbers must match dashboard numbers** — analytics bridge calls the same compute functions as charts

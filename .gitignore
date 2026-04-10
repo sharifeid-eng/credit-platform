@@ -7,3 +7,19 @@ reports/
 alembic/versions/__pycache__/
 .claude/
 !.claude/commands/
+
+# Data room artifacts (regenerated on ingest, not source data)
+**/dataroom/chunks/
+**/dataroom/index.pkl
+**/dataroom/analytics/
+# Note: registry.json IS tracked (lightweight metadata)
+
+# Living Mind JSONL files (accumulate over time, machine-specific)
+data/_master_mind/
+**/mind/*.jsonl
+**/mind/consolidated.json
+**/mind/style_guide.md
+**/mind/profile.json
+
+# NotebookLM session data
+.notebooklm/

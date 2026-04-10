@@ -46,8 +46,9 @@ _FILENAME_RULES = [
     (re.compile(r"(financial.?model|financial.?master|fin.?model|valuation.?model)"), DocumentType.FINANCIAL_MODEL),
     # Vintage / cohort data
     (re.compile(r"(vintage|cohort|default.?rat|delinquen|dilution|dpd|roll.?rate|loss.?curve)"), DocumentType.VINTAGE_COHORT),
-    # Portfolio / loan tapes
+    # Portfolio / loan tapes (including date-named files: YYYY-MM-DD_*.csv/xlsx)
     (re.compile(r"(loan.?tape|portfolio.?tape|receivable|loan.?book|tape.?data)"), DocumentType.PORTFOLIO_TAPE),
+    (re.compile(r"\d{4}-\d{2}-\d{2}_.*\.(csv|xlsx?)$"), DocumentType.PORTFOLIO_TAPE),
     # Legal documents
     (re.compile(r"(legal|najiz|court|litigation|arbitrat|enforcement|judgment)"), DocumentType.LEGAL_DOCUMENT),
     # Presentations / decks
