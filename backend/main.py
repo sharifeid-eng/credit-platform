@@ -57,6 +57,7 @@ from core.portfolio import (
     compute_klaim_borrowing_base,
     compute_klaim_concentration_limits,
     compute_klaim_covenants,
+    annotate_covenant_eod,
 )
 from core.database import engine, get_db
 from core.db_loader import has_db_data, load_from_db, get_facility_config as db_facility_config
@@ -2540,6 +2541,52 @@ def _facility_params_path(company, product):
         'data', company, product, 'facility_params.json'
     )
 
+
+def _covenant_history_path(company, product):
+    """Path to covenant breach history JSON."""
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..',
+        'data', company, product, 'covenant_history.json'
+    )
+
+
+def _load_covenant_history(company, product):
+    """Load covenant breach history. Returns {covenant_name: [{period, compliant, date}, ...]}."""
+    path = _covenant_history_path(company, product)
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def _save_covenant_history(company, product, result):
+    """Persist current covenant results into history file.
+    Appends current period's results, keeping newest-first order, max 24 periods.
+    """
+    path = _covenant_history_path(company, product)
+    history = _load_covenant_history(company, product)
+
+    test_date = result.get('test_date', '')
+    for cov in result.get('covenants', []):
+        name = cov['name']
+        if not cov.get('eod_rule'):
+            continue
+        record = {
+            'period': cov.get('period', test_date),
+            'compliant': cov.get('compliant', True),
+            'current': cov.get('current'),
+            'date': test_date,
+        }
+        records = history.get(name, [])
+        # Deduplicate: replace existing record with same date
+        records = [r for r in records if r.get('date') != test_date]
+        records.insert(0, record)
+        # Keep max 24 periods
+        history[name] = records[:24]
+
+    with open(path, 'w') as f:
+        json.dump(history, f, indent=2)
+
 def _load_facility_params(company, product):
     """Load facility params with 3-tier priority:
     1. Manual overrides (facility_params.json) — highest priority
@@ -2740,6 +2787,14 @@ def get_portfolio_covenants(company: str, product: str,
         result = portfolio_covenants(df, mult, ref_date, fp)
     else:
         result = compute_klaim_covenants(df, mult, ref_date, fp)
+
+    # --- Consecutive breach tracking (EoD determination per MMA 18.3) ---
+    try:
+        history = _load_covenant_history(company, product)
+        result = annotate_covenant_eod(result, history)
+        _save_covenant_history(company, product, result)
+    except Exception:
+        pass  # History tracking is optional — never break the main response
 
     # --- Trend: load previous snapshot to compute rate-of-change per covenant ---
     try:

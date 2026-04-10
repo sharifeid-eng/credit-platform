@@ -1,0 +1,565 @@
+{
+  "facility_terms": {
+    "facility_type": "revolving",
+    "facility_limit": 15000000,
+    "currency": "USD",
+    "maturity_date": "2030-02-01",
+    "commitment_period_end": null,
+    "effective_date": "2026-02-10",
+    "parties": [
+      "Klaim Receivable Purchase SPV 4 Limited (Company)",
+      "Klaim Holdings Limited (Parent)",
+      "ACP Shariah Financing Fund L.P. (Financier)",
+      "ACP Shariah Financing GP Limited (Investment Agent / Security Agent)",
+      "Klaim Kapital Technologies Limited (Seller / Sub-Servicer)"
+    ],
+    "governing_law": "ADGM Courts (Abu Dhabi Global Markets)",
+    "interest_rate_description": "13% p.a. fixed Murabaha Profit (30/360 day count) + 35% of SPV4 net profits (Relevant Profit Amount), capped at 18% p.a. combined",
+    "section_ref": "Articles 1-2, Schedule 1",
+    "confidence": 0.97
+  },
+  "eligibility_criteria": [
+    {
+      "name": "Currency",
+      "description": "All amounts payable must be denominated in AED",
+      "parameter": null,
+      "value": "AED",
+      "section_ref": "MRPA Eligibility Criteria (b)(i)",
+      "page": 29,
+      "confidence": 0.98
+    },
+    {
+      "name": "Aging Ineligibility",
+      "description": "Receivables unpaid for 91 days or more after the Invoice Date are deducted from Adjusted Pool Balance",
+      "parameter": "ineligibility_age_days",
+      "value": 91,
+      "section_ref": "MMA Art. 20 — Adjusted Pool Balance (b)",
+      "page": 81,
+      "confidence": 0.98
+    },
+    {
+      "name": "Single Receivable Size Cap",
+      "description": "OPB of any single Eligible Receivable must not exceed 0.5% of aggregate OPB of all Eligible Receivables",
+      "parameter": "single_receivable_limit",
+      "value": 0.005,
+      "section_ref": "MRPA Eligible Receivable (ii)",
+      "page": 31,
+      "confidence": 0.97
+    },
+    {
+      "name": "Per-Debtor Credit Limit",
+      "description": "OPB owed by a single Eligible Debtor must not exceed USD 15,000,000",
+      "parameter": "max_debtor_credit_limit",
+      "value": 15000000,
+      "section_ref": "MRPA Eligible Receivable (iii)",
+      "page": 33,
+      "confidence": 0.98
+    },
+    {
+      "name": "Services Rendered",
+      "description": "Healthcare services must have been rendered per the Receivables Contract terms",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MRPA Eligible Receivable (iv)",
+      "page": 31,
+      "confidence": 0.95
+    },
+    {
+      "name": "First-Ranking Security",
+      "description": "Subject to a valid, first-ranking security assignment in favour of the Security Agent, duly perfected",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MRPA Eligibility Criteria (c)(iii)",
+      "page": 30,
+      "confidence": 0.95
+    },
+    {
+      "name": "Eligible Debtor",
+      "description": "Debtor must be on the Eligible Debtor List or approved by Investment Agent. Must be UAE-incorporated, not an Affiliate of Parent, not insolvent.",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MRPA Eligible Debtor (a)-(d)",
+      "page": 30,
+      "confidence": 0.97
+    },
+    {
+      "name": "No Disputes or Adverse Claims",
+      "description": "Not subject to any Adverse Claims, Disputes, or outstanding breach",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MRPA Eligibility Criteria (c)(iv)",
+      "page": 30,
+      "confidence": 0.95
+    },
+    {
+      "name": "Free Assignment",
+      "description": "Freely assignable without further counterparty consent",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MRPA Eligibility Criteria (d)",
+      "page": 30,
+      "confidence": 0.95
+    },
+    {
+      "name": "Arm's Length Transaction",
+      "description": "On arm's length terms and for full market value",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MRPA Eligibility Criteria (h)",
+      "page": 30,
+      "confidence": 0.95
+    },
+    {
+      "name": "Dilution Deduction",
+      "description": "All Dilutions (defective services, cancellations, setoffs) deducted from Adjusted Pool Balance",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MMA Art. 20 — Adjusted Pool Balance (c)",
+      "page": 81,
+      "confidence": 0.95
+    },
+    {
+      "name": "Dispute Deduction",
+      "description": "Any amount subject to a Dispute or Adverse Claim deducted from Adjusted Pool Balance",
+      "parameter": null,
+      "value": null,
+      "section_ref": "MMA Art. 20 — Adjusted Pool Balance (d)",
+      "page": 81,
+      "confidence": 0.95
+    }
+  ],
+  "advance_rates": [
+    {
+      "category": "default",
+      "rate": 0.90,
+      "condition": "Applied to (Adjusted Pool Balance + Cash Collateral) to compute Borrowing Base",
+      "section_ref": "MMA Art. 20 — Borrowing Base definition, page 5",
+      "confidence": 0.98
+    }
+  ],
+  "concentration_limits": [
+    {
+      "name": "Single Eligible Receivable",
+      "limit_type": "single_receivable",
+      "threshold_pct": 0.10,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "MRPA Concentration Limits (a)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Top 10 Largest Eligible Receivables",
+      "limit_type": "top_n",
+      "threshold_pct": 0.50,
+      "tiered": null,
+      "n_value": 10,
+      "section_ref": "MRPA Concentration Limits (b)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Single Customer (Originator via KKT)",
+      "limit_type": "single_customer",
+      "threshold_pct": 0.10,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "MRPA Concentration Limits (c)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Single Non-Eligible Debtor",
+      "limit_type": "single_payer",
+      "threshold_pct": 0.10,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "MRPA Concentration Limits (d)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Extended Age Receivables (70-90 days)",
+      "limit_type": "extended_age",
+      "threshold_pct": 0.05,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "MRPA Concentration Limits (e)",
+      "confidence": 0.97
+    }
+  ],
+  "covenants": [
+    {
+      "name": "Company Minimum Consolidated Cash Balance",
+      "covenant_type": "maintenance",
+      "metric": "cash_ratio_limit",
+      "threshold": 3.0,
+      "direction": ">=",
+      "test_frequency": "quarterly",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 18.2(a)",
+      "confidence": 0.97
+    },
+    {
+      "name": "PAR30",
+      "covenant_type": "maintenance",
+      "metric": "par30_limit",
+      "threshold": 0.07,
+      "direction": "<=",
+      "test_frequency": "monthly",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 18.2(b)(i) — single breach NOT an EoD per 18.3(i)",
+      "confidence": 0.98
+    },
+    {
+      "name": "PAR60",
+      "covenant_type": "maintenance",
+      "metric": "par60_limit",
+      "threshold": 0.05,
+      "direction": "<=",
+      "test_frequency": "monthly",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 18.2(b)(ii)",
+      "confidence": 0.98
+    },
+    {
+      "name": "Collection Ratio",
+      "covenant_type": "maintenance",
+      "metric": "collection_ratio_limit",
+      "threshold": 0.25,
+      "direction": ">=",
+      "test_frequency": "monthly",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 18.2(c) — 2 consecutive breaches for EoD per 18.3(ii)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Paid vs Due Ratio",
+      "covenant_type": "maintenance",
+      "metric": "paid_vs_due_limit",
+      "threshold": 0.95,
+      "direction": ">=",
+      "test_frequency": "monthly",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 18.2(d) — 2 consecutive breaches for EoD per 18.3(iii)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Parent Minimum Consolidated Cash Balance",
+      "covenant_type": "maintenance",
+      "metric": "cash_ratio_limit",
+      "threshold": 3.0,
+      "direction": ">=",
+      "test_frequency": "quarterly",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 18.2(e)",
+      "confidence": 0.97
+    },
+    {
+      "name": "Weighted Average Life",
+      "covenant_type": "maintenance",
+      "metric": "wal_threshold_days",
+      "threshold": 70,
+      "direction": "<=",
+      "test_frequency": "per_purchase",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "MMA Art. 21.1 — dual-path: WAL ≤ 70d OR Extended Age (70-90d) ≤ 5% per Art. 21.2",
+      "confidence": 0.97
+    }
+  ],
+  "events_of_default": [
+    {
+      "trigger": "Failure to pay principal or interest within 5 Business Days of due date (if accidental/technical)",
+      "section_ref": "MMA Art. 22.1",
+      "cure_period_days": 5,
+      "severity": "payment",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Breach of PAR60 covenant (single breach is EoD)",
+      "section_ref": "MMA Art. 22.2 / 18.2(b)(ii)",
+      "cure_period_days": null,
+      "severity": "covenant",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Breach of Collection Ratio on two or more consecutive Collection Periods",
+      "section_ref": "MMA Art. 22.2 / 18.3(ii)",
+      "cure_period_days": null,
+      "severity": "covenant",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Breach of Paid vs Due Ratio on two or more consecutive Collection Periods",
+      "section_ref": "MMA Art. 22.2 / 18.3(iii)",
+      "cure_period_days": null,
+      "severity": "covenant",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Breach of any other obligation not remedied within 15 Business Days of notice",
+      "section_ref": "MMA Art. 22.4",
+      "cure_period_days": 15,
+      "severity": "covenant",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Any representation or warranty materially incorrect when made or deemed made",
+      "section_ref": "MMA Art. 22.5",
+      "cure_period_days": null,
+      "severity": "covenant",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Cross-default: default on Financial Indebtedness exceeding USD 500,000",
+      "section_ref": "MMA Art. 22.6",
+      "cure_period_days": null,
+      "severity": "cross_default",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Insolvency of any Obligor",
+      "section_ref": "MMA Art. 22.7",
+      "cure_period_days": null,
+      "severity": "mac",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Insolvency proceedings commenced against any Obligor",
+      "section_ref": "MMA Art. 22.8",
+      "cure_period_days": null,
+      "severity": "mac",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Creditors' process: attachment/execution over assets exceeding USD 500,000 not discharged within 15 Business Days",
+      "section_ref": "MMA Art. 22.9",
+      "cure_period_days": 15,
+      "severity": "operational",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Unlawfulness or invalidity of any Finance Document obligation",
+      "section_ref": "MMA Art. 22.11",
+      "cure_period_days": null,
+      "severity": "operational",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Cessation of business by any Obligor",
+      "section_ref": "MMA Art. 22.12",
+      "cure_period_days": null,
+      "severity": "operational",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Change of Senior Management (Karim Dakki) not replaced with Investment Agent-approved person within 30 days",
+      "section_ref": "MMA Art. 22.13",
+      "cure_period_days": 30,
+      "severity": "operational",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Change in ownership — Parent ceases to hold 100% of Company shares",
+      "section_ref": "MMA Art. 22.14",
+      "cure_period_days": null,
+      "severity": "mac",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Audit qualification on financial statements of any Obligor",
+      "section_ref": "MMA Art. 22.15",
+      "cure_period_days": null,
+      "severity": "operational",
+      "confidence": 0.90
+    },
+    {
+      "trigger": "Expropriation, seizure, or nationalisation of assets exceeding USD 250,000",
+      "section_ref": "MMA Art. 22.16",
+      "cure_period_days": null,
+      "severity": "mac",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Litigation or proceedings against any Obligor involving amounts exceeding USD 500,000",
+      "section_ref": "MMA Art. 22.18",
+      "cure_period_days": null,
+      "severity": "operational",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Material Adverse Change affecting the Obligors' ability to perform obligations",
+      "section_ref": "MMA Art. 22.20",
+      "cure_period_days": null,
+      "severity": "mac",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Borrowing Base Deficiency not cured within 15 Business Day Remedy Period (after BB Holiday Period)",
+      "section_ref": "MMA Art. 22.22 / 8.3",
+      "cure_period_days": 15,
+      "severity": "covenant",
+      "confidence": 0.95
+    }
+  ],
+  "reporting_requirements": [
+    {
+      "name": "Borrowing Base Certificate",
+      "frequency": "monthly",
+      "due_days_after_period": null,
+      "description": "Delivered on the 1st and 15th Business Day of each month, showing eligible receivables, advance rate, and borrowing base calculation",
+      "confidence": 0.95
+    },
+    {
+      "name": "Borrowing Base Report",
+      "frequency": "monthly",
+      "due_days_after_period": null,
+      "description": "Accompanies the Borrowing Base Certificate with detailed portfolio data",
+      "confidence": 0.93
+    },
+    {
+      "name": "Compliance Certificate",
+      "frequency": "quarterly",
+      "due_days_after_period": null,
+      "description": "Delivered with quarterly financial statements confirming covenant compliance",
+      "confidence": 0.95
+    },
+    {
+      "name": "Annual Audited Financial Statements",
+      "frequency": "annual",
+      "due_days_after_period": 120,
+      "description": "Audited consolidated financial statements (180 days for FY2025)",
+      "confidence": 0.95
+    },
+    {
+      "name": "Quarterly Unaudited Financial Statements",
+      "frequency": "quarterly",
+      "due_days_after_period": 30,
+      "description": "Unaudited balance sheet within 30 days of quarter-end",
+      "confidence": 0.95
+    },
+    {
+      "name": "Monthly Bank Statements",
+      "frequency": "monthly",
+      "due_days_after_period": 15,
+      "description": "Monthly bank statements within 15 Business Days of month-end",
+      "confidence": 0.93
+    },
+    {
+      "name": "Default Notification",
+      "frequency": "ad_hoc",
+      "due_days_after_period": null,
+      "description": "Prompt notification upon awareness of any Default or Event of Default",
+      "confidence": 0.95
+    },
+    {
+      "name": "Management Meetings",
+      "frequency": "quarterly",
+      "due_days_after_period": 15,
+      "description": "Management meetings within 15 days of quarter-end",
+      "confidence": 0.90
+    }
+  ],
+  "waterfall_normal": [
+    {"priority": 1, "description": "Agent fees, costs, and expenses to Investment Agent / Security Agent", "applies_in": "both"},
+    {"priority": 2, "description": "Murabaha Profit element of each Deferred Price + other costs/expenses", "applies_in": "normal"},
+    {"priority": 3, "description": "Cost Price element of each Deferred Price (pro rata)", "applies_in": "normal"},
+    {"priority": 4, "description": "Any other amounts due to Finance Parties", "applies_in": "normal"},
+    {"priority": 5, "description": "Residual to Company / Seller", "applies_in": "normal"}
+  ],
+  "waterfall_default": [
+    {"priority": 1, "description": "Agent fees, costs, and expenses", "applies_in": "both"},
+    {"priority": 2, "description": "All outstanding principal and accrued Murabaha Profit", "applies_in": "default"},
+    {"priority": 3, "description": "Breakage costs and make-whole amounts", "applies_in": "default"},
+    {"priority": 4, "description": "Any other amounts due", "applies_in": "default"}
+  ],
+  "risk_flags": [
+    {
+      "category": "deviation",
+      "description": "Invoice Date and claim submission date may differ for healthcare claims. Documents were originally drafted for real estate and not fully updated. Counsel recommends short amendment letter to formalize Invoice Date = claim submission date for healthcare.",
+      "severity": "medium",
+      "recommendation": "Execute amendment letter to align Invoice Date with claim submission date"
+    },
+    {
+      "category": "deviation",
+      "description": "PAR30/PAR60 drafted with 'instalment past due' language but healthcare claims have no formal instalments or contractual due dates. Counsel confirmed PAR should reference debtor-specific expected payment dates, pending formalization.",
+      "severity": "medium",
+      "recommendation": "Formalize PAR calculation methodology via amendment letter referencing expected payment dates"
+    },
+    {
+      "category": "deviation",
+      "description": "Monthly Denial Rate is cumulative (stock ratio) but this is not explicitly stated. Currently tested per-purchase which may be cumbersome. Counsel recommends formalizing as a drawstop rather than per-purchase condition.",
+      "severity": "low",
+      "recommendation": "Clarify via amendment that Monthly Denial Rate is cumulative and operates as a drawstop"
+    },
+    {
+      "category": "below_market",
+      "description": "Concentration Limit (a) — single receivable at 10% — is effectively redundant given the 0.5% eligibility gate. Concentration Limit (b) — Top 10 at 50% — is also arguably redundant. Counsel confirmed redundancy.",
+      "severity": "low",
+      "recommendation": "Consider simplifying concentration limits in next amendment to remove redundant thresholds"
+    },
+    {
+      "category": "unusual_term",
+      "description": "BB Holiday Period of 5 months from agreement date (until ~10 July 2026) during which no BB cure obligation exists. This is a ramp-up provision but should be monitored as the deadline approaches.",
+      "severity": "low",
+      "recommendation": "Monitor BB compliance starting July 2026; ensure portfolio ramp-up meets BB requirements by holiday expiry"
+    }
+  ],
+  "definitions": {
+    "Adjusted Pool Balance": "OPB of Eligible Receivables reduced by: (a) OPB breaching Concentration Limits, (b) OPB unpaid 91+ days after Invoice Date, (c) all Dilutions, (d) OPB subject to Dispute or Adverse Claim",
+    "Advance Rate": "90%",
+    "Age": "Days elapsed since the claim submission date of a Receivable; zero for Repaid Amounts",
+    "Borrowing Base": "(Adjusted Pool Balance + Cash Collateral) x Advance Rate (90%)",
+    "Borrowing Base Holiday Period": "5 months from agreement date (10 Feb 2026 to ~10 Jul 2026)",
+    "Cash Collateral": "Funds on deposit in Collection Account constituting principal collections, net of accrued Murabaha Profit, subject to first-ranking security",
+    "Collection Period": "Each calendar month",
+    "Collection Ratio": "Collections received in period / OPB at start of period",
+    "Concentration Limits": "5 limits: single receivable 10%, top 10 50%, single customer 10%, single non-eligible debtor 10%, extended age 5%",
+    "Dilution": "Reduction/cancellation of receivable due to defective services, contract changes, or setoff — NOT due to inability to pay",
+    "Distributable Profits": "Company's accumulated realised profits less accumulated realised losses",
+    "Eligible Debtor": "Not Affiliate of Parent; not insolvent; UAE-incorporated; on Eligible Debtor List or approved by Investment Agent",
+    "Extended Age Receivables": "Receivables with Age > 70 days but ≤ 90 days",
+    "Maximum Credit Limit": "USD 15,000,000 per debtor",
+    "Monthly Denial Rate": "Cumulative denials / total originated (stock ratio). Cap defined in MMA page 17",
+    "Murabaha Profit": "CP x PR x (N/360) where PR = 13%",
+    "Net Cash Burn": "Net cash from operating activities (excluding working capital changes) minus capex, trailing 90 days",
+    "Outstanding Principal Balance": "Unpaid invoice amount net of Collections received and applied to principal",
+    "PAR30": "OPB with instalment >30 days past due / OPB of all Eligible Receivables (excl. written-off)",
+    "PAR60": "OPB with instalment >60 days past due / OPB of all Eligible Receivables (excl. written-off)",
+    "Paid vs Due": "Collections on receivables due in period / Receivables that became due in period",
+    "Relevant Profit Amount": "35% of net profits of Company, capped so that combined with Murabaha Profit does not exceed 18% p.a. of Total Commitments",
+    "Reserved Amount": "15% of Distributable Profits + Relevant Profit Amount (or estimate)",
+    "Weighted Average Life": "Sum(OPB_i x Age_i) / Total OPB (all receivables + Repaid Amounts)"
+  },
+  "section_map": {
+    "Article 1": "Definitions and Interpretation",
+    "Article 2": "The Facilities",
+    "Article 4": "Conditions of Utilisation",
+    "Article 5": "Utilisations",
+    "Article 6": "Payments under Murabaha Contracts",
+    "Article 7": "Illegality, Voluntary Prepayment and Cancellation",
+    "Article 8": "Mandatory Early Payment and Cancellation",
+    "Article 11": "Tax Gross-Up and Indemnities",
+    "Article 16": "Representations",
+    "Article 17": "Information Undertakings",
+    "Article 18": "Financial Covenants",
+    "Article 19": "General Undertakings",
+    "Article 20": "Borrowing Base",
+    "Article 21": "Weighted Average Life Test",
+    "Article 22": "Events of Default",
+    "Article 24": "Payment Mechanics",
+    "Schedule 1": "The Parties",
+    "Schedule 2": "Conditions Precedent",
+    "Schedule 6": "Deferred Payment Schedule"
+  },
+  "overall_confidence": 0.96,
+  "extraction_model": "human_review_with_counsel",
+  "extraction_cost_usd": 0.00,
+  "extracted_at": "2026-04-10T12:00:00+00:00",
+  "document_type": "credit_agreement",
+  "filename": "Master Murabaha Agreement.pdf",
+  "page_count": 130
+}

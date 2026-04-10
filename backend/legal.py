@@ -8,6 +8,7 @@ for facility agreements. All endpoints under /companies/{co}/products/{p}/legal/
 
 import os
 import sys
+import json
 import shutil
 import logging
 from typing import Optional
@@ -230,16 +231,25 @@ def get_events_of_default(company: str, product: str):
 
 @router.get("/companies/{company}/products/{product}/legal/reporting")
 def get_reporting_requirements(company: str, product: str):
-    """Get extracted reporting obligations."""
+    """Get extracted reporting obligations + payment schedule."""
     extraction = load_latest_extraction(company, product)
     if not extraction:
         return {'available': False}
+
+    # Load payment schedule if available
+    payment_schedule = None
+    legal_dir = get_legal_dir(company, product)
+    schedule_path = os.path.join(legal_dir, 'payment_schedule.json')
+    if os.path.exists(schedule_path):
+        with open(schedule_path, 'r') as f:
+            payment_schedule = json.load(f)
 
     return {
         'available': True,
         'reporting_requirements': extraction.get('reporting_requirements', []),
         'waterfall_normal': extraction.get('waterfall_normal', []),
         'waterfall_default': extraction.get('waterfall_default', []),
+        'payment_schedule': payment_schedule,
         'document': {
             'filename': extraction.get('filename', ''),
             'extracted_at': extraction.get('extracted_at', ''),

@@ -1,0 +1,47 @@
+{
+  "facility_terms": {
+    "facility_type": "commodity_broker_fee",
+    "facility_limit": null,
+    "currency": "USD",
+    "maturity_date": null,
+    "commitment_period_end": null,
+    "effective_date": "2026-02-10",
+    "parties": [
+      "DD&Co Limited (Commodity Broker)",
+      "ACP Shariah Financing GP Limited (Purchaser)",
+      "Amwal Capital Partners (Fee Guarantor)"
+    ],
+    "governing_law": "English law",
+    "interest_rate_description": "Commodity broker fees for Shariah-compliant Tawarruq structure — NOT the facility profit rate",
+    "section_ref": "Page 1",
+    "confidence": 0.95
+  },
+  "eligibility_criteria": [],
+  "advance_rates": [],
+  "concentration_limits": [],
+  "covenants": [],
+  "events_of_default": [],
+  "reporting_requirements": [],
+  "waterfall_normal": [],
+  "waterfall_default": [],
+  "risk_flags": [],
+  "definitions": {
+    "Upfront Fee": "USD 150, one-time, due on or before signing the CPA",
+    "Commodity Administration Fee": "USD 7.50 per USD 1,000,000 of Purchase Price (pro rata), minimum USD 150 per transaction",
+    "Payment Terms": "Invoiced in USD immediately after each Sale Transaction, due within 10 days",
+    "Suspension Right": "DD&Co may suspend services if invoices unpaid within 10 days",
+    "ACP Backstop": "If SPV cannot pay within 10 days, invoices forwarded to Amwal Capital Partners"
+  },
+  "section_map": {
+    "Page 1": "Fee Schedule and Terms",
+    "Page 2": "Gross-Up, Suspension, Governing Law",
+    "Page 3": "Execution"
+  },
+  "overall_confidence": 0.95,
+  "extraction_model": "human_review_with_counsel",
+  "extraction_cost_usd": 0.00,
+  "extracted_at": "2026-04-10T12:00:00+00:00",
+  "document_type": "fee_letter",
+  "filename": "Fee letter.pdf",
+  "page_count": 3
+}

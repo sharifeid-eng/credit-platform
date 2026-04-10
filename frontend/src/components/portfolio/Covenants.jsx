@@ -6,6 +6,7 @@ export default function Covenants({ data, availableDates, selectedDate, onDateCh
   const covenants = data.covenants || []
   const compliantCount = data.compliant_count ?? covenants.filter(c => c.compliant).length
   const breachCount = data.breach_count ?? (covenants.length - compliantCount)
+  const eodCount = data.eod_count ?? 0
   const testDate = data.test_date || ''
   const ccy = data.currency || currency || 'AED'
 
@@ -51,6 +52,11 @@ export default function Covenants({ data, availableDates, selectedDate, onDateCh
             {breachCount > 0 && (
               <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>
                 ● {breachCount} Breach
+              </span>
+            )}
+            {eodCount > 0 && (
+              <span style={{ fontSize: 11, color: '#F06060', fontWeight: 700 }}>
+                ● {eodCount} EoD
               </span>
             )}
           </div>

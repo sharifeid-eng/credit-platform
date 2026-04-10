@@ -1,0 +1,116 @@
+{
+  "facility_terms": {
+    "facility_type": "subordinated_qard_al_hassan",
+    "facility_limit": 8263125,
+    "currency": "AED",
+    "maturity_date": null,
+    "commitment_period_end": null,
+    "effective_date": "2026-02-10",
+    "parties": [
+      "Klaim Holdings Limited (Financier / Parent)",
+      "Klaim Receivable Purchase SPV 4 Limited (Borrower)"
+    ],
+    "governing_law": "English and Welsh law, ADGM courts",
+    "interest_rate_description": "Zero — true Qard Al Hassan (benevolent/interest-free loan)",
+    "section_ref": "Clause 7, page 7",
+    "confidence": 0.97
+  },
+  "eligibility_criteria": [],
+  "advance_rates": [],
+  "concentration_limits": [],
+  "covenants": [
+    {
+      "name": "Financier Liquidity",
+      "covenant_type": "maintenance",
+      "metric": null,
+      "threshold": 0,
+      "direction": ">=",
+      "test_frequency": "ongoing",
+      "cure_period_days": null,
+      "equity_cure_allowed": false,
+      "section_ref": "Clause 6.2(e), page 7 — Financier must maintain sufficient liquidity to make advances when required",
+      "confidence": 0.90
+    }
+  ],
+  "events_of_default": [
+    {
+      "trigger": "Non-payment by Borrower of any sum when due",
+      "section_ref": "Clause 12.1(a), page 8",
+      "cure_period_days": null,
+      "severity": "payment",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Failure to comply with any other provision, not cured within 15 Business Days",
+      "section_ref": "Clause 12.1(b), page 8",
+      "cure_period_days": 15,
+      "severity": "covenant",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Insolvency Event with respect to the Borrower",
+      "section_ref": "Clause 12.1(c), page 8",
+      "cure_period_days": null,
+      "severity": "mac",
+      "confidence": 0.95
+    },
+    {
+      "trigger": "Performance becomes unlawful",
+      "section_ref": "Clause 12.1(d), page 9",
+      "cure_period_days": null,
+      "severity": "operational",
+      "confidence": 0.93
+    },
+    {
+      "trigger": "Cross-acceleration: Financial Indebtedness under MMA declared due early",
+      "section_ref": "Clause 12.1(e), page 9",
+      "cure_period_days": null,
+      "severity": "cross_default",
+      "confidence": 0.95
+    }
+  ],
+  "reporting_requirements": [],
+  "waterfall_normal": [],
+  "waterfall_default": [],
+  "risk_flags": [
+    {
+      "category": "unusual_term",
+      "description": "All Financier enforcement rights (acceleration, legal proceedings, insolvency petitions) require prior written consent of the Investment Agent until Senior Discharge Date. EoD provisions are effectively toothless while senior facility is outstanding.",
+      "severity": "low",
+      "recommendation": "No action needed — this subordination is protective of the senior facility (ACP's position)"
+    },
+    {
+      "category": "unusual_term",
+      "description": "Non-petition clause: Financier cannot institute winding up or enforce judgments until 2 years and 1 day after Senior Discharge Date",
+      "severity": "low",
+      "recommendation": "Standard SPV bankruptcy-remoteness protection — beneficial to senior lender"
+    }
+  ],
+  "definitions": {
+    "Required Funded Amount": "15% of Total Commitments under the Master Murabaha Agreement = AED 8,263,125",
+    "Facility": "AED 8,263,125 committed, unsecured, subordinated, interest-free advance facility",
+    "Senior Obligations": "All obligations under the MMA and other Finance Documents",
+    "Senior Discharge Date": "Date when all Senior Obligations irrevocably and unconditionally paid in full",
+    "Maturity Date": "One Business Day after the Senior Discharge Date",
+    "Available Funds": "Borrower assets legally available after payment of all Senior Obligations"
+  },
+  "section_map": {
+    "Clause 2": "Facility",
+    "Clause 3": "Utilisation",
+    "Clause 4": "Conditions Precedent",
+    "Clause 6": "Covenants",
+    "Clause 7": "No Compensation",
+    "Clause 8": "Repayment",
+    "Clause 9": "Subordination",
+    "Clause 10": "Unsecured",
+    "Clause 12": "Events of Default",
+    "Clause 14": "Limited Recourse and Non-Petition"
+  },
+  "overall_confidence": 0.95,
+  "extraction_model": "human_review_with_counsel",
+  "extraction_cost_usd": 0.00,
+  "extracted_at": "2026-04-10T12:00:00+00:00",
+  "document_type": "security_agreement",
+  "filename": "Subordinated Qard Al Hassan Agreement.pdf",
+  "page_count": 15
+}

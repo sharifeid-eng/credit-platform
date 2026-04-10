@@ -1,0 +1,235 @@
+{
+  "facility_terms": {
+    "facility_type": "receivables_purchase",
+    "facility_limit": 15000000,
+    "currency": "AED",
+    "maturity_date": null,
+    "commitment_period_end": null,
+    "effective_date": "2026-02-10",
+    "parties": [
+      "Klaim Kapital Technologies Limited (Seller / Sub-Servicer)",
+      "Klaim Receivable Purchase SPV 4 Limited (Buyer)",
+      "ACP Shariah Financing GP Limited (Servicer)"
+    ],
+    "governing_law": "ADGM Courts",
+    "interest_rate_description": "Uncommitted arrangement — Purchase Price = Net Invoice Amount x Advance Rate",
+    "section_ref": "Preamble, Section 1",
+    "confidence": 0.95
+  },
+  "eligibility_criteria": [
+    {
+      "name": "Eligible Counterparty",
+      "description": "Counterparty must be an Eligible Debtor or approved in writing by Investment Agent",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Eligibility Criteria (a)",
+      "page": 29,
+      "confidence": 0.95
+    },
+    {
+      "name": "AED Currency",
+      "description": "All amounts payable must be in AED",
+      "parameter": null,
+      "value": "AED",
+      "section_ref": "Eligibility Criteria (b)(i)",
+      "page": 29,
+      "confidence": 0.98
+    },
+    {
+      "name": "Payment to Custody Account",
+      "description": "Amounts must be paid directly to the Custody Account",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Eligibility Criteria (b)(ii)",
+      "page": 29,
+      "confidence": 0.95
+    },
+    {
+      "name": "Clean Payment",
+      "description": "No withholding, counterclaim, deduction or set-off unless approved by Investment Agent",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Eligibility Criteria (b)(iii)",
+      "page": 29,
+      "confidence": 0.95
+    },
+    {
+      "name": "Standard Form Claim",
+      "description": "Must be in the standard form of the relevant Customer",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Eligibility Criteria (c)(i)",
+      "page": 30,
+      "confidence": 0.93
+    },
+    {
+      "name": "Debtor Approved",
+      "description": "Approved by the Eligible Debtor per its current policies and guidelines",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Eligibility Criteria (c)(ii)",
+      "page": 30,
+      "confidence": 0.93
+    },
+    {
+      "name": "No WAL Breach",
+      "description": "WAL of Eligible Receivables must be ≤ 70 days AND/OR Extended Age Receivables ≤ 5% of aggregate OPB",
+      "parameter": "wal_threshold_days",
+      "value": 70,
+      "section_ref": "Section 1(d)(xi)",
+      "page": 6,
+      "confidence": 0.95
+    },
+    {
+      "name": "No Monthly Denial Rate Breach",
+      "description": "Monthly Denial Rate must not have been breached and be continuing",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Section 1(d)(x)",
+      "page": 6,
+      "confidence": 0.93
+    },
+    {
+      "name": "No Borrowing Base Deficiency",
+      "description": "No Borrowing Base Deficiency exists at time of purchase",
+      "parameter": null,
+      "value": null,
+      "section_ref": "Section 1(d)(viii)",
+      "page": 6,
+      "confidence": 0.95
+    }
+  ],
+  "advance_rates": [
+    {
+      "category": "default",
+      "rate": 0.90,
+      "condition": "Purchase Price = Adjusted Net Invoice Amount = Net Invoice Amount x Advance Rate",
+      "section_ref": "Section 1(e), Exhibit A — Adjusted Net Invoice Amount",
+      "confidence": 0.97
+    }
+  ],
+  "concentration_limits": [
+    {
+      "name": "Single Eligible Receivable",
+      "limit_type": "single_receivable",
+      "threshold_pct": 0.10,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "Concentration Limits (a), page 28",
+      "confidence": 0.97
+    },
+    {
+      "name": "Top 10 Largest Eligible Receivables",
+      "limit_type": "top_n",
+      "threshold_pct": 0.50,
+      "tiered": null,
+      "n_value": 10,
+      "section_ref": "Concentration Limits (b), page 28",
+      "confidence": 0.97
+    },
+    {
+      "name": "Single Customer (Originator)",
+      "limit_type": "single_customer",
+      "threshold_pct": 0.10,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "Concentration Limits (c), page 29",
+      "confidence": 0.97
+    },
+    {
+      "name": "Single Non-Eligible Debtor",
+      "limit_type": "single_payer",
+      "threshold_pct": 0.10,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "Concentration Limits (d), page 29",
+      "confidence": 0.97
+    },
+    {
+      "name": "Extended Age Receivables (70-90 days)",
+      "limit_type": "extended_age",
+      "threshold_pct": 0.05,
+      "tiered": null,
+      "n_value": null,
+      "section_ref": "Concentration Limits (e), page 29",
+      "confidence": 0.97
+    }
+  ],
+  "covenants": [],
+  "events_of_default": [],
+  "reporting_requirements": [
+    {
+      "name": "Quarterly Unaudited Financials",
+      "frequency": "quarterly",
+      "due_days_after_period": 30,
+      "description": "Unaudited balance sheet within 30 days of quarter-end",
+      "confidence": 0.93
+    },
+    {
+      "name": "Annual Audited Financials",
+      "frequency": "annual",
+      "due_days_after_period": 120,
+      "description": "Audited consolidated financials (180 days for FY2025)",
+      "confidence": 0.93
+    },
+    {
+      "name": "Management Meetings",
+      "frequency": "quarterly",
+      "due_days_after_period": 15,
+      "description": "Within 15 days of quarter-end",
+      "confidence": 0.90
+    },
+    {
+      "name": "Weekly Movables Registration",
+      "frequency": "monthly",
+      "due_days_after_period": null,
+      "description": "On last Business Day of each calendar week: register true sales on Movables Security Register",
+      "confidence": 0.90
+    }
+  ],
+  "waterfall_normal": [],
+  "waterfall_default": [],
+  "risk_flags": [],
+  "definitions": {
+    "Account Debtor": "Insurance companies/TPAs listed on Schedule II + any subsequently approved by Buyer",
+    "Adjusted Net Invoice Amount": "Net Invoice Amount x Advance Rate",
+    "Age": "Days elapsed since the claim submission date of a Receivable; zero for Repaid Amounts",
+    "Borrowing Base": "Adjusted Pool Balance + cash in Collections Account (principal collections net of accrued Murabaha Profit)",
+    "Collections": "All funds received in payment of Receivables + Deemed Collections + Related Security proceeds",
+    "Customer": "Healthcare providers who originate receivables and sell to KKT",
+    "Dilution": "Reduction/cancellation due to defective goods/services, contract changes, setoff — NOT inability to pay",
+    "Eligible Debtor": "Not Affiliate of Parent; not insolvent; UAE-incorporated; on Eligible Debtor List or approved",
+    "Extended Age Receivables": "Receivables with Age > 70 days but ≤ 90 days",
+    "Maximum Credit Limit": "USD 15,000,000",
+    "Net Invoice Amount": "Total amount payable by Account Debtor net of VAT, discounts, credits",
+    "Outstanding Purchase Amount": "Net Invoice Amount minus aggregate Collections deposited",
+    "Portfolio": "All Receivables owned by the Company + all Repaid Amounts",
+    "Purchase Price": "= Adjusted Net Invoice Amount (Section 1(e))",
+    "Repaid Amounts": "Cash collections in Collection Account not yet applied or swept",
+    "Retained Amount": "Excess of Net Invoice Amount over Adjusted Net Invoice Amount (the holdback)",
+    "Weighted Average Life": "Sum(OPB_i x Age_i) / Total OPB including Eligible, Ineligible, and Repaid Amounts",
+    "Weighted Average Life Test": "Satisfied if WAL ≤ 70 days"
+  },
+  "section_map": {
+    "Section 1": "Purchase and Sale of Receivables",
+    "Section 5": "Servicing and Collection",
+    "Section 6": "Repurchase Obligations",
+    "Section 9": "Indemnification",
+    "Exhibit A": "Defined Terms",
+    "Exhibit B": "Conditions Precedent",
+    "Exhibit C": "Representations and Warranties",
+    "Exhibit D": "Covenants",
+    "Exhibit E": "Eligibility Criteria",
+    "Exhibit F": "Sub-Servicer Termination Events",
+    "Exhibit G": "Accounts",
+    "Schedule I": "Account Debtors",
+    "Schedule II": "Eligible Debtor List"
+  },
+  "overall_confidence": 0.95,
+  "extraction_model": "human_review_with_counsel",
+  "extraction_cost_usd": 0.00,
+  "extracted_at": "2026-04-10T12:00:00+00:00",
+  "document_type": "credit_agreement",
+  "filename": "Master Receivables Purchase Agreement.pdf",
+  "page_count": 60
+}

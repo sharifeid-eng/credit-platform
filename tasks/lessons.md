@@ -3,6 +3,23 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-10 — Multi-document extraction must merge, not pick latest
+**Mistake:** `load_latest_extraction()` picked the single document with the latest `extracted_at` timestamp. When all 4 Klaim documents had the same timestamp, it alphabetically chose "Fee letter" — returning 0 covenants, 0 reporting, 0 EODs (all the substance is in the MMA/MRPA).
+**Rule:** For multi-document facilities, always merge all extractions. Lists (covenants, EODs, reporting) are concatenated and deduped by name. Dicts (facility_terms) are merged with primary credit_agreement winning on conflict. Track `source_documents` array for provenance.
+
+---
+
+## 2026-04-10 — Relative paths in core/ modules break when backend runs from subdirectory
+**Mistake:** `get_legal_dir()` used `os.path.join('data', company, product, 'legal')` — a relative path. When uvicorn runs from `backend/`, this resolved to `backend/data/klaim/...` which doesn't exist. The function returned an empty list, making all Legal Analysis tabs show "no documents".
+**Rule:** All path construction in `core/` modules must use `os.path.dirname(os.path.abspath(__file__))` to anchor to the project root, matching the pattern established in `core/loader.py`. Never use bare relative paths like `os.path.join('data', ...)`.
+
+---
+
+## 2026-04-10 — Tape columns represent sellers, not payers (Klaim)
+**Lesson:** The `Group` column in Klaim tapes contains healthcare provider names (143 sellers), NOT insurance company names (payers/Account Debtors). The MRPA lists 13 approved Account Debtors (insurance companies), but the tape has no column to identify which insurer owes on each deal. This means the 10% non-eligible debtor concentration limit cannot be monitored from tape data alone. Recommendation: request a payer column in future tape exports.
+
+---
+
 ## 2026-04-10 — Registry format must be consistent across all engines writing to the same file
 **Mistake:** `AnalyticsSnapshotEngine` wrote `registry.json` as `list[dict]` while `DataRoomEngine` expected `dict[str, dict]`. Running both on the same company corrupted the registry — all DataRoomEngine operations (catalog, search, stats) crashed with `AttributeError: 'list' object has no attribute 'items'`.
 **Rule:** When multiple modules read/write the same file, they MUST use the same schema. Either: (1) share a common `_load_registry`/`_save_registry`, (2) add a migration path in the reader (handle both old and new formats), or (3) use separate files. We chose option (2): the snapshot engine now auto-migrates list→dict on read.

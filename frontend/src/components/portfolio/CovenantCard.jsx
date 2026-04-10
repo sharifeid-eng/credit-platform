@@ -1,8 +1,15 @@
 import ComplianceBadge from './ComplianceBadge'
 
+const EOD_STYLES = {
+  eod_triggered:      { bg: 'rgba(240,96,96,0.15)', border: 'rgba(240,96,96,0.4)', color: '#F06060', label: 'EoD TRIGGERED' },
+  first_breach:       { bg: 'rgba(201,168,76,0.12)', border: 'rgba(201,168,76,0.3)', color: '#C9A84C', label: '1st BREACH — NOT YET EOD' },
+  breach_no_eod:      { bg: 'rgba(201,168,76,0.12)', border: 'rgba(201,168,76,0.3)', color: '#C9A84C', label: 'BREACH — NOT AN EOD' },
+  compliant:          null,
+}
+
 export default function CovenantCard({ covenant, currency = 'AED' }) {
   const { name, current, threshold, compliant, operator, format, period, breakdown,
-          previous_value, days_since_previous } = covenant
+          previous_value, days_since_previous, eod_rule, eod_status, eod_triggered, consecutive_breaches } = covenant
 
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
@@ -51,10 +58,32 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
     }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-          {name}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {name}
+          </div>
+          {eod_rule && (
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+              {eod_rule === 'single_breach_not_eod' && 'Single breach NOT an EoD (MMA 18.3(i))'}
+              {eod_rule === 'single_breach_is_eod' && 'Single breach IS an EoD'}
+              {eod_rule === 'two_consecutive_breaches' && '2 consecutive breaches = EoD (MMA 18.3)'}
+            </div>
+          )}
         </div>
-        <ComplianceBadge compliant={compliant} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {eod_status && EOD_STYLES[eod_status] && (
+            <span style={{
+              padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700,
+              background: EOD_STYLES[eod_status].bg,
+              border: `1px solid ${EOD_STYLES[eod_status].border}`,
+              color: EOD_STYLES[eod_status].color,
+              whiteSpace: 'nowrap',
+            }}>
+              {EOD_STYLES[eod_status].label}
+            </span>
+          )}
+          <ComplianceBadge compliant={compliant} />
+        </div>
       </div>
 
       {/* Value */}

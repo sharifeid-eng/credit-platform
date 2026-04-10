@@ -1203,3 +1203,62 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'bb_holiday_active': bb_holiday_active,
         'bb_holiday_end': bb_holiday_end.strftime('%Y-%m-%d') if bb_holiday_end else None,
     }
+
+
+def annotate_covenant_eod(result, history):
+    """Annotate covenants with consecutive breach tracking for EoD determination.
+
+    Pure function: takes covenant result + history dict, returns annotated result.
+    History format: {covenant_name: [{period, compliant, date}, ...]} sorted newest-first.
+
+    Per MMA Article 18.3:
+    - single_breach_not_eod: breach is a warning, not an EoD (PAR30)
+    - single_breach_is_eod: any breach = immediate EoD (PAR60, Parent Cash)
+    - two_consecutive_breaches: EoD only after 2 consecutive monthly breaches (Collection Ratio, Paid vs Due)
+    """
+    for cov in result.get('covenants', []):
+        eod_rule = cov.get('eod_rule')
+        if not eod_rule:
+            continue
+
+        name = cov['name']
+        prev_records = history.get(name, [])
+        is_breaching = not cov.get('compliant', True)
+
+        if eod_rule == 'single_breach_not_eod':
+            cov['eod_triggered'] = False
+            cov['eod_status'] = 'breach_no_eod' if is_breaching else 'compliant'
+            cov['consecutive_breaches'] = 1 if is_breaching else 0
+
+        elif eod_rule == 'single_breach_is_eod':
+            cov['eod_triggered'] = is_breaching
+            cov['eod_status'] = 'eod_triggered' if is_breaching else 'compliant'
+            cov['consecutive_breaches'] = 1 if is_breaching else 0
+
+        elif eod_rule == 'two_consecutive_breaches':
+            # Check if the most recent prior period was also a breach
+            prior_breach = False
+            if prev_records:
+                prior_breach = not prev_records[0].get('compliant', True)
+
+            if is_breaching and prior_breach:
+                consecutive = 2
+                eod_triggered = True
+                eod_status = 'eod_triggered'
+            elif is_breaching:
+                consecutive = 1
+                eod_triggered = False
+                eod_status = 'first_breach'
+            else:
+                consecutive = 0
+                eod_triggered = False
+                eod_status = 'compliant'
+
+            cov['eod_triggered'] = eod_triggered
+            cov['eod_status'] = eod_status
+            cov['consecutive_breaches'] = consecutive
+
+    # Recount with EoD awareness
+    eod_count = sum(1 for c in result['covenants'] if c.get('eod_triggered'))
+    result['eod_count'] = eod_count
+    return result

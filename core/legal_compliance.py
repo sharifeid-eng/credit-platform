@@ -42,29 +42,82 @@ def load_legal_facility_params(company: str, product: str) -> dict:
 
 
 def load_latest_extraction(company: str, product: str) -> dict | None:
-    """Load the most recent extraction result for a company/product."""
+    """Load and merge all extraction results for a company/product.
+
+    Multi-document facilities (MMA + MRPA + Fee Letter + Qard) each contribute
+    different fields. This merges them: lists are concatenated, dicts are merged
+    (later docs override on conflict), and the primary credit_agreement provides
+    the base facility_terms.
+    """
     legal_dir = get_legal_dir(company, product)
     if not os.path.exists(legal_dir):
         return None
 
-    latest = None
-    latest_date = None
-
-    for fname in os.listdir(legal_dir):
+    extractions = []
+    for fname in sorted(os.listdir(legal_dir)):
         if not fname.endswith('_extracted.json'):
             continue
         fpath = os.path.join(legal_dir, fname)
         try:
             with open(fpath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            extracted_at = data.get('extracted_at', '')
-            if latest_date is None or extracted_at > latest_date:
-                latest = data
-                latest_date = extracted_at
+            extractions.append(data)
         except (json.JSONDecodeError, IOError):
             continue
 
-    return latest
+    if not extractions:
+        return None
+
+    if len(extractions) == 1:
+        return extractions[0]
+
+    # Merge: start with the primary credit_agreement, layer others on top
+    primary = next((e for e in extractions if e.get('document_type') == 'credit_agreement'), extractions[0])
+    merged = dict(primary)  # shallow copy
+
+    # List fields: concatenate from all documents (dedup by content hash)
+    list_fields = [
+        'covenants', 'eligibility_criteria', 'advance_rates', 'concentration_limits',
+        'events_of_default', 'reporting_requirements', 'risk_flags',
+        'waterfall_normal', 'waterfall_default',
+    ]
+    for field in list_fields:
+        combined = list(primary.get(field, []))
+        seen_names = {item.get('name', '') for item in combined if isinstance(item, dict)}
+        for ext in extractions:
+            if ext is primary:
+                continue
+            for item in ext.get(field, []):
+                # Dedup by name if dict, otherwise just append
+                if isinstance(item, dict):
+                    item_name = item.get('name', '')
+                    if item_name and item_name not in seen_names:
+                        combined.append(item)
+                        seen_names.add(item_name)
+                else:
+                    combined.append(item)
+        merged[field] = combined
+
+    # Dict fields: merge (primary wins on conflict)
+    dict_fields = ['facility_terms', 'definitions', 'section_map']
+    for field in dict_fields:
+        base = dict(primary.get(field, {}))
+        for ext in extractions:
+            if ext is primary:
+                continue
+            for k, v in ext.get(field, {}).items():
+                if k not in base or not base[k]:
+                    base[k] = v
+        merged[field] = base
+
+    # Track all source documents
+    merged['source_documents'] = [
+        {'filename': e.get('filename', ''), 'document_type': e.get('document_type', ''),
+         'extracted_at': e.get('extracted_at', ''), 'confidence': e.get('overall_confidence', 0)}
+        for e in extractions
+    ]
+
+    return merged
 
 
 def _extraction_dict_to_params(extraction: dict) -> dict:

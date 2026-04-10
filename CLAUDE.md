@@ -743,6 +743,9 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Analytics-as-source** — Platform-computed analytics (tape summaries, PAR, DSO) snapshotted into the data room as searchable documents. Memos can cite "Tape Analytics — PAR Analysis, Mar 2026" alongside "HSBC Investor Report, Jan 2026".
 - **Memo feedback loop** — Analyst edits to AI-generated memo sections are recorded in Company Mind. Future memos benefit from accumulated style preferences and corrections.
 - **Legal extraction caching** — Extract once per PDF, cache forever. 5-pass Claude pipeline (~$1.25/doc). 3-tier merge: document > manual > hardcoded.
+- **Multi-document extraction merge** — `load_latest_extraction()` merges all `*_extracted.json` files in the legal directory. Lists (covenants, EODs, reporting) concatenated and deduped by name. Dicts (facility_terms) merged with primary credit_agreement winning on conflict. Tracks `source_documents` array for provenance.
+- **Consecutive breach EoD tracking** — `annotate_covenant_eod()` in `core/portfolio.py` (pure function) + `covenant_history.json` (I/O in `main.py`). Per MMA 18.3: `single_breach_not_eod` (PAR30), `single_breach_is_eod` (PAR60, Parent Cash), `two_consecutive_breaches` (Collection Ratio, Paid vs Due). History persists max 24 periods, dedupes by date.
+- **Payment schedule as static data** — Stored in `data/{co}/{prod}/legal/payment_schedule.json` (not extracted by AI). Backend reporting endpoint loads and serves it alongside extracted reporting requirements. Frontend renders with PAID/NEXT badges relative to today's date.
 - **Registry format** — Both DataRoomEngine and AnalyticsSnapshotEngine use dict[str, dict] registry format (keyed by doc_id). Auto-migrates old list format on read.
 -----
 ## Design System — Dark Theme ✅
@@ -828,7 +831,12 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Framework: `LEGAL_EXTRACTION_SCHEMA.md` — extraction taxonomy, confidence grading, param mapping
   - 22 tests (schemas, mapping, compliance comparison, parser utils) — all passing
   - Parameterized `ineligibility_age_days` and `cash_ratio_limit` in `core/portfolio.py` (was hardcoded 365 and 3.0)
-  - **Next:** Upload actual Klaim facility agreement to validate extraction, compare against external legal tool via Chrome
+  - **Klaim facility documents reviewed:** 4 PDFs (MMA 130pp, MRPA 60pp, Qard 15pp, Fee Letter 3pp) with human-reviewed extraction JSONs at 96% confidence, $0 AI cost
+  - **Multi-document extraction merge:** `load_latest_extraction()` merges all documents — lists concatenated (deduped by name), dicts merged (primary credit_agreement wins)
+  - **Account Debtor validation:** CRITICAL DATA GAP — tape has no payer column; 10% non-eligible debtor limit unenforceable from tape data. Saved to `legal/debtor_validation.json`
+  - **Payment schedule:** 17-payment schedule ($6M, 13% p.a., ACT/360) stored in `legal/payment_schedule.json`, served via reporting endpoint, rendered in ReportingCalendar.jsx
+  - **Consecutive breach history:** `annotate_covenant_eod()` + `covenant_history.json` persistence per MMA 18.3 — `first_breach`, `breach_no_eod`, `eod_triggered` statuses with styled frontend badges
+  - **Path fix:** `get_legal_dir()` now uses absolute path (was relative, broke when backend ran from subdirectory)
 - ✅ **Creative UI redesign (branch: claude/creative-landing-page-research-5hdf6):**
   - Landing page: Islamic geometric SVG background pattern (Girih/8-point star, gold, 14% opacity, 140px tile) — stroke widths tuned for visibility (1.0 lines, 1.6 star, 2.2 dots)
   - Landing page: Syne 800 display font for hero headline + LAITH wordmark; `--font-display` CSS token

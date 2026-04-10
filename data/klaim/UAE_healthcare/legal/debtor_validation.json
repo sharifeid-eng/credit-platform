@@ -1,0 +1,38 @@
+{
+  "validation_type": "account_debtor_eligibility",
+  "validated_at": "2026-04-10",
+  "source_document": "MRPA (Master Receivables Purchase Agreement), page 25",
+  "tape_file": "2026-03-03_uae_healthcare.csv",
+  "approved_account_debtors": [
+    "Abu Dhabi National Insurance Co.",
+    "Almadallah Healthcare Management FZ CO",
+    "Gulf Insurance Group (Gulf) B.S.C.",
+    "National Health Insurance Company - Daman (PJSC)",
+    "FMC Network UAE Management Consultancy LLC",
+    "MedNet UAE FZ LLC",
+    "NAS Neuron Health Services LLC",
+    "Neuron LLC",
+    "NEXtCARE Claims Management LLC",
+    "National General Insurance Co. (PJSC)",
+    "Sukoon Insurance P.J.S.C.",
+    "American Life Insurance Company",
+    "Emirates Group"
+  ],
+  "finding": "TAPE_LACKS_PAYER_COLUMN",
+  "severity": "critical_data_gap",
+  "detail": "The Klaim tape has no column identifying the insurance company (Account Debtor / payer) for each deal. The 'Group' column contains healthcare provider names (143 unique sellers), NOT insurance company names. Product column only has 'claim' and 'invoice'. Without a payer column, the platform CANNOT: (1) verify that all receivables are owed by approved Account Debtors, (2) monitor the 10% non-eligible debtor concentration limit per MRPA Concentration Limits (d), (3) flag receivables from unapproved insurance companies as ineligible.",
+  "tape_columns_checked": ["Group", "Product"],
+  "group_column_contains": "healthcare_provider_names",
+  "unique_groups_count": 143,
+  "recommendations": [
+    "Request Klaim add an 'Insurance Company' or 'Payer' column to future tape exports",
+    "Until payer data is available, assume all receivables are from approved debtors (optimistic) or flag as unverifiable (conservative)",
+    "The 10% non-eligible debtor concentration limit cannot be enforced from tape data alone",
+    "Consider adding payer identification to the Integration API invoice schema (extra_data JSONB field)"
+  ],
+  "mrpa_concentration_limit_d": {
+    "rule": "Maximum 10% of Pool Balance may be owed by Account Debtors NOT on the approved list",
+    "enforceable_from_tape": false,
+    "reason": "No payer column in tape"
+  }
+}

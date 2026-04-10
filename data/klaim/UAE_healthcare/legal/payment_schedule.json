@@ -1,0 +1,35 @@
+{
+  "facility": {
+    "principal": 6000000,
+    "currency": "USD",
+    "draw_date": "2026-02-17",
+    "maturity_date": "2030-02-01",
+    "rate_pct": 13.0,
+    "day_count": "ACT/360",
+    "daily_accrual": 2166.67,
+    "structure": "16 quarterly profit-only payments + bullet principal at maturity"
+  },
+  "payments": [
+    { "date": "2026-03-31", "days": 42,  "coupon": 91000.00,     "principal": 0,         "total": 91000.00 },
+    { "date": "2026-06-30", "days": 91,  "coupon": 197166.67,    "principal": 0,         "total": 197166.67 },
+    { "date": "2026-09-30", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2026-12-31", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2027-03-31", "days": 90,  "coupon": 195000.00,    "principal": 0,         "total": 195000.00 },
+    { "date": "2027-06-30", "days": 91,  "coupon": 197166.67,    "principal": 0,         "total": 197166.67 },
+    { "date": "2027-09-30", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2027-12-31", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2028-03-31", "days": 91,  "coupon": 197166.67,    "principal": 0,         "total": 197166.67 },
+    { "date": "2028-06-30", "days": 91,  "coupon": 197166.67,    "principal": 0,         "total": 197166.67 },
+    { "date": "2028-09-30", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2028-12-31", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2029-03-31", "days": 90,  "coupon": 195000.00,    "principal": 0,         "total": 195000.00 },
+    { "date": "2029-06-30", "days": 91,  "coupon": 197166.67,    "principal": 0,         "total": 197166.67 },
+    { "date": "2029-09-30", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2029-12-31", "days": 92,  "coupon": 199333.33,    "principal": 0,         "total": 199333.33 },
+    { "date": "2030-02-01", "days": 32,  "coupon": 69333.33,     "principal": 6000000,   "total": 6069333.33 }
+  ],
+  "total_interest": 3130166.67,
+  "total_principal": 6000000,
+  "total_payments": 9130166.67,
+  "source": "MMA (Master Murabaha Agreement), human-verified schedule"
+}
