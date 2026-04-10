@@ -1,0 +1,79 @@
+{
+  "592a9e2c-162": {
+    "doc_id": "592a9e2c-162",
+    "filename": "2025-09-23_uae_healthcare.csv",
+    "filepath": ".claude\\worktrees\\pedantic-poitras\\data\\klaim\\UAE_healthcare\\2025-09-23_uae_healthcare.csv",
+    "document_type": "other",
+    "sha256": "16ab2225de8e251013a76333290c7cf67470b5a3b126df73bec78291e7dd2c8f",
+    "page_count": 1,
+    "chunk_count": 3,
+    "text_length": 3979,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2025-09-23_uae_healthcare.csv",
+      "rows": 6290,
+      "cols": 25,
+      "separator": ","
+    },
+    "ingested_at": "2026-04-10T11:56:21"
+  },
+  "20a56bc2-96a": {
+    "doc_id": "20a56bc2-96a",
+    "filename": "2025-12-08_uae_healthcare.xlsx",
+    "filepath": ".claude\\worktrees\\pedantic-poitras\\data\\klaim\\UAE_healthcare\\2025-12-08_uae_healthcare.xlsx",
+    "document_type": "other",
+    "sha256": "fdc34b863da89db33d58b5cc5f7322240c74de8fd78f09cb5dcd5803b8b6a234",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 10844,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2025-12-08_uae_healthcare.xlsx",
+      "sheets": [
+        {
+          "name": "Deal sheet - 8Dec2025",
+          "rows": 4988,
+          "cols": 45
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-10T11:56:24"
+  },
+  "efe3704c-821": {
+    "doc_id": "efe3704c-821",
+    "filename": "2026-02-20_uae_healthcare.csv",
+    "filepath": ".claude\\worktrees\\pedantic-poitras\\data\\klaim\\UAE_healthcare\\2026-02-20_uae_healthcare.csv",
+    "document_type": "other",
+    "sha256": "ad8a55090f51a1d42f5f1baed4aa6807c466b86506626e86aa3074aaf29d4b5e",
+    "page_count": 1,
+    "chunk_count": 3,
+    "text_length": 4263,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2026-02-20_uae_healthcare.csv",
+      "rows": 7536,
+      "cols": 25,
+      "separator": ","
+    },
+    "ingested_at": "2026-04-10T11:56:25"
+  },
+  "1867b05e-fa7": {
+    "doc_id": "1867b05e-fa7",
+    "filename": "2026-03-03_uae_healthcare.csv",
+    "filepath": ".claude\\worktrees\\pedantic-poitras\\data\\klaim\\UAE_healthcare\\2026-03-03_uae_healthcare.csv",
+    "document_type": "other",
+    "sha256": "1e392379cf94e29ad6804ad19effd348a63bc1012041fb8e1214f00277b41f4e",
+    "page_count": 1,
+    "chunk_count": 6,
+    "text_length": 9467,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2026-03-03_uae_healthcare.csv",
+      "rows": 7697,
+      "cols": 60,
+      "separator": ","
+    },
+    "ingested_at": "2026-04-10T11:56:27"
+  }
+}

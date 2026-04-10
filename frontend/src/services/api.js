@@ -216,33 +216,25 @@ export const postResearchChat = (co, prod, question, history = []) =>
 // ── Memo Engine ──────────────────────────────────────────────────────────────
 export const getMemoTemplates = () =>
   api.get('/memo-templates').then(r => r.data);
-
 export const listMemos = (co, prod) =>
   api.get(`/companies/${co}/products/${prod}/memos`).then(r => r.data);
-
 export const createMemo = (co, prod, template, title, sections) =>
   api.post(`/companies/${co}/products/${prod}/memos`, { template, title, sections }).then(r => r.data);
-
 export const getMemo = (co, prod, memoId) =>
   api.get(`/companies/${co}/products/${prod}/memos/${memoId}`).then(r => r.data);
-
 export const generateMemo = (co, prod, template, customSections) =>
   api.post(`/companies/${co}/products/${prod}/memos/generate`,
     { template, custom_sections: customSections },
     { timeout: 300_000 }
   ).then(r => r.data);
-
 export const regenerateSection = (co, prod, memoId, sectionKey) =>
   api.post(`/companies/${co}/products/${prod}/memos/${memoId}/sections/${sectionKey}/regenerate`,
     {}, { timeout: 120_000 }
   ).then(r => r.data);
-
 export const updateMemoSection = (co, prod, memoId, sectionKey, content) =>
   api.patch(`/companies/${co}/products/${prod}/memos/${memoId}/sections/${sectionKey}`, { content }).then(r => r.data);
-
 export const updateMemoStatus = (co, prod, memoId, status) =>
   api.patch(`/companies/${co}/products/${prod}/memos/${memoId}/status`, { status }).then(r => r.data);
-
 export const exportMemoPdf = (co, prod, memoId) =>
   api.post(`/companies/${co}/products/${prod}/memos/${memoId}/export-pdf`, {},
     { timeout: 120_000, responseType: 'blob' }
@@ -252,6 +244,41 @@ export const exportMemoPdf = (co, prod, memoId) =>
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   });
+
+// ── Legal Analysis ───────────────────────────────────────────────────────────
+export const uploadLegalDocument = (co, prod, file, documentType = 'credit_agreement') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post(`/companies/${co}/products/${prod}/legal/upload`, formData, {
+    params: { document_type: documentType },
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300_000,
+  }).then(r => r.data);
+};
+export const getLegalDocuments          = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/documents`).then(r => r.data);
+export const getLegalDocument           = (co, prod, filename) =>
+  api.get(`/companies/${co}/products/${prod}/legal/documents/${filename}`).then(r => r.data);
+export const reExtractLegalDocument     = (co, prod, filename, docType = 'credit_agreement') =>
+  api.post(`/companies/${co}/products/${prod}/legal/documents/${filename}/re-extract`, null, { params: { document_type: docType } }).then(r => r.data);
+export const deleteLegalDocument        = (co, prod, filename) =>
+  api.delete(`/companies/${co}/products/${prod}/legal/documents/${filename}`).then(r => r.data);
+export const getLegalFacilityTerms      = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/facility-terms`).then(r => r.data);
+export const getLegalEligibility        = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/eligibility`).then(r => r.data);
+export const getLegalCovenantsExtracted = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/covenants-extracted`).then(r => r.data);
+export const getLegalEventsOfDefault    = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/events-of-default`).then(r => r.data);
+export const getLegalReporting          = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/reporting`).then(r => r.data);
+export const getLegalRiskFlags          = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/legal/risk-flags`).then(r => r.data);
+export const getLegalComplianceComparison = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/legal/compliance-comparison`, { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getLegalAmendmentDiff      = (co, prod, oldFile, newFile) =>
+  api.get(`/companies/${co}/products/${prod}/legal/amendment-diff`, { params: { filename_old: oldFile, filename_new: newFile } }).then(r => r.data);
 
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;

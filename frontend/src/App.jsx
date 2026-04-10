@@ -13,6 +13,7 @@ import ResearchChat from './pages/research/ResearchChat';
 import MemoArchive from './pages/research/MemoArchive';
 import MemoBuilder from './pages/research/MemoBuilder';
 import MemoEditor from './pages/research/MemoEditor';
+import LegalAnalytics from './pages/LegalAnalytics';
 
 function CompanyRedirect() {
   // Redirect /company/:name to first product's tape overview
@@ -36,6 +37,8 @@ export default function App() {
           <Route path="tape/:tab" element={<TapeAnalytics />} />
           <Route path="portfolio" element={<Navigate to="borrowing-base" replace />} />
           <Route path="portfolio/:tab" element={<PortfolioAnalytics />} />
+          <Route path="legal" element={<Navigate to="documents" replace />} />
+          <Route path="legal/:tab" element={<LegalAnalytics />} />
           <Route path="executive-summary" element={<ExecutiveSummary />} />
           <Route path="research" element={<Navigate to="library" replace />} />
           <Route path="research/library" element={<DocumentLibrary />} />
@@ -53,6 +56,8 @@ export default function App() {
           <Route path="tape/:tab" element={<TapeAnalytics />} />
           <Route path="portfolio" element={<Navigate to="borrowing-base" replace />} />
           <Route path="portfolio/:tab" element={<PortfolioAnalytics />} />
+          <Route path="legal" element={<Navigate to="documents" replace />} />
+          <Route path="legal/:tab" element={<LegalAnalytics />} />
           <Route path="executive-summary" element={<ExecutiveSummary />} />
           <Route path="research" element={<Navigate to="library" replace />} />
           <Route path="research/library" element={<DocumentLibrary />} />

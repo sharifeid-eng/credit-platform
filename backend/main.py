@@ -93,6 +93,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="ACP Private Credit API", lifespan=lifespan)
 app.include_router(integration_router)
 
+from backend.legal import router as legal_router
+app.include_router(legal_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174,http://localhost:5175").split(","),
@@ -1614,6 +1617,17 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
     except Exception:
         pass
 
+    # 21. Legal compliance (if documents extracted)
+    try:
+        from core.legal_compliance import build_legal_context_for_executive_summary
+        co = config.get('company', '')
+        pr = config.get('product', '')
+        legal_ctx = build_legal_context_for_executive_summary(co, pr)
+        if legal_ctx:
+            sections.append(legal_ctx)
+    except Exception:
+        pass
+
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
         mind_ctx = build_mind_context('klaim', config.get('product', 'UAE_healthcare'),
@@ -2527,12 +2541,22 @@ def _facility_params_path(company, product):
     )
 
 def _load_facility_params(company, product):
-    """Load saved facility params or return empty dict."""
+    """Load facility params with 3-tier priority:
+    1. Manual overrides (facility_params.json) — highest priority
+    2. Document-extracted values (legal/) — baseline
+    3. Hardcoded defaults (in compute functions) — fallback
+    """
+    from core.legal_compliance import merge_facility_params
+
+    # Load manual params
     path = _facility_params_path(company, product)
+    manual = {}
     if os.path.exists(path):
         with open(path, 'r') as f:
-            return json.load(f)
-    return {}
+            manual = json.load(f)
+
+    # Merge with document-extracted values (legal takes baseline, manual overrides)
+    return merge_facility_params(company, product, manual)
 
 def _portfolio_load(company, product, snapshot, as_of_date, currency, db=None):
     """Load data for portfolio computation. Tries DB first, falls back to tape.

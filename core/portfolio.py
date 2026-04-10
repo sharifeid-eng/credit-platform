@@ -622,7 +622,7 @@ def compute_klaim_borrowing_base(df, mult=1, ref_date=None, facility_params=None
                → Concentration Adjustments → Advance Rate Discount
                → Adjusted Pool Balance + Cash = Borrowing Base
 
-    Advance rates by region: UAE (AED) 90%, Non-UAE (USD) 85%
+    Advance rates by region: UAE 90% (all eligible debtors must be UAE-incorporated per facility agreement)
     """
     if facility_params is None:
         facility_params = {}
@@ -631,9 +631,10 @@ def compute_klaim_borrowing_base(df, mult=1, ref_date=None, facility_params=None
     outstanding = _klaim_outstanding(active, mult)
     total_ar = float(outstanding.sum())
 
-    # ── Ineligible: deals with age > 365 days or fully collected ─────
+    # ── Ineligible: deals unpaid 91+ days after Invoice Date (MMA page 81) ──
     age = _klaim_deal_age_days(active, ref_date)
-    inelig_age = float(outstanding[age > 365].sum())
+    max_age_days = facility_params.get('ineligibility_age_days', 91) if facility_params else 91
+    inelig_age = float(outstanding[age > max_age_days].sum())
     # Denied > 50% of purchase value
     if 'Purchase value' in active.columns and 'Denied by insurance' in active.columns:
         denied_pct = active['Denied by insurance'].fillna(0) / active['Purchase value'].replace(0, 1)
@@ -660,7 +661,6 @@ def compute_klaim_borrowing_base(df, mult=1, ref_date=None, facility_params=None
     default_rate = facility_params.get('advance_rate', 0.90)
     rates_by_region = facility_params.get('advance_rates_by_region', {
         'UAE': 0.90,
-        'Non-UAE': 0.85,
     })
     adjusted_pool = eligible_after_conc * default_rate
 
@@ -742,7 +742,7 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
     2. Top-10 Receivables Concentration (50%)
     3. Single customer concentration (10%)
     4. Single payer concentration (10%)
-    5. Extended Age Receivables (5%, WAL < 60 days)
+    5. Extended Age Receivables (5%, WAL ≤ 70 days, Extended Age 70-90d)
     """
     if facility_params is None:
         facility_params = {}
@@ -864,9 +864,10 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
         ],
     })
 
-    # ── 5. Extended Age Receivables (WAL) ───────────────────────────
+    # ── 5. Extended Age Receivables (WAL ≤ 70d, carve-out 70-90d ≤ 5%) ──
     ext_age_threshold = facility_params.get('extended_age_limit', 0.05)
-    wal_threshold_days = facility_params.get('wal_threshold_days', 60)
+    wal_threshold_days = facility_params.get('wal_threshold_days', 70)
+    ext_age_upper_days = facility_params.get('extended_age_upper_days', 90)
     ext_age_pct = 0
     wal_days = 0
     ext_age_adj = 0
@@ -874,8 +875,8 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
     age = _klaim_deal_age_days(active, ref_date)
 
     if total_ar > 0:
-        # Extended age = receivables older than WAL threshold
-        old_mask = age > wal_threshold_days
+        # Extended age = receivables between WAL threshold and upper bound (70-90 days per MMA Art. 21.2)
+        old_mask = (age > wal_threshold_days) & (age <= ext_age_upper_days)
         ext_age_amount = float(outstanding[old_mask].sum())
         ext_age_pct = ext_age_amount / total_ar
         ext_age_breaches = int(old_mask.sum())
@@ -917,13 +918,13 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
 # ── Klaim Covenants ─────────────────────────────────────────────────────────
 
 def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
-    """Klaim 6 covenants matching Creditit:
+    """Klaim 6 covenants per MMA Article 18.2:
     1. Minimum Consolidated Cash Balance (Cash / max(Net Burn, 3M avg) ≥ 3.0x)
-    2. Weighted Average Life of Receivables (< 60 days)
-    3. PAR30 (< 7%)
-    4. PAR60 (< 5%)
-    5. Collection Ratio (≥ 25%, period-based)
-    6. Paid vs Due Ratio (≥ 95%, period-based)
+    2. Weighted Average Life of Receivables (≤ 70 days, dual-path: WAL or 5% carve-out)
+    3. PAR30 (≤ 7%) — single breach NOT an EoD per MMA 18.3(i)
+    4. PAR60 (≤ 5%)
+    5. Collection Ratio (≥ 25%, period-based) — 2 consecutive breaches for EoD per MMA 18.3(ii)
+    6. Paid vs Due Ratio (≥ 95%, period-based) — 2 consecutive breaches for EoD per MMA 18.3(iii)
     """
     if facility_params is None:
         facility_params = {}
@@ -955,11 +956,12 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     cash_ratio = cash / denominator if denominator > 0 else 0
     cash_available = bool(denominator > 0)
 
+    cash_ratio_limit = facility_params.get('cash_ratio_limit', 3.0) if facility_params else 3.0
     covenants.append({
         'name': 'Minimum Consolidated Cash Balance',
         'current': _safe(cash_ratio),
-        'threshold': 3.0,
-        'compliant': bool(cash_ratio >= 3.0) if cash_available else True,
+        'threshold': cash_ratio_limit,
+        'compliant': bool(cash_ratio >= cash_ratio_limit) if cash_available else True,
         'operator': '>=',
         'format': 'ratio',
         'period': test_date_str,
@@ -974,27 +976,44 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         ],
     })
 
-    # ── 2. Weighted Average Life of Receivables (< 60 days) ─────────
-    wal_threshold = facility_params.get('wal_threshold_days', 60)
+    # ── 2. Weighted Average Life (≤ 70d, OR Extended Age 70-90d ≤ 5%) ──
+    # MMA Art. 21: WAL test satisfied if WAL ≤ 70 days (Path A),
+    # OR even if WAL > 70d, if Extended Age Receivables (70-90d) ≤ 5% of Eligible OPB (Path B)
+    wal_threshold = facility_params.get('wal_threshold_days', 70)
+    ext_age_limit = facility_params.get('extended_age_limit', 0.05)
+    ext_age_upper = facility_params.get('extended_age_upper_days', 90)
     age = _klaim_deal_age_days(active, ref_date)
     wal = 0
+    ext_age_pct = 0
     if total_ar > 0:
         wal = float(np.average(age, weights=outstanding))
+        ext_age_mask = (age > wal_threshold) & (age <= ext_age_upper)
+        ext_age_pct = float(outstanding[ext_age_mask].sum()) / total_ar if total_ar > 0 else 0
+
+    # Dual-path compliance: Path A (WAL ≤ threshold) OR Path B (Extended Age ≤ 5%)
+    path_a = bool(wal <= wal_threshold)
+    path_b = bool(ext_age_pct <= ext_age_limit)
+    wal_compliant = path_a or path_b
+    compliance_path = 'Path A (WAL)' if path_a else ('Path B (carve-out)' if path_b else 'Breach')
 
     covenants.append({
         'name': 'Weighted average life of receivables',
         'current': _safe(wal),
         'threshold': _safe(wal_threshold),
-        'compliant': bool(wal < wal_threshold),
-        'operator': '<',
+        'compliant': wal_compliant,
+        'operator': '<=',
         'format': 'days',
         'period': test_date_str,
         'available': True,
         'partial': False,
-        'note': f'{wal - wal_threshold:.0f} days over' if wal >= wal_threshold else None,
+        'compliance_path': compliance_path,
+        'note': f'Compliant via carve-out (Extended Age {ext_age_pct:.1%} ≤ {ext_age_limit:.0%})' if (not path_a and path_b) else (f'{wal - wal_threshold:.0f} days over' if not wal_compliant else None),
         'breakdown': [
             {'label': 'Weighted Average Life', 'value': f'{wal:.0f} days'},
-            {'label': 'Limit', 'value': f'{wal_threshold} days'},
+            {'label': 'WAL Limit (Path A)', 'value': f'{wal_threshold} days'},
+            {'label': f'Extended Age ({wal_threshold}-{ext_age_upper}d) share', 'value': f'{ext_age_pct:.1%}'},
+            {'label': 'Extended Age Limit (Path B)', 'value': f'{ext_age_limit:.0%}'},
+            {'label': 'Compliance Path', 'value': compliance_path, 'bold': True},
         ],
     })
 
@@ -1026,7 +1045,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
-        'note': 'Calculated on the last day of each calendar month',
+        'eod_rule': 'single_breach_not_eod',  # MMA 18.3(i): single breach is NOT an EoD
+        'note': 'Single breach is not an Event of Default (MMA 18.3(i))',
         'breakdown': [
             {'label': 'At-risk receivables', 'value': _safe(par30_amount)},
             {'label': 'Total A/R', 'value': _safe(total_ar)},
@@ -1054,6 +1074,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'eod_rule': 'single_breach_is_eod',  # MMA 18.2(b)(ii): single breach IS an EoD
         'note': 'Calculated on the last day of each calendar month',
         'breakdown': [
             {'label': 'At-risk receivables', 'value': _safe(par60_amount)},
@@ -1086,7 +1107,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': period_str,
         'available': True,
         'partial': False,
-        'note': None,
+        'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(ii): 2 consecutive breaches for EoD
+        'note': 'EoD requires 2 consecutive monthly breaches (MMA 18.3(ii))',
         'breakdown': [
             {'label': 'Collections (period)', 'value': _safe(total_coll if 'total_coll' in dir() else 0)},
             {'label': 'Total A/R (period)', 'value': _safe(total_pv if 'total_pv' in dir() else 0)},
@@ -1117,13 +1139,55 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': period_str,
         'available': True,
         'partial': False,
-        'note': None,
+        'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(iii): 2 consecutive breaches for EoD
+        'note': 'EoD requires 2 consecutive monthly breaches (MMA 18.3(iii))',
         'breakdown': [
             {'label': 'Amount paid (period)', 'value': _safe(amount_paid if 'amount_paid' in dir() else 0)},
             {'label': 'Amount due (period)', 'value': _safe(amount_due if 'amount_due' in dir() else 0)},
             {'label': 'Paid vs Due', 'value': _safe(pvd_ratio), 'bold': True},
         ],
     })
+
+    # ── 7. Parent Minimum Consolidated Cash Balance (≥ 3.0x) ────────
+    # MMA 18.2(e): Same formula as Company cash balance, but for Parent (Klaim Holdings)
+    # Requires manual input — Parent financials not in tape data
+    parent_cash = facility_params.get('parent_cash_balance', 0) * mult
+    parent_burn = facility_params.get('parent_net_cash_burn', 0) * mult
+    parent_burn_3m = facility_params.get('parent_net_cash_burn_3m_avg', parent_burn) * mult
+    parent_denom = max(parent_burn, parent_burn_3m)
+    parent_ratio = parent_cash / parent_denom if parent_denom > 0 else 0
+    parent_available = bool(parent_denom > 0)
+
+    covenants.append({
+        'name': 'Parent Minimum Cash Balance',
+        'current': _safe(parent_ratio),
+        'threshold': cash_ratio_limit,
+        'compliant': bool(parent_ratio >= cash_ratio_limit) if parent_available else True,
+        'operator': '>=',
+        'format': 'ratio',
+        'period': test_date_str,
+        'available': parent_available,
+        'partial': not parent_available,
+        'eod_rule': 'single_breach_is_eod',
+        'note': 'Requires manual input — enter Parent cash and burn data on the platform' if not parent_available else None,
+        'breakdown': [
+            {'label': 'Parent Consolidated Cash', 'value': _safe(parent_cash)},
+            {'label': 'Parent Net Cash Burn (prior month)', 'value': _safe(parent_burn)},
+            {'label': 'Parent 3M avg Net Cash Burn', 'value': _safe(parent_burn_3m)},
+            {'label': 'Denominator', 'value': _safe(parent_denom), 'bold': True},
+        ],
+    })
+
+    # ── BB Holiday Period check ─────────────────────────────────────
+    # MMA 8.3(b): No BB cure obligation for first 5 months from agreement date
+    agreement_date_str = facility_params.get('agreement_date', '2026-02-10')
+    try:
+        agreement_date = pd.to_datetime(agreement_date_str)
+        bb_holiday_end = agreement_date + pd.DateOffset(months=5)
+        bb_holiday_active = ref_date < bb_holiday_end
+    except Exception:
+        bb_holiday_active = False
+        bb_holiday_end = None
 
     computable = [c for c in covenants if c['available'] and not c['partial']]
     compliant_count = sum(1 for c in computable if c['compliant'])
@@ -1136,4 +1200,6 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'breach_count': breach_count,
         'partial_count': partial_count,
         'test_date': test_date_str,
+        'bb_holiday_active': bb_holiday_active,
+        'bb_holiday_end': bb_holiday_end.strftime('%Y-%m-%d') if bb_holiday_end else None,
     }

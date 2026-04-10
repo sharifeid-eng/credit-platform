@@ -147,13 +147,19 @@ credit-platform/
 │       └── aa1a0a4ec761_initial_schema_6_tables.py  # Initial migration (6 tables)
 ├── alembic.ini             # Alembic config
 ├── backend/
-│   ├── main.py             # FastAPI app — all REST endpoints (tape + portfolio)
+│   ├── main.py             # FastAPI app — all REST endpoints (tape + portfolio + legal)
+│   ├── legal.py            # Legal Analysis API endpoints (upload, extract, compare)
 │   ├── auth.py             # X-API-Key authentication for integration endpoints
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
 │   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (14 sections: hierarchy, clocks, denominators, decision trees, compute registry)
 │   ├── FRAMEWORK_INDEX.md  # Quick reference index — section map, company registry, command lookup, core principles
+│   ├── LEGAL_EXTRACTION_SCHEMA.md  # Legal extraction taxonomy — field schemas, confidence grading, param mapping
+│   ├── legal_schemas.py    # Pydantic models for legal extraction output
+│   ├── legal_parser.py     # PDF-to-markdown conversion (PyMuPDF + pymupdf4llm + pdfplumber)
+│   ├── legal_extractor.py  # Multi-pass Claude extraction engine (5 passes, cached)
+│   ├── legal_compliance.py # Compliance comparison: doc terms vs live portfolio metrics
 │   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
 │   ├── methodology_klaim.py # Klaim methodology metadata (16 sections, 29 metrics, 13 tables)
 │   ├── methodology_silq.py # SILQ methodology metadata (15 sections, 23 metrics, 2 tables)
@@ -192,6 +198,7 @@ credit-platform/
 │   │   │   ├── Home.jsx             # Landing page — company grid + resources section
 │   │   │   ├── TapeAnalytics.jsx    # 18-tab tape dashboard (extracted from old Company.jsx)
 │   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
+│   │   │   ├── LegalAnalytics.jsx   # 8-tab legal document analysis
 │   │   │   ├── Framework.jsx        # Analysis Framework page (/framework) — analytical philosophy with sticky TOC
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
@@ -240,6 +247,15 @@ credit-platform/
 │   │   │   │       └── SilqCdrCcrChart.jsx        # CDR/CCR conditional rates by vintage (SILQ)
 │   │   │   │       ├── SilqLossWaterfallChart.jsx
 │   │   │   │       └── SilqUnderwritingDriftChart.jsx
+│   │   │   ├── legal/
+│   │   │   │   ├── DocumentUpload.jsx     # PDF upload + document inventory
+│   │   │   │   ├── FacilityTerms.jsx      # Extracted facility overview
+│   │   │   │   ├── EligibilityView.jsx    # Eligibility criteria + advance rates
+│   │   │   │   ├── CovenantComparison.jsx # Doc thresholds vs live compliance
+│   │   │   │   ├── EventsOfDefault.jsx    # EOD triggers + severity
+│   │   │   │   ├── ReportingCalendar.jsx  # Reporting obligations
+│   │   │   │   ├── RiskAssessment.jsx     # AI risk flags
+│   │   │   │   └── AmendmentHistory.jsx   # Version comparison
 │   │   │   └── portfolio/
 │   │   │       ├── BorrowingBase.jsx         # Waterfall, KPIs, advance rates, facility capacity
 │   │   │       ├── ConcentrationLimits.jsx   # Limit cards with compliance badges + breaching items
@@ -392,7 +408,7 @@ Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body
 Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 -----
 ## Navigation Architecture
-**Hierarchy:** Company → Product → (Tape Analytics | Portfolio Analytics)
+**Hierarchy:** Company → Product → (Tape Analytics | Portfolio Analytics | Legal Analysis)
 
 **Route structure:**
 | Route | Component | Description |
@@ -400,11 +416,12 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 | `/` | `Home` | Landing page — company grid |
 | `/company/:co/:product/tape/:tab` | `TapeAnalytics` | 18-tab dashboard (tab slug in URL) |
 | `/company/:co/:product/portfolio/:tab` | `PortfolioAnalytics` | 6-tab portfolio view (live data from DB/tape) |
+| `/company/:co/:product/legal/:tab` | `LegalAnalytics` | 8-tab legal document analysis |
 | `/company/:co/:product/executive-summary` | `ExecutiveSummary` | AI-powered holistic findings from all metrics |
 | `/company/:co/:product/methodology` | `Methodology` | Definitions & formulas reference |
 | `/framework` | `Framework` | Analysis Framework — analytical philosophy with sticky TOC |
 
-**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Methodology. Active state: gold left border + gold text.
+**Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Legal Analysis (8 links), Methodology. Active state: gold left border + gold text.
 
 **URL-based tabs:** Active tab driven by `:tab` URL param (not React state). Users can bookmark/share specific views. Slugs: `overview`, `actual-vs-expected`, `deployment`, `collection`, `denial-trend`, `ageing`, `revenue`, `portfolio-tab`, `cohort-analysis`, `returns`, `risk-migration`, `data-integrity`, `loss-waterfall`, `recovery-analysis`, `collections-timing`, `underwriting-drift`, `segment-analysis`, `seasonality`, `cdr-ccr`, `borrowing-base`, `concentration-limits`, `covenants`, `invoices`, `payments`, `bank-statements`.
 
@@ -451,16 +468,46 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 
 **Data source:** Portfolio Analytics reads from PostgreSQL database when configured (`DATABASE_URL`). Falls back to tape CSV/Excel files if DB not available. The computation engine (`core/portfolio.py`) works with tape-compatible DataFrames regardless of source.
 -----
-## Data Source Architecture
-**Two distinct data pipelines feed the platform:**
+## Legal Analysis Tabs (8) — AI-Powered Document Analysis
+|Tab                |What It Shows                                                |
+|-------------------|-------------------------------------------------------------|
+|Documents          |PDF upload (drag-drop), document inventory, extraction status badges, re-extract/delete actions|
+|Facility Terms     |4 KPI cards (limit, type, maturity, governing law), detail table with all extracted terms|
+|Eligibility & Rates|Eligibility criteria table (name, value, section ref, confidence), advance rate schedule cards|
+|Covenants & Limits |Two-column comparison: document thresholds vs live portfolio values, breach distance gauge, discrepancy flags|
+|Events of Default  |EOD triggers grouped by severity (payment/covenant/cross_default/MAC/operational), cure periods|
+|Reporting          |Reporting obligations timeline with frequency badges, normal + default payment waterfall priority|
+|Risk Assessment    |AI-generated risk flags (missing provisions, below-market terms), severity badges, recommendations|
+|Amendment History  |Document version picker, material changes diff table (old value → new value)|
 
-| | Tape Analytics | Portfolio Analytics |
-|---|---|---|
-| **Source** | CSV/Excel files in `data/` | PostgreSQL database (fallback: tape files) |
-| **Ingestion** | Manual upload by analyst | Inbound API from portfolio companies |
-| **Refresh** | Point-in-time snapshots (monthly) | Real-time (as companies push data) |
-| **Purpose** | Retrospective analysis, IC reporting | Live monitoring, borrowing base, covenants |
-| **Backend module** | `core/analysis.py` + `core/loader.py` | `core/portfolio.py` + `core/db_loader.py` |
+**Data source:** PDF facility agreements uploaded to `data/{company}/{product}/legal/`. AI extraction via Claude (~$1.25/doc, cached forever). Extracted terms auto-populate `facility_params` via 3-tier priority: document → manual override → hardcoded default.
+
+**Legal Analysis endpoints (under `/companies/{co}/products/{p}/legal/`):**
+|Endpoint                     |Method|Description                              |
+|-----------------------------|------|-----------------------------------------|
+|`/upload`                    |POST  |Upload PDF, trigger background extraction|
+|`/documents`                 |GET   |List all documents + extraction status   |
+|`/documents/{filename}`      |GET   |Document details + full extraction result|
+|`/documents/{filename}/re-extract`|POST|Re-run extraction                     |
+|`/facility-terms`            |GET   |Extracted facility terms                 |
+|`/eligibility`               |GET   |Eligibility criteria + advance rates     |
+|`/covenants-extracted`       |GET   |Covenant thresholds + concentration limits|
+|`/events-of-default`         |GET   |EOD triggers with severity               |
+|`/reporting`                 |GET   |Reporting obligations + waterfall        |
+|`/risk-flags`                |GET   |AI risk assessment flags                 |
+|`/compliance-comparison`     |GET   |Doc terms vs live portfolio (side-by-side)|
+|`/amendment-diff`            |GET   |Compare two document versions            |
+-----
+## Data Source Architecture
+**Three distinct data pipelines feed the platform:**
+
+| | Tape Analytics | Portfolio Analytics | Legal Analysis |
+|---|---|---|---|
+| **Source** | CSV/Excel files in `data/` | PostgreSQL database (fallback: tape files) | PDF facility agreements in `data/.../legal/` |
+| **Ingestion** | Manual upload by analyst | Inbound API from portfolio companies | PDF upload via Legal Analysis tab |
+| **Refresh** | Point-in-time snapshots (monthly) | Real-time (as companies push data) | On document upload or amendment |
+| **Purpose** | Retrospective analysis, IC reporting | Live monitoring, borrowing base, covenants | Contractual truth, compliance comparison |
+| **Backend module** | `core/analysis.py` + `core/loader.py` | `core/portfolio.py` + `core/db_loader.py` | `core/legal_extractor.py` + `core/legal_compliance.py` |
 
 **DB-optional mode:** If `DATABASE_URL` is not set in `.env`, portfolio endpoints automatically fall back to computing from the latest tape CSV/Excel file. This allows the platform to run without PostgreSQL for tape-only analysis.
 
@@ -568,6 +615,12 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Overview page standardization** — All company overviews follow a consistent section structure guided by the L1-L5 analytical hierarchy: (1) Main KPIs (L1/L2, 5-col grid, bespoke per company), (2) "Credit Quality" section (L3, PAR 30+/60+/90+ as individual cards), (3) "Leading Indicators" section (L5, DTFC etc when available). PAR cards always use `{ccy} {amount}K at risk` subtitle format. Fixed 5-column grids prevent async reflow. Bespoke KPIs encouraged within each section.
 - **Executive Summary always visible** — Sidebar shows Executive Summary for all companies including Ejari. Decoupled from `hide_portfolio_tabs` flag which only controls Portfolio Analytics tabs.
 - **Executive Summary dual-output architecture** — Single AI call returns JSON object with `narrative` (sections array + summary_table + bottom_line) and `findings` (array, same as before). Company-specific section guidance injected into prompt. Response parsing handles both old format (array) and new format (object) for backward compat. `max_tokens=8000` for the combined output. Generation takes ~50-60s vs ~10s previously.
+- **Legal Analysis — third analytical pillar** — AI-powered facility agreement analysis alongside Tape Analytics and Portfolio Analytics. PDF upload → 5-pass Claude extraction → structured JSON (eligibility, advance rates, covenants, concentration limits, EOD, reporting, waterfall) → cached to `data/{co}/{prod}/legal/`. 8 frontend tabs in sidebar between Portfolio Analytics and Methodology. Hidden when `hide_portfolio_tabs: true` (same as Portfolio — legal analysis requires portfolio context).
+- **Legal extraction engine** — `core/legal_extractor.py` runs 5 passes: (1) definitions & structure, (2) facility + eligibility + advance rates, (3) covenants + concentration limits, (4) EOD + reporting + waterfall, (5) AI risk assessment. Each pass prepends the definitions glossary and targets specific sections. ~$1.25/document, cached forever. Sonnet for passes 1-4, Opus for risk assessment.
+- **3-tier facility params priority** — `_load_facility_params()` in `main.py` merges: (1) document-extracted values from `legal/` (baseline), (2) manual overrides from `facility_params.json` (precedence), (3) hardcoded defaults in compute functions (fallback). `_sources` dict tracks provenance per field. FacilityParamsPanel shows `Source: Document` vs `Source: Manual` badges.
+- **Legal compliance comparison** — `core/legal_compliance.py` `build_compliance_comparison()` matches extracted covenant thresholds against live portfolio values from `compute_klaim_covenants()`. Returns breach distance (% headroom), discrepancy flags (document vs hardcoded default), and overall compliance summary. Fed into executive summary AI context.
+- **PDF parsing pipeline** — `core/legal_parser.py` uses PyMuPDF (`pymupdf4llm`) for markdown conversion preserving headers/structure, plus `pdfplumber` for table extraction (advance rate schedules, concentration tier tables). Semantic chunking by article/section headers (legal docs are well-structured). Definitions section isolated first as context for all subsequent extraction passes.
+- **Legal extraction schema** — `core/LEGAL_EXTRACTION_SCHEMA.md` defines extraction taxonomy (7 sections), Pydantic models in `core/legal_schemas.py`, confidence grading (HIGH >= 0.85, MED >= 0.70, LOW < 0.70), and facility_params mapping table (12 fields). Companion to ANALYSIS_FRAMEWORK.md Section 16.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -640,6 +693,19 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Legal Analysis (third pillar):**
+  - PDF upload + 5-pass AI extraction engine (`core/legal_extractor.py`) — ~$1.25/doc, cached forever
+  - Pydantic extraction schemas (`core/legal_schemas.py`) — Tier 1 (facility, eligibility, advance rates, covenants, concentration), Tier 2 (EOD, reporting, waterfall), Tier 3 (risk flags)
+  - 3-tier facility params priority: document → manual → hardcoded default. `_load_facility_params()` auto-merges
+  - Compliance comparison engine (`core/legal_compliance.py`) — doc terms vs live portfolio metrics side-by-side
+  - 12 backend endpoints (`backend/legal.py`) — upload, documents, facility-terms, eligibility, covenants-extracted, events-of-default, reporting, risk-flags, compliance-comparison, amendment-diff
+  - Frontend: `LegalAnalytics.jsx` + 8 tab components (DocumentUpload, FacilityTerms, EligibilityView, CovenantComparison, EventsOfDefault, ReportingCalendar, RiskAssessment, AmendmentHistory)
+  - Sidebar: Legal Analysis section between Portfolio Analytics and Methodology (hidden when `hide_portfolio_tabs: true`)
+  - Executive summary integration: legal compliance context fed into `_build_klaim_full_context()`
+  - Framework: `LEGAL_EXTRACTION_SCHEMA.md` — extraction taxonomy, confidence grading, param mapping
+  - 22 tests (schemas, mapping, compliance comparison, parser utils) — all passing
+  - Parameterized `ineligibility_age_days` and `cash_ratio_limit` in `core/portfolio.py` (was hardcoded 365 and 3.0)
+  - **Next:** Upload actual Klaim facility agreement to validate extraction, compare against external legal tool via Chrome
 - ✅ **Creative UI redesign (branch: claude/creative-landing-page-research-5hdf6):**
   - Landing page: Islamic geometric SVG background pattern (Girih/8-point star, gold, 14% opacity, 140px tile) — stroke widths tuned for visibility (1.0 lines, 1.6 star, 2.2 dots)
   - Landing page: Syne 800 display font for hero headline + LAITH wordmark; `--font-display` CSS token
@@ -1028,7 +1094,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Role-based access (RBAC)
 - [ ] Scheduled report delivery
 - [ ] Real-time webhook notifications to portfolio companies
-- [ ] AI-powered covenant extraction — ingest facility agreement PDFs, extract advance rates, concentration limits, covenant formulas, eligibility criteria → auto-populate facility_configs
+- [x] AI-powered legal analysis — ingest facility agreement PDFs, 5-pass Claude extraction (eligibility, advance rates, covenants, concentration limits, EOD, reporting, risk flags), auto-populate facility_configs via 3-tier priority, compliance comparison, 8-tab frontend, 22 tests. **Next:** validate with real Klaim facility agreement + external legal tool comparison
 -----
 ## Environment
 - **Machine:** Windows (PowerShell)

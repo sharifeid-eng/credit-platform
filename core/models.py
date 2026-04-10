@@ -114,7 +114,7 @@ class FacilityConfig(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), unique=True, nullable=False)
     facility_limit = Column(Numeric(18, 2), nullable=True)
-    advance_rates = Column(JSONB, nullable=True)          # {"UAE": 0.90, "Non-UAE": 0.85}
+    advance_rates = Column(JSONB, nullable=True)          # {"UAE": 0.90} per facility agreement
     concentration_limits = Column(JSONB, nullable=True)   # [{name, threshold, ...}]
     covenants = Column(JSONB, nullable=True)              # [{name, threshold, operator, ...}]
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
