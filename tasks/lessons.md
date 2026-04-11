@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — Subagent-generated code must be verified against actual function signatures
+**Mistake:** The memo `analytics_bridge.py` (written by a subagent) imported `parse_tamara_snapshot` from `core.analysis_tamara` — a function that doesn't exist. The real function is `parse_tamara_data`. Would crash at runtime.
+**Rule:** When a subagent writes cross-module imports, verify function names exist (`grep "def function_name" target_module.py`). Subagents guess names from patterns.
+
+---
+
+## 2026-04-11 — Registry format must be consistent across all engines writing to the same file
+**Mistake:** `AnalyticsSnapshotEngine` wrote `registry.json` as `list[dict]` while `DataRoomEngine` expected `dict[str, dict]`. Using both corrupted the registry.
+**Rule:** Multiple modules sharing the same file MUST use the same schema. Add migration paths for format changes.
+
+---
+
 ## 2026-04-11 — docker-compose `environment` overrides `env_file`
 **Issue:** Added `CF_TEAM=${CF_TEAM:-}` in the `environment` section of docker-compose.yml. The `env_file: .env.production` also contains `CF_TEAM=amwalcp`. Expected `.env.production` to win, but Docker Compose evaluates `environment` AFTER `env_file` — so `${CF_TEAM:-}` (empty from host shell) overwrote the value from the file. Backend saw empty `CF_TEAM`, fell back to dev mode.
 **Rule:** Never put `${VAR:-}` in the `environment` section for vars that should come from `env_file`. Either use `env_file` alone (preferred) or hardcode values in `environment`. The `environment` section is for computed values (like `DATABASE_URL` with interpolation) and overrides; `env_file` is for simple key=value secrets.

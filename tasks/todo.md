@@ -3,6 +3,21 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Next Session Priority — First Klaim Credit Memo (end-to-end test)
+
+### Context
+The Research Hub, Living Mind, and IC Memo Engine are built (~17,000 lines) but have never been tested end-to-end. The `generate_full_memo()` function in `core/memo/generator.py` makes real Claude API calls to produce IC-ready memos. All 4 companies return `available=True` from the analytics bridge.
+
+### Priority items
+- [ ] **Generate first Klaim Credit Memo** — tests full pipeline: template → analytics bridge → data room search → Living Mind → Claude generation → storage → PDF export
+- [ ] **Generate Tamara Credit Memo** — second test with summary-type company
+- [ ] **Validate Legal Analysis tabs render** — walk Klaim → Legal Analysis → all 8 tabs
+- [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors vs `Group` column
+- [ ] **Store payment schedule** — $6M draw, 16 quarterly payments + bullet maturity 2030-02-01
+- [ ] **Implement consecutive breach history** — `covenant_history.json` for EoD determination
+
+---
+
 ## Completed — 2026-04-11 (session 10: Authentication + RBAC)
 - [x] **Cloudflare Access JWT authentication** — Backend reads `CF_Authorization` cookie / `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against Cloudflare public keys (`amwalcp.cloudflareaccess.com/cdn-cgi/access/certs`). Auto-provisions users on first login. Admin bootstrap via `ADMIN_EMAIL` env var.
 - [x] **User model + migration** — `User` table (email, name, role, is_active, timestamps) in `core/models.py`. Alembic migration `b2f3a8c91d45`.
