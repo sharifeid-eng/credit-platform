@@ -485,6 +485,7 @@ export default function OperatorCenter() {
   const [mindFilter, setMindFilter] = useState(null)
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
 
@@ -494,12 +495,14 @@ export default function OperatorCenter() {
 
   const loadStatus = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await getOperatorStatus()
       setStatus(data)
       setTodos(data.todos || [])
     } catch (e) {
       console.error('Failed to load operator status:', e)
+      setError('Failed to load operator status. Make sure the backend is running.')
     }
     setLoading(false)
   }
@@ -564,6 +567,25 @@ export default function OperatorCenter() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: 'var(--gold)', fontSize: 14, fontFamily: 'var(--font-mono)' }}>Loading operator status...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div style={{ color: '#F06060', fontSize: 14, fontFamily: 'var(--font-mono)' }}>{error}</div>
+        <button
+          onClick={loadStatus}
+          style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 6, padding: '8px 16px', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 12, fontWeight: 600,
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          Retry
+        </button>
       </div>
     )
   }
