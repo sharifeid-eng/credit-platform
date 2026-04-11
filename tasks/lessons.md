@@ -23,6 +23,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — Postgres password is baked into the Docker volume at first init
+**Issue:** `POSTGRES_PASSWORD` in `docker-compose.yml` only sets the password when the `pgdata` volume is first created. Changing it later in `.env` doesn't update the existing database. If the volume was created with a blank password, you must `ALTER USER` inside the running container before the new password will work. Production DB password: `laith`.
+**Rule:** When debugging "password authentication failed" after changing `POSTGRES_PASSWORD`, remember the volume already has the old password. Fix inside Postgres first: `docker compose exec db psql -U laith -d laith_credit -c "ALTER USER laith PASSWORD 'new_pw';"`.
+
+---
+
+## 2026-04-11 — Docker Compose reads `${VAR}` from `.env` in project root, not `.env.production`
+**Issue:** `docker-compose.yml` interpolates `${POSTGRES_PASSWORD}` from the shell environment or a `.env` file in the project root. The `env_file: .env.production` directive only loads vars into the container's environment, NOT into docker-compose's variable substitution. Appending `POSTGRES_PASSWORD` to `.env.production` had no effect on the `WARN: variable not set` message.
+**Rule:** Variables used in `docker-compose.yml` `${...}` syntax must be in `.env` (project root) or exported in the shell. Variables needed only by the app go in `.env.production` (loaded via `env_file`).
+
+---
+
 ## 2026-04-11 — Always verify requirements.txt matches local venv after adding new packages
 **Mistake:** `python-multipart` was installed locally in session 4 (needed by `UploadFile` in `backend/legal.py`) but never added to `backend/requirements.txt`. The Docker container crashed on startup because the package was missing. The site was down and it wasn't caught for multiple sessions.
 **Rule:** After any session that adds a new Python import, check `backend/requirements.txt` before EOD. A quick verification: `grep -r "^from\|^import" backend/ core/ | grep -v __pycache__ | sort -u` vs contents of requirements.txt. Also: the `/eod` function should eventually include a "verify Docker builds" step.
