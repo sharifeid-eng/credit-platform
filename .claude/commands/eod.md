@@ -46,13 +46,26 @@ Review the full conversation for any: mistakes made and corrected, patterns to a
 
 Stage and commit `CLAUDE.md`, `tasks/todo.md`, `tasks/lessons.md`, and any other modified source files that haven't been committed yet. Use a clear, descriptive commit message. Do **not** commit `.env`.
 
-## Step 9 — Push to main
+## Step 9 — Merge to main and push
 
-`git push origin main`
+**This step is NON-NEGOTIABLE. The deploy script pulls `main`. If work stays on a feature branch, it doesn't deploy.**
+
+If you are on a feature branch:
+```
+git checkout main
+git pull origin main
+git merge <feature-branch> --no-edit
+git push origin main
+```
+
+If you are already on main:
+```
+git push origin main
+```
 
 ## Step 10 — Sync feature branch (if one exists)
 
-If there is an active feature branch (check `git branch -a`), fast-forward it to main:
+After main is pushed, sync the feature branch so it matches:
 ```
 git checkout <feature-branch>
 git merge main --no-edit
