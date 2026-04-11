@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — Don't use a specific company as a "default" fallback
+**Issue:** When making Research Chat suggestions per-company, the initial implementation fell back to Klaim suggestions (`SUGGESTED_QUESTIONS.klaim`) for unknown analysis types. User correctly flagged this — Klaim is just one company, not a sensible default.
+**Rule:** When building per-company/per-type maps with a fallback, always use a genuinely generic `default` key. No company should be treated as the canonical default — it leaks company-specific language into other contexts.
+
+---
+
 ## 2026-04-11 — Every new backend route prefix needs an Nginx proxy location
 **Issue:** Added `/operator` endpoints in `backend/operator.py` but never added a corresponding `location /operator` block in `docker/nginx.conf`. On production, Nginx served `index.html` (SPA fallback) instead of proxying to the backend. The frontend received HTML instead of JSON, axios threw a parse error, and the page showed empty content. Took a second round of debugging (after the user sent production screenshots) to identify Nginx as the culprit.
 **Rule:** When adding a new route prefix to the backend (e.g., `/operator`, `/mind`, `/memo-templates`), ALWAYS add a matching `location` block in `docker/nginx.conf`. The Nginx config only proxies explicitly listed prefixes — everything else serves `index.html`. Checklist: backend route → nginx.conf → deploy.

@@ -886,6 +886,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Company pages: Sidebar NavItem — animated left border (Framer Motion scaleY 0→1, origin top) + gold gradient background sweep on active state; micro-indent on hover
   - Company pages: KpiCard sparkline — optional `sparklineData` prop renders 60×18px inline SVG polyline with endpoint dot
   - Company pages: DataChat per-company question sets — `PROMPTS` map keyed by `analysisType` (`silq`, `ejari_summary`, `default`); relevant suggested questions for each asset class
+  - Research Chat: per-company suggested questions — `SUGGESTED_QUESTIONS` map keyed by `analysisType` (`klaim`, `silq`, `ejari_summary`, `tamara_summary`, `default`); tailored data room questions per company
   - Typography: Syne (display/hero), Space Grotesk (UI body), JetBrains Mono (data). Single Google Fonts load in index.html. All 55+ IBM Plex Mono / Inter hardcoded references replaced with CSS tokens.
   - Navbar: height 56→80px, lion icon 36→54px, LAITH wordmark 22→33px (Syne 800), "Data Analytics" label 10→15px
   - Landing page section labels: "Portfolio Companies" + "Resources" 9→13px
