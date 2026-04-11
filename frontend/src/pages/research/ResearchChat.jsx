@@ -4,17 +4,43 @@ import { useCompany } from '../../contexts/CompanyContext'
 import useBreakpoint from '../../hooks/useBreakpoint'
 import { postResearchChat } from '../../services/api'
 
-const SUGGESTED_QUESTIONS = [
-  'What are the covenant trigger levels?',
-  'Summarize the facility structure',
-  'What does the Deloitte FDD conclude?',
-  'Compare vintage performance across reports',
-  'What are the key risk factors identified?',
-  'Summarize the securitisation facility terms',
-]
+const SUGGESTED_QUESTIONS = {
+  tamara_summary: [
+    'What are the covenant trigger levels?',
+    'Summarize the securitisation facility terms',
+    'What does the Deloitte FDD conclude?',
+    'Compare vintage performance across reports',
+    'What are the key risk factors identified?',
+    'Summarize the facility structure',
+  ],
+  klaim: [
+    'What are the facility advance rates and eligibility criteria?',
+    'Which provider groups have the highest denial rates?',
+    'Summarize the key risk factors from the legal documents',
+    'What is the current collection performance by vintage?',
+    'What are the concentration limits and are any breached?',
+    'How does the loss waterfall break down by vintage?',
+  ],
+  silq: [
+    'Which product type (BNPL, RBF, RCL) performs best?',
+    'What is the overdue rate trend across shops?',
+    'Summarize the key covenants and compliance status',
+    'How does loan tenure affect collection rates?',
+    'What are the concentration risks in the portfolio?',
+    'Compare delinquency trends across recent tapes',
+  ],
+  ejari_summary: [
+    'What is the current DPD distribution and trend?',
+    'Which cohort vintage has the highest loss rate?',
+    'How do roll rates compare across DPD buckets?',
+    'What is the recovery rate from legal proceedings?',
+    'Summarize the key credit quality indicators',
+    'What are the write-off trends and fraud patterns?',
+  ],
+}
 
 export default function ResearchChat() {
-  const { company, product } = useCompany()
+  const { company, product, analysisType } = useCompany()
   const { isMobile } = useBreakpoint()
 
   const [messages, setMessages] = useState([])
@@ -157,7 +183,7 @@ export default function ResearchChat() {
                 maxWidth: 560,
                 margin: '0 auto',
               }}>
-                {SUGGESTED_QUESTIONS.map((q, i) => (
+                {(SUGGESTED_QUESTIONS[analysisType] || SUGGESTED_QUESTIONS.klaim).map((q, i) => (
                   <motion.button
                     key={i}
                     initial={{ opacity: 0, y: 6 }}
