@@ -3,6 +3,10 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — Every new backend route prefix needs an Nginx proxy location
+**Issue:** Added `/operator` endpoints in `backend/operator.py` but never added a corresponding `location /operator` block in `docker/nginx.conf`. On production, Nginx served `index.html` (SPA fallback) instead of proxying to the backend. The frontend received HTML instead of JSON, axios threw a parse error, and the page showed empty content. Took a second round of debugging (after the user sent production screenshots) to identify Nginx as the culprit.
+**Rule:** When adding a new route prefix to the backend (e.g., `/operator`, `/mind`, `/memo-templates`), ALWAYS add a matching `location` block in `docker/nginx.conf`. The Nginx config only proxies explicitly listed prefixes — everything else serves `index.html`. Checklist: backend route → nginx.conf → deploy.
+
 ## 2026-04-11 — Internal directories in `data/` must be filtered at the source
 **Issue:** `_master_mind` directory lives under `data/` alongside real company directories. `get_companies()` returned it as a company, causing a ghost card on the landing page. The `operator.py` endpoint had its own `startswith("_")` filter, but `main.py`'s `/companies` and `/aggregate-stats` endpoints did not — fix at the source (`get_companies()`) rather than adding filters in every caller.
 **Rule:** When a utility function like `get_companies()` returns data consumed by multiple callers, fix the function itself rather than patching each consumer. Defensive filters in callers are OK as belt-and-suspenders but should not be the primary fix.
