@@ -12,8 +12,8 @@ def get_companies():
     if not os.path.exists(DATA_DIR):
         print(f"Data directory not found: {DATA_DIR}")
         return []
-    return [d for d in os.listdir(DATA_DIR) 
-            if os.path.isdir(os.path.join(DATA_DIR, d))]
+    return [d for d in os.listdir(DATA_DIR)
+            if os.path.isdir(os.path.join(DATA_DIR, d)) and not d.startswith('_')]
 
 def get_products(company):
     """Return list of products for a company, read dynamically from subfolders"""
