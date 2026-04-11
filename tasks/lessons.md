@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-10 — Subagent-generated code must be verified against actual function signatures
+**Mistake:** The memo `analytics_bridge.py` (written by a subagent) imported `parse_tamara_snapshot` from `core.analysis_tamara` — a function that doesn't exist. The real function is `parse_tamara_data`. This would crash at runtime when generating any Tamara memo.
+**Rule:** When a subagent writes code that imports from existing modules, verify the imports exist. Run a quick `grep -n "def function_name"` against the target module, or do a test import. Subagents don't have the full module context and may guess function names based on patterns from other modules (e.g., `parse_ejari_workbook` → assumed `parse_tamara_snapshot`).
+
+---
+
 ## 2026-04-10 — Registry format must be consistent across all engines writing to the same file
 **Mistake:** `AnalyticsSnapshotEngine` wrote `registry.json` as `list[dict]` while `DataRoomEngine` expected `dict[str, dict]`. Running both on the same company corrupted the registry — all DataRoomEngine operations (catalog, search, stats) crashed with `AttributeError: 'list' object has no attribute 'items'`.
 **Rule:** When multiple modules read/write the same file, they MUST use the same schema. Either: (1) share a common `_load_registry`/`_save_registry`, (2) add a migration path in the reader (handle both old and new formats), or (3) use separate files. We chose option (2): the snapshot engine now auto-migrates list→dict on read.

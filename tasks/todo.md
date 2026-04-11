@@ -3,6 +3,36 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Next Session Priority — First Klaim Credit Memo (end-to-end test)
+
+### Context
+The Research Hub, Living Mind, and IC Memo Engine are built (~17,000 lines) but have never been tested end-to-end. The `generate_full_memo()` function in `core/memo/generator.py` makes real Claude API calls to produce IC-ready memos. The analytics bridge, data room search, and living mind context all feed in. The Tamara function name bug has been fixed. All 4 companies return `available=True` from the analytics bridge.
+
+### Priority items
+- [ ] **Generate first Klaim Credit Memo** — call `MemoGenerator.generate_full_memo('klaim', 'UAE_healthcare', 'credit_memo')`. This tests: template loading → analytics bridge (6 metrics from tape) → data room search (4 tapes + legal analysis doc) → Living Mind (12 entries) → Claude section generation → storage versioning → PDF export. Klaim has the richest context (most data, most mind entries, legal analysis doc indexed).
+- [ ] **Generate Tamara Credit Memo** — second test with summary-type company. Tests the `parse_tamara_data()` path through analytics bridge.
+- [ ] **Validate Legal Analysis tabs render** — navigate to Klaim → Legal Analysis → walk all 8 tabs. Confirm extraction JSONs display correctly. The compliance comparison tab is most important (doc thresholds vs live portfolio).
+- [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors (MRPA page 25) against Klaim tape `Group` column. Flag any payer not on approved list.
+- [ ] **Store payment schedule** — $6M draw, 16 quarterly payments + bullet maturity 2030-02-01. For Reporting Calendar tab.
+- [ ] **Implement consecutive breach history** — `covenant_history.json` to track prior-period results for EoD determination (PAR30 = single not EoD, Collection/PvD = 2 consecutive required).
+
+### Files to start with
+- `core/memo/generator.py` — `generate_full_memo()` (line ~377)
+- `core/memo/analytics_bridge.py` — verified working for all 4 companies
+- `core/memo/storage.py` — saves to `reports/memos/{co}_{prod}/{memo_id}/`
+- `core/memo/pdf_export.py` — dark-themed PDF output
+- `data/klaim/UAE_healthcare/mind/` — 12 entries (6 data quality, 4 findings, 2 IC feedback)
+- `data/klaim/UAE_healthcare/dataroom/` — 4 tapes + legal analysis doc indexed
+
+---
+
+## Completed — 2026-04-10 (session 5b: Tamara fix + EOD)
+- [x] Fixed `parse_tamara_snapshot` → `parse_tamara_data` in analytics_bridge.py
+- [x] Verified all 4 companies (Klaim, SILQ, Tamara, Ejari) return available=True
+- [x] Committed and pushed fix
+
+---
+
 ## Completed — 2026-04-10 (session 5: Research Hub + Living Mind + Memo Engine)
 - [x] **Phase 1: Foundation** — Data Room Engine, Living Mind, Analytics Snapshots, Frontend skeleton
   - `core/dataroom/` (12 files, 3,500 lines) — engine, parsers (PDF/Excel/CSV/JSON/DOCX/ODS), chunker, classifier, analytics_snapshot
