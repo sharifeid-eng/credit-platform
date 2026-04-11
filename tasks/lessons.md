@@ -3,6 +3,16 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — docker-compose `environment` overrides `env_file`
+**Issue:** Added `CF_TEAM=${CF_TEAM:-}` in the `environment` section of docker-compose.yml. The `env_file: .env.production` also contains `CF_TEAM=amwalcp`. Expected `.env.production` to win, but Docker Compose evaluates `environment` AFTER `env_file` — so `${CF_TEAM:-}` (empty from host shell) overwrote the value from the file. Backend saw empty `CF_TEAM`, fell back to dev mode.
+**Rule:** Never put `${VAR:-}` in the `environment` section for vars that should come from `env_file`. Either use `env_file` alone (preferred) or hardcode values in `environment`. The `environment` section is for computed values (like `DATABASE_URL` with interpolation) and overrides; `env_file` is for simple key=value secrets.
+
+## 2026-04-11 — Cloudflare Access logo must be hosted publicly
+**Issue:** Set the Cloudflare Access login page logo to `https://laithanalytics.ai/lion.png`. The logo didn't render because the entire domain is behind Cloudflare Access — Cloudflare can't fetch the image from a domain it's protecting (chicken-and-egg). The preview in the Cloudflare dashboard worked because it fetches differently than the live page.
+**Rule:** Cloudflare Access login page assets (logo, favicon) must be hosted on a public URL not behind the same Access policy. Options: Imgur, S3 bucket, GitHub raw, or create a Cloudflare Access bypass rule for specific asset paths.
+
+---
+
 ## 2026-04-11 — Don't use a specific company as a "default" fallback
 **Issue:** When making Research Chat suggestions per-company, the initial implementation fell back to Klaim suggestions (`SUGGESTED_QUESTIONS.klaim`) for unknown analysis types. User correctly flagged this — Klaim is just one company, not a sensible default.
 **Rule:** When building per-company/per-type maps with a fallback, always use a genuinely generic `default` key. No company should be treated as the canonical default — it leaks company-specific language into other contexts.

@@ -108,10 +108,11 @@ The platform allows analysts and investment committee members to:
 - Real-time borrowing base waterfall, concentration limits, covenant monitoring
 - Portfolio computation engine (`core/portfolio.py`) with DB-optional fallback to tape data
 - Frontend: 6 portfolio tabs (Borrowing Base, Concentration Limits, Covenants, Invoices, Payments, Bank Statements)
-### Phase 3 — Team & IC Viewing Layer
-- Role-based access (analyst vs IC vs read-only)
+### Phase 3 — Team & IC Viewing Layer ✅ (partial)
+- ✅ Role-based access (admin vs viewer via Cloudflare Access JWT)
+- ✅ Cloud deployment (Hetzner VPS, Docker Compose, Cloudflare Access)
 - Scheduled report delivery
-- Cloud deployment so the app runs 24/7
+- Expand roles (analyst, IC, read-only)
 -----
 ## Tech Stack
 - **Backend:** Python, FastAPI (`localhost:8000`), Pandas, Anthropic API (`claude-opus-4-6`), ReportLab (PDF)
@@ -153,6 +154,8 @@ credit-platform/
 │   ├── main.py             # FastAPI app — all REST endpoints (tape + portfolio + legal)
 │   ├── legal.py            # Legal Analysis API endpoints (upload, extract, compare)
 │   ├── auth.py             # X-API-Key authentication for integration endpoints
+│   ├── cf_auth.py          # Cloudflare Access JWT verification, auth middleware, user auto-provision
+│   ├── auth_routes.py      # Auth API routes (/auth/me, /auth/users CRUD)
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   ├── operator.py         # Operator Command Center endpoints (status, todo, mind review, digest)
 │   └── schemas.py          # Pydantic request/response models for integration API
@@ -224,6 +227,7 @@ credit-platform/
 │   ├── src/
 │   │   ├── App.jsx                  # Nested routes with CompanyLayout
 │   │   ├── contexts/
+│   │   │   ├── AuthContext.jsx       # Auth state provider (user, isAdmin, logout, refreshUser)
 │   │   │   ├── CompanyContext.jsx    # Shared state provider (company, product, snapshots, config)
 │   │   │   └── MobileMenuContext.jsx # Sidebar drawer state (open/close/toggle) + body scroll lock
 │   │   ├── layouts/
@@ -237,6 +241,7 @@ credit-platform/
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
 │   │   │   ├── OperatorCenter.jsx  # Operator Command Center (5-tab: health, commands, follow-ups, activity, mind)
+│   │   │   ├── UserManagement.jsx  # Admin user management page (/admin/users)
 │   │   │   ├── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   │   └── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
 │   │   │   ├── research/          # Research Hub pages
@@ -248,9 +253,10 @@ credit-platform/
 │   │   ├── hooks/
 │   │   │   └── useBreakpoint.js         # Mobile/tablet/desktop detection via matchMedia listeners
 │   │   ├── components/
+│   │   │   ├── ProtectedRoute.jsx       # Auth route guard (redirects if not authenticated/not admin)
 │   │   │   ├── Sidebar.jsx              # Persistent nav — 240px desktop, slide-in drawer on mobile
 │   │   │   ├── KpiCard.jsx              # Framer Motion stagger + hover effects + optional sparklineData prop
-│   │   │   ├── Navbar.jsx               # Responsive — hamburger menu on mobile, contains LaithLogo
+│   │   │   ├── Navbar.jsx               # Responsive — hamburger menu on mobile, contains LaithLogo + UserMenu
 │   │   │   ├── AICommentary.jsx         # Slide-up animation on commentary
 │   │   │   ├── DataChat.jsx
 │   │   │   ├── TabInsight.jsx           # Smooth expand/collapse with AnimatePresence
@@ -603,9 +609,10 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 
 **Integration API authentication:** Portfolio companies authenticate via `X-API-Key` header. Keys are generated with `scripts/create_api_key.py`, SHA-256 hashed, and stored in the `organizations` table. Each API key is scoped to one organization — queries automatically filter to that org's data.
 
-**Database schema (6 tables):**
+**Database schema (7 tables):**
 | Table | Purpose |
 |---|---|
+| `users` | Platform users with email, name, role (admin/viewer), active status |
 | `organizations` | Portfolio companies (Klaim, SILQ) with API key hash |
 | `products` | Products per org with analysis_type, currency, facility_limit |
 | `invoices` | Receivables pool (amount_due, status, customer, extra_data JSONB) |
@@ -764,6 +771,8 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Consecutive breach EoD tracking** — `annotate_covenant_eod()` in `core/portfolio.py` (pure function) + `covenant_history.json` (I/O in `main.py`). Per MMA 18.3: `single_breach_not_eod` (PAR30), `single_breach_is_eod` (PAR60, Parent Cash), `two_consecutive_breaches` (Collection Ratio, Paid vs Due). History persists max 24 periods, dedupes by date.
 - **Payment schedule as static data** — Stored in `data/{co}/{prod}/legal/payment_schedule.json` (not extracted by AI). Backend reporting endpoint loads and serves it alongside extracted reporting requirements. Frontend renders with PAID/NEXT badges relative to today's date.
 - **Registry format** — Both DataRoomEngine and AnalyticsSnapshotEngine use dict[str, dict] registry format (keyed by doc_id). Auto-migrates old list format on read.
+- **Cloudflare Access JWT auth** — Platform authentication delegated to Cloudflare Access (team: `amwalcp`). Backend reads `CF_Authorization` cookie or `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against public keys from `amwalcp.cloudflareaccess.com/cdn-cgi/access/certs` (cached 1hr). User table maps email → role (admin/viewer). Auto-provisions users on first login. `ADMIN_EMAIL` env var bootstraps first admin. Auth middleware skips `/auth/*`, `/api/integration/*`, OPTIONS. When `CF_TEAM` not set (local dev), middleware passes all requests through — zero friction for development. Existing X-API-Key integration auth completely untouched.
+- **docker-compose env var precedence** — `environment` section overrides `env_file` values. Auth vars (`CF_TEAM`, `CF_APP_AUD`, `ADMIN_EMAIL`) must only be in `.env.production` via `env_file`, NOT in the `environment` section (which reads from host shell and gets empty strings).
 - **Operator Command Center** — `/operator/status` reads from existing files only (config.json, registry.json, mind/*.jsonl, legal/*_extracted.json, reports/ai_cache/). No new data infrastructure. Gap detection uses heuristic rules. Personal follow-ups stored in `tasks/operator_todo.json` (separate from Claude's `tasks/todo.md`). Frontend at `/operator` with 5 tabs: Health Matrix, Commands, Follow-ups, Activity Log, Mind Review. `/ops` slash command provides terminal briefing.
 - **Activity logging** — `core/activity_log.py` appends to `reports/activity_log.jsonl`. Imported by 14 endpoints (AI, reports, legal, data room, memos, mind, alerts). Log_activity() calls placed before return statements. Only logs fresh operations (not cache hits for AI endpoints).
 - **Weekend Deep Work protocol** — `WEEKEND_DEEP_WORK.md` defines 7 analytical modes for long Claude Code sessions. State-save via `reports/deep-work/progress.json`. Two-pass file analysis (core engines before UI). Self-audit validation pass. Tiered frequency schedule (weekly Red Team → quarterly Full Combo).
@@ -839,6 +848,17 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Authentication + RBAC (Cloudflare Access JWT + app-side roles):**
+  - Cloudflare Access handles login (email OTP, allowlists, geo-restrictions) — branded login page with dark navy background + lion logo
+  - Backend: `backend/cf_auth.py` — reads `CF_Authorization` cookie / `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against Cloudflare public keys, caches keys (1hr TTL)
+  - Auto-provisioning: first login creates User record. `ADMIN_EMAIL` env var gets admin role, all others get viewer
+  - Auth middleware: `CloudflareAuthMiddleware` — skips `/auth/*`, `/api/integration/*`, OPTIONS. Dev mode (no `CF_TEAM`) passes all requests through
+  - Auth routes: `backend/auth_routes.py` — `/auth/me`, `/auth/logout-url`, `/auth/users` CRUD (admin-only)
+  - User model: `core/models.py` `User` table (email, name, role, is_active, timestamps). Migration `b2f3a8c91d45`
+  - Frontend: `AuthContext.jsx` (calls `/auth/me` on mount), `ProtectedRoute.jsx` (route guard), `UserMenu` dropdown in Navbar (initials avatar, email, role badge, "Manage Users" for admin, "Log out")
+  - User Management: `/admin/users` page — invite users, edit roles, deactivate/reactivate (admin-only)
+  - Env vars: `CF_TEAM`, `CF_APP_AUD`, `ADMIN_EMAIL` in `.env.production`
+  - Existing X-API-Key integration auth completely untouched
 - ✅ **Operator Command Center (`/operator` page + `/ops` slash command):**
   - Backend: `backend/operator.py` — `GET /operator/status` (aggregate health, gaps, commands), todo CRUD, mind browse/promote, Slack digest
   - Activity logging: `core/activity_log.py` — centralized JSONL logger wired into 14 endpoints (AI, reports, legal, data room, memos, mind, alerts)
@@ -1292,7 +1312,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [ ] Historical report versioning — saved with timestamps, comparison across dates
 **Phase 3 (Team & Deployment):**
 - [x] Cloud deployment
-- [ ] Role-based access (RBAC)
+- [x] Role-based access (RBAC) — Cloudflare Access JWT + admin/viewer roles, user management page
 - [ ] Scheduled report delivery
 - [ ] Real-time webhook notifications to portfolio companies
 - [x] AI-powered legal analysis — ingest facility agreement PDFs, 5-pass Claude extraction (eligibility, advance rates, covenants, concentration limits, EOD, reporting, risk flags), auto-populate facility_configs via 3-tier priority, compliance comparison, 8-tab frontend, 22 tests. **Next:** validate with real Klaim facility agreement + external legal tool comparison

@@ -3,6 +3,21 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-11 (session 10: Authentication + RBAC)
+- [x] **Cloudflare Access JWT authentication** — Backend reads `CF_Authorization` cookie / `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against Cloudflare public keys (`amwalcp.cloudflareaccess.com/cdn-cgi/access/certs`). Auto-provisions users on first login. Admin bootstrap via `ADMIN_EMAIL` env var.
+- [x] **User model + migration** — `User` table (email, name, role, is_active, timestamps) in `core/models.py`. Alembic migration `b2f3a8c91d45`.
+- [x] **Auth middleware** — `CloudflareAuthMiddleware` in `backend/cf_auth.py`. Skips `/auth/*`, `/api/integration/*`, OPTIONS. Dev mode (no `CF_TEAM`) passes all requests through.
+- [x] **Auth API routes** — `backend/auth_routes.py`: `/auth/me`, `/auth/logout-url`, `/auth/users` CRUD (admin-only). Pre-provision users with roles before they log in.
+- [x] **Frontend AuthContext** — `AuthContext.jsx` calls `/auth/me` on mount, provides `user`, `isAdmin`, `logout`. `ProtectedRoute.jsx` guards all routes.
+- [x] **Navbar user menu** — Replaced hardcoded "Sharif Eid" with `UserMenu` dropdown: initials avatar, email, role badge (gold ADMIN / blue VIEWER), "Manage Users" link (admin-only), "Log out" button.
+- [x] **User Management page** — `/admin/users` with user table, invite form, inline role editing, deactivate/reactivate. Admin-only route guard.
+- [x] **Cloudflare Access branding** — Configured login page: dark navy background (`#121C27`), lion logo (via Imgur), "Laith Analytics" name, "Sign in to access Laith Analytics" header.
+- [x] **Docker + Nginx** — `/auth` proxy location in nginx.conf, `withCredentials: true` on Axios, env vars (`CF_TEAM`, `CF_APP_AUD`, `ADMIN_EMAIL`) in `.env.production`.
+- [x] **docker-compose.yml env var fix** — Removed `${CF_TEAM:-}` from `environment` section (was overriding `env_file` values with empty strings).
+- [x] **Deployed and verified** — Login flow works: Cloudflare OTP → app shows user name + admin badge + manage users link.
+
+---
+
 ## Completed — 2026-04-11 (session 9: Research Chat per-company suggestions)
 - [x] **Make Research Chat suggestions context-aware** — `SUGGESTED_QUESTIONS` in `ResearchChat.jsx` was a flat array of Tamara-specific questions shown to all companies. Converted to a map keyed by `analysisType` (matching the DataChat.jsx pattern). Now shows tailored suggestions for klaim, silq, ejari_summary, and tamara_summary. Added a generic `default` fallback for future companies.
 
