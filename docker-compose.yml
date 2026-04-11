@@ -9,9 +9,6 @@ services:
       - CORS_ORIGINS=https://laithanalytics.ai,https://www.laithanalytics.ai
       - FRONTEND_URL=http://frontend:80
       - BACKEND_URL=http://localhost:8000
-      - CF_TEAM=${CF_TEAM:-}
-      - CF_APP_AUD=${CF_APP_AUD:-}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
     volumes:
       - ./data:/app/data:ro
       - ./reports:/app/reports
