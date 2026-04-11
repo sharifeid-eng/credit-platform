@@ -85,6 +85,9 @@ async def lifespan(app: FastAPI):
             with engine.connect() as conn:
                 conn.execute(sa_text("SELECT 1"))
             print("[Laith] Database connected.")
+            # Bootstrap first admin user if users table is empty
+            from backend.cf_auth import bootstrap_admin
+            bootstrap_admin()
         except Exception as e:
             print(f"[Laith] Database connection failed: {e}. Running in tape-only mode.")
     else:
@@ -100,6 +103,14 @@ app.include_router(legal_router)
 
 from backend.operator import router as operator_router
 app.include_router(operator_router)
+
+from backend.auth_routes import router as auth_router
+app.include_router(auth_router)
+
+# Auth middleware — must be added BEFORE CORSMiddleware (Starlette processes
+# middleware in reverse order, so CORS runs first, then auth)
+from backend.cf_auth import CloudflareAuthMiddleware
+app.add_middleware(CloudflareAuthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

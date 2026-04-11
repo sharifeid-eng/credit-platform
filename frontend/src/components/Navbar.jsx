@@ -1,11 +1,14 @@
+import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import useBreakpoint from '../hooks/useBreakpoint'
 import { useMobileMenu } from '../contexts/MobileMenuContext'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Navbar() {
   const { pathname } = useLocation()
   const { isMobile } = useBreakpoint()
   const { toggle } = useMobileMenu()
+  const { user, isAdmin, logout } = useAuth()
   const isCompanyPage = pathname.startsWith('/company/')
 
   return (
@@ -87,9 +90,122 @@ export default function Navbar() {
             <Chip>v0.5</Chip>
           </>
         )}
-        <Chip highlight>Sharif Eid</Chip>
+        {user && <UserMenu user={user} isAdmin={isAdmin} logout={logout} />}
       </div>
     </nav>
+  )
+}
+
+function UserMenu({ user, isAdmin, logout }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const initials = (user.name || user.email || '?')
+    .split(' ')
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: open ? 'var(--bg-surface)' : 'transparent',
+          border: '1px solid var(--border)',
+          borderRadius: 20, padding: '4px 12px 4px 4px',
+          cursor: 'pointer', color: 'var(--text-secondary)',
+          fontFamily: 'var(--font-mono)', fontSize: 12,
+          letterSpacing: '0.02em',
+          transition: 'border-color var(--transition-fast)',
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-hover)'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+      >
+        <div style={{
+          width: 26, height: 26, borderRadius: '50%',
+          background: 'var(--gold-muted)', color: 'var(--gold)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-ui)',
+        }}>
+          {initials}
+        </div>
+        {user.name || user.email}
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 6px)',
+          background: 'var(--bg-surface)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '8px 0', minWidth: 220,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          zIndex: 200,
+        }}>
+          {/* User info */}
+          <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-ui)' }}>
+              {user.name}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+              {user.email}
+            </div>
+            <div style={{
+              display: 'inline-block', marginTop: 6,
+              fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              padding: '2px 8px', borderRadius: 10,
+              background: isAdmin ? 'var(--gold-muted)' : 'var(--blue-muted)',
+              color: isAdmin ? 'var(--gold)' : 'var(--blue)',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              {user.role}
+            </div>
+          </div>
+
+          {/* Menu items */}
+          {isAdmin && (
+            <Link
+              to="/admin/users"
+              onClick={() => setOpen(false)}
+              style={{
+                display: 'block', padding: '10px 16px', fontSize: 13,
+                color: 'var(--text-secondary)', textDecoration: 'none',
+                fontFamily: 'var(--font-ui)',
+                transition: 'background var(--transition-fast)',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-deep)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              Manage Users
+            </Link>
+          )}
+          <button
+            onClick={() => { setOpen(false); logout() }}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              padding: '10px 16px', fontSize: 13,
+              color: 'var(--red)', background: 'none', border: 'none',
+              cursor: 'pointer', fontFamily: 'var(--font-ui)',
+              transition: 'background var(--transition-fast)',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-deep)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            Log out
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
