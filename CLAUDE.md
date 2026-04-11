@@ -141,6 +141,7 @@ Opens two terminal windows (backend + frontend) and launches the browser automat
 credit-platform/
 ├── analyze.py              # Legacy CLI analysis tool (still functional)
 ├── generate_report.py      # Playwright + ReportLab PDF report generator (CLI + backend)
+├── WEEKEND_DEEP_WORK.md    # 7-mode analytical audit protocol (health, tests, architecture, docs, prompts, red team, regression)
 ├── .env                    # API key + DATABASE_URL — NEVER committed to GitHub
 ├── .gitignore              # Must include: .env, node_modules/, venv/, __pycache__/, reports/
 ├── alembic/
@@ -153,8 +154,10 @@ credit-platform/
 │   ├── legal.py            # Legal Analysis API endpoints (upload, extract, compare)
 │   ├── auth.py             # X-API-Key authentication for integration endpoints
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
+│   ├── operator.py         # Operator Command Center endpoints (status, todo, mind review, digest)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
+│   ├── activity_log.py     # Centralized JSONL event logger — imported by all instrumented endpoints
 │   ├── ANALYSIS_FRAMEWORK.md # Analytical philosophy document (14 sections: hierarchy, clocks, denominators, decision trees, compute registry)
 │   ├── FRAMEWORK_INDEX.md  # Quick reference index — section map, company registry, command lookup, core principles
 │   ├── LEGAL_EXTRACTION_SCHEMA.md  # Legal extraction taxonomy — field schemas, confidence grading, param mapping
@@ -233,6 +236,7 @@ credit-platform/
 │   │   │   ├── Framework.jsx        # Analysis Framework page (/framework) — analytical philosophy with sticky TOC
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
+│   │   │   ├── OperatorCenter.jsx  # Operator Command Center (5-tab: health, commands, follow-ups, activity, mind)
 │   │   │   ├── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   │   └── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
 │   │   │   ├── research/          # Research Hub pages
@@ -468,6 +472,18 @@ Key columns in loan tape files:
 |`PATCH /companies/{co}/products/{p}/memos/{id}/status`       |Change status                      |
 |`POST /companies/{co}/products/{p}/memos/{id}/export-pdf`    |Export memo as PDF                 |
 
+**Operator Command Center endpoints:**
+|Endpoint                               |Method |Description                              |
+|---------------------------------------|-------|-----------------------------------------|
+|`/operator/status`                     |GET    |Aggregate health, commands, gaps, activity|
+|`/operator/todo`                       |GET    |List operator follow-up items            |
+|`/operator/todo`                       |POST   |Create follow-up item                    |
+|`/operator/todo/{id}`                  |PATCH  |Update follow-up (toggle complete, edit) |
+|`/operator/todo/{id}`                  |DELETE |Delete follow-up item                    |
+|`/operator/mind`                       |GET    |Browse all mind entries (master + company)|
+|`/operator/mind/{id}`                  |PATCH  |Promote/archive a mind entry             |
+|`/operator/digest`                     |POST   |Generate weekly digest (Slack or JSON)   |
+
 All tape chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
 Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
@@ -490,6 +506,7 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 | `/company/:co/:product/research/memos/new` | `MemoBuilder` | Create new IC memo (4-step wizard) |
 | `/company/:co/:product/research/memos/:memoId` | `MemoEditor` | View/edit/regenerate memo |
 | `/company/:co/:product/legal/:tab` | `LegalAnalytics` | Legal analysis 8-tab dashboard |
+| `/operator` | `OperatorCenter` | Command Center — health matrix, commands, follow-ups, activity log, mind review |
 | `/framework` | `Framework` | Analysis Framework — analytical philosophy with sticky TOC |
 
 **Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Legal Analysis (8 links), Research Hub (Document Library, Research Chat, IC Memos), Methodology. Active state: gold left border + gold text.
@@ -747,6 +764,9 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Consecutive breach EoD tracking** — `annotate_covenant_eod()` in `core/portfolio.py` (pure function) + `covenant_history.json` (I/O in `main.py`). Per MMA 18.3: `single_breach_not_eod` (PAR30), `single_breach_is_eod` (PAR60, Parent Cash), `two_consecutive_breaches` (Collection Ratio, Paid vs Due). History persists max 24 periods, dedupes by date.
 - **Payment schedule as static data** — Stored in `data/{co}/{prod}/legal/payment_schedule.json` (not extracted by AI). Backend reporting endpoint loads and serves it alongside extracted reporting requirements. Frontend renders with PAID/NEXT badges relative to today's date.
 - **Registry format** — Both DataRoomEngine and AnalyticsSnapshotEngine use dict[str, dict] registry format (keyed by doc_id). Auto-migrates old list format on read.
+- **Operator Command Center** — `/operator/status` reads from existing files only (config.json, registry.json, mind/*.jsonl, legal/*_extracted.json, reports/ai_cache/). No new data infrastructure. Gap detection uses heuristic rules. Personal follow-ups stored in `tasks/operator_todo.json` (separate from Claude's `tasks/todo.md`). Frontend at `/operator` with 5 tabs: Health Matrix, Commands, Follow-ups, Activity Log, Mind Review. `/ops` slash command provides terminal briefing.
+- **Activity logging** — `core/activity_log.py` appends to `reports/activity_log.jsonl`. Imported by 14 endpoints (AI, reports, legal, data room, memos, mind, alerts). Log_activity() calls placed before return statements. Only logs fresh operations (not cache hits for AI endpoints).
+- **Weekend Deep Work protocol** — `WEEKEND_DEEP_WORK.md` defines 7 analytical modes for long Claude Code sessions. State-save via `reports/deep-work/progress.json`. Two-pass file analysis (core engines before UI). Self-audit validation pass. Tiered frequency schedule (weekly Red Team → quarterly Full Combo).
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -819,6 +839,23 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Operator Command Center (`/operator` page + `/ops` slash command):**
+  - Backend: `backend/operator.py` — `GET /operator/status` (aggregate health, gaps, commands), todo CRUD, mind browse/promote, Slack digest
+  - Activity logging: `core/activity_log.py` — centralized JSONL logger wired into 14 endpoints (AI, reports, legal, data room, memos, mind, alerts)
+  - Frontend: `OperatorCenter.jsx` — 5-tab dashboard (Health Matrix, Commands, Follow-ups, Activity Log, Mind Review)
+  - Health Matrix: per-company cards with tape freshness badges (green/amber/red), legal/dataroom/mind stats, auto-detected gaps
+  - Command menu: 11 framework + 3 session + 7 deep work modes in categorized grid
+  - Follow-ups: persistent todo list (`tasks/operator_todo.json`) with priority, category, company tags — separate from Claude's `tasks/todo.md`
+  - Mind Review: browse all mind entries (master + company), filter by source, promote company entries to master mind
+  - Navigation: `/operator` route, "Ops" link in Navbar, Operator Card in Home Resources
+  - `/ops` slash command: terminal operator briefing at session start
+- ✅ **Weekend Deep Work protocol (`WEEKEND_DEEP_WORK.md`):**
+  - 7 modes: Codebase Health Audit, Test Generation Sprint, Architecture Review, Documentation Sprint, Prompt Optimisation, Red Team Review, Regression Validation
+  - State-save progress manifest (`reports/deep-work/progress.json`) for session resumption
+  - Two-pass file analysis strategy (core engines before UI)
+  - Self-audit validation pass cross-referencing CLAUDE.md and ANALYSIS_FRAMEWORK.md
+  - Financial business logic stress tests (covenant leakage, waterfall errors, separation principle)
+  - Tiered frequency: weekly (Red Team) → bi-weekly (Health + Tests) → monthly (Architecture + Regression) → quarterly (Full Combo)
 - ✅ **Legal Analysis (third pillar):**
   - PDF upload + 5-pass AI extraction engine (`core/legal_extractor.py`) — ~$1.25/doc, cached forever
   - Pydantic extraction schemas (`core/legal_schemas.py`) — Tier 1 (facility, eligibility, advance rates, covenants, concentration), Tier 2 (EOD, reporting, waterfall), Tier 3 (risk flags)

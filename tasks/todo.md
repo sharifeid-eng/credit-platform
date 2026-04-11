@@ -3,6 +3,26 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-11 (session 7: Operator Command Center + Weekend Deep Work Protocol)
+- [x] **Weekend Deep Work protocol** — `WEEKEND_DEEP_WORK.md` committed to project root. 7 modes: Codebase Health Audit, Test Generation Sprint, Architecture Review, Documentation Sprint, Prompt Optimisation, Red Team Review, Regression Validation. Includes: state-save progress manifest, two-pass file analysis strategy, self-audit validation pass, financial business logic stress tests, tiered frequency schedule.
+- [x] **Operator Command Center — backend** — `backend/operator.py` + `core/activity_log.py`:
+  - `GET /operator/status`: aggregate company health, tape freshness, legal coverage, mind entries, AI cache, data room, gap detection, command menu
+  - `GET/POST/PATCH/DELETE /operator/todo`: persistent follow-up list with company tags, priority (P0/P1/P2), categories
+  - `GET/PATCH /operator/mind`: browse all mind entries, promote company→master, archive
+  - `POST /operator/digest`: weekly Slack digest
+  - `core/activity_log.py`: centralized JSONL logger, importable from any endpoint
+- [x] **Operator Command Center — frontend** — `OperatorCenter.jsx` (530 lines):
+  - 5-tab dashboard: Health Matrix, Commands, Follow-ups, Activity Log, Mind Review
+  - Company health cards with freshness badges, stats grid, gap detection
+  - Command menu grid (11 framework + 3 session + 7 deep work)
+  - Todo CRUD with priority, category, company tags
+  - Mind entry browser with promote-to-master action
+- [x] **Frontend wiring** — `/operator` route, "Ops" link in Navbar, Operator Card in Home Resources
+- [x] **Activity logging instrumentation** — `log_activity()` wired into 14 endpoints: AI (commentary, exec summary, tab insight, chat), Reports (PDF, compliance cert, memo export), Data (dataroom ingest, facility params), Research (query), Legal (upload, extraction), Mind (record), Alerts (breach notification)
+- [x] **`/ops` slash command** — `.claude/commands/ops.md` for terminal operator briefing at session start
+
+---
+
 ## Completed — 2026-04-10 (session 6: Legal Analysis — Document Review Follow-up)
 - [x] **Account Debtor validation** — Cross-referenced MRPA 13 approved Account Debtors against tape Group column. Finding: CRITICAL DATA GAP — tape has no payer/insurance company column (Group = 143 healthcare providers, not insurance debtors). 10% non-eligible debtor concentration limit unenforceable from tape. Saved to `legal/debtor_validation.json` + Company Mind.
 - [x] **Payment schedule storage** — 17-payment schedule ($6M draw, 13% p.a. ACT/360, quarterly profit + bullet maturity) stored in `legal/payment_schedule.json`. Backend reporting endpoint extended. Frontend ReportingCalendar.jsx updated with schedule table (4 KPI cards + 17-row table with PAID/NEXT badges).

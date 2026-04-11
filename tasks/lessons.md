@@ -3,6 +3,23 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — .gitignore blocks `.claude/` — use `git add -f` for slash commands
+**Issue:** `.claude/` directory is in `.gitignore` (likely from a default template). When trying to `git add .claude/commands/ops.md`, git silently ignores it. Must use `git add -f .claude/commands/ops.md` to force-add individual files.
+**Rule:** When adding new slash commands to `.claude/commands/`, always use `git add -f`.
+
+---
+
+## 2026-04-11 — Place log_activity() calls BEFORE the return statement, not after
+**Mistake:** When adding `log_activity()` to the breach notification endpoint, the call was placed after the `return {...}` statement, making it unreachable dead code.
+**Rule:** When instrumenting endpoints with logging, always place the log call before the return. If the return builds a dict inline, either: (1) assign to a variable first, log, then return, or (2) place the log call on the line before `return {`.
+
+---
+
+## 2026-04-11 — Operator state reads from existing files, no new infrastructure needed
+**Design decision:** The Operator Command Center (`/operator/status`) reads from files that already exist (config.json, registry.json, mind/*.jsonl, legal/*_extracted.json, reports/ai_cache/) rather than introducing a new database or state system. Gap detection uses heuristic rules against these existing files. This keeps the system simple and avoids migration costs. Personal follow-ups are stored separately in `tasks/operator_todo.json` (not tasks/todo.md which is Claude's session scratch space).
+
+---
+
 ## 2026-04-10 — Multi-document extraction must merge, not pick latest
 **Mistake:** `load_latest_extraction()` picked the single document with the latest `extracted_at` timestamp. When all 4 Klaim documents had the same timestamp, it alphabetically chose "Fee letter" — returning 0 covenants, 0 reporting, 0 EODs (all the substance is in the MMA/MRPA).
 **Rule:** For multi-document facilities, always merge all extractions. Lists (covenants, EODs, reporting) are concatenated and deduped by name. Dicts (facility_terms) are merged with primary credit_agreement winning on conflict. Track `source_documents` array for provenance.
