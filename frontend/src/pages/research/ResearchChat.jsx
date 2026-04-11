@@ -37,6 +37,14 @@ const SUGGESTED_QUESTIONS = {
     'Summarize the key credit quality indicators',
     'What are the write-off trends and fraud patterns?',
   ],
+  default: [
+    'What are the key risk factors in this portfolio?',
+    'Summarize the facility structure and terms',
+    'What is the current collection performance?',
+    'What are the covenant levels and compliance status?',
+    'Compare performance trends across recent reports',
+    'What are the main concentration risks?',
+  ],
 }
 
 export default function ResearchChat() {
@@ -183,7 +191,7 @@ export default function ResearchChat() {
                 maxWidth: 560,
                 margin: '0 auto',
               }}>
-                {(SUGGESTED_QUESTIONS[analysisType] || SUGGESTED_QUESTIONS.klaim).map((q, i) => (
+                {(SUGGESTED_QUESTIONS[analysisType] || SUGGESTED_QUESTIONS.default).map((q, i) => (
                   <motion.button
                     key={i}
                     initial={{ opacity: 0, y: 6 }}
