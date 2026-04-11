@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — EOD MUST merge feature branch into main before pushing
+**Mistake:** `/eod` Step 9 says "push to main" but when work was done on a feature branch (`claude/prepare-context-DToUt`), I pushed to the feature branch instead and rationalized skipping the merge. The deploy script pulls `main` — so the code never reached production.
+**Rule:** EOD Step 9 is non-negotiable: if on a feature branch, `git checkout main && git merge <branch> --no-edit && git push origin main`. The `/eod` command has been updated to make this explicit. Never skip this step regardless of what the session task instructions say about which branch to develop on.
+
+---
+
+## 2026-04-11 — Always verify requirements.txt matches local venv after adding new packages
+**Mistake:** `python-multipart` was installed locally in session 4 (needed by `UploadFile` in `backend/legal.py`) but never added to `backend/requirements.txt`. The Docker container crashed on startup because the package was missing. The site was down and it wasn't caught for multiple sessions.
+**Rule:** After any session that adds a new Python import, check `backend/requirements.txt` before EOD. A quick verification: `grep -r "^from\|^import" backend/ core/ | grep -v __pycache__ | sort -u` vs contents of requirements.txt. Also: the `/eod` function should eventually include a "verify Docker builds" step.
+
+---
+
 ## 2026-04-11 — .gitignore blocks `.claude/` — use `git add -f` for slash commands
 **Issue:** `.claude/` directory is in `.gitignore` (likely from a default template). When trying to `git add .claude/commands/ops.md`, git silently ignores it. Must use `git add -f .claude/commands/ops.md` to force-add individual files.
 **Rule:** When adding new slash commands to `.claude/commands/`, always use `git add -f`.
