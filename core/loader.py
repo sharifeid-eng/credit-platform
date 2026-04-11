@@ -39,7 +39,7 @@ def get_snapshots(company, product):
                 'date': extract_date_from_filename(file)
             })
     
-    snapshots.sort(key=lambda x: x['date'] or '0000-00-00')
+    snapshots.sort(key=lambda x: (x['date'] or '0000-00-00', x['filename']))
     return snapshots
 
 def extract_date_from_filename(filename):
@@ -63,15 +63,27 @@ def load_snapshot(filepath):
     if filepath.endswith('.csv'):
         df = pd.read_csv(filepath)
     else:
-        # For multi-sheet Excel files, pick the largest sheet (most data rows)
+        # For multi-sheet Excel files, prefer well-known data sheet names,
+        # then fall back to the largest sheet by row count.
         xls = pd.ExcelFile(filepath)
         best_sheet = None
+        _PREFERRED_NAMES = {'data', 'sheet1', 'deals', 'loan tape', 'portfolio'}
+        _SKIP_NAMES = {'summary', 'glossary', 'notes', 'instructions', 'metadata', 'readme'}
         if len(xls.sheet_names) > 1:
-            best_sheet, best_rows = xls.sheet_names[0], -1
+            # First: try preferred names
             for sn in xls.sheet_names:
-                nrows = pd.read_excel(xls, sheet_name=sn).shape[0]
-                if nrows > best_rows:
-                    best_sheet, best_rows = sn, nrows
+                if sn.lower().strip() in _PREFERRED_NAMES:
+                    best_sheet = sn
+                    break
+            # Second: largest non-skip sheet
+            if not best_sheet:
+                best_sheet, best_rows = xls.sheet_names[0], -1
+                for sn in xls.sheet_names:
+                    if sn.lower().strip() in _SKIP_NAMES:
+                        continue
+                    nrows = pd.read_excel(xls, sheet_name=sn).shape[0]
+                    if nrows > best_rows:
+                        best_sheet, best_rows = sn, nrows
         sheet = best_sheet or xls.sheet_names[0]
         df = pd.read_excel(filepath, sheet_name=sheet)
         # Detect malformed headers: if most column names are numeric (not strings),

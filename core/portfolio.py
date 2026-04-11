@@ -1084,7 +1084,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     })
 
     # ── 5. Collection Ratio (≥ 25%) ─────────────────────────────────
-    # Amount collected in period / Total A/R at start of period
+    # NOTE: True period ratio requires two snapshots (start vs end of period).
+    # Single-tape approximation: cumulative collected / face value.
     coll_threshold = facility_params.get('collection_ratio_limit', 0.25)
     coll_ratio = 0
     if 'Deal date' in df.columns and 'Collected till date' in df.columns:
@@ -1098,7 +1099,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         coll_ratio = total_coll / total_pv if total_pv > 0 else 0
 
     covenants.append({
-        'name': 'Collection Ratio',
+        'name': 'Collection Ratio (cumulative)',
         'current': _safe(coll_ratio),
         'threshold': _safe(coll_threshold),
         'compliant': bool(coll_ratio >= coll_threshold),
@@ -1106,9 +1107,9 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'format': 'pct',
         'period': period_str,
         'available': True,
-        'partial': False,
+        'partial': True,
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(ii): 2 consecutive breaches for EoD
-        'note': 'EoD requires 2 consecutive monthly breaches (MMA 18.3(ii))',
+        'note': 'Single-tape approximation: cumulative collected / face value. True period ratio requires two snapshots.',
         'breakdown': [
             {'label': 'Collections (period)', 'value': _safe(total_coll if 'total_coll' in dir() else 0)},
             {'label': 'Total A/R (period)', 'value': _safe(total_pv if 'total_pv' in dir() else 0)},
@@ -1237,9 +1238,20 @@ def annotate_covenant_eod(result, history):
 
         elif eod_rule == 'two_consecutive_breaches':
             # Check if the most recent prior period was also a breach
+            # Validate that it's truly the preceding period (within ~45 days)
             prior_breach = False
             if prev_records:
-                prior_breach = not prev_records[0].get('compliant', True)
+                prev_period = prev_records[0].get('period', '')
+                current_period = cov.get('period', '')
+                is_consecutive = True
+                if prev_period and current_period:
+                    try:
+                        import pandas as _pd
+                        gap_days = (_pd.Timestamp(current_period) - _pd.Timestamp(prev_period)).days
+                        is_consecutive = 15 <= gap_days <= 45  # roughly one calendar month
+                    except Exception:
+                        is_consecutive = True  # if date parsing fails, assume consecutive
+                prior_breach = is_consecutive and not prev_records[0].get('compliant', True)
 
             if is_breaching and prior_breach:
                 consecutive = 2

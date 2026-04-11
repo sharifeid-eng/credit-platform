@@ -11,6 +11,8 @@ import numpy as np
 
 def fmt_m(v):
     """Format a number in millions for display."""
+    if v is None or (isinstance(v, float) and (np.isnan(v) or np.isinf(v))):
+        return '—'
     if abs(v) >= 1e6:
         return f"{v / 1e6:.1f}M"
     if abs(v) >= 1e3:
@@ -32,11 +34,15 @@ def apply_multiplier(config, display_currency):
 
 
 def filter_by_date(df, as_of_date=None):
-    """Filter DataFrame to deals on or before as_of_date."""
+    """Filter DataFrame to deals on or before as_of_date.
+
+    Returns a copy — never mutates the input DataFrame.
+    """
     if 'Deal date' in df.columns:
+        df = df.copy()
         df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
-    if as_of_date and 'Deal date' in df.columns:
-        df = df[df['Deal date'] <= pd.to_datetime(as_of_date)]
+        if as_of_date:
+            df = df[df['Deal date'] <= pd.to_datetime(as_of_date)]
     return df
 
 
@@ -479,9 +485,12 @@ def compute_revenue(df, mult):
     if has_other: monthly['other_fees'] *= mult
     else:         monthly['other_fees']  = 0
 
-    monthly['realised_revenue']   = (
-        monthly['gross_revenue'] * (monthly['collected'] / monthly['purchase_value'])
-    ).fillna(0)
+    monthly['realised_revenue'] = np.where(
+        monthly['purchase_value'] > 0,
+        monthly['gross_revenue'] * (monthly['collected'] / monthly['purchase_value']),
+        0,
+    )
+    monthly['realised_revenue'] = monthly['realised_revenue'].replace([np.inf, -np.inf], 0)
     monthly['unrealised_revenue'] = monthly['gross_revenue'] - monthly['realised_revenue']
     monthly['gross_margin']       = (
         monthly['gross_revenue'] / monthly['purchase_value'] * 100
@@ -593,7 +602,7 @@ def compute_returns_analysis(df, mult):
         'total_deployed':       round(total_pp, 2),
         'total_face_value':     round(total_pv, 2),
         'avg_discount':         round(float(df['Discount'].mean()) * 100, 2),
-        'weighted_avg_discount': round(float((df['Discount'] * df['Purchase value']).sum() / total_pv * mult * 100), 2) if total_pv else 0,
+        'weighted_avg_discount': round(float((df['Discount'] * df['Purchase value']).sum() / df['Purchase value'].sum() * 100), 2) if df['Purchase value'].sum() else 0,
         'expected_margin':      round(expected_margin, 2),
         'realised_margin':      round(comp_margin, 2),
         'capital_recovery':     round(capital_recovery, 2),
@@ -1136,7 +1145,8 @@ def compute_group_performance(df, mult, as_of_date=None):
         completed = grp[grp['Status'] == 'Completed']
         active    = grp[grp['Status'] == 'Executed']
 
-        # DSO for completed deals in this group
+        # Weighted average deal age for completed deals in this group
+        # (approximates DSO — true DSO requires completion timestamps)
         dso = 0
         if len(completed):
             comp_days = (today - completed['Deal date']).dt.days
@@ -1297,7 +1307,7 @@ def compute_vat_summary(df, mult):
 
 # ── PAR (Portfolio at Risk) ──────────────────────────────────────────────────
 
-def _build_empirical_benchmark(completed_df):
+def _build_empirical_benchmark(completed_df, snapshot_date=None):
     """Build empirical expected collection % by deal age bucket from completed deals.
 
     Groups completed deals by age bucket (30-day intervals), computes the median
@@ -1318,8 +1328,8 @@ def _build_empirical_benchmark(completed_df):
     if 'Deal date' not in cdf.columns:
         return None
 
-    today = pd.Timestamp.now()
-    cdf['deal_age'] = (today - cdf['Deal date']).dt.days
+    ref = pd.Timestamp(snapshot_date) if snapshot_date else pd.Timestamp.now()
+    cdf['deal_age'] = (ref - cdf['Deal date']).dt.days
 
     # Create 30-day buckets from 0 to 720
     buckets = []
@@ -1437,7 +1447,7 @@ def compute_par(df, mult, as_of_date=None):
 
     # Method 2: Option C — Empirical benchmarks from completed deals
     completed = df[df['Status'] == 'Completed'].copy()
-    benchmark = _build_empirical_benchmark(completed)
+    benchmark = _build_empirical_benchmark(completed, snapshot_date=as_of_date)
 
     if benchmark is not None:
         active['deal_age'] = (today - active['Deal date']).dt.days
@@ -1999,12 +2009,16 @@ def compute_seasonality(df, mult, as_of_date=None):
         collection_rate.append(coll_row)
 
     # Seasonal index — average across years
+    # Compute overall average from non-zero months only (avoids deflating index for mid-year starts)
+    all_nonzero = [origination[mm-1].get(str(y), 0) for mm in range(1, 13) for y in years
+                   if origination[mm-1].get(str(y), 0) > 0]
+    overall_avg = sum(all_nonzero) / len(all_nonzero) if all_nonzero else 1
+
     seasonal_index = []
     for m in range(1, 13):
         vals = [origination[m-1].get(str(y), 0) for y in years]
         vals = [v for v in vals if v > 0]
         avg = sum(vals) / len(vals) if vals else 0
-        overall_avg = sum(sum(origination[mm-1].get(str(y), 0) for y in years) for mm in range(1, 13)) / (12 * len(years)) if years else 1
         seasonal_index.append({
             'month': m,
             'index': round(avg / overall_avg, 4) if overall_avg > 0 else 1.0,
@@ -2192,6 +2206,10 @@ def compute_cdr_ccr(df, mult, as_of_date=None):
 
         # Age: months from start of vintage month to as_of_date (min 1)
         months_outstanding = max(((today - vintage.to_timestamp()).days / 30.44), 1.0)
+
+        # Skip vintages with insufficient seasoning (< 3 months) — annualization is misleading
+        if months_outstanding < 3:
+            continue
 
         collected = float((grp['Collected till date'] * mult).sum())
         defaulted = float((grp['Denied by insurance'] * mult).sum()) if has_denial else 0.0

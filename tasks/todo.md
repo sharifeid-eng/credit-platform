@@ -18,6 +18,39 @@ The Research Hub, Living Mind, and IC Memo Engine are built (~17,000 lines) but 
 
 ---
 
+## Completed — 2026-04-11 (session 11: Red Team Review + Fix All 28 Findings)
+- [x] **Red Team Mode 6 — first adversarial review** — Full codebase audit covering 6 sections: Data Integrity, Calculation Verification, Business Logic Stress Test, UX Trust, AI Commentary Risks, Failure Mode Catalogue. Found 8 critical, 14 warning, 6 improvement findings. Report: `reports/deep-work/2026-04-11-red-team-report.md`.
+- [x] **Fix C-4: Path traversal in legal upload** — `backend/legal.py` now sanitizes filenames with `os.path.basename()`, rejects dotfiles.
+- [x] **Fix C-1: Previous snapshot index inverted** — `backend/main.py` BB movement attribution + covenant trend were comparing against NEXT snapshot instead of PREVIOUS. Changed `+1` → `-1` with `>= 0` guard.
+- [x] **Fix B-1: Weighted avg discount double-multiplied** — `core/analysis.py` `compute_returns_analysis()` had extra `* mult` in weighted discount formula. Removed.
+- [x] **Fix C-2: Covenant Collection Ratio uses cumulative data** — `core/portfolio.py` renamed to "Collection Ratio (cumulative)", marked `partial: True`, added note explaining single-tape limitation.
+- [x] **Fix E-1: AI silent exception swallowing** — `backend/main.py` `_build_klaim_full_context()` had 22 `try/except: pass` blocks. All now track errors in `data_gaps[]` and append a DATA GAPS section to AI context.
+- [x] **Fix C-3: PAR benchmark non-deterministic** — `core/analysis.py` `_build_empirical_benchmark()` now accepts `snapshot_date` param instead of using `pd.Timestamp.now()`.
+- [x] **Fix D-1: Race condition on snapshot switch** — `CompanyContext.jsx` summary fetch now uses `AbortController` to cancel stale requests.
+- [x] **Fix C-5: CF_TEAM empty string auth bypass** — `backend/cf_auth.py` now strips whitespace and logs warning when CF_TEAM is set but empty.
+- [x] **Fix A-1: filter_by_date() mutation** — `core/analysis.py` now copies DataFrame before mutating `Deal date` column.
+- [x] **Fix B-2: Revenue inf on zero PV** — `core/analysis.py` guarded with `np.where` + `.replace([np.inf, -np.inf], 0)`.
+- [x] **Fix B-3: CDR > 100% for young vintages** — Skip vintages < 3 months old in `compute_cdr_ccr()`.
+- [x] **Fix E-3: AI cache serves wrong currency** — Currency added to `_ai_cache_key()` and all callers updated.
+- [x] **Fix C-7: Cache not invalidated on file replace** — File mtime added to AI cache key.
+- [x] **Fix C-8: Bulk ops partial commit** — `backend/integration.py` now uses `db.begin_nested()` savepoints per item.
+- [x] **Fix D-2: TabInsight stale across snapshots** — Added `useEffect` to clear on snapshot/currency change.
+- [x] **Fix D-3: AICommentary not cleared on back-nav** — Added `useEffect` in CompanyContext to clear `aiCache` on snapshot change.
+- [x] **Fix D-4: Tamara missing read-only badge** — Added matching badge in `TamaraDashboard.jsx`.
+- [x] **Fix D-5: No data source indicator** — `PortfolioAnalytics.jsx` now shows "Live Data" or "Tape Fallback" badge.
+- [x] **Fix A-4: Non-deterministic snapshot sort** — Secondary sort by filename in `loader.py`.
+- [x] **Fix A-5: Sheet selection heuristic** — Prefer named data sheets, skip summary/glossary sheets.
+- [x] **Fix C-10: EoD non-consecutive validation** — Validates 15-45 day gap between periods.
+- [x] **Fix C-12: Amendment covenant dedup** — Prefers later `extracted_at` timestamp.
+- [x] **Fix I-1: N+1 queries in db_loader** — Pre-aggregates payments in single query.
+- [x] **Fix I-2: Unbounded caches** — `_BoundedCache` with max 10 entries.
+- [x] **Fix I-5: fmt_m NaN crash** — NaN/inf guard added.
+- [x] **Fix I-6: Seasonality avg includes zeros** — Filters non-zero months.
+- [x] **Fix misc** — `_safe()` inf guard (SILQ), `_dpd()` missing column warning, migration.py input mutation, DataChat empty response, Tamara percentage edge case.
+- [x] **All 156 tests passing** after fixes.
+
+---
+
 ## Completed — 2026-04-11 (session 10: Authentication + RBAC)
 - [x] **Cloudflare Access JWT authentication** — Backend reads `CF_Authorization` cookie / `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against Cloudflare public keys (`amwalcp.cloudflareaccess.com/cdn-cgi/access/certs`). Auto-provisions users on first login. Admin bootstrap via `ADMIN_EMAIL` env var.
 - [x] **User model + migration** — `User` table (email, name, role, is_active, timestamps) in `core/models.py`. Alembic migration `b2f3a8c91d45`.

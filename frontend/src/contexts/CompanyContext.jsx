@@ -81,14 +81,22 @@ export function CompanyProvider({ children }) {
     })
   }, [product, snapshot])
 
+  // Clear AI cache when snapshot changes (covers browser back-nav, not just dropdown)
+  useEffect(() => {
+    setAiCache(null)
+  }, [snapshot])
+
   // Load summary KPIs
   useEffect(() => {
     if (!product || !snapshot) return
+    const controller = new AbortController()
     setSummaryLoading(true)
     setSummary(null)
     getSummary(company, product, snapshot, currency, asOfDate || undefined)
-      .then(setSummary)
-      .finally(() => setSummaryLoading(false))
+      .then(data => { if (!controller.signal.aborted) setSummary(data) })
+      .catch(() => {})
+      .finally(() => { if (!controller.signal.aborted) setSummaryLoading(false) })
+    return () => controller.abort()
   }, [product, snapshot, currency, asOfDate])
 
   const localCcy = config.currency ?? 'AED'

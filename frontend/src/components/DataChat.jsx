@@ -30,7 +30,11 @@ export default function DataChat({ company, product, snapshot, currency }) {
     setLoading(true)
     try {
       const reply = await postChat(company, product, snapshot, currency, q, messages)
-      setMessages(prev => [...prev, { role: 'ai', text: reply }])
+      if (!reply || !reply.trim()) {
+        setMessages(prev => [...prev, { role: 'ai', text: 'No response received — please try again.', isError: true }])
+      } else {
+        setMessages(prev => [...prev, { role: 'ai', text: reply }])
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'Error — please try again.', isError: true }])
     } finally {

@@ -693,10 +693,10 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.
 - **`core/config.py`** — per-product `config.json` stores currency and description.
 - **Snapshot naming** — files must start with `YYYY-MM-DD_` for date parsing.
-- **`filter_by_date()`** — filters deals to `Deal date <= as_of_date`. **Important:** Only filters deal selection by origination date — does NOT adjust balance columns (collected, denied, outstanding). These always reflect the tape snapshot date. See ANALYSIS_FRAMEWORK.md Section 15.
+- **`filter_by_date()`** — filters deals to `Deal date <= as_of_date`. **Always returns a copy** — never mutates the input DataFrame. **Important:** Only filters deal selection by origination date — does NOT adjust balance columns (collected, denied, outstanding). These always reflect the tape snapshot date. See ANALYSIS_FRAMEWORK.md Section 15.
 - **`_load()` in main.py** — matches snapshots by `filename` or `date` field (fixed Feb 2026).
 - **AICommentary caching** — two layers: (1) In-memory via `CompanyContext` state, survives tab switches within a session, clears on snapshot change. (2) Disk cache in `reports/ai_cache/` — persists across sessions and users (see below).
-- **AI response disk cache** — All AI endpoints (executive summary, commentary, tab insights) cache responses to `reports/ai_cache/` as JSON files. Cache key: `(endpoint, company, product, snapshot_filename)` — currency excluded (only affects numeric display), `as_of_date` normalized (None/snapshot_date/future all map to same key). `?refresh=true` query param forces regeneration. One AI call per tape lifetime.
+- **AI response disk cache** — All AI endpoints (executive summary, commentary, tab insights) cache responses to `reports/ai_cache/` as JSON files. Cache key: `(endpoint, company, product, snapshot_filename, currency, file_mtime)` — currency included because AI commentary embeds currency-specific amounts; file mtime included to auto-invalidate when a same-name file is replaced. `as_of_date` normalized (None/snapshot_date/future all map to same key). `?refresh=true` query param forces regeneration.
 - **AI blocked on backdated views** — `_check_backdated()` returns HTTP 400 on all AI endpoints when `as_of_date < snapshot_date`. Balance metrics would be misleading (inflated collection rates, understated outstanding). Frontend: KpiCard shows `TAPE DATE` badge + dimmed value, BackdatedBanner classifies metrics, AI controls disabled with explanation.
 - **API response extraction** — `api.js` extracts: `.commentary` for AI commentary, `.insight` for tab insights, `.answer` for chat responses.
 - **Text contrast** — `--text-muted` updated from `#4A5568` to `#8494A7` for readability on dark theme.
@@ -918,7 +918,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - New slash command: `.claude/commands/eod.md` — 11-step end-of-session checklist (tests, .env check, cache cleanup, docs, commit, push, sync)
 - ✅ **AI response caching (disk-based, cross-user):**
   - Executive summary (~$0.48/call), commentary (~$0.06/call), tab insights (~$0.02/call x 18 tabs) cached to `reports/ai_cache/`
-  - Cache key: `(endpoint, company, product, snapshot)` — one AI call per tape lifetime, served instantly thereafter
+  - Cache key: `(endpoint, company, product, snapshot, currency, file_mtime)` — separate cache per currency, auto-invalidates on file replacement
   - `?refresh=true` query param forces regeneration; frontend shows CACHED badge + Regenerate button
   - `GET /ai-cache-status` endpoint reports what's cached for a given snapshot
 - ✅ **Backdated view data integrity:**
@@ -1205,6 +1205,16 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Compliance comparison (extracted vs live analytics)
   - 8-tab frontend dashboard
   - Klaim: 4 documents reviewed, 7 parameter updates from MMA/MRPA
+- ✅ **Red Team Review + 28 Finding Fixes (Mode 6 Deep Work):**
+  - First adversarial review: 8 critical, 14 warning, 6 improvement findings across ~50 files
+  - Report: `reports/deep-work/2026-04-11-red-team-report.md`, progress: `reports/deep-work/progress.json`
+  - **Security:** Path traversal in legal upload fixed (`os.path.basename`), CF_TEAM empty-string auth bypass guarded
+  - **Calculation fixes:** Weighted avg discount double-multiply removed, revenue inf guarded, CDR seasoning filter (< 3 months skipped), PAR benchmark uses snapshot date not `now()`
+  - **Business logic:** Snapshot index inverted (BB movement/covenant trends), covenant Collection Ratio marked as cumulative approximation, EoD consecutive period validation, amendment covenant dedup prefers later timestamp
+  - **AI hardening:** 22 `try/except: pass` blocks replaced with `data_gaps[]` tracking + DATA GAPS section in context, currency added to AI cache key, file mtime in cache key for same-name replacement
+  - **Frontend:** Race condition fixed (AbortController), TabInsight/AICommentary cleared on snapshot change, Tamara read-only badge, PortfolioAnalytics data source badge, DataChat empty response handling
+  - **Performance:** db_loader N+1 queries → single pre-aggregate, bounded in-memory caches (max 10)
+  - All 156 tests passing after fixes
 -----
 ## Known Gaps & Next Steps
 **Short term:**

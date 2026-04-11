@@ -50,6 +50,11 @@ def _dpd(df, ref_date=None):
     else:
         ref_date = pd.to_datetime(ref_date)
     if C_REPAY_DEADLINE not in df.columns:
+        import logging
+        logging.getLogger('laith.silq').warning(
+            f"Column '{C_REPAY_DEADLINE}' missing — DPD defaulting to 0 for all loans. "
+            "PAR, covenants, and BB eligibility may be unreliable."
+        )
         return pd.Series(0, index=df.index)
     dpd = (ref_date - df[C_REPAY_DEADLINE]).dt.days.clip(lower=0)
     # Closed loans have 0 DPD regardless
@@ -66,11 +71,17 @@ def _ensure_str_shop_id(df):
 
 
 def _safe(val):
-    """Convert numpy types to Python natives for JSON serialization."""
+    """Convert numpy types to Python natives for JSON serialization.
+
+    NaN and inf are converted to 0 to prevent JSON serialization errors.
+    Note: this means 'missing data' and 'genuine zero' are indistinguishable downstream.
+    """
     if isinstance(val, (np.integer,)):
         return int(val)
     if isinstance(val, (np.floating,)):
-        return float(val) if not np.isnan(val) else 0
+        if np.isnan(val) or np.isinf(val):
+            return 0
+        return float(val)
     if isinstance(val, (np.bool_,)):
         return bool(val)
     return val

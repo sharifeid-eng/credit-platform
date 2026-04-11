@@ -27,7 +27,10 @@ logger = logging.getLogger("laith.auth")
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-CF_TEAM = os.getenv("CF_TEAM")  # e.g. "amwalcp"
+_raw_cf_team = os.getenv("CF_TEAM")
+CF_TEAM = _raw_cf_team.strip() if _raw_cf_team and _raw_cf_team.strip() else None
+if _raw_cf_team is not None and CF_TEAM is None:
+    logger.warning("CF_TEAM is set but empty/whitespace — treating as not configured (dev mode)")
 CF_APP_AUD = os.getenv("CF_APP_AUD")  # Application audience tag from CF dashboard
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")  # Bootstrap first admin
 

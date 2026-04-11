@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getTabInsight } from '../services/api'
 
@@ -11,6 +11,14 @@ export default function TabInsight({ company, product, snapshot, currency, tab, 
   const [open, setOpen]       = useState(false)
   const [error, setError]     = useState(null)
   const [fromCache, setFromCache] = useState(false)
+
+  // Clear cached insight when snapshot/currency changes
+  useEffect(() => {
+    setText(null)
+    setOpen(false)
+    setFromCache(false)
+    setError(null)
+  }, [snapshot, currency])
 
   async function fetch(refresh = false) {
     if (isBackdated) return

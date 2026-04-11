@@ -101,18 +101,22 @@ def load_klaim_from_db(db, company: str, product: str) -> pd.DataFrame:
     if not invoices:
         return pd.DataFrame()
 
+    # Pre-aggregate payments for all invoices in a single query (avoids N+1)
+    inv_ids = [inv.id for inv in invoices]
+    pay_totals = {}
+    if inv_ids:
+        pay_stmt = (
+            select(Payment.invoice_id, func.coalesce(func.sum(Payment.payment_amount), 0))
+            .where(Payment.invoice_id.in_(inv_ids))
+            .group_by(Payment.invoice_id)
+        )
+        pay_totals = dict(db.execute(pay_stmt).all())
+
     # Build rows
     rows = []
     for inv in invoices:
         meta = inv.extra_data or {}
-
-        # Aggregate payments
-        pay_stmt = (
-            select(
-                func.coalesce(func.sum(Payment.payment_amount), 0)
-            ).where(Payment.invoice_id == inv.id)
-        )
-        collected = float(db.execute(pay_stmt).scalar() or 0)
+        collected = float(pay_totals.get(inv.id, 0))
 
         rows.append({
             'Deal date': pd.to_datetime(inv.invoice_date),

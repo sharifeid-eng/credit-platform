@@ -75,27 +75,31 @@ def load_latest_extraction(company: str, product: str) -> dict | None:
     primary = next((e for e in extractions if e.get('document_type') == 'credit_agreement'), extractions[0])
     merged = dict(primary)  # shallow copy
 
-    # List fields: concatenate from all documents (dedup by content hash)
+    # List fields: concatenate from all documents (dedup by name, prefer later extraction)
     list_fields = [
         'covenants', 'eligibility_criteria', 'advance_rates', 'concentration_limits',
         'events_of_default', 'reporting_requirements', 'risk_flags',
         'waterfall_normal', 'waterfall_default',
     ]
     for field in list_fields:
-        combined = list(primary.get(field, []))
-        seen_names = {item.get('name', '') for item in combined if isinstance(item, dict)}
+        # Build a map of name -> (item, extracted_at) across all documents,
+        # preferring the entry from the document with the later extracted_at timestamp.
+        named_items: dict[str, tuple[dict, str]] = {}
+        unnamed_items: list = []
         for ext in extractions:
-            if ext is primary:
-                continue
+            ext_ts = ext.get('extracted_at', '')
             for item in ext.get(field, []):
-                # Dedup by name if dict, otherwise just append
                 if isinstance(item, dict):
                     item_name = item.get('name', '')
-                    if item_name and item_name not in seen_names:
-                        combined.append(item)
-                        seen_names.add(item_name)
+                    if item_name:
+                        existing_ts = named_items.get(item_name, (None, ''))[1]
+                        if item_name not in named_items or ext_ts > existing_ts:
+                            named_items[item_name] = (item, ext_ts)
+                    else:
+                        unnamed_items.append(item)
                 else:
-                    combined.append(item)
+                    unnamed_items.append(item)
+        combined = [entry[0] for entry in named_items.values()] + unnamed_items
         merged[field] = combined
 
     # Dict fields: merge (primary wins on conflict)

@@ -53,7 +53,10 @@ async def upload_legal_document(
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
     legal_dir = get_legal_dir(company, product)
-    file_path = os.path.join(legal_dir, file.filename)
+    safe_name = os.path.basename(file.filename)
+    if not safe_name or safe_name.startswith('.'):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    file_path = os.path.join(legal_dir, safe_name)
 
     # Save uploaded file
     content = await file.read()
@@ -62,13 +65,13 @@ async def upload_legal_document(
 
     file_size = len(content)
     logger.info(f"Uploaded legal document: {file_path} ({file_size} bytes)")
-    log_activity(LEGAL_UPLOAD, company, product, f"Uploaded legal doc: {file.filename} ({file_size} bytes)")
+    log_activity(LEGAL_UPLOAD, company, product, f"Uploaded legal doc: {safe_name} ({file_size} bytes)")
 
     # Trigger background extraction
     background_tasks.add_task(_background_extract, file_path, document_type, company, product)
 
     return {
-        'filename': file.filename,
+        'filename': safe_name,
         'file_path': file_path,
         'file_size': file_size,
         'document_type': document_type,
@@ -141,7 +144,12 @@ def re_extract_document(
 
 @router.delete("/companies/{company}/products/{product}/legal/documents/{filename}")
 def delete_document(company: str, product: str, filename: str):
-    """Delete a legal document and its cached extraction."""
+    """Delete a legal document and its cached extraction.
+
+    TODO: Add admin-only authorization check (e.g. Depends(require_admin) from
+    cf_auth.py). Currently protected only by Cloudflare Access middleware at the
+    network layer — any authenticated user can delete legal documents.
+    """
     legal_dir = get_legal_dir(company, product)
     file_path = os.path.join(legal_dir, filename)
 

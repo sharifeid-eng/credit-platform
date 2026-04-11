@@ -43,7 +43,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div style={{ color: MUTED, marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color || '#E8EAF0' }}>
-          {p.name}: {typeof p.value === 'number' && p.value < 1 ? (p.value * 100).toFixed(2) + '%' : p.value?.toLocaleString()}
+          {p.name}: {typeof p.value === 'number' && p.value <= 1 && p.value >= 0 ? (p.value * 100).toFixed(2) + '%' : p.value?.toLocaleString()}
         </div>
       ))}
     </div>
@@ -972,16 +972,37 @@ export default function TamaraDashboard() {
   }
 
   return (
-    <AnimatePresence mode="wait">
+    <div>
+      {/* Read-only badge */}
       <motion.div
-        key={activeSection}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.25 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        style={{
+          background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', padding: '12px 18px',
+          border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12,
+          marginBottom: 16,
+        }}
       >
-        {renderSection()}
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: GOLD }}>
+          Read-Only Summary
+        </span>
+        <span style={{ fontSize: 11, color: MUTED }}>
+          Pre-computed data room analysis — no live tape calculations
+        </span>
       </motion.div>
-    </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeSection}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.25 }}
+        >
+          {renderSection()}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   )
 }

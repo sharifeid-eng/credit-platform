@@ -3,6 +3,23 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — Red Team reviews catch calculation errors that tests don't
+
+**Discovery:** The first Red Team review (Mode 6) found `weighted_avg_discount` was double-multiplied by FX rate (`* mult` applied when numerator and denominator already contained `mult` via `total_pv`). This shipped in the original Returns tab code, passed all tests, and was shown to IC. Tests didn't catch it because they tested with `mult=1` (local currency).
+**Rule:** Tests with `mult=1.0` won't catch FX-related bugs. Add at least one test per financial function that uses a non-1.0 multiplier (e.g., `mult=0.2723` for AED). Schedule Red Team Mode 6 at least monthly.
+
+## 2026-04-11 — Comments lie about sort order — verify against the actual code
+
+**Discovery:** `backend/main.py` line 2826 had comment `# snaps sorted newest-first` but `get_snapshots()` sorts ascending (oldest-first). The `prev_idx = current_idx + 1` was therefore pointing at the NEXT snapshot, not the previous one. BB movement attribution and covenant trends were comparing against the wrong reference period.
+**Rule:** Never trust sort-order comments — verify by reading the sort function. When writing sort-dependent code, reference the sort location: `# sorted ascending in get_snapshots() (loader.py:42)`.
+
+## 2026-04-11 — AI context `try/except: pass` is the most dangerous pattern on a financial platform
+
+**Discovery:** `_build_klaim_full_context()` had 22 `try/except Exception: pass` blocks. When a compute function fails, the AI generates analysis WITHOUT that metric — and can conclude "portfolio is healthy" because it literally doesn't know PAR data was missing. This is worse than a 500 error because the user trusts the confident output.
+**Rule:** In AI context builders, NEVER use `except: pass`. Collect errors: `data_gaps.append(str(e))`. Append a DATA GAPS section so the AI can caveat its findings. A visible "could not compute PAR" is infinitely better than a confident "portfolio looks good" that omits PAR.
+
+---
+
 ## 2026-04-11 — Subagent-generated code must be verified against actual function signatures
 **Mistake:** The memo `analytics_bridge.py` (written by a subagent) imported `parse_tamara_snapshot` from `core.analysis_tamara` — a function that doesn't exist. The real function is `parse_tamara_data`. Would crash at runtime.
 **Rule:** When a subagent writes cross-module imports, verify function names exist (`grep "def function_name" target_module.py`). Subagents guess names from patterns.

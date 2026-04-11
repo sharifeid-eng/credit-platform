@@ -26,6 +26,7 @@ export default function PortfolioAnalytics() {
   const [bbData, setBbData] = useState(null)
   const [clData, setClData] = useState(null)
   const [covData, setCovData] = useState(null)
+  const [dataSource, setDataSource] = useState(null)
   const [covDates, setCovDates] = useState([])
   const [covSelectedDate, setCovSelectedDate] = useState('')
   const [loading, setLoading] = useState(false)
@@ -68,9 +69,9 @@ export default function PortfolioAnalytics() {
 
     const aod = asOfDate || undefined
     const fetcher =
-      tab === 'borrowing-base'       ? getPortfolioBorrowingBase(company, product, snapshot, currency, aod).then(setBbData) :
-      tab === 'concentration-limits' ? getPortfolioConcentrationLimits(company, product, snapshot, currency, aod).then(setClData) :
-      tab === 'covenants'            ? getPortfolioCovenants(company, product, snapshot, currency, aod).then(setCovData) :
+      tab === 'borrowing-base'       ? getPortfolioBorrowingBase(company, product, snapshot, currency, aod).then(data => { setBbData(data); setDataSource(data.data_source || 'tape') }) :
+      tab === 'concentration-limits' ? getPortfolioConcentrationLimits(company, product, snapshot, currency, aod).then(data => { setClData(data); setDataSource(data.data_source || 'tape') }) :
+      tab === 'covenants'            ? getPortfolioCovenants(company, product, snapshot, currency, aod).then(data => { setCovData(data); setDataSource(data.data_source || 'tape') }) :
       Promise.resolve()
 
     fetcher
@@ -110,6 +111,23 @@ export default function PortfolioAnalytics() {
   return (
     <div>
       {errorBanner}
+
+      {/* Data source indicator */}
+      {dataSource && (
+        <div style={{ padding: isMobile ? '12px 14px 0' : '12px 28px 0' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '3px 10px', borderRadius: 4, marginBottom: 12,
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            background: dataSource === 'database' ? 'rgba(45,212,191,0.1)' : 'rgba(201,168,76,0.1)',
+            color: dataSource === 'database' ? 'var(--accent-teal)' : 'var(--accent-gold)',
+            border: `1px solid ${dataSource === 'database' ? 'rgba(45,212,191,0.2)' : 'rgba(201,168,76,0.2)'}`,
+          }}>
+            {dataSource === 'database' ? 'Live Data' : 'Tape Fallback'}
+          </div>
+        </div>
+      )}
 
       {/* Gear icon for facility params — positioned top-right of content area */}
       {showGear && (

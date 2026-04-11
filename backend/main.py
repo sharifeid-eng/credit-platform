@@ -127,7 +127,14 @@ def _load(company, product, snapshot):
     snaps = get_snapshots(company, product)
     if not snaps:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
+    # Prefer exact filename match, then date match
+    sel = next((s for s in snaps if s['filename'] == snapshot), None)
+    if sel is None:
+        date_matches = [s for s in snaps if s['date'] == snapshot]
+        if len(date_matches) > 1:
+            names = [s['filename'] for s in date_matches]
+            raise HTTPException(status_code=400, detail=f"Ambiguous snapshot date '{snapshot}' matches {len(date_matches)} files: {', '.join(names)}. Please specify by filename.")
+        sel = date_matches[0] if date_matches else snaps[-1]
     return load_snapshot(sel['filepath']), sel
 
 def _currency(company, product, requested):
@@ -156,17 +163,25 @@ def _ai_cache_dir():
 
 def _ai_cache_key(endpoint: str, company: str, product: str,
                   snapshot: str = '', as_of_date: str = '', tab: str = '',
-                  snapshot_date: str = '') -> str:
+                  snapshot_date: str = '', currency: str = '') -> str:
     """Build a deterministic cache filename from request parameters.
-    Currency is excluded because the analytical findings are identical —
-    currency only applies a numeric multiplier to displayed amounts.
     as_of_date is normalized: if it's empty or >= snapshot_date, it maps
     to the same key (all mean 'use all data from this tape')."""
     # Normalize: treat None/empty/snapshot_date/future as the same "full tape" state
     norm_aod = ''
     if as_of_date and snapshot_date and as_of_date < snapshot_date:
         norm_aod = as_of_date  # genuinely backdated — different data slice
-    raw = f"{endpoint}|{company}|{product}|{snapshot}|{norm_aod}|{tab}"
+    raw = f"{endpoint}|{company}|{product}|{snapshot}|{norm_aod}|{tab}|{currency}"
+    # Include file mtime to invalidate cache when same-name file is replaced
+    try:
+        from core.loader import get_snapshots
+        snaps = get_snapshots(company, product)
+        snap_file = next((s for s in snaps if s['filename'] == snapshot), None)
+        if snap_file and os.path.exists(snap_file['filepath']):
+            mtime = str(int(os.path.getmtime(snap_file['filepath'])))
+            raw += f"|{mtime}"
+    except Exception:
+        pass  # graceful fallback — cache works without mtime
     h = hashlib.sha256(raw.encode()).hexdigest()[:16]
     safe = f"{company}_{product}_{endpoint}"
     if tab:
@@ -1022,7 +1037,18 @@ def get_hhi_timeseries(company: str, product: str, currency: Optional[str] = Non
 
 # ── Ejari summary endpoint ────────────────────────────────────────────────────
 
-_ejari_cache = {}
+from collections import OrderedDict
+
+class _BoundedCache(OrderedDict):
+    """LRU cache with max 10 entries."""
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > 10:
+            self.popitem(last=False)
+
+_ejari_cache = _BoundedCache()
 
 @app.get("/companies/{company}/products/{product}/ejari-summary")
 def get_ejari_summary(company: str, product: str, snapshot: Optional[str] = None):
@@ -1035,7 +1061,7 @@ def get_ejari_summary(company: str, product: str, snapshot: Optional[str] = None
 
 # ── Tamara endpoint ─────────────────────────────────────────────────────────
 
-_tamara_cache = {}
+_tamara_cache = _BoundedCache()
 
 @app.get("/companies/{company}/products/{product}/tamara-summary")
 def get_tamara_summary(company: str, product: str, snapshot: Optional[str] = None):
@@ -1340,7 +1366,7 @@ def get_ai_commentary(company: str, product: str,
     snap_key = sel_for_key.get('filename', snapshot or '')
     snap_date = sel_for_key.get('date', '')
     _check_backdated(as_of_date, snap_date)
-    cache_path = _ai_cache_key('commentary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date)
+    cache_path = _ai_cache_key('commentary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date, currency=currency or '')
 
     if not refresh:
         cached = _ai_cache_get(cache_path)
@@ -1407,9 +1433,9 @@ PORTFOLIO SNAPSHOT:
 - Total Deals: {s['total_deals']:,}
 - Purchase Value: {disp} {s['total_purchase_value']/1e6:.1f}M
 - Total Collected: {disp} {s['total_collected']/1e6:.1f}M
-- Collection Rate: {s['collection_rate']:.1f}%
-- Denial Rate: {s['denial_rate']:.1f}%
-- Pending Response: {disp} {s['total_pending']/1e6:.1f}M ({s['pending_rate']:.1f}% of portfolio)
+- Collection Rate: {s['collection_rate']:.2f}%
+- Denial Rate: {s['denial_rate']:.2f}%
+- Pending Response: {disp} {s['total_pending']/1e6:.1f}M ({s['pending_rate']:.2f}% of portfolio)
 - Deal Status: {s['status_breakdown']}
 
 LAST 6 MONTHS ACTIVITY:
@@ -1442,6 +1468,7 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
     """Build comprehensive analytics context from ALL Klaim compute functions."""
     from core.analysis import add_month_column
     sections = []
+    data_gaps = []
 
     # 1. Summary
     try:
@@ -1449,8 +1476,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         sections.append(f"PORTFOLIO SUMMARY: {s['total_deals']:,} deals, {disp} {s['total_purchase_value']/1e6:.1f}M originated, "
                        f"Collection Rate {s['collection_rate']:.1f}%, Denial Rate {s['denial_rate']:.1f}%, "
                        f"Pending {s['pending_rate']:.1f}%, Active {s['active_deals']}, Completed {s['completed_deals']}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 2. PAR (dual perspective)
     try:
@@ -1458,24 +1485,24 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         if par.get('available'):
             sections.append(f"PAR (Lifetime): 30+={par['lifetime_par30']:.2f}%, 60+={par['lifetime_par60']:.2f}%, 90+={par['lifetime_par90']:.2f}% "
                            f"| PAR (Active Outstanding): 30+={par['par30']:.1f}%, 60+={par['par60']:.1f}%, 90+={par['par90']:.1f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 3. DTFC
     try:
         dtfc = compute_dtfc(df, mult, as_of_date)
         if dtfc.get('available'):
             sections.append(f"DTFC: Median {dtfc['median_dtfc']:.0f}d, P90 {dtfc['p90_dtfc']:.0f}d ({dtfc['method']})")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 4. DSO
     try:
         dso = compute_dso(df, mult, as_of_date)
         if dso.get('available'):
             sections.append(f"DSO: Weighted {dso['weighted_dso']:.0f}d, Median {dso['median_dso']:.0f}d, P95 {dso['p95_dso']:.0f}d")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 5. Collection velocity
     try:
@@ -1484,8 +1511,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         if recent:
             rates = ', '.join([f"{m.get('Month','?')}: {m.get('rate',0):.1f}%" for m in recent])
             sections.append(f"COLLECTION VELOCITY (last 3M): {rates} | Avg days to collect: {cv.get('avg_days',0):.0f}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 6. Denial trend
     try:
@@ -1494,8 +1521,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         if recent:
             rates = ', '.join([f"{m.get('Month','?')}: {m.get('denial_rate',0):.1f}%" for m in recent])
             sections.append(f"DENIAL TREND (last 3M): {rates}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 7. Ageing
     try:
@@ -1506,8 +1533,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
                        f"Watch {health.get('Watch',{}).get('percentage',0):.0f}%, "
                        f"Delayed {health.get('Delayed',{}).get('percentage',0):.0f}%, "
                        f"Poor {health.get('Poor',{}).get('percentage',0):.0f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 8. Concentration
     try:
@@ -1516,8 +1543,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         top_groups = conc.get('group', [])[:3]
         top_str = ', '.join([f"{g.get('Group','?')} ({g.get('share',0):.1f}%)" for g in top_groups])
         sections.append(f"CONCENTRATION: HHI={hhi.get('hhi',0):.4f} ({hhi.get('label','?')}), Top groups: {top_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 9. Returns
     try:
@@ -1526,8 +1553,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         sections.append(f"RETURNS: Realised Margin {rs.get('realised_margin',0):.2f}%, "
                        f"Capital Recovery {rs.get('capital_recovery',0):.2f}%, "
                        f"Avg Discount {rs.get('avg_discount',0):.2f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 10. Expected Loss
     try:
@@ -1535,8 +1562,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         p = el.get('portfolio', {})
         sections.append(f"EXPECTED LOSS MODEL: PD={p.get('pd',0):.2f}%, LGD={p.get('lgd',0):.2f}%, "
                        f"EL Rate={p.get('el_rate',0):.4f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 11. Stress test
     try:
@@ -1546,8 +1573,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
             worst = scenarios[-1]
             sections.append(f"STRESS TEST: Worst scenario ({worst.get('scenario','')}): "
                            f"collection drops to {worst.get('stressed_rate',0):.1f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 12. Cohort loss waterfall
     try:
@@ -1556,15 +1583,15 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         sections.append(f"LOSS WATERFALL: Default rate {totals.get('default_rate',0):.2f}%, "
                        f"Recovery rate {totals.get('recovery_rate',0):.2f}%, "
                        f"Net loss rate {totals.get('net_loss_rate',0):.2f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 13. Recovery analysis
     try:
         ra = compute_recovery_analysis(df, mult)
         sections.append(f"RECOVERY: Portfolio recovery rate {ra.get('portfolio_recovery_rate',0):.1f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 14. Underwriting drift
     try:
@@ -1574,8 +1601,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
             sections.append(f"UNDERWRITING DRIFT: {len(flagged)} vintages flagged with drift out of {len(ud.get('vintages',[]))}")
         else:
             sections.append(f"UNDERWRITING DRIFT: No vintages flagged — origination quality stable")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 15. Seasonality
     try:
@@ -1586,23 +1613,23 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
             trough = min(idx, key=lambda x: x.get('index', 0))
             sections.append(f"SEASONALITY: Peak month={peak.get('month','?')} (index {peak.get('index',0):.2f}), "
                            f"Trough month={trough.get('month','?')} (index {trough.get('index',0):.2f})")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 16. Segment analysis
     try:
         sa = compute_segment_analysis(df, mult)
         dims = sa.get('dimensions', [])
         sections.append(f"SEGMENTS: Available dimensions: {', '.join(dims)}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 17. HHI time series (load all snapshots)
     try:
         hhi_ts = compute_hhi_for_snapshot(df, mult)
         sections.append(f"HHI (current snapshot): {hhi_ts.get('hhi',0):.4f}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 18. Group performance
     try:
@@ -1611,8 +1638,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         if top3:
             top_str = ', '.join([f"{g.get('Group','?')}: coll={g.get('collection_rate',0):.1f}% den={g.get('denial_rate',0):.1f}%" for g in top3])
             sections.append(f"TOP PROVIDERS: {top_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 19. Cohorts (recent)
     try:
@@ -1621,8 +1648,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         if recent:
             coh_str = ', '.join([f"{c.get('month','?')}: {c.get('deals',0)} deals, coll={c.get('collection_rate',0):.1f}%" for c in recent])
             sections.append(f"RECENT COHORTS: {coh_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 20. Loss categorization
     try:
@@ -1631,8 +1658,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         if cats:
             cat_str = ', '.join([f"{c.get('category','?')}: {c.get('pct',0):.0f}%" for c in cats])
             sections.append(f"LOSS CATEGORIES: {cat_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # 21. Legal compliance (if documents extracted)
     try:
@@ -1642,8 +1669,8 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
         legal_ctx = build_legal_context_for_executive_summary(co, pr)
         if legal_ctx:
             sections.append(legal_ctx)
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
 
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
@@ -1653,8 +1680,11 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
             sections.append("")
             sections.append("PLATFORM MEMORY:")
             sections.append(mind_ctx.formatted)
-    except Exception:
-        pass
+    except Exception as e:
+        data_gaps.append(str(e))
+
+    if data_gaps:
+        sections.append(f"\nDATA GAPS (could not compute {len(data_gaps)} sections): " + '; '.join(data_gaps[:10]))
 
     return '\n'.join(sections)
 
@@ -1997,7 +2027,7 @@ def get_executive_summary(company: str, product: str,
     snap_key = sel_for_key.get('filename', snapshot or '')
     snap_date = sel_for_key.get('date', '')
     _check_backdated(as_of_date, snap_date)
-    cache_path = _ai_cache_key('executive_summary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date)
+    cache_path = _ai_cache_key('executive_summary', company, product, snap_key, as_of_date or '', snapshot_date=snap_date, currency=currency or '')
 
     if not refresh:
         cached = _ai_cache_get(cache_path)
@@ -2179,7 +2209,7 @@ def get_tab_insight(company: str, product: str,
     snap_key = sel_for_key.get('filename', snapshot or '')
     snap_date = sel_for_key.get('date', '')
     _check_backdated(as_of_date, snap_date)
-    cache_path = _ai_cache_key('tab_insight', company, product, snap_key, as_of_date or '', tab, snapshot_date=snap_date)
+    cache_path = _ai_cache_key('tab_insight', company, product, snap_key, as_of_date or '', tab, snapshot_date=snap_date, currency=currency or '')
 
     if not refresh:
         cached = _ai_cache_get(cache_path)
@@ -2689,8 +2719,8 @@ def get_portfolio_borrowing_base(company: str, product: str,
             current_idx = next(
                 (i for i, s in enumerate(snaps) if s['date'] == sel.get('date')), 0
             )
-            prev_idx = current_idx + 1
-            if prev_idx < len(snaps):
+            prev_idx = current_idx - 1  # snaps sorted oldest-first (ascending)
+            if prev_idx >= 0:
                 prev_snap = snaps[prev_idx]
                 if atype == 'silq':
                     prev_df, _ = load_silq_snapshot(prev_snap['filepath'])
@@ -2823,8 +2853,8 @@ def get_portfolio_covenants(company: str, product: str,
             current_idx = next(
                 (i for i, s in enumerate(snaps) if s['date'] == sel.get('date')), 0
             )
-            prev_idx = current_idx + 1  # snaps sorted newest-first
-            if prev_idx < len(snaps):
+            prev_idx = current_idx - 1  # snaps sorted oldest-first (ascending)
+            if prev_idx >= 0:
                 prev_snap = snaps[prev_idx]
                 if atype == 'silq':
                     prev_df, _ = load_silq_snapshot(prev_snap['filepath'])
@@ -2869,7 +2899,11 @@ def get_facility_params(company: str, product: str):
 
 @app.post("/companies/{company}/products/{product}/portfolio/facility-params")
 def save_facility_params(company: str, product: str, request: dict):
-    """Save facility parameters (facility_limit, facility_drawn, cash_balance, etc.)."""
+    """Save facility parameters (facility_limit, facility_drawn, cash_balance, etc.).
+    NOTE: Currency is not stored here — monetary values are assumed to be in the
+    product's reporting currency (from config.json). The frontend should send values
+    in the reporting currency, not the display currency after FX conversion.
+    """
     allowed_keys = {
         'facility_limit', 'facility_drawn', 'cash_balance',
         'equity_injection', 'advance_rate',

@@ -132,22 +132,24 @@ def create_invoices_bulk(
 
     for i, item in enumerate(body.invoices):
         try:
-            prod = _resolve_product(db, org, item.product_id)
-            inv = Invoice(
-                id=uuid.uuid4(),
-                org_id=org.id,
-                product_id=prod.id,
-                invoice_number=item.invoice_number,
-                amount_due=item.amount_due,
-                currency=item.currency_alpha3,
-                status=item.status,
-                customer_name=item.customer_name,
-                payer_name=item.payer_name,
-                invoice_date=item.invoice_date,
-                due_date=item.due_date,
-                extra_data=item.extra_data,
-            )
-            db.add(inv)
+            with db.begin_nested():  # savepoint — rollback only this item on failure
+                prod = _resolve_product(db, org, item.product_id)
+                inv = Invoice(
+                    id=uuid.uuid4(),
+                    org_id=org.id,
+                    product_id=prod.id,
+                    invoice_number=item.invoice_number,
+                    amount_due=item.amount_due,
+                    currency=item.currency_alpha3,
+                    status=item.status,
+                    customer_name=item.customer_name,
+                    payer_name=item.payer_name,
+                    invoice_date=item.invoice_date,
+                    due_date=item.due_date,
+                    extra_data=item.extra_data,
+                )
+                db.add(inv)
+                db.flush()
             created += 1
         except Exception as e:
             errors.append({"index": i, "detail": str(e)})
@@ -256,17 +258,19 @@ def create_payments_bulk(
 
     for i, item in enumerate(body.payments):
         try:
-            inv = _get_invoice_or_404(db, org, item.invoice_id)
-            pay = Payment(
-                id=uuid.uuid4(),
-                invoice_id=inv.id,
-                payment_type=item.payment_type,
-                payment_amount=item.payment_amount,
-                currency=item.currency_alpha3,
-                payment_date=item.payment_date,
-                transaction_id=item.transaction_id,
-            )
-            db.add(pay)
+            with db.begin_nested():  # savepoint — rollback only this item on failure
+                inv = _get_invoice_or_404(db, org, item.invoice_id)
+                pay = Payment(
+                    id=uuid.uuid4(),
+                    invoice_id=inv.id,
+                    payment_type=item.payment_type,
+                    payment_amount=item.payment_amount,
+                    currency=item.currency_alpha3,
+                    payment_date=item.payment_date,
+                    transaction_id=item.transaction_id,
+                )
+                db.add(pay)
+                db.flush()
             created += 1
         except HTTPException as e:
             errors.append({"index": i, "detail": e.detail})
