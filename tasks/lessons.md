@@ -3,6 +3,16 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-11 — Internal directories in `data/` must be filtered at the source
+**Issue:** `_master_mind` directory lives under `data/` alongside real company directories. `get_companies()` returned it as a company, causing a ghost card on the landing page. The `operator.py` endpoint had its own `startswith("_")` filter, but `main.py`'s `/companies` and `/aggregate-stats` endpoints did not — fix at the source (`get_companies()`) rather than adding filters in every caller.
+**Rule:** When a utility function like `get_companies()` returns data consumed by multiple callers, fix the function itself rather than patching each consumer. Defensive filters in callers are OK as belt-and-suspenders but should not be the primary fix.
+
+## 2026-04-11 — Always add error states to pages that fetch data on mount
+**Issue:** `OperatorCenter.jsx` fetched from `/operator/status` on mount, but only had a loading state — no error state. When the API was unreachable, the page rendered blank with no feedback. User sees nothing and can't diagnose the problem.
+**Rule:** Every page/component that fetches data on mount needs three states: loading, error, and success. The error state should show what went wrong and offer a retry action. Never silently swallow API errors in a catch block that only logs to console.
+
+---
+
 ## 2026-04-11 — EOD MUST merge feature branch into main before pushing
 **Mistake:** `/eod` Step 9 says "push to main" but when work was done on a feature branch (`claude/prepare-context-DToUt`), I pushed to the feature branch instead and rationalized skipping the merge. The deploy script pulls `main` — so the code never reached production.
 **Rule:** EOD Step 9 is non-negotiable: if on a feature branch, `git checkout main && git merge <branch> --no-edit && git push origin main`. The `/eod` command has been updated to make this explicit. Never skip this step regardless of what the session task instructions say about which branch to develop on.
