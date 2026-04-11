@@ -171,11 +171,11 @@ class AnalyticsBridge:
                 return parse_ejari_workbook(snapshots[-1]["filepath"])
 
             if analysis_type == "tamara_summary":
-                from core.analysis_tamara import parse_tamara_snapshot
+                from core.analysis_tamara import parse_tamara_data
                 snapshots = get_snapshots(company, product)
                 if not snapshots:
                     return None
-                return parse_tamara_snapshot(snapshots[-1]["filepath"])
+                return parse_tamara_data(snapshots[-1]["filepath"])
 
             return None
         except Exception as e:
