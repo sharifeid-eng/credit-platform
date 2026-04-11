@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models for the Laith credit platform.
 
-6 tables supporting Phase 2A (database) and Phase 2B (integration API):
+7 tables supporting Phase 2A (database), Phase 2B (integration API), and Phase 3 (auth):
+- users: platform users with email + role (admin/viewer)
 - organizations: portfolio companies (Klaim, SILQ, etc.)
 - products: products within each company
 - invoices: the receivables pool (core table)
@@ -12,11 +13,23 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, DateTime, Date, ForeignKey, Numeric,
-    Text, Index
+    Text, Index, Boolean
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from core.database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="viewer")  # 'admin' or 'viewer'
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
 
 
 class Organization(Base):

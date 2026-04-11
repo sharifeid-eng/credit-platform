@@ -1,7 +1,11 @@
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:8000';
-const api = axios.create({ baseURL: API_BASE, headers: { 'Content-Type': 'application/json' } });
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,  // Send CF_Authorization cookie with every request
+});
 
 export default api;
 
@@ -291,6 +295,14 @@ export const getOperatorMind         = (company = null, category = null) =>
 export const updateOperatorMindEntry = (id, update) => api.patch(`/operator/mind/${id}`, update).then(r => r.data);
 export const sendOperatorDigest      = (webhookUrl = null) =>
   api.post('/operator/digest', null, { params: webhookUrl ? { webhook_url: webhookUrl } : {} }).then(r => r.data);
+
+// ── Auth ────────────────────────────────────────────────────────────────────
+export const getAuthMe             = () => api.get('/auth/me').then(r => r.data);
+export const getAuthLogoutUrl      = () => api.get('/auth/logout-url').then(r => r.data);
+export const getAuthUsers          = () => api.get('/auth/users').then(r => r.data);
+export const createAuthUser        = (user) => api.post('/auth/users', user).then(r => r.data);
+export const updateAuthUser        = (id, update) => api.patch(`/auth/users/${id}`, update).then(r => r.data);
+export const deleteAuthUser        = (id) => api.delete(`/auth/users/${id}`).then(r => r.data);
 
 // ── Legacy aliases (old names kept for any existing code) ────────────────────
 export const getCollectionVelocity = getCollectionVelocityChart;

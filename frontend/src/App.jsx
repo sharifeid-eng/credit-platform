@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MobileMenuProvider } from './contexts/MobileMenuContext';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Framework from './pages/Framework';
@@ -15,6 +17,7 @@ import MemoBuilder from './pages/research/MemoBuilder';
 import MemoEditor from './pages/research/MemoEditor';
 import LegalAnalytics from './pages/LegalAnalytics';
 import OperatorCenter from './pages/OperatorCenter';
+import UserManagement from './pages/UserManagement';
 
 function CompanyRedirect() {
   // Redirect /company/:name to first product's tape overview
@@ -25,12 +28,17 @@ function CompanyRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
+      <AuthProvider>
       <MobileMenuProvider>
+      <ProtectedRoute>
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/framework" element={<Framework />} />
         <Route path="/operator" element={<OperatorCenter />} />
+        <Route path="/admin/users" element={
+          <ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute>
+        } />
 
         {/* Company routes with sidebar layout */}
         <Route path="/company/:companyName/:product" element={<CompanyLayout />}>
@@ -73,7 +81,9 @@ export default function App() {
         {/* Legacy alias */}
         <Route path="/companies/:companyName/*" element={<Navigate to="/company/:companyName" replace />} />
       </Routes>
+      </ProtectedRoute>
       </MobileMenuProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
