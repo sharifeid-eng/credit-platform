@@ -218,6 +218,7 @@ credit-platform/
 │           ├── mind/              # Company-level Living Mind (JSONL files)
 │           ├── dataroom/          # Ingested documents, chunks, search index
 │           │   ├── registry.json
+│           │   ├── notebooklm_state.json  # NLM notebook ID + synced source tracking
 │           │   ├── chunks/
 │           │   ├── analytics/
 │           │   └── index.pkl
@@ -325,7 +326,8 @@ credit-platform/
 │   └── package.json
 ├── tests/
 │   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
-│   └── test_analysis_silq.py   # Integration tests for SILQ analytics
+│   ├── test_analysis_silq.py   # Integration tests for SILQ analytics
+│   └── test_notebooklm_bridge.py  # NotebookLM bridge, dual engine, synthesizer tests (14 tests)
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
@@ -463,6 +465,10 @@ Key columns in loan tape files:
 |`POST /companies/{co}/products/{p}/dataroom/snapshot-analytics`|Snapshot current analytics       |
 |`POST /companies/{co}/products/{p}/research/query`           |Dual-engine research query         |
 |`POST /companies/{co}/products/{p}/research/chat`            |Research chat (for frontend)       |
+|`GET /notebooklm/status`                                     |NotebookLM engine health status    |
+|`POST /companies/{co}/products/{p}/notebooklm/sync`          |Sync data room to NLM notebook     |
+|`POST /companies/{co}/products/{p}/notebooklm/configure`     |Set NLM chat persona               |
+|`GET /companies/{co}/products/{p}/notebooklm/sources`        |List NLM notebook sources          |
 |`GET /companies/{co}/products/{p}/mind/profile`              |Company mind profile               |
 |`POST /companies/{co}/products/{p}/mind/record`              |Record mind entry                  |
 |`GET /mind/master/context`                                   |Preview master mind context        |
@@ -634,8 +640,11 @@ The platform includes an AI-powered research and memo generation system built on
 
 **Research Intelligence** (`core/research/`):
 - Claude RAG query engine with source citations
-- NotebookLM bridge for second-opinion research (authenticated, requires `notebooklm login`)
-- Dual-engine synthesis: merges best insights from both engines
+- NotebookLM bridge (`notebooklm-py` v0.3.4) — first-class second-opinion engine via Python API or CLI fallback
+- Dual-engine synthesis: merges best insights from both engines, preserves citation origins
+- Notebook ID + synced source persistence via JSON sidecars (`data/{co}/{prod}/dataroom/notebooklm_state.json`)
+- Auto-sync: data room ingest triggers NLM source upload
+- Auth: `notebooklm login` (local) or `NOTEBOOKLM_AUTH_JSON` env var (headless/server)
 - Rules-based insight extraction at ingest time (metrics, covenants, dates, risk flags)
 
 **IC Memo Engine** (`core/memo/`):
@@ -764,7 +773,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **PDF parsing pipeline** — `core/legal_parser.py` uses PyMuPDF (`pymupdf4llm`) for markdown conversion preserving headers/structure, plus `pdfplumber` for table extraction (advance rate schedules, concentration tier tables). Semantic chunking by article/section headers (legal docs are well-structured). Definitions section isolated first as context for all subsequent extraction passes.
 - **Legal extraction schema** — `core/LEGAL_EXTRACTION_SCHEMA.md` defines extraction taxonomy (7 sections), Pydantic models in `core/legal_schemas.py`, confidence grading (HIGH >= 0.85, MED >= 0.70, LOW < 0.70), and facility_params mapping table (12 fields). Companion to ANALYSIS_FRAMEWORK.md Section 16.
 - **Living Mind 4-layer architecture** — Framework (codified rules) → Master Mind (fund lessons) → Methodology (company rules) → Company Mind (position notes). Every AI prompt sees all 4 layers. Knowledge flows upward: fast corrections → consolidation → codification.
-- **Dual-engine research** — Claude RAG (primary) + NotebookLM (second opinion). Both run on every query when available, synthesis merges best insights. Graceful fallback to Claude-only.
+- **Dual-engine research** — Claude RAG (primary) + NotebookLM (second opinion, first-class). Both run on every query when available, synthesis merges best insights with citation origin tracking. `notebooklm-py` v0.3.4 via Python API (preferred) or CLI fallback. Auth: `notebooklm login` (browser OAuth, saves to `~/.notebooklm/storage_state.json`) or `NOTEBOOKLM_AUTH_JSON` env var (headless). Notebook IDs + synced sources persisted to `data/{co}/{prod}/dataroom/notebooklm_state.json`. Data room ingest auto-syncs to NLM. Chat persona configured for credit analysis. Frontend shows engine badges (blue=Claude, teal=NLM, gold=merged), NLM status indicator, and synthesis notes. Graceful fallback to Claude-only when NLM unavailable.
 - **Analytics-as-source** — Platform-computed analytics (tape summaries, PAR, DSO) snapshotted into the data room as searchable documents. Memos can cite "Tape Analytics — PAR Analysis, Mar 2026" alongside "HSBC Investor Report, Jan 2026".
 - **Memo feedback loop** — Analyst edits to AI-generated memo sections are recorded in Company Mind. Future memos benefit from accumulated style preferences and corrections.
 - **Legal extraction caching** — Extract once per PDF, cache forever. 5-pass Claude pipeline (~$1.25/doc). 3-tier merge: document > manual > hardcoded.
@@ -1183,10 +1192,15 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ **Research Hub (data room ingestion + dual-engine research):**
   - Data room engine: ingest any directory (PDF, Excel, CSV, JSON, DOCX), chunk, index, search
   - Claude RAG query engine with source citations
-  - NotebookLM bridge (authenticated, dual-engine synthesis)
+  - NotebookLM bridge rewritten against real `notebooklm-py` v0.3.4 API (was non-functional before)
+  - Dual-engine synthesis with citation origin tracking (claude vs notebooklm)
+  - Notebook ID + synced source persistence via JSON sidecars (survives restarts)
+  - Auto-sync: data room ingest triggers NLM source upload
+  - 4 NLM endpoints: status, sync, configure, sources
+  - NLM status in Operator Command Center health matrix
   - Rules-based insight extraction at ingest time
   - Analytics snapshots as searchable research sources
-  - Frontend: DocumentLibrary, ResearchChat pages
+  - Frontend: DocumentLibrary, ResearchChat (engine badges, NLM status indicator, sync button, synthesis notes)
 - ✅ **Living Mind (institutional memory):**
   - Master Mind: fund-level preferences, IC norms, cross-company patterns
   - Company Mind: per-company corrections, findings, IC feedback, data quality

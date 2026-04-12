@@ -15,6 +15,22 @@ The Research Hub, Living Mind, and IC Memo Engine are built (~17,000 lines) but 
 - [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors vs `Group` column
 - [ ] **Store payment schedule** — $6M draw, 16 quarterly payments + bullet maturity 2030-02-01
 - [ ] **Implement consecutive breach history** — `covenant_history.json` for EoD determination
+- [ ] **Test NotebookLM dual-engine end-to-end** — merge feature branch to main, ingest Klaim data room, sync to NLM, verify dual-engine answers in Research Chat with engine badges
+
+---
+
+## Completed — 2026-04-12 (session 12: NotebookLM Integration Rewrite)
+- [x] **Audit NotebookLM bridge** — discovered existing `notebooklm_bridge.py` was entirely non-functional (speculative API, wrong method names, wrong response types). Package `notebooklm-py` not in requirements.txt.
+- [x] **Install and verify `notebooklm-py 0.3.4`** — Python package + CLI both functional. Inspected full API surface (NotebookLMClient, AskResult, ChatReference, NotebooksAPI, SourcesAPI, ChatAPI, ResearchAPI).
+- [x] **Rewrite `notebooklm_bridge.py`** — complete rewrite against real v0.3.4 API: `sources.add_file/add_text`, `chat.ask` → `AskResult`, `research.start`, `chat.configure`. Fixed async `from_storage()` pattern. Added notebook/source persistence via JSON sidecars. Health status endpoint.
+- [x] **Rewrite `dual_engine.py`** — handles `AskResult` dataclass with references, conversation_id, turn_number. Returns `nlm_references` and `nlm_conversation_id`. Added `get_nlm_status()`, `configure_notebook()`.
+- [x] **Fix `synthesizer.py`** — citation converter handles ChatReference dicts (source_id, cited_text). Preserves cited_text field.
+- [x] **Add 4 backend endpoints** — `GET /notebooklm/status`, `POST .../notebooklm/sync`, `POST .../notebooklm/configure`, `GET .../notebooklm/sources`. Auto-sync to NLM on data room ingest.
+- [x] **Wire NLM into Operator Command Center** — `get_operator_status()` includes NLM health in response.
+- [x] **Rewrite `ResearchChat.jsx`** — engine badges (Claude/NLM/Dual/Retrieval), NLM status indicator with sync button, citation pills color-coded by origin, synthesis notes panel, system messages for sync ops.
+- [x] **Add `notebooklm-py` to `requirements.txt`** — was missing, would not survive fresh install or Docker rebuild.
+- [x] **14 new tests** — bridge init, persistence, query, synthesizer conversion, dual engine, citation merging. All passing.
+- [x] **Fix backend startup crash** — `backend/operator.py` shadows Python stdlib `operator` module when running from `backend/` directory. Fixed CLAUDE.md manual start instructions. Documented in lessons.md.
 
 ---
 

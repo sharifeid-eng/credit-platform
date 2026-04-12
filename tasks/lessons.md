@@ -45,6 +45,11 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 **Issue:** `backend/operator.py` shadows Python's built-in `operator` module. When uvicorn is launched from the `backend/` directory (`cd backend && python -m uvicorn main:app`), Python adds `backend/` to `sys.path` and finds our `operator.py` before the stdlib one. This triggers a circular import crash: `collections` → `from operator import eq` → our `operator.py` → `json` → `re` → `functools` → `collections` (circular). Manifests as `ImportError: cannot import name 'namedtuple' from partially initialized module 'collections'`.
 **Rule:** Never name a backend module after a Python stdlib module (`operator`, `collections`, `signal`, `logging`, `string`, `typing`, etc.). Always run uvicorn from the project root using dot notation (`python -m uvicorn backend.main:app`) so `backend/` is a package, not a path entry. If a naming conflict is discovered, rename the file — don't rely on launch instructions.
 
+## 2026-04-12 — Never write integration code against a guessed API
+
+**Issue:** The original `notebooklm_bridge.py` was written speculatively against a guessed `notebooklm` Python API that didn't exist. Every method call (`client.sources.add()`, `client.chat.send()`) would have thrown `AttributeError` on real use. The code passed review because it looked plausible and the graceful degradation path (`available=False`) meant the app never actually tried to use it. The package wasn't even in `requirements.txt`.
+**Rule:** Before writing integration code against a third-party library: (1) install it, (2) inspect the actual API surface (`dir()`, `inspect.signature()`), (3) write a minimal end-to-end test that calls the real API. If you can't install it, stub the integration and document it as TODO — don't write fake-working code. Always verify the package is in `requirements.txt` after implementing.
+
 ---
 
 ## 2026-04-11 — Don't use a specific company as a "default" fallback
