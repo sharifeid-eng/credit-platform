@@ -284,9 +284,11 @@ class ResearchSynthesizer:
     def _convert_nlm_sources(self, nlm_sources: list) -> list[dict]:
         """Convert NLM source references to the standard citation format.
 
-        NLM sources may be strings, dicts, or objects. This normalises
-        them into the standard ``{index, doc_id, filename, snippet, ...}``
-        format.
+        NLM references come from ``NotebookLMEngine.query()`` as dicts with
+        keys: ``source_id``, ``citation_number``, ``cited_text``,
+        ``start_char``, ``end_char``, ``chunk_id``.
+
+        Also handles legacy formats (plain strings, arbitrary dicts).
         """
         converted: list[dict] = []
 
@@ -302,25 +304,31 @@ class ResearchSynthesizer:
                     "origin": "notebooklm",
                 })
             elif isinstance(src, dict):
+                # Primary: NLM ChatReference format (source_id, cited_text)
+                source_id = src.get("source_id", src.get("doc_id", src.get("id", "")))
+                cited_text = src.get("cited_text", "")
+                snippet = cited_text or src.get("snippet", src.get("text", src.get("excerpt", "")))
+
                 converted.append({
-                    "index": i,
-                    "doc_id": src.get("doc_id", src.get("id", "")),
+                    "index": src.get("citation_number", i),
+                    "doc_id": source_id,
                     "filename": src.get("filename", src.get("name", "")),
                     "document_type": src.get("document_type", src.get("type", "")),
-                    "snippet": (
-                        src.get("snippet", src.get("text", src.get("excerpt", "")))
-                    )[:200],
+                    "snippet": (snippet or "")[:200],
+                    "cited_text": cited_text,
                     "score": src.get("score", src.get("relevance", 0)),
                     "origin": "notebooklm",
                 })
             else:
-                # Object with attributes
+                # Object with attributes (e.g. raw ChatReference dataclass)
                 converted.append({
-                    "index": i,
-                    "doc_id": getattr(src, "doc_id", getattr(src, "id", "")),
+                    "index": getattr(src, "citation_number", i),
+                    "doc_id": getattr(src, "source_id", getattr(src, "id", "")),
                     "filename": getattr(src, "filename", getattr(src, "name", "")),
                     "document_type": getattr(src, "document_type", ""),
-                    "snippet": str(getattr(src, "snippet", getattr(src, "text", "")))[:200],
+                    "snippet": str(
+                        getattr(src, "cited_text", getattr(src, "snippet", ""))
+                    )[:200],
                     "score": getattr(src, "score", 0),
                     "origin": "notebooklm",
                 })

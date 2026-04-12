@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../../contexts/CompanyContext'
 import useBreakpoint from '../../hooks/useBreakpoint'
-import { postResearchChat } from '../../services/api'
+import { postResearchChat, getNotebookLMStatus, syncNotebookLM } from '../../services/api'
 
 const SUGGESTED_QUESTIONS = {
   tamara_summary: [
@@ -47,6 +47,156 @@ const SUGGESTED_QUESTIONS = {
   ],
 }
 
+const ENGINE_LABELS = {
+  claude: 'Claude RAG',
+  notebooklm: 'NotebookLM',
+  merged: 'Dual Engine',
+  retrieval_only: 'Retrieval Only',
+}
+
+const ENGINE_COLORS = {
+  claude: { bg: 'rgba(91,141,239,0.12)', border: 'rgba(91,141,239,0.25)', text: '#5B8DEF' },
+  notebooklm: { bg: 'rgba(45,212,191,0.12)', border: 'rgba(45,212,191,0.25)', text: '#2DD4BF' },
+  merged: { bg: 'rgba(201,168,76,0.12)', border: 'rgba(201,168,76,0.25)', text: '#C9A84C' },
+  retrieval_only: { bg: 'rgba(132,148,167,0.12)', border: 'rgba(132,148,167,0.25)', text: '#8494A7' },
+}
+
+function EngineBadge({ engine }) {
+  const colors = ENGINE_COLORS[engine] || ENGINE_COLORS.retrieval_only
+  const label = ENGINE_LABELS[engine] || engine
+  return (
+    <span style={{
+      fontSize: 9,
+      fontWeight: 700,
+      fontFamily: 'var(--font-mono)',
+      padding: '2px 8px',
+      borderRadius: 10,
+      background: colors.bg,
+      color: colors.text,
+      border: `1px solid ${colors.border}`,
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em',
+    }}>
+      {label}
+    </span>
+  )
+}
+
+function NLMStatusIndicator({ status, onSync, syncing }) {
+  if (!status) return null
+
+  const isAvailable = status.available
+  const isInstalled = status.library_installed
+  const isAuth = status.authenticated
+
+  let color, label, detail
+  if (isAvailable) {
+    color = '#2DD4BF'
+    label = 'NLM Active'
+    detail = `${status.integration_method} | ${status.notebooks_cached} notebook(s)`
+  } else if (isInstalled && !isAuth) {
+    color = '#F0C040'
+    label = 'NLM Not Authenticated'
+    detail = 'Run notebooklm login'
+  } else {
+    color = '#8494A7'
+    label = 'NLM Unavailable'
+    detail = 'Package not installed'
+  }
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      fontSize: 10,
+      color: 'var(--text-muted)',
+    }}>
+      <div style={{
+        width: 7, height: 7, borderRadius: '50%',
+        background: color,
+        boxShadow: `0 0 6px ${color}50`,
+      }} />
+      <span style={{ fontWeight: 600, color }}>{label}</span>
+      <span style={{ color: 'var(--text-faint)' }}>{detail}</span>
+      {isAvailable && (
+        <button
+          onClick={onSync}
+          disabled={syncing}
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            padding: '2px 8px',
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: syncing ? 'var(--border)' : 'transparent',
+            color: syncing ? 'var(--text-faint)' : 'var(--accent-teal)',
+            cursor: syncing ? 'not-allowed' : 'pointer',
+            transition: 'all var(--transition-fast)',
+          }}
+        >
+          {syncing ? 'Syncing...' : 'Sync Sources'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function SynthesisNotes({ notes }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!notes) return null
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          fontSize: 9,
+          fontWeight: 600,
+          color: 'var(--accent-gold)',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        <span style={{
+          transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+          transition: 'transform 150ms',
+          display: 'inline-block',
+        }}>
+          {'>>'}
+        </span>
+        Synthesis Notes
+      </button>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{
+              marginTop: 6,
+              padding: '8px 12px',
+              background: 'rgba(201,168,76,0.06)',
+              border: '1px solid rgba(201,168,76,0.15)',
+              borderRadius: 6,
+              fontSize: 11,
+              lineHeight: 1.5,
+              color: 'var(--text-muted)',
+            }}
+          >
+            {notes}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 export default function ResearchChat() {
   const { company, product, analysisType } = useCompany()
   const { isMobile } = useBreakpoint()
@@ -54,12 +204,48 @@ export default function ResearchChat() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [nlmStatus, setNlmStatus] = useState(null)
+  const [syncing, setSyncing] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+
+  // Fetch NLM status on mount
+  useEffect(() => {
+    getNotebookLMStatus()
+      .then(setNlmStatus)
+      .catch(() => setNlmStatus(null))
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  async function handleSync() {
+    if (!company || !product || syncing) return
+    setSyncing(true)
+    try {
+      const result = await syncNotebookLM(company, product)
+      // Refresh status after sync
+      const freshStatus = await getNotebookLMStatus()
+      setNlmStatus(freshStatus)
+      // Show sync result as system message
+      const uploaded = result.uploaded || 0
+      const skipped = result.skipped || 0
+      const errors = result.errors?.length || 0
+      setMessages(prev => [...prev, {
+        role: 'system',
+        text: `NotebookLM sync complete: ${uploaded} uploaded, ${skipped} already synced${errors ? `, ${errors} errors` : ''}.`,
+      }])
+    } catch {
+      setMessages(prev => [...prev, {
+        role: 'system',
+        text: 'NotebookLM sync failed. Check authentication.',
+        isError: true,
+      }])
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   async function send(question) {
     const q = (question || input).trim()
@@ -73,6 +259,11 @@ export default function ResearchChat() {
         role: 'ai',
         text: reply.answer || reply.text || reply,
         citations: reply.citations || [],
+        engine: reply.engine || 'claude',
+        synthesis_notes: reply.synthesis_notes || null,
+        nlm_available: reply.nlm_available || false,
+        claude_answer: reply.claude_answer || null,
+        nlm_answer: reply.nlm_answer || null,
       }])
     } catch {
       setMessages(prev => [...prev, {
@@ -107,7 +298,7 @@ export default function ResearchChat() {
     >
       {/* Header */}
       <div style={{ marginBottom: 20, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <h1 style={{
             fontSize: isMobile ? 20 : 24,
             fontWeight: 800,
@@ -128,10 +319,11 @@ export default function ResearchChat() {
         <p style={{
           fontSize: 12,
           color: 'var(--text-muted)',
-          margin: '6px 0 0',
+          margin: '0 0 8px',
         }}>
-          Ask questions across all ingested documents
+          Dual-engine research across all ingested documents
         </p>
+        <NLMStatusIndicator status={nlmStatus} onSync={handleSync} syncing={syncing} />
       </div>
 
       {/* Chat area */}
@@ -174,12 +366,25 @@ export default function ResearchChat() {
               <div style={{
                 fontSize: 11,
                 color: 'var(--text-muted)',
-                marginBottom: 24,
-                maxWidth: 340,
-                margin: '0 auto 24px',
+                marginBottom: 12,
+                maxWidth: 400,
+                margin: '0 auto 12px',
                 lineHeight: 1.5,
               }}>
-                Research Chat searches across all ingested documents to answer your questions with source citations.
+                Research Chat queries all ingested documents using Claude RAG
+                {nlmStatus?.available && ' and NotebookLM for dual-engine synthesis'}.
+                Answers include source citations.
+              </div>
+
+              {/* Engine status badges */}
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                justifyContent: 'center',
+                marginBottom: 20,
+              }}>
+                <EngineBadge engine="claude" />
+                {nlmStatus?.available && <EngineBadge engine="notebooklm" />}
               </div>
 
               {/* Suggested questions */}
@@ -234,59 +439,111 @@ export default function ResearchChat() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
                 style={{
-                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '80%',
+                  alignSelf: msg.role === 'user' ? 'flex-end'
+                    : msg.role === 'system' ? 'center' : 'flex-start',
+                  maxWidth: msg.role === 'system' ? '90%' : '80%',
                 }}
               >
-                <div style={{
-                  padding: '10px 14px',
-                  borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                  background: msg.role === 'user'
-                    ? 'rgba(201,168,76,0.12)'
-                    : msg.isError ? 'rgba(240,96,96,0.08)' : 'var(--bg-deep)',
-                  border: `1px solid ${
-                    msg.role === 'user'
-                      ? 'rgba(201,168,76,0.2)'
-                      : msg.isError ? 'rgba(240,96,96,0.15)' : 'var(--border)'
-                  }`,
-                  fontSize: 12,
-                  lineHeight: 1.65,
-                  color: msg.isError ? '#F06060' : 'var(--text-primary)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}>
-                  {msg.text}
-                </div>
-
-                {/* Citations */}
-                {msg.citations && msg.citations.length > 0 && (
+                {/* System messages */}
+                {msg.role === 'system' ? (
                   <div style={{
-                    display: 'flex',
-                    gap: 6,
-                    flexWrap: 'wrap',
-                    marginTop: 8,
-                    paddingLeft: 4,
+                    padding: '6px 14px',
+                    borderRadius: 12,
+                    background: msg.isError ? 'rgba(240,96,96,0.08)' : 'rgba(45,212,191,0.08)',
+                    border: `1px solid ${msg.isError ? 'rgba(240,96,96,0.15)' : 'rgba(45,212,191,0.15)'}`,
+                    fontSize: 10,
+                    color: msg.isError ? '#F06060' : '#2DD4BF',
+                    textAlign: 'center',
+                    fontWeight: 600,
                   }}>
-                    {msg.citations.map((cit, j) => (
-                      <span
-                        key={j}
-                        title={cit.filename || cit.source || `Source ${j + 1}`}
-                        style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          fontFamily: 'var(--font-mono)',
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                          background: 'rgba(201,168,76,0.12)',
-                          color: 'var(--accent-gold)',
-                          border: '1px solid rgba(201,168,76,0.2)',
-                          cursor: 'default',
-                        }}
-                      >
-                        [{j + 1}] {cit.filename || cit.source || `Source ${j + 1}`}
-                      </span>
-                    ))}
+                    {msg.text}
                   </div>
+                ) : (
+                  <>
+                    <div style={{
+                      padding: '10px 14px',
+                      borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                      background: msg.role === 'user'
+                        ? 'rgba(201,168,76,0.12)'
+                        : msg.isError ? 'rgba(240,96,96,0.08)' : 'var(--bg-deep)',
+                      border: `1px solid ${
+                        msg.role === 'user'
+                          ? 'rgba(201,168,76,0.2)'
+                          : msg.isError ? 'rgba(240,96,96,0.15)' : 'var(--border)'
+                      }`,
+                      fontSize: 12,
+                      lineHeight: 1.65,
+                      color: msg.isError ? '#F06060' : 'var(--text-primary)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}>
+                      {msg.text}
+                    </div>
+
+                    {/* Engine badge + citations row */}
+                    {msg.role === 'ai' && !msg.isError && (
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {/* Engine badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {msg.engine && <EngineBadge engine={msg.engine} />}
+                          {msg.engine === 'merged' && (
+                            <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>
+                              Claude + NotebookLM synthesized
+                            </span>
+                          )}
+                          {msg.nlm_available === false && msg.engine === 'claude' && (
+                            <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>
+                              NLM unavailable
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Citations */}
+                        {msg.citations && msg.citations.length > 0 && (
+                          <div style={{
+                            display: 'flex',
+                            gap: 6,
+                            flexWrap: 'wrap',
+                            paddingLeft: 2,
+                          }}>
+                            {msg.citations.map((cit, j) => {
+                              const origin = cit.origin || 'claude'
+                              const originColor = origin === 'notebooklm'
+                                ? 'rgba(45,212,191,0.12)' : 'rgba(201,168,76,0.12)'
+                              const originBorder = origin === 'notebooklm'
+                                ? 'rgba(45,212,191,0.2)' : 'rgba(201,168,76,0.2)'
+                              const originText = origin === 'notebooklm'
+                                ? 'var(--accent-teal)' : 'var(--accent-gold)'
+                              return (
+                                <span
+                                  key={j}
+                                  title={`${cit.filename || cit.source || `Source ${j + 1}`} (${origin})`}
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    fontFamily: 'var(--font-mono)',
+                                    padding: '2px 8px',
+                                    borderRadius: 10,
+                                    background: originColor,
+                                    color: originText,
+                                    border: `1px solid ${originBorder}`,
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  [{cit.index || j + 1}] {cit.filename || cit.source || `Source ${j + 1}`}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* Synthesis notes for merged answers */}
+                        {msg.engine === 'merged' && msg.synthesis_notes && (
+                          <SynthesisNotes notes={msg.synthesis_notes} />
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </motion.div>
             ))}
@@ -304,7 +561,7 @@ export default function ResearchChat() {
                 background: 'var(--bg-deep)',
                 border: '1px solid var(--border)',
                 display: 'flex',
-                gap: 6,
+                gap: 8,
                 alignItems: 'center',
               }}
             >
@@ -320,6 +577,9 @@ export default function ResearchChat() {
                   }}
                 />
               ))}
+              <span style={{ fontSize: 10, color: 'var(--text-faint)', marginLeft: 4 }}>
+                {nlmStatus?.available ? 'Querying Claude + NotebookLM...' : 'Querying Claude RAG...'}
+              </span>
             </motion.div>
           )}
 

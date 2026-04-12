@@ -5,6 +5,10 @@ Runs research queries through Claude RAG and optionally NotebookLM,
 then synthesises a unified answer. When NotebookLM is unavailable,
 falls back gracefully to Claude-only mode.
 
+NotebookLM is a first-class research engine — not an afterthought. When
+available, it provides independent document understanding that catches
+things Claude's RAG might miss (different chunking, different attention).
+
 Usage::
 
     engine = DualResearchEngine()
@@ -95,6 +99,8 @@ class DualResearchEngine:
                 ``chunks_searched``: Number of chunks searched.
                 ``mind_context_used``: Whether mind context was injected.
                 ``nlm_available``: Whether NLM engine was available.
+                ``nlm_references``: NLM ChatReference dicts (or []).
+                ``nlm_conversation_id``: For follow-up queries (or None).
         """
         # Step 1: Claude RAG (always)
         claude_result = self.claude_engine.query(
@@ -106,7 +112,7 @@ class DualResearchEngine:
             top_k=top_k,
         )
 
-        # Step 2: NotebookLM (optional)
+        # Step 2: NotebookLM (optional but encouraged)
         nlm_result = None
         nlm_available = False
 
@@ -130,9 +136,16 @@ class DualResearchEngine:
 
         # Step 3: Synthesise or return Claude-only
         if nlm_result and nlm_result.get("answer", "").strip():
+            # Convert NLM references to synthesizer-compatible format
+            nlm_for_synth = {
+                "answer": nlm_result["answer"],
+                "sources": nlm_result.get("references", []),
+                "engine": "notebooklm",
+            }
+
             merged = self.synthesizer.synthesize(
                 claude_result=claude_result,
-                nlm_result=nlm_result,
+                nlm_result=nlm_for_synth,
                 question=question,
             )
             return {
@@ -140,6 +153,8 @@ class DualResearchEngine:
                 "chunks_searched": claude_result.get("chunks_searched", 0),
                 "mind_context_used": claude_result.get("mind_context_used", False),
                 "nlm_available": nlm_available,
+                "nlm_references": nlm_result.get("references", []),
+                "nlm_conversation_id": nlm_result.get("conversation_id"),
             }
 
         # Claude-only result
@@ -153,6 +168,8 @@ class DualResearchEngine:
             "chunks_searched": claude_result.get("chunks_searched", 0),
             "mind_context_used": claude_result.get("mind_context_used", False),
             "nlm_available": nlm_available,
+            "nlm_references": [],
+            "nlm_conversation_id": None,
         }
 
     def deep_research(
@@ -161,13 +178,11 @@ class DualResearchEngine:
         product: str,
         topic: str,
     ) -> dict:
-        """Extended research using NotebookLM Deep Research for web crawling.
+        """Extended research using NotebookLM's web research + Claude RAG.
 
-        This is a premium feature that uses NLM's deep research mode to
-        crawl the web for additional context on a topic, then merges with
-        internal data room knowledge.
-
-        Falls back to a standard query if NLM deep research is unavailable.
+        Starts a NotebookLM web research session, then queries both engines
+        for a comprehensive answer. Falls back to standard query if NLM
+        deep research is unavailable.
 
         Args:
             company: Company slug.
@@ -175,62 +190,34 @@ class DualResearchEngine:
             topic: Research topic (broader than a single question).
 
         Returns:
-            Dict with the same schema as ``query()`` plus an additional
-            ``deep_research`` boolean flag.
+            Dict with the same schema as ``query()`` plus ``deep_research``.
         """
         self._try_init_nlm()
 
-        # Check if NLM supports deep research
-        nlm_deep_available = (
-            self.nlm_engine is not None
-            and self.nlm_engine.available
-            and hasattr(self.nlm_engine, "_run_python")
-        )
-
-        if nlm_deep_available:
+        if self.nlm_engine and self.nlm_engine.available:
             try:
                 notebook_id = self.nlm_engine.ensure_notebook(company, product)
                 if notebook_id:
-                    # Attempt deep research via NLM
-                    if self.nlm_engine._use_python:
-                        raw = self.nlm_engine._run_python(
-                            "deep_research", notebook_id, topic
-                        )
-                        nlm_answer, nlm_sources = self.nlm_engine._parse_nlm_response(raw)
-                    else:
-                        raw = self.nlm_engine._run_cli(
-                            "deep-research",
-                            "--notebook", notebook_id,
-                            "--topic", topic,
-                        )
-                        nlm_answer, nlm_sources = self.nlm_engine._parse_nlm_response(raw)
-
-                    if nlm_answer:
-                        # Run Claude RAG too for internal docs
-                        claude_result = self.claude_engine.query(
-                            company=company,
-                            product=product,
-                            question=f"Research topic: {topic}",
-                            include_analytics=True,
+                    # Start web research
+                    research_info = self.nlm_engine.start_research(
+                        notebook_id, topic, source="web", mode="deep",
+                    )
+                    if research_info:
+                        logger.info(
+                            "DualResearchEngine: deep research started for %s/%s: %s",
+                            company, product, topic[:60],
                         )
 
-                        merged = self.synthesizer.synthesize(
-                            claude_result=claude_result,
-                            nlm_result={
-                                "answer": nlm_answer,
-                                "sources": nlm_sources,
-                                "engine": "notebooklm_deep",
-                            },
-                            question=topic,
-                        )
-
-                        return {
-                            **merged,
-                            "deep_research": True,
-                            "chunks_searched": claude_result.get("chunks_searched", 0),
-                            "mind_context_used": claude_result.get("mind_context_used", False),
-                            "nlm_available": True,
-                        }
+                    # Now query both engines (NLM will have fresh web context)
+                    result = self.query(
+                        company=company,
+                        product=product,
+                        question=f"Research topic: {topic}",
+                        use_notebooklm=True,
+                        include_analytics=True,
+                    )
+                    result["deep_research"] = True
+                    return result
 
             except Exception as exc:
                 logger.warning(
@@ -251,15 +238,28 @@ class DualResearchEngine:
         return result
 
     # ------------------------------------------------------------------
+    # NLM status
+    # ------------------------------------------------------------------
+
+    def get_nlm_status(self) -> dict:
+        """Return NotebookLM engine status for operator dashboards."""
+        self._try_init_nlm()
+        if self.nlm_engine:
+            return self.nlm_engine.get_status()
+        return {
+            "library_installed": False,
+            "integration_method": None,
+            "authenticated": False,
+            "available": False,
+            "notebooks_cached": 0,
+        }
+
+    # ------------------------------------------------------------------
     # NLM lazy init
     # ------------------------------------------------------------------
 
     def _try_init_nlm(self):
-        """Lazy-initialise the NotebookLM engine. Called once.
-
-        After the first call, ``self.nlm_engine`` is either a working
-        ``NotebookLMEngine`` instance or ``None`` (permanently).
-        """
+        """Lazy-initialise the NotebookLM engine. Called once."""
         if self._nlm_checked:
             return
 
@@ -271,7 +271,14 @@ class DualResearchEngine:
                 self.nlm_engine = engine
                 logger.info("DualResearchEngine: NotebookLM available")
             else:
-                logger.info("DualResearchEngine: NotebookLM not available")
+                # Keep the engine reference even if not authenticated —
+                # status endpoint can report why it's unavailable
+                self.nlm_engine = engine
+                logger.info(
+                    "DualResearchEngine: NotebookLM not available — %s",
+                    "not authenticated" if (engine._use_python or engine._use_cli)
+                    else "library not installed",
+                )
         except Exception as exc:
             logger.warning(
                 "DualResearchEngine: failed to init NLM engine: %s", exc
@@ -279,7 +286,7 @@ class DualResearchEngine:
             self.nlm_engine = None
 
     # ------------------------------------------------------------------
-    # Utility: sync documents to NLM
+    # Source sync
     # ------------------------------------------------------------------
 
     def sync_to_notebooklm(
@@ -306,6 +313,7 @@ class DualResearchEngine:
         if self.nlm_engine is None or not self.nlm_engine.available:
             return {
                 "uploaded": 0,
+                "skipped": 0,
                 "errors": ["NotebookLM is not available"],
                 "notebook_id": None,
             }
@@ -316,8 +324,9 @@ class DualResearchEngine:
                 catalog = self.claude_engine._dr.catalog(company, product)
                 documents = [
                     {
+                        "doc_id": doc.get("doc_id", doc.get("filename", "")),
                         "filepath": doc.get("filepath", ""),
-                        "filename": doc.get("filename", ""),
+                        "title": doc.get("filename", ""),
                     }
                     for doc in catalog
                     if doc.get("filepath")
@@ -325,8 +334,25 @@ class DualResearchEngine:
             except Exception as exc:
                 return {
                     "uploaded": 0,
+                    "skipped": 0,
                     "errors": [f"Failed to load catalog: {exc}"],
                     "notebook_id": None,
                 }
 
         return self.nlm_engine.sync_sources(company, product, documents)
+
+    def configure_notebook(self, company: str, product: str) -> bool:
+        """Configure the NLM notebook chat persona for credit analysis.
+
+        Should be called after creating/restoring a notebook to set the
+        appropriate analytical tone.
+        """
+        self._try_init_nlm()
+        if not self.nlm_engine or not self.nlm_engine.available:
+            return False
+
+        notebook_id = self.nlm_engine.ensure_notebook(company, product)
+        if not notebook_id:
+            return False
+
+        return self.nlm_engine.configure_chat(notebook_id)
