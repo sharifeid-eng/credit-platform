@@ -3,6 +3,33 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-12 — NotebookLM Python API method signatures must be inspected, not guessed
+
+**Discovery:** When connecting to NotebookLM via `notebooklm-py`, the initial attempt used `client.chat.send()` (didn't exist) then `client.chat.ask(notebook_id=X, message=Y)` (wrong kwargs). The actual signature was `client.chat.ask(notebook_id, question)` — positional args only. Had to use `inspect.signature()` to discover the correct API.
+**Rule:** When integrating with third-party Python packages, always inspect method signatures (`import inspect; inspect.signature(method)`) before guessing parameter names. Don't assume method names or kwargs — check the actual API surface.
+
+## 2026-04-12 — NotebookLM CLI requires venv activation on Windows
+
+**Discovery:** Running `notebooklm login` from PowerShell outside the venv gave "command not found". The CLI is installed in `venv\Scripts\notebooklm.exe`, not globally.
+**Rule:** CLI tools installed via pip in a venv are only accessible after `venv\Scripts\activate` or via `venv\Scripts\notebooklm.exe` directly.
+
+## 2026-04-12 — Worktree .claude/ directory is separate from main repo .claude/
+
+**Discovery:** Slash commands created in `.claude/commands/` inside a worktree are NOT automatically in the main repo's `.claude/commands/`. The worktree has its own copy. The `.gitignore` rule `!.claude/commands/` negates the `.claude/` ignore, but from the worktree root `.claude/` matches the top-level ignore before the negation applies.
+**Rule:** When creating new slash commands in a worktree, they need to be manually copied to the main repo's `.claude/commands/` directory. Track this as a post-merge step.
+
+## 2026-04-12 — Event bus design: listeners must never block writes
+
+**Discovery:** When adding event publishing to `_append_entry()` in master_mind.py and company_mind.py, the event bus publish call must be wrapped in try/except and never allowed to prevent the JSONL write from completing. The mind system is the source of truth — events are optional notifications.
+**Rule:** Event bus listeners are fire-and-forget. Wrap `event_bus.publish()` in try/except in write paths. The bus itself already catches listener exceptions, but the publish call site must also be guarded against import errors or bus initialization failures.
+
+## 2026-04-12 — Backward-compatible schema extension via metadata._graph
+
+**Discovery:** Extending MindEntry with graph fields (relations, source_refs, node_type, staleness) without a migration. Solved by storing new fields in `metadata["_graph"]` subkey — existing code ignores unknown metadata keys, so old readers work fine. New readers check for `_graph` and extract graph fields. Lazy upgrade on read via `upgrade_entry()`.
+**Rule:** When extending an append-only JSONL schema, prefer metadata sub-keys over top-level field additions. This avoids migration scripts and preserves backward compatibility. Use a lazy upgrade function in `_read_entries()` that adds defaults without rewriting files.
+
+---
+
 ## 2026-04-11 — Red Team reviews catch calculation errors that tests don't
 
 **Discovery:** The first Red Team review (Mode 6) found `weighted_avg_discount` was double-multiplied by FX rate (`* mult` applied when numerator and denominator already contained `mult` via `total_pv`). This shipped in the original Returns tab code, passed all tests, and was shown to IC. Tests didn't catch it because they tested with `mult=1` (local currency).
