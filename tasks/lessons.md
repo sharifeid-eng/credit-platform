@@ -40,6 +40,11 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 **Issue:** Set the Cloudflare Access login page logo to `https://laithanalytics.ai/lion.png`. The logo didn't render because the entire domain is behind Cloudflare Access — Cloudflare can't fetch the image from a domain it's protecting (chicken-and-egg). The preview in the Cloudflare dashboard worked because it fetches differently than the live page.
 **Rule:** Cloudflare Access login page assets (logo, favicon) must be hosted on a public URL not behind the same Access policy. Options: Imgur, S3 bucket, GitHub raw, or create a Cloudflare Access bypass rule for specific asset paths.
 
+## 2026-04-12 — Never name a module after a Python stdlib module
+
+**Issue:** `backend/operator.py` shadows Python's built-in `operator` module. When uvicorn is launched from the `backend/` directory (`cd backend && python -m uvicorn main:app`), Python adds `backend/` to `sys.path` and finds our `operator.py` before the stdlib one. This triggers a circular import crash: `collections` → `from operator import eq` → our `operator.py` → `json` → `re` → `functools` → `collections` (circular). Manifests as `ImportError: cannot import name 'namedtuple' from partially initialized module 'collections'`.
+**Rule:** Never name a backend module after a Python stdlib module (`operator`, `collections`, `signal`, `logging`, `string`, `typing`, etc.). Always run uvicorn from the project root using dot notation (`python -m uvicorn backend.main:app`) so `backend/` is a package, not a path entry. If a naming conflict is discovered, rename the file — don't rely on launch instructions.
+
 ---
 
 ## 2026-04-11 — Don't use a specific company as a "default" fallback

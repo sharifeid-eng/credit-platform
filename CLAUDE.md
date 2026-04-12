@@ -133,7 +133,8 @@ cd C:\Users\SharifEid\credit-platform
 Opens two terminal windows (backend + frontend) and launches the browser automatically.
 
 **Manual start (if needed):**
-- Terminal 1 — Backend: `cd credit-platform && venv\Scripts\activate && cd backend && python -m uvicorn main:app --reload`
+- Terminal 1 — Backend: `cd credit-platform && venv\Scripts\activate && python -m uvicorn backend.main:app --reload`
+  > **IMPORTANT:** Run from the project root, NOT from `backend/`. Running from `backend/` causes `backend/operator.py` to shadow Python's built-in `operator` module (circular import crash on Python 3.14+). Use `backend.main:app` (dot notation) from the project root.
 - Terminal 2 — Frontend: `cd credit-platform\frontend && npm run dev`
 - Then open `http://localhost:5173`
 -----
