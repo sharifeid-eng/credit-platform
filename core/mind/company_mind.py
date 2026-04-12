@@ -149,18 +149,46 @@ class CompanyMind:
             raise ValueError(f"Unknown category: {category}. Valid: {list(_FILES.keys())}")
         return self.base_dir / filename
 
-    def _append_entry(self, entry: MindEntry) -> None:
-        """Append a single entry to its category's JSONL file."""
+    def _append_entry(self, entry: MindEntry, graph_meta: Optional[Dict] = None) -> None:
+        """Append a single entry to its category's JSONL file.
+
+        Args:
+            entry: The MindEntry to append.
+            graph_meta: Optional graph metadata (relations, source_refs, node_type)
+                        stored in metadata._graph for backward-compatible JSONL.
+        """
+        d = entry.to_dict()
+        if graph_meta:
+            d["metadata"]["_graph"] = graph_meta
         path = self._jsonl_path(entry.category)
         with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry.to_dict(), ensure_ascii=False) + "\n")
+            f.write(json.dumps(d, ensure_ascii=False) + "\n")
         logger.debug(
             "CompanyMind[%s/%s]: recorded %s entry %s",
             self.company, self.product, entry.category, entry.id[:8],
         )
 
+        # Publish event for downstream listeners
+        try:
+            from core.mind.event_bus import event_bus, Events
+            event_bus.publish(Events.MIND_ENTRY_CREATED, {
+                "scope": "company",
+                "company": self.company,
+                "product": self.product,
+                "entry_id": entry.id,
+                "category": entry.category,
+                "content": entry.content,
+            })
+        except Exception:
+            pass  # Event bus not critical — never block writes
+
     def _read_entries(self, category: str) -> List[MindEntry]:
-        """Read all entries from a category's JSONL file."""
+        """Read all entries from a category's JSONL file.
+
+        Lazily upgrades old-format entries with graph metadata defaults.
+        """
+        from core.mind.schema import upgrade_entry
+
         path = self._jsonl_path(category)
         if not path.exists():
             return []
@@ -171,7 +199,9 @@ class CompanyMind:
                 if not line:
                     continue
                 try:
-                    entries.append(MindEntry.from_dict(json.loads(line)))
+                    d = json.loads(line)
+                    upgrade_entry(d)  # adds graph defaults if missing (no rewrite)
+                    entries.append(MindEntry.from_dict(d))
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.warning(
                         "CompanyMind[%s/%s]: skipping malformed line %d in %s: %s",

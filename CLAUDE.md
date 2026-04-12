@@ -186,9 +186,24 @@ credit-platform/
 │   │   ├── generator.py       # AI section generator with analytics + research + mind
 │   │   ├── storage.py         # File-based versioning (draft → review → final)
 │   │   └── pdf_export.py      # Dark-themed PDF export for memos
-│   ├── mind/                  # Living Mind — institutional memory
+│   ├── mind/                  # Living Mind + Intelligence System
 │   │   ├── master_mind.py     # Fund-level: preferences, IC norms, cross-company patterns
-│   │   └── company_mind.py    # Per-company: corrections, findings, IC feedback, data quality
+│   │   ├── company_mind.py    # Per-company: corrections, findings, IC feedback, data quality
+│   │   ├── schema.py          # KnowledgeNode + Relation dataclasses (extends MindEntry)
+│   │   ├── relation_index.py  # Bidirectional adjacency list for node relations
+│   │   ├── event_bus.py       # Lightweight sync pub/sub for knowledge events
+│   │   ├── graph.py           # Graph-aware query engine with scoring + traversal
+│   │   ├── entity_extractor.py # Regex-based entity extraction (7 types) from text + metrics
+│   │   ├── compiler.py        # Incremental compilation: one input → many node updates
+│   │   ├── learning.py        # Closed-loop learning: correction → auto-rule generation
+│   │   ├── listeners.py       # Event bus listeners (compilation, learning, thesis)
+│   │   ├── thesis.py          # Investment thesis tracker with drift detection
+│   │   ├── intelligence.py    # Cross-company pattern detection
+│   │   ├── briefing.py        # Morning briefing generator (urgency-scored)
+│   │   ├── analyst.py         # Persistent analyst context store
+│   │   ├── session.py         # Session state tracker for delta briefings
+│   │   ├── kb_decomposer.py   # Decomposes lessons.md + CLAUDE.md into KnowledgeNodes
+│   │   └── kb_query.py        # Unified search across all knowledge stores
 │   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
 │   ├── methodology_klaim.py # Klaim methodology metadata (16 sections, 29 metrics, 13 tables)
 │   ├── methodology_silq.py # SILQ methodology metadata (15 sections, 23 metrics, 2 tables)
@@ -771,6 +786,11 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Consecutive breach EoD tracking** — `annotate_covenant_eod()` in `core/portfolio.py` (pure function) + `covenant_history.json` (I/O in `main.py`). Per MMA 18.3: `single_breach_not_eod` (PAR30), `single_breach_is_eod` (PAR60, Parent Cash), `two_consecutive_breaches` (Collection Ratio, Paid vs Due). History persists max 24 periods, dedupes by date.
 - **Payment schedule as static data** — Stored in `data/{co}/{prod}/legal/payment_schedule.json` (not extracted by AI). Backend reporting endpoint loads and serves it alongside extracted reporting requirements. Frontend renders with PAID/NEXT badges relative to today's date.
 - **Registry format** — Both DataRoomEngine and AnalyticsSnapshotEngine use dict[str, dict] registry format (keyed by doc_id). Auto-migrates old list format on read.
+- **Intelligence System — Knowledge Graph architecture** — KnowledgeNode extends MindEntry via composition (not inheritance). New fields stored in `metadata["_graph"]` subkey for backward-compatible JSONL storage. Lazy upgrade on read via `upgrade_entry()` — no batch migration needed. RelationIndex is a separate JSON file (`relations.json`) per scope — bidirectional adjacency list. Event bus is synchronous, in-process, with `disable()` for test isolation.
+- **Intelligence System — Incremental compilation** — Entity extraction (regex-based, 7 types) feeds into a KnowledgeCompiler that creates/supersedes/reinforces/contradicts existing nodes. One document → 10-15 knowledge updates. Compilation reports logged to `compilation_log.jsonl`. Entities stored in dedicated `entities.jsonl` per company.
+- **Intelligence System — Closed-loop learning** — Every analyst correction auto-classified (tone_shift, threshold_override, data_caveat, etc.) and auto-generates learning rules as KnowledgeNodes (node_type="rule"). Patterns extracted when same correction type appears 3+ times → codification candidates. Rules have `last_triggered` and `trigger_count` metadata for decay tracking.
+- **Intelligence System — Thesis tracker** — Per-company investment thesis with measurable pillars linked to computed metrics (e.g., "collection_rate" > 0.85). Auto-drift detection on tape ingestion: holding → weakening (within 10% of threshold) → broken (breached). Conviction score (0-100) aggregated from pillar scores. Thesis injected as Layer 5 in AI prompts.
+- **Intelligence System — 5-layer AI context** — Framework (L1) → Master Mind (L2) → Methodology (L3) → Company Mind (L4) → Thesis (L5, new). Layer 5 includes active pillars with statuses and drift alerts, making every AI output thesis-aware.
 - **Cloudflare Access JWT auth** — Platform authentication delegated to Cloudflare Access (team: `amwalcp`). Backend reads `CF_Authorization` cookie or `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against public keys from `amwalcp.cloudflareaccess.com/cdn-cgi/access/certs` (cached 1hr). User table maps email → role (admin/viewer). Auto-provisions users on first login. `ADMIN_EMAIL` env var bootstraps first admin. Auth middleware skips `/auth/*`, `/api/integration/*`, OPTIONS. When `CF_TEAM` not set (local dev), middleware passes all requests through — zero friction for development. Existing X-API-Key integration auth completely untouched.
 - **docker-compose env var precedence** — `environment` section overrides `env_file` values. Auth vars (`CF_TEAM`, `CF_APP_AUD`, `ADMIN_EMAIL`) must only be in `.env.production` via `env_file`, NOT in the `environment` section (which reads from host shell and gets empty strings).
 - **Operator Command Center** — `/operator/status` reads from existing files only (config.json, registry.json, mind/*.jsonl, legal/*_extracted.json, reports/ai_cache/). No new data infrastructure. Gap detection uses heuristic rules. Personal follow-ups stored in `tasks/operator_todo.json` (separate from Claude's `tasks/todo.md`). Frontend at `/operator` with 5 tabs: Health Matrix, Commands, Follow-ups, Activity Log, Mind Review. `/ops` slash command provides terminal briefing.
@@ -1215,6 +1235,19 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **Frontend:** Race condition fixed (AbortController), TabInsight/AICommentary cleared on snapshot change, Tamara read-only badge, PortfolioAnalytics data source badge, DataChat empty response handling
   - **Performance:** db_loader N+1 queries → single pre-aggregate, bounded in-memory caches (max 10)
   - All 156 tests passing after fixes
+- ✅ **Intelligence System — Self-Learning "Second Brain" (7-phase build, inspired by Claude+Obsidian pattern):**
+  - **Phase 0 Foundation:** `core/mind/schema.py` (KnowledgeNode + Relation dataclasses, backward-compatible via metadata._graph), `core/mind/relation_index.py` (bidirectional adjacency list, BFS chain traversal), `core/mind/event_bus.py` (sync pub/sub, disable for tests). master_mind.py + company_mind.py upgraded with graph metadata + event publishing.
+  - **Phase 1 Knowledge Graph:** `core/mind/graph.py` — graph-aware query engine with recency/category/graph bonus scoring, supersession exclusion, contradiction penalty. Neighborhood BFS, staleness detection (60d threshold), compaction of superseded chains.
+  - **Phase 2 Incremental Compilation:** `core/mind/entity_extractor.py` (regex extraction of 7 entity types from text + tape metrics), `core/mind/compiler.py` (one-input-many-updates: create/supersede/reinforce/contradict pipeline, compilation reports in JSONL, cross-document discrepancy detection).
+  - **Phase 3 Closed-Loop Learning:** `core/mind/learning.py` — LearningEngine auto-classifies corrections (tone_shift, threshold_override, data_caveat, factual_error, missing_context, methodology_correction). Rules auto-generated as KnowledgeNodes (node_type="rule"). Pattern extraction groups 3+ similar corrections into codification candidates. Correction frequency tracking by type.
+  - **Phase 4 Thesis Tracker:** `core/mind/thesis.py` — InvestmentThesis + ThesisPillar + DriftAlert. Per-company structured theses with measurable pillars linked to computed metrics. Auto-drift detection: holding → weakening (within 10%) → broken (breached). Conviction score 0-100 per company. Versioned thesis log (JSONL). AI context injection as Layer 5.
+  - **Phase 5 Proactive Intelligence:** `core/mind/intelligence.py` (cross-company pattern detection: metric trends, risk convergence, covenant pressure across 2+ companies). `core/mind/briefing.py` (morning briefing with urgency-scored priority actions, thesis alerts, learning summary, recommendations). `core/mind/analyst.py` (persistent analyst context: last session, priority companies, IC dates, focus areas).
+  - **Phase 6 Session Tracker:** `core/mind/session.py` — tracks tapes/docs/corrections/rules per session, persists to `reports/session_state.json`, delta computation for "since last session" briefings.
+  - **Phase 7 Queryable KB:** `core/mind/kb_decomposer.py` (parses lessons.md entries + CLAUDE.md decisions into linked KnowledgeNodes with stable IDs and topic tags). `core/mind/kb_query.py` (unified search across mind entries + lessons + decisions + entity nodes with text/metadata/tag scoring).
+  - **Event Listeners:** `core/mind/listeners.py` — wires TAPE_INGESTED → metric compilation + thesis drift check, DOCUMENT_INGESTED → entity extraction + compilation, MEMO_EDITED → learning rule generation, CORRECTION_RECORDED → correction analysis.
+  - **6 Slash Commands:** `/morning` (session-start briefing), `/thesis {company}` (create/review thesis), `/drift` (check all theses), `/learn` (review corrections + auto-rules), `/emerge` (cross-company patterns), `/know {question}` (KB search).
+  - **Tests:** 93 new tests (42 foundation + 51 system), all 249 total passing.
+  - **Architecture:** JSONL-first (no migration), lazy schema upgrade, event bus with disable() for test isolation, backward-compatible metadata._graph storage. File-based, no new PostgreSQL dependency.
 -----
 ## Known Gaps & Next Steps
 **Short term:**
@@ -1293,6 +1326,20 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Data extraction fixed — 73 KPIs, 136 financials, 5 demographic dims, 51 BP metrics, 152 FM metrics
 - [x] Landing page — dual flags (SA+AE), auto-rotating carousel (3.5s crossfade, dot indicators, pause-on-hover)
 - [x] Financial Performance trend chart + Business Plan projection chart + Demographics grouped bars
+**Intelligence System — Integration (backend wiring + frontend):**
+- [ ] Wire `register_all_listeners()` into backend main.py app startup
+- [ ] Add thesis API endpoints (GET/POST thesis, drift, log)
+- [ ] Add briefing API endpoint (GET /operator/briefing)
+- [ ] Add knowledge search endpoint (GET /knowledge/search)
+- [ ] Add chat feedback endpoint (POST chat-feedback)
+- [ ] Wire TAPE_INGESTED/DOCUMENT_INGESTED/MEMO_EDITED events into existing endpoints
+- [ ] Create ThesisTracker.jsx frontend (pillar cards, drift history, edit mode)
+- [ ] Create MorningBriefing.jsx in OperatorCenter (priority card view)
+- [ ] Add "Learning" tab to OperatorCenter (correction dashboard)
+- [ ] Add DataChat thumbs-up/down feedback buttons
+- [ ] Enhance build_mind_context() with graph-aware scoring (Phase 1B)
+- [ ] Add Layer 5 (thesis context) to AI prompts (Phase 4C)
+- [ ] Copy 6 new slash commands from worktree to main repo .claude/commands/
 **Research Hub & Memo — Near-term:**
 - [ ] CSV tape classifier improvement (currently classified as "other" instead of "portfolio_tape")
 - [ ] Seed Tamara Company Mind from data room findings

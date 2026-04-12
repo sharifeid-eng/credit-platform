@@ -3,18 +3,50 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
-## Next Session Priority — First Klaim Credit Memo (end-to-end test)
+## Next Session Priorities
 
-### Context
-The Research Hub, Living Mind, and IC Memo Engine are built (~17,000 lines) but have never been tested end-to-end. The `generate_full_memo()` function in `core/memo/generator.py` makes real Claude API calls to produce IC-ready memos. All 4 companies return `available=True` from the analytics bridge.
+### Intelligence System Integration
+- [ ] **Wire event listeners into backend main.py** — call `register_all_listeners()` at app startup
+- [ ] **Add thesis API endpoints** — GET/POST `/companies/{co}/products/{prod}/thesis`, `/thesis/drift`, `/thesis/log`
+- [ ] **Add briefing API endpoint** — GET `/operator/briefing`
+- [ ] **Add knowledge search endpoint** — GET `/knowledge/search`
+- [ ] **Add chat feedback endpoint** — POST `/companies/{co}/products/{prod}/chat-feedback`
+- [ ] **Wire TAPE_INGESTED event** into `_load()` helper in main.py
+- [ ] **Wire DOCUMENT_INGESTED event** into DataRoomEngine
+- [ ] **Wire MEMO_EDITED event** into memo section update endpoint (capture ai_version)
+- [ ] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode
+- [ ] **Create MorningBriefing.jsx component** — priority card view in OperatorCenter
+- [ ] **Add "Learning" tab to OperatorCenter** — correction dashboard
+- [ ] **Add DataChat thumbs-up/down feedback** — frontend + backend
+- [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
+- [ ] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration
+- [ ] **Add Layer 5 (thesis context) to AI prompts** — Phase 4C integration
+- [ ] **Copy slash commands to main repo .claude/commands/** — 6 new commands from worktree
 
-### Priority items
-- [ ] **Generate first Klaim Credit Memo** — tests full pipeline: template → analytics bridge → data room search → Living Mind → Claude generation → storage → PDF export
+### Remaining from Prior Sessions
+- [ ] **Generate first Klaim Credit Memo** — tests full pipeline end-to-end
 - [ ] **Generate Tamara Credit Memo** — second test with summary-type company
 - [ ] **Validate Legal Analysis tabs render** — walk Klaim → Legal Analysis → all 8 tabs
-- [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors vs `Group` column
-- [ ] **Store payment schedule** — $6M draw, 16 quarterly payments + bullet maturity 2030-02-01
-- [ ] **Implement consecutive breach history** — `covenant_history.json` for EoD determination
+
+---
+
+## Completed — 2026-04-12 (session 12: Intelligence System — Second Brain)
+
+**Inspired by Claude+Obsidian "second brain" pattern (Defileo viral post + NotebookLM research).**
+
+Built the complete Laith Intelligence System across 7 phases:
+
+- [x] **Phase 0: Foundation Layer** — `core/mind/schema.py` (KnowledgeNode + Relation dataclasses with backward-compatible JSONL storage), `core/mind/relation_index.py` (bidirectional adjacency list), `core/mind/event_bus.py` (lightweight sync pub/sub). Upgraded `master_mind.py` and `company_mind.py` writers with graph metadata + event publishing.
+- [x] **Phase 1: Knowledge Graph** — `core/mind/graph.py` (graph-aware query engine with recency/category/graph bonus scoring, BFS neighborhood traversal, contradiction detection, staleness detection, compaction)
+- [x] **Phase 2: Incremental Compilation Engine** — `core/mind/entity_extractor.py` (regex-based extraction of COVENANT, METRIC, RISK_FLAG, COUNTERPARTY, DATE_EVENT, THRESHOLD, FACILITY_TERM from text + tape metrics), `core/mind/compiler.py` (one-input-many-updates: create/supersede/reinforce/contradict pipeline with compilation reports, cross-document discrepancy detection)
+- [x] **Phase 3: Closed-Loop Learning** — `core/mind/learning.py` (LearningEngine: correction analysis → auto-classify tone_shift/threshold_override/data_caveat/factual_error/etc → generate natural-language rules, pattern extraction from 3+ similar corrections → codification candidates, correction frequency tracking)
+- [x] **Phase 4: Thesis Tracker & Drift Detection** — `core/mind/thesis.py` (InvestmentThesis + ThesisPillar + DriftAlert dataclasses, automatic drift check against live metrics, conviction score 0-100, status transitions holding→weakening→broken, versioned thesis log, AI context injection Layer 5)
+- [x] **Phase 5: Proactive Intelligence** — `core/mind/intelligence.py` (cross-company pattern detection: metric trends, risk convergence, covenant pressure), `core/mind/briefing.py` (morning briefing generator with urgency-scored priority actions, thesis alerts, learning summary), `core/mind/analyst.py` (persistent analyst context store)
+- [x] **Phase 6: Session Tracker** — `core/mind/session.py` (tracks tapes/docs/corrections/rules per session, delta computation for morning briefings)
+- [x] **Phase 7: Queryable Knowledge Base** — `core/mind/kb_decomposer.py` (parse lessons.md + CLAUDE.md into linked KnowledgeNodes), `core/mind/kb_query.py` (unified search across mind + lessons + decisions + entities)
+- [x] **Event Listeners** — `core/mind/listeners.py` (wires TAPE_INGESTED → compilation + thesis drift, DOCUMENT_INGESTED → entity extraction + compilation, MEMO_EDITED → learning rule generation, CORRECTION_RECORDED → analysis)
+- [x] **6 Slash Commands** — `/morning` (briefing), `/thesis` (tracker), `/drift` (check all), `/learn` (review), `/emerge` (patterns), `/know` (KB query)
+- [x] **93 new tests** — 42 foundation + 51 system, all passing alongside 134+22 existing = 249 total
 
 ---
 
