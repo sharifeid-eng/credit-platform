@@ -31,6 +31,9 @@ The Research Hub, Living Mind, and IC Memo Engine are built (~17,000 lines) but 
 - [x] **Add `notebooklm-py` to `requirements.txt`** — was missing, would not survive fresh install or Docker rebuild.
 - [x] **14 new tests** — bridge init, persistence, query, synthesizer conversion, dual engine, citation merging. All passing.
 - [x] **Fix backend startup crash** — `backend/operator.py` shadows Python stdlib `operator` module when running from `backend/` directory. Fixed CLAUDE.md manual start instructions. Documented in lessons.md.
+- [x] **Fix `start.ps1`** — was `cd backend && uvicorn main:app`, now runs from project root with `backend.main:app` dot notation.
+- [x] **Add `/notebooklm` nginx proxy rule** — production requests were hitting SPA fallback instead of backend API. Same pattern as previous Operator Center fix.
+- [x] **Production deployment verified** — NLM Active (teal dot) on laithanalytics.ai with auth token, both engine badges showing.
 
 ---
 
