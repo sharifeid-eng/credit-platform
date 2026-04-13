@@ -3,6 +3,33 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Memo generation: dual-engine produces different, not always longer, output
+
+**Discovery:** Comparing Claude-only vs dual-engine memos: total length was similar (~50K chars), but distribution changed. Dual-engine added depth to exec summary (+295), market context (+763), credit quality (+249), investment thesis (+284), but was shorter on portfolio analytics (-1013), covenants (-583), and financials (-497). The NLM contribution appears to add external context and cross-references where available, but also introduces discipline — sections where NLM found no relevant sources got honest disclaimers ("relevance scores ranging from 0.11 to 0.25") rather than speculative padding.
+**Rule:** Don't expect dual-engine to always produce more content. It produces *better-grounded* content — richer where data room evidence exists, more conservative where it doesn't. This is the correct behavior. When reviewing memos, check market context and company overview sections first — those benefit most from NLM's data room access.
+
+## 2026-04-13 — Data room must live at company level, not product level
+
+**Discovery:** The data room engine stored everything at `data/{company}/{product}/dataroom/` but the actual data room files live at `data/{company}/dataroom/` (company level). This caused: (1) the engine couldn't find files, (2) `dataroom` was picked up as a "product" by the loader, (3) the `_EXCLUDE_DIRS` set blocked scanning when source path contained "dataroom" in its parts.
+**Rule:** Data room = company-level (`data/{company}/dataroom/`). Products share the same data room. The engine's output subdirs (`chunks/`, `analytics/`) go inside the dataroom dir. Exclude those subdirs from scanning, not "dataroom" itself. Also exclude "dataroom" from `get_products()` so it's not treated as a product.
+
+## 2026-04-13 — Silent degradation of external services must be replaced with user-facing warnings
+
+**Discovery:** NotebookLM auth had expired for the entire session, and the platform silently fell back to Claude-only mode everywhere — research queries, data room sync, memo generation. No one was notified. The user explicitly asked: "do not allow the platform to simply ignore without notifying me."
+**Rule:** Any external service (NLM, API, DB) that degrades must produce a structured warning (`{code, message, fix, severity}`) in the response. Frontend must intercept and present the warning before the first affected action, with "Proceed without X" and "Retry" options. Session remembers the dismissal. Never silently fall back.
+
+## 2026-04-13 — Memo sections referencing data room are only as good as the data room coverage
+
+**Discovery:** The Klaim memo's "Market & Competitive Context" section honestly flagged that data room sources had low relevance scores (0.11-0.25) for market data. The "Financial Performance" section was similarly thin. But "Facility Structure" and "Credit Quality" were rich because the legal documents and tape analytics provided strong evidence.
+**Rule:** Before generating a memo, check data room coverage per section. Sections that rely on data room (company_overview, market_context, facility_structure, financial_performance) need corresponding document types ingested. If coverage is thin, flag it upfront rather than generating speculative content. The memo appendix (auto-generated) lists all sources — review it to assess coverage.
+
+## 2026-04-13 — NLM sync is slow and should not block the user
+
+**Discovery:** Syncing 87 data room files to NotebookLM takes several minutes (each file uploaded individually). The sync endpoint blocked for the entire duration. During data room ingest, the auto-sync also blocked.
+**Rule:** NLM sync should be treated as a background enhancement, not a blocking prerequisite. The ingest response already returns immediately with NLM sync results, but the sync itself is synchronous within the endpoint. For large data rooms (50+ files), consider: (1) sync only the most relevant document types first, (2) report progress incrementally, (3) cap at ~20 sources per sync.
+
+---
+
 ## 2026-04-13 — Never auto-ingest external directories without asking the user first
 
 **Discovery:** The data room ingest endpoint was called without specifying a source path, which caused it to scan the default OneDrive directory and pull in 23 files — including pitch decks, corporate docs, and other materials that weren't intended for the data room. The user wasn't asked which folder to ingest or what documents to include.
