@@ -18,8 +18,9 @@ def get_companies():
 def get_products(company):
     """Return list of products for a company, read dynamically from subfolders"""
     company_path = os.path.join(DATA_DIR, company)
+    _NON_PRODUCT_DIRS = {'dataroom', '_master_mind', 'mind', '__pycache__'}
     return [d for d in os.listdir(company_path)
-            if os.path.isdir(os.path.join(company_path, d))]
+            if os.path.isdir(os.path.join(company_path, d)) and d not in _NON_PRODUCT_DIRS]
 
 def get_snapshots(company, product):
     """Return all data files for a company/product, sorted by date"""

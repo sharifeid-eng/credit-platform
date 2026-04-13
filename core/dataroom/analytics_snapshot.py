@@ -912,8 +912,8 @@ class AnalyticsSnapshotEngine:
     # ------------------------------------------------------------------
 
     def _dataroom_dir(self, company: str, product: str) -> Path:
-        """Return the dataroom directory for a company/product."""
-        return self.base_dir / "data" / company / product / "dataroom"
+        """Return the dataroom directory for a company."""
+        return self.base_dir / "data" / company / "dataroom"
 
     def _registry_path(self, company: str, product: str) -> Path:
         return self._dataroom_dir(company, product) / "registry.json"

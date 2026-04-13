@@ -6,7 +6,7 @@ parses files, chunks content, builds search indexes, and maintains a
 file-based registry for incremental updates.
 
 Storage layout:
-    data/{company}/{product}/dataroom/
+    data/{company}/dataroom/
         registry.json          - Document registry (metadata + hashes)
         chunks/{doc_id}.json   - Chunked content per document
         index.pkl              - TF-IDF search index (optional, requires sklearn)
@@ -75,10 +75,11 @@ _SUPPORTED_EXTENSIONS = {
 }
 
 # Files to exclude from data room ingestion (config files, not data)
-_EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json"}
+_EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json",
+                      "notebooklm_state.json", "index.pkl"}
 
-# Directories to skip during recursive scan (prevents self-referential ingestion)
-_EXCLUDE_DIRS = {"dataroom", "__pycache__", "node_modules", ".git", "mind"}
+# Directories to skip during recursive scan (prevents ingesting engine output)
+_EXCLUDE_DIRS = {"chunks", "analytics", "__pycache__", "node_modules", ".git", "mind"}
 
 
 def _is_supported(filepath: str) -> bool:
@@ -114,8 +115,8 @@ class DataRoomEngine:
             self._data_root = Path(__file__).resolve().parent.parent.parent / "data"
 
     def _dataroom_dir(self, company: str, product: str) -> Path:
-        """Get the dataroom storage directory for a company/product."""
-        d = self._data_root / company / product / "dataroom"
+        """Get the dataroom storage directory for a company."""
+        d = self._data_root / company / "dataroom"
         d.mkdir(parents=True, exist_ok=True)
         return d
 

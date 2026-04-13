@@ -488,7 +488,7 @@ def list_companies():
     for co in get_companies():
         ps = get_products(co)
         all_snaps = [s for p in ps for s in get_snapshots(co, p)]
-        all_snaps.sort(key=lambda s: s['date'])
+        all_snaps.sort(key=lambda s: s['date'] or '0000-00-00')
         since = all_snaps[0]['date'] if all_snaps else None
         result.append({
             'name': co,
@@ -3433,16 +3433,12 @@ def dataroom_ingest(company: str, product: str, source_dir: Optional[str] = None
     If source_dir not provided, uses a default path pattern based on company.
     """
     if not source_dir:
-        # Try common data room paths
-        candidates = [
-            os.path.join(os.path.expanduser('~'), 'OneDrive - Amwal Capital Partners',
-                        'Resources', 'Private Credit', company),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', company, product),
-        ]
-        source_dir = next((c for c in candidates if os.path.exists(c)), None)
-        if not source_dir:
+        # Default: company-level dataroom folder inside the platform data directory
+        source_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', company, 'dataroom')
+        if not os.path.exists(source_dir):
             raise HTTPException(status_code=400,
-                              detail=f"No data room directory found for {company}. Provide source_dir parameter.")
+                              detail=f"No data room directory found at data/{company}/dataroom/. "
+                                     f"Create the folder and add documents, or provide source_dir parameter.")
 
     result = _dataroom_engine.ingest(company, product, source_dir)
     log_activity(DATAROOM_INGEST, company, product, f"Ingested data room: {result.get('documents_ingested', '?')} documents")

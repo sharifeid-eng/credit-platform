@@ -185,7 +185,7 @@ class NotebookLMEngine:
 
     def _sidecar_path(self, company: str, product: str) -> Path:
         """Path to the JSON sidecar that stores notebook ID + synced sources."""
-        return _DATA_ROOT / company / product / "dataroom" / "notebooklm_state.json"
+        return _DATA_ROOT / company / "dataroom" / "notebooklm_state.json"
 
     def _load_state(self, company: str, product: str) -> dict:
         """Load persisted NLM state from disk."""
