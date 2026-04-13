@@ -112,8 +112,8 @@ export default function DocumentLibrary() {
             { label: 'Total Documents', value: stats.total_documents ?? 0 },
             { label: 'Total Pages', value: stats.total_pages ?? 0 },
             { label: 'Total Chunks', value: stats.total_chunks ?? 0 },
-            ...(stats.by_type ? Object.entries(stats.by_type).map(([type, count]) => ({
-              label: type.toUpperCase(), value: count,
+            ...(stats.by_type ? Object.entries(stats.by_type).map(([type, val]) => ({
+              label: type.toUpperCase(), value: typeof val === 'object' ? (val.count ?? 0) : (val ?? 0),
             })) : []),
           ].map((s, i) => (
             <motion.div
