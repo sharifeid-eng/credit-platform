@@ -11,17 +11,46 @@ Track active work here. Claude updates this as tasks progress.
 - [ ] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration
 - [ ] **Copy slash commands to main repo .claude/commands/** — 6 new commands from worktree
 
-### Klaim Data Room + Memo Exercise (do in order)
-1. [ ] **Validate Legal Analysis tabs render** — walk Klaim → Legal Analysis → all 8 tabs
-2. [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors vs `Group` column
-3. [ ] **Implement consecutive breach history** — `covenant_history.json` for EoD determination
-4. [ ] **Test NotebookLM dual-engine end-to-end** — ingest Klaim data room, sync to NLM, verify Research Chat
-5. [ ] **Ingest Klaim data room** — documents auto-compile via Intelligence System events
-6. [ ] **Generate first Klaim Credit Memo** — tests full pipeline end-to-end with all 5 context layers
-7. [ ] **Generate Tamara Credit Memo** — second test with summary-type company
+### Klaim Data Room + Memo Exercise ✅ COMPLETE (session 17)
+1. [x] **Validate Legal Analysis tabs render** — all 8 tabs render with rich data
+2. [x] **Validate Account Debtors against tape** — 0/13 match, Group = provider names not payer names, recorded in Company Mind
+3. [x] **Implement consecutive breach history** — already built, verified working (PAR30=breach_no_eod, PAR60=eod_triggered, Paid vs Due=first_breach)
+4. [x] **Test NotebookLM dual-engine** — NLM auth expired (needs manual `notebooklm login`), Claude-only fallback works
+5. [x] **Ingest Klaim data room** — 23 new files from OneDrive, 28 total docs, 492 chunks, DOCUMENT_INGESTED events fired, entities extracted
+6. [x] **Generate first Klaim Credit Memo** — 12 AI sections, 5-layer context pipeline working end-to-end, renders in MemoEditor
+7. [x] **Generate Tamara Credit Memo** — 11/12 AI sections (covenant bug fixed: list vs dict format)
 
 ### Other Remaining
-- [ ] **Store payment schedule** — $6M draw, 16 quarterly payments + bullet maturity 2030-02-01
+- [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
+
+---
+
+## Completed — 2026-04-13 (session 17: Klaim Data Room + Memo Exercise)
+
+End-to-end validation of the full analysis pipeline — Legal Analysis, Data Room, Intelligence System events, and Memo Engine.
+
+**Validation:**
+- [x] **Legal Analysis tabs** — all 8 render with rich extracted data from 4 facility PDFs
+- [x] **Account Debtor validation** — confirmed: tape Group column = 143 healthcare providers (sellers), NOT insurance companies (payers). 0/13 approved Account Debtors found. MRPA concentration limit (d) unenforceable.
+- [x] **Consecutive breach history** — `annotate_covenant_eod()` + `covenant_history.json` already working, verified EoD status annotations
+- [x] **NotebookLM** — auth expired (needs manual re-login), Claude-only fallback operational
+
+**Data Room Ingestion:**
+- [x] **Klaim data room** — 23 new files ingested from OneDrive (facility agreements, pitch decks, corporate docs, SPV filings). Total: 28 docs, 492 chunks, 320 pages
+- [x] **DOCUMENT_INGESTED events** — fired, entity extraction ran, compilation log + entities.jsonl populated
+- [x] **Document Library** — renders with full stats (28 docs, 320 pages, 492 chunks)
+
+**Memo Engine:**
+- [x] **Klaim Credit Memo** — 12 AI-generated sections with mixed sources (analytics + data room). Full 5-layer context pipeline working. MemoEditor renders with section TOC, Regenerate/Edit buttons, PDF export
+- [x] **Tamara Credit Memo** — 11/12 AI sections generated. Exec summary correctly flagged insufficient data. Covenant section bug fixed (list vs dict format)
+
+**Bug Fixes:**
+- [x] **`covenant_history.json` breaking loader** — added to `_EXCLUDE` set in `core/loader.py` (also `facility_params.json`, `debtor_validation.json`)
+- [x] **Analytics bridge covenant format** — added `isinstance()` check for list vs dict triggers in `core/memo/analytics_bridge.py`
+
+**Lessons:**
+- Non-data JSON files in product dirs must be excluded from snapshot discovery
+- Analytics bridge must handle both dict and list covenant formats (company-type polymorphism)
 
 ---
 

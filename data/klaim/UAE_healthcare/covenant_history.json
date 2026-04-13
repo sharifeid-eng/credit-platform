@@ -1,0 +1,42 @@
+{
+  "PAR30 (Portfolio at Risk > 30 days)": [
+    {
+      "period": "2026-04-13",
+      "compliant": false,
+      "current": 0.3938332095771121,
+      "date": "2026-04-13"
+    }
+  ],
+  "PAR60 (Portfolio at Risk > 60 days)": [
+    {
+      "period": "2026-04-13",
+      "compliant": false,
+      "current": 0.3221255276123768,
+      "date": "2026-04-13"
+    }
+  ],
+  "Collection Ratio (cumulative)": [
+    {
+      "period": "2026-04-01 \u2013 2026-04-30",
+      "compliant": true,
+      "current": 0.7077267657336078,
+      "date": "2026-04-13"
+    }
+  ],
+  "Paid vs Due Ratio": [
+    {
+      "period": "2026-04-01 \u2013 2026-04-30",
+      "compliant": false,
+      "current": 0.7031565563816208,
+      "date": "2026-04-13"
+    }
+  ],
+  "Parent Minimum Cash Balance": [
+    {
+      "period": "2026-04-13",
+      "compliant": true,
+      "current": 0,
+      "date": "2026-04-13"
+    }
+  ]
+}

@@ -318,14 +318,27 @@ class AnalyticsBridge:
 
             elif section_key in ("covenant_analysis", "covenant_compliance"):
                 triggers = covenant.get("triggers", {})
-                for trigger_name, trigger_data in triggers.items():
-                    if isinstance(trigger_data, dict):
-                        status = trigger_data.get("status", "unknown")
+                if isinstance(triggers, dict):
+                    for trigger_name, trigger_data in triggers.items():
+                        if isinstance(trigger_data, dict):
+                            status = trigger_data.get("status", "unknown")
+                            metrics.append({
+                                "label": trigger_name,
+                                "value": status,
+                                "assessment": (
+                                    "healthy" if status == "compliant"
+                                    else "warning"
+                                ),
+                            })
+                elif isinstance(triggers, list):
+                    for t in triggers:
+                        name = t.get("name", t.get("trigger", "?"))
+                        status = t.get("status", "unknown")
                         metrics.append({
-                            "label": trigger_name,
+                            "label": name,
                             "value": status,
                             "assessment": (
-                                "healthy" if status == "compliant"
+                                "healthy" if status in ("compliant", "holding")
                                 else "warning"
                             ),
                         })

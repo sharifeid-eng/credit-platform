@@ -87,5 +87,372 @@
     "source": "platform_analytics",
     "doc_id": "9ac8cc56-d6e8-4374-bda9-04a97cb83fb3",
     "content_path": "data\\klaim\\UAE_healthcare\\dataroom\\analytics\\9ac8cc56-d6e8-4374-bda9-04a97cb83fb3.json"
+  },
+  "53a18de2-e4e": {
+    "doc_id": "53a18de2-e4e",
+    "filename": "01. Master Murabaha Agreement.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\01. Master Murabaha Agreement.docx",
+    "document_type": "facility_agreement",
+    "sha256": "6419b6bd5867f73e3756c2e16d1693dc12677f8d137dd2dd8360f9eda6cccd3b",
+    "page_count": 21,
+    "chunk_count": 50,
+    "text_length": 118657,
+    "table_count": 8,
+    "parser_metadata": {
+      "filename": "01. Master Murabaha Agreement.docx",
+      "author": "Nadi Najm",
+      "created": "2025-04-03",
+      "modified": "2025-04-03"
+    },
+    "ingested_at": "2026-04-13T20:57:59"
+  },
+  "c5a9cb27-2ee": {
+    "doc_id": "c5a9cb27-2ee",
+    "filename": "KLAIM - Overview.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\KLAIM - Overview.pdf",
+    "document_type": "other",
+    "sha256": "01684393c7001becfbcf22d482f825df88ddafcc661db4475f885e84ae8fe704",
+    "page_count": 20,
+    "chunk_count": 27,
+    "text_length": 12909,
+    "table_count": 7,
+    "parser_metadata": {
+      "filename": "KLAIM - Overview.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:00"
+  },
+  "f7c8ddda-c48": {
+    "doc_id": "f7c8ddda-c48",
+    "filename": "KlaimFlow Pitch_v7.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\KlaimFlow Pitch_v7.pdf",
+    "document_type": "company_presentation",
+    "sha256": "3bb200934e773ada048f54382ce25353aa1fd30e33f351da5b567ce8ea5e30ca",
+    "page_count": 26,
+    "chunk_count": 33,
+    "text_length": 16101,
+    "table_count": 5,
+    "parser_metadata": {
+      "filename": "KlaimFlow Pitch_v7.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:02"
+  },
+  "1d995fd2-cf9": {
+    "doc_id": "1d995fd2-cf9",
+    "filename": "KlaimXFeesable Pitch_v5.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\KlaimXFeesable Pitch_v5.pdf",
+    "document_type": "company_presentation",
+    "sha256": "ca47fa0434bcc23b9b9f5cf512f571af9d84c441fa05d56943abe23434059642",
+    "page_count": 25,
+    "chunk_count": 30,
+    "text_length": 15349,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "KlaimXFeesable Pitch_v5.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:03"
+  },
+  "1a0e3f6f-e55": {
+    "doc_id": "1a0e3f6f-e55",
+    "filename": "Klaim_Summary Deck - Debt - July 2024.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\Klaim_Summary Deck - Debt - July 2024.pdf",
+    "document_type": "company_presentation",
+    "sha256": "b354c5790b67a917b955741bcd0b97a5767909cc31ce4df269ab175176d9b7a1",
+    "page_count": 23,
+    "chunk_count": 32,
+    "text_length": 23062,
+    "table_count": 9,
+    "parser_metadata": {
+      "filename": "Klaim_Summary Deck - Debt - July 2024.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:05"
+  },
+  "466dcab8-70e": {
+    "doc_id": "466dcab8-70e",
+    "filename": "Master RPA - KlaimX.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\Master RPA - KlaimX.docx",
+    "document_type": "other",
+    "sha256": "67f73b5a4a041228295d0e40892a71305e9fd1155820499e7ebd353e9ae6c4c9",
+    "page_count": 1,
+    "chunk_count": 4,
+    "text_length": 0,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "Master RPA - KlaimX.docx",
+      "author": "H.P",
+      "created": "2025-09-09",
+      "modified": "2025-09-25"
+    },
+    "ingested_at": "2026-04-13T20:58:05"
+  },
+  "b4b0bce0-f58": {
+    "doc_id": "b4b0bce0-f58",
+    "filename": "Pitch_Deck.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\Pitch_Deck.pdf",
+    "document_type": "company_presentation",
+    "sha256": "291324cb594cf3d36161115da51ca81f354d93003ca9abe697e25e6ed7054126",
+    "page_count": 52,
+    "chunk_count": 66,
+    "text_length": 31960,
+    "table_count": 11,
+    "parser_metadata": {
+      "filename": "Pitch_Deck.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:08"
+  },
+  "b7cd07c7-447": {
+    "doc_id": "b7cd07c7-447",
+    "filename": "SPV Performance.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV Performance.pdf",
+    "document_type": "other",
+    "sha256": "7d107f4d6c0b285dec76f7912c5454760218de0a83cfcf1c1d761bd2c6ce76e0",
+    "page_count": 3,
+    "chunk_count": 18,
+    "text_length": 1808,
+    "table_count": 15,
+    "parser_metadata": {
+      "filename": "SPV Performance.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:08"
+  },
+  "837934c6-564": {
+    "doc_id": "837934c6-564",
+    "filename": "01. Master Murabaha Agreement - vSent.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\01. Master Murabaha Agreement - vSent.docx",
+    "document_type": "facility_agreement",
+    "sha256": "59655684d70bf31148d63e142f1ec62c9fb489c922d1cbeea2ae15745a8b70e0",
+    "page_count": 21,
+    "chunk_count": 50,
+    "text_length": 118630,
+    "table_count": 8,
+    "parser_metadata": {
+      "filename": "01. Master Murabaha Agreement - vSent.docx",
+      "author": "Nadi Najm",
+      "created": "2025-10-01",
+      "modified": "2025-10-01"
+    },
+    "ingested_at": "2026-04-13T20:58:09"
+  },
+  "b82a1e05-93e": {
+    "doc_id": "b82a1e05-93e",
+    "filename": "02. Articles of Association_KRP SPV1.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\02. Articles of Association_KRP SPV1.pdf",
+    "document_type": "other",
+    "sha256": "04a6b09c47ccb04ec87ebdd44fee615a680b11ca5fe79eb5fa2a318b20db43d4",
+    "page_count": 20,
+    "chunk_count": 20,
+    "text_length": 49329,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "02. Articles of Association_KRP SPV1.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:11"
+  },
+  "04f168ae-ef8": {
+    "doc_id": "04f168ae-ef8",
+    "filename": "02. Certificate of Incorporation_KRP SPV1.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\02. Certificate of Incorporation_KRP SPV1.pdf",
+    "document_type": "other",
+    "sha256": "ebff6b9bf5d79bd317676e1b6bd8428ed3e7fecd484d380a30a1f6e293b865f6",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 905,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "02. Certificate of Incorporation_KRP SPV1.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:11"
+  },
+  "d4e33dd0-2cd": {
+    "doc_id": "d4e33dd0-2cd",
+    "filename": "02. Klaim Receivable Purchase SPV 1 Limited FS FY24_ADGM[32].pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\02. Klaim Receivable Purchase SPV 1 Limited FS FY24_ADGM[32].pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "259cd7b3a9ca7ce9c0e25425d3e04f1474cd27dcc9aa0f016783da89f3058357",
+    "page_count": 22,
+    "chunk_count": 22,
+    "text_length": 45410,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "02. Klaim Receivable Purchase SPV 1 Limited FS FY24_ADGM[32].pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:13"
+  },
+  "9aae97c7-766": {
+    "doc_id": "9aae97c7-766",
+    "filename": "02. Register of Members_KRP SPV1_May23.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\02. Register of Members_KRP SPV1_May23.pdf",
+    "document_type": "other",
+    "sha256": "65fd75cb38006f1e09609a86ea3b72afcb753eac3796d45ffe447a2e973f7588",
+    "page_count": 3,
+    "chunk_count": 12,
+    "text_length": 2570,
+    "table_count": 9,
+    "parser_metadata": {
+      "filename": "02. Register of Members_KRP SPV1_May23.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "cdacb63d-b7d": {
+    "doc_id": "cdacb63d-b7d",
+    "filename": "03. Klaim Intragroup Receivables Sale and Purchase Agreement - vSent.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\03. Klaim Intragroup Receivables Sale and Purchase Agreement - vSent.docx",
+    "document_type": "facility_agreement",
+    "sha256": "e43fc69825a8aabfbb91ffba1ee91a50ba485b5fadb0701d1c5fe932c149e2f5",
+    "page_count": 3,
+    "chunk_count": 5,
+    "text_length": 13245,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "03. Klaim Intragroup Receivables Sale and Purchase Agreement - vSent.docx",
+      "author": "Ahmad Al Taher",
+      "created": "2022-10-26",
+      "modified": "2025-10-01"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "152371d9-b91": {
+    "doc_id": "152371d9-b91",
+    "filename": "04. Receivables Security Agreement - vSent.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\04. Receivables Security Agreement - vSent.docx",
+    "document_type": "facility_agreement",
+    "sha256": "3fda49bdd584a9f122ed0c2e7bc8b62f113290c9646087ad16acc0693b0fb77a",
+    "page_count": 3,
+    "chunk_count": 5,
+    "text_length": 13470,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "04. Receivables Security Agreement - vSent.docx",
+      "author": "Ahmad Al Taher",
+      "created": "2022-10-26",
+      "modified": "2025-10-01"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "e5ef3375-6dc": {
+    "doc_id": "e5ef3375-6dc",
+    "filename": "05. Share Charge Agreement - vSent.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\05. Share Charge Agreement - vSent.docx",
+    "document_type": "facility_agreement",
+    "sha256": "20d616bc8b5821bafead78065f890e1df3e206e3805710564251952de0763de7",
+    "page_count": 7,
+    "chunk_count": 13,
+    "text_length": 35996,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "05. Share Charge Agreement - vSent.docx",
+      "author": "Mahmoud Hussein Kamel",
+      "created": "2023-05-23",
+      "modified": "2025-10-01"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "8ab9ac6e-db0": {
+    "doc_id": "8ab9ac6e-db0",
+    "filename": "06. On-Sale Agency Agreement - vSent.docx",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\06. On-Sale Agency Agreement - vSent.docx",
+    "document_type": "facility_agreement",
+    "sha256": "a874a495e93d716500587e268213c7f4826df08ee58072672c20328942925cc4",
+    "page_count": 2,
+    "chunk_count": 4,
+    "text_length": 9853,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "06. On-Sale Agency Agreement - vSent.docx",
+      "author": "AUHWS14001",
+      "title": "SCB IF Agency Agreement",
+      "created": "2022-03-25",
+      "modified": "2025-10-01"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "c54517c9-57c": {
+    "doc_id": "c54517c9-57c",
+    "filename": "06. Register of Directors_KRP SPV1_May23.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\06. Register of Directors_KRP SPV1_May23.pdf",
+    "document_type": "other",
+    "sha256": "a7a714d5f71ceb07f78f0add11c6e7c65409383a102474a35e0ac3dd1288bda0",
+    "page_count": 1,
+    "chunk_count": 5,
+    "text_length": 749,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "06. Register of Directors_KRP SPV1_May23.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "711ca526-cd3": {
+    "doc_id": "711ca526-cd3",
+    "filename": "08. Register of BOC_KRP SPV1.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\08. Register of BOC_KRP SPV1.pdf",
+    "document_type": "other",
+    "sha256": "00985e9c16b2732dc36d2cc1a22ed803765e8a4fcb55c73c15998e138187505c",
+    "page_count": 1,
+    "chunk_count": 5,
+    "text_length": 1143,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "08. Register of BOC_KRP SPV1.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:14"
+  },
+  "169f3956-da2": {
+    "doc_id": "169f3956-da2",
+    "filename": "KLAIM RECEIVABLE PURCHASE SPV 1 LIMITED - Commercial License (EXP OCT2025).pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\SPV1\\KLAIM RECEIVABLE PURCHASE SPV 1 LIMITED - Commercial License (EXP OCT2025).pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "a68edb02cec6493229eb06cf8ddf5c5801ec1fd95a420535dd62e40c495e0390",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 2968,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "KLAIM RECEIVABLE PURCHASE SPV 1 LIMITED - Commercial License (EXP OCT2025).pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:15"
+  },
+  "33d6adb3-436": {
+    "doc_id": "33d6adb3-436",
+    "filename": "Bridge to Series B - Teaser - v2.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\US\\Bridge to Series B - Teaser - v2.pdf",
+    "document_type": "other",
+    "sha256": "cd79fc7de8988afa34689d500dbdfccbb5182628f1cf14526d7ca539d663a538",
+    "page_count": 27,
+    "chunk_count": 36,
+    "text_length": 22389,
+    "table_count": 7,
+    "parser_metadata": {
+      "filename": "Bridge to Series B - Teaser - v2.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:17"
+  },
+  "5a2d4d94-ec3": {
+    "doc_id": "5a2d4d94-ec3",
+    "filename": "Complete_with_Docusign_DRAFT_Klaim_Claritev_ (1).pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\US\\Complete_with_Docusign_DRAFT_Klaim_Claritev_ (1).pdf",
+    "document_type": "other",
+    "sha256": "c62ef0965626899c709e4d5296bd9760ca860145563a1b16884b6ab582daf04b",
+    "page_count": 3,
+    "chunk_count": 3,
+    "text_length": 4336,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "Complete_with_Docusign_DRAFT_Klaim_Claritev_ (1).pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:17"
+  },
+  "29047ebe-82d": {
+    "doc_id": "29047ebe-82d",
+    "filename": "Klaimk_US_Deck_Short_v7.pdf",
+    "filepath": "C:\\Users\\SharifEid\\OneDrive - Amwal Capital Partners\\Resources\\Private Credit\\klaim\\Non data room DD requests\\US\\Klaimk_US_Deck_Short_v7.pdf",
+    "document_type": "company_presentation",
+    "sha256": "f1d63ecda7ea39e531929085f6339a131ac32bf3be04cadde7aae3d6ea419203",
+    "page_count": 30,
+    "chunk_count": 37,
+    "text_length": 21584,
+    "table_count": 7,
+    "parser_metadata": {
+      "filename": "Klaimk_US_Deck_Short_v7.pdf"
+    },
+    "ingested_at": "2026-04-13T20:58:19"
   }
 }

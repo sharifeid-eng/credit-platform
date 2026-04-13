@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Non-data JSON files in product directories break snapshot loader
+
+**Discovery:** `covenant_history.json` was created in `data/klaim/UAE_healthcare/` by the covenants endpoint. The loader's `get_snapshots()` picks up all `.json` files, and `covenant_history.json` has no date prefix → `extract_date_from_filename()` returns None → `sort()` crashes on `'<' not supported between instances of 'str' and 'NoneType'`. Same risk for `facility_params.json` and `debtor_validation.json`.
+**Rule:** Any new JSON file created in a product directory must be added to `_EXCLUDE` in `core/loader.py`. Alternatively, non-data files should go in subdirectories (legal/, mind/) rather than the product root. The existing `_EXCLUDE` set only had `config.json` and `methodology.json`.
+
+## 2026-04-13 — Analytics bridge must handle both dict and list covenant formats
+
+**Discovery:** Tamara's covenant triggers are stored as a list of objects (`[{name, status, ...}]`) but the analytics bridge assumed dict format (`{trigger_name: {status: ...}}`). The `.items()` call on a list caused `'list' object has no attribute 'items'`. This is the same class of bug as the DocumentLibrary `by_type` issue (session 15).
+**Rule:** When accessing data structures from different company types, always check with `isinstance()` before calling `.items()`, `.values()`, or other dict-specific methods. Summary-type companies (Ejari, Tamara) may use different data shapes than tape companies (Klaim, SILQ).
+
+---
+
 ## 2026-04-13 — Event deduplication needed when helper is called per-endpoint
 
 **Discovery:** `_load()` in `backend/main.py` is called by 30+ chart endpoints on every request. Firing `TAPE_INGESTED` inside `_load()` without deduplication would trigger entity extraction, thesis drift checks, and compilation 30+ times per page load. Solution: module-level `_tape_events_fired: set` that tracks `(company, product, snapshot)` tuples — fires once per unique tape per process lifetime.

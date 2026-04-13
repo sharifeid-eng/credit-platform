@@ -27,7 +27,8 @@ def get_snapshots(company, product):
     snapshots = []
     
     # Known non-data files to exclude from snapshot discovery
-    _EXCLUDE = {'config.json', 'methodology.json'}
+    _EXCLUDE = {'config.json', 'methodology.json', 'covenant_history.json',
+                 'facility_params.json', 'debtor_validation.json'}
     for file in os.listdir(product_path):
         if file in _EXCLUDE:
             continue
