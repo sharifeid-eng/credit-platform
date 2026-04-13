@@ -3,6 +3,13 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Never auto-ingest external directories without asking the user first
+
+**Discovery:** The data room ingest endpoint was called without specifying a source path, which caused it to scan the default OneDrive directory and pull in 23 files — including pitch decks, corporate docs, and other materials that weren't intended for the data room. The user wasn't asked which folder to ingest or what documents to include.
+**Rule:** Always ask the user which directory/files to ingest before running data room ingestion. The user should specify the source path explicitly. Don't assume a default OneDrive or external folder. For Klaim, only facility agreements + platform tapes + AI-generated analytics belong in the data room.
+
+---
+
 ## 2026-04-13 — Non-data JSON files in product directories break snapshot loader
 
 **Discovery:** `covenant_history.json` was created in `data/klaim/UAE_healthcare/` by the covenants endpoint. The loader's `get_snapshots()` picks up all `.json` files, and `covenant_history.json` has no date prefix → `extract_date_from_filename()` returns None → `sort()` crashes on `'<' not supported between instances of 'str' and 'NoneType'`. Same risk for `facility_params.json` and `debtor_validation.json`.
