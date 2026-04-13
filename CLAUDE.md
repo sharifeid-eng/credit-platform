@@ -522,6 +522,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/dataroom/documents`        |List all ingested documents        |
 |`GET /companies/{co}/products/{p}/dataroom/stats`            |Data room aggregate stats          |
 |`GET /companies/{co}/products/{p}/dataroom/search?q=...`     |Search across all documents        |
+|`GET /companies/{co}/products/{p}/dataroom/documents/{id}/view`|Stream original file for browser viewing|
 |`POST /companies/{co}/products/{p}/dataroom/snapshot-analytics`|Snapshot current analytics       |
 |`POST /companies/{co}/products/{p}/research/query`           |Dual-engine research query         |
 |`POST /companies/{co}/products/{p}/research/chat`            |Research chat (for frontend)       |
@@ -1353,6 +1354,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `core/loader.py`: Added `_NON_PRODUCT_DIRS` set to exclude `dataroom`, `_master_mind`, `mind` from product discovery
   - `core/memo/analytics_bridge.py`: `isinstance()` check for list vs dict covenant triggers (Tamara uses list, Klaim uses dict)
   - `backend/main.py`: Null-safe sort in `list_companies` (`date or '0000-00-00'`)
+- ✅ **Document Library enhancements (session 17):**
+  - Category filter chips: clickable pills per document_type with colored borders (gold=Facility Agreement, blue=Company Presentation, teal=Business Plan, purple=Portfolio Tape, gray=Other)
+  - Category badges on cards replace generic "FILE" label — human-readable names ("Facility Agreement" not "FACILITY_AGREEMENT")
+  - Sort dropdown: Name, Category, Pages, Date Ingested
+  - Folder breadcrumbs: last 2 folder segments from filepath shown in italic below filename
+  - File viewing: PDF cards clickable, open in new browser tab via `GET /dataroom/documents/{id}/view` endpoint (streams original file with correct MIME type)
+  - Text length shown in card metadata (e.g. "18.4K chars")
+  - Results count when filtered ("Showing 3 of 87 documents in Company Presentation")
 -----
 ## Known Gaps & Next Steps
 **Short term:**
