@@ -89,7 +89,9 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         <div
           title="Reflects tape snapshot date, not the as-of date. Deal selection is filtered but balances are not."
           style={{
-            position: 'absolute', top: 6, right: 8,
+            position: 'absolute',
+            top: (trend !== undefined && trend !== null) ? 30 : 6,
+            right: 8,
             fontSize: 8, fontWeight: 700, letterSpacing: '0.04em',
             padding: '2px 6px', borderRadius: 3,
             color: 'var(--accent-gold)',
@@ -105,6 +107,7 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         fontSize: 9, fontWeight: 600,
         textTransform: 'uppercase', letterSpacing: '0.1em',
         color: 'var(--text-muted)', marginBottom: 9,
+        paddingRight: (trend !== undefined && trend !== null) || stale ? 52 : 0,
       }}>
         {label}
       </div>

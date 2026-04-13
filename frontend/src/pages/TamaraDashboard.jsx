@@ -181,15 +181,20 @@ function CovenantTriggerCard({ trigger }) {
           }} />
         )}
 
-        {/* Threshold markers */}
-        {[{ val: l1_threshold, label: 'L1' }, { val: l2_threshold, label: 'L2' }, { val: l3_threshold, label: 'L3' }].map(t => (
-          <div key={t.label} style={{
-            position: 'absolute', left: barWidth(t.val), top: 0, bottom: 0,
-            borderLeft: `1px dashed ${MUTED}`, opacity: 0.5,
-          }}>
-            <span style={{ position: 'absolute', top: -14, left: -8, fontSize: 9, color: MUTED }}>{t.label}</span>
-          </div>
-        ))}
+        {/* Threshold markers — stagger label vertically when thresholds are close */}
+        {[{ val: l1_threshold, label: 'L1' }, { val: l2_threshold, label: 'L2' }, { val: l3_threshold, label: 'L3' }].map((t, i) => {
+          const thresholds = [l1_threshold, l2_threshold, l3_threshold]
+          const prevVal = i > 0 ? thresholds[i - 1] : 0
+          const tooClose = i > 0 && maxVal > 0 && ((t.val - prevVal) / maxVal) < 0.08
+          return (
+            <div key={t.label} style={{
+              position: 'absolute', left: barWidth(t.val), top: 0, bottom: 0,
+              borderLeft: `1px dashed ${MUTED}`, opacity: 0.5,
+            }}>
+              <span style={{ position: 'absolute', top: tooClose ? -24 : -14, left: -8, fontSize: 9, color: MUTED }}>{t.label}</span>
+            </div>
+          )
+        })}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11 }}>

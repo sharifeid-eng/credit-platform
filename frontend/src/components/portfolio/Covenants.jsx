@@ -96,7 +96,8 @@ export default function Covenants({ data, availableDates, selectedDate, onDateCh
                 background: 'var(--bg-deep)', border: '1px solid var(--border)',
                 borderRadius: 6, padding: '6px 10px',
                 fontSize: 10, color: notifState === 'error' ? 'var(--accent-red)' : 'var(--accent-teal)',
-                whiteSpace: 'nowrap', boxShadow: 'var(--shadow-card)',
+                whiteSpace: 'nowrap', boxShadow: 'var(--shadow-card)', maxWidth: 260,
+                overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
                 {notifMsg}
               </div>

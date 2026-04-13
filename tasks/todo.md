@@ -34,6 +34,18 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-13 (session 14: UI collision audit + fixes)
+
+Fixed absolute-vs-flow positioning collisions across the platform:
+
+- [x] **KpiCard: trend badge overlapping label text** — added `paddingRight: 52` on label when trend or stale badge is present, preventing text from running under the badge on all cards
+- [x] **KpiCard: stale badge vs trend badge overlap** — stale "TAPE DATE" badge now stacks below trend badge (`top: 30` when trend present) instead of occupying the same corner
+- [x] **TamaraDashboard: L1/L2/L3 threshold label overlap** — labels now stagger vertically (`top: -24`) when adjacent thresholds are within 8% of maxVal
+- [x] **Covenants: notification tooltip viewport overflow** — added `maxWidth: 260` + `textOverflow: ellipsis` to prevent `whiteSpace: nowrap` from extending beyond viewport
+- [x] **Platform-wide audit** — verified FacilityParamsPanel (already safe), Navbar/MemoEditor dropdowns (acceptable popover pattern), CovenantCard threshold markers (already clamped)
+
+---
+
 ## Completed — 2026-04-12 (session 13: Intelligence System — Second Brain)
 
 **Inspired by Claude+Obsidian "second brain" pattern (Defileo viral post + NotebookLM research).**

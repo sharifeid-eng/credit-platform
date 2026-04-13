@@ -3,6 +3,16 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Absolute-positioned badges need flow content padding reservation
+
+**Discovery:** KpiCard's trend badge (`position: absolute; top: 12; right: 12`) overlapped the label text on wider desktop cards where "COLLECTION RATE" extended into the badge area. The label had no `paddingRight` to reserve space for the badge. Same pattern existed between the stale "TAPE DATE" badge and trend badge (both in top-right corner), and in TamaraDashboard threshold labels when values are close together.
+**Rule:** Whenever you position something `position: absolute` in a corner of a container, the normal-flow content in that corner MUST have matching padding to reserve space. This is easy to miss because collisions only appear when data is longer than expected. Audit checklist: (1) find all `position: absolute` children, (2) check if any flow sibling can grow into that space, (3) add padding/margin if so. Also check for badge-on-badge overlap when multiple absolute elements share a corner — stagger them vertically or give them distinct positions.
+
+## 2026-04-13 — Edit tool writes to the specified path, not the worktree CWD
+
+**Discovery:** When working in a git worktree at `.claude/worktrees/dazzling-payne/`, the Edit tool writes to the exact file path specified. If I specify `C:\Users\SharifEid\credit-platform\frontend\src\...` (the main repo path), it edits the main repo — not the worktree copy. The worktree's files live at `C:\Users\SharifEid\credit-platform\.claude\worktrees\dazzling-payne\frontend\src\...`.
+**Rule:** In worktree sessions, ALWAYS use the full worktree path for Edit/Read/Write operations. Check with `pwd` to confirm the worktree root, then use that as the base for all file paths. Edits to the main repo path will silently succeed but won't show in `git diff` from the worktree.
+
 ## 2026-04-12 — NotebookLM Python API method signatures must be inspected, not guessed
 
 **Discovery:** When connecting to NotebookLM via `notebooklm-py`, the initial attempt used `client.chat.send()` (didn't exist) then `client.chat.ask(notebook_id=X, message=Y)` (wrong kwargs). The actual signature was `client.chat.ask(notebook_id, question)` — positional args only. Had to use `inspect.signature()` to discover the correct API.
