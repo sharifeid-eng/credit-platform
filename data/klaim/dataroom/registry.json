@@ -1,0 +1,1580 @@
+{
+  "9dbd2cc9-327": {
+    "doc_id": "9dbd2cc9-327",
+    "filename": "Capital Table.xlsx",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Capital Table.xlsx",
+    "document_type": "other",
+    "sha256": "c1217e479c5715c280fde0fbf34b42d6d915433e44c2b1d2a0058e8ab4d62a1c",
+    "page_count": 21,
+    "chunk_count": 21,
+    "text_length": 47212,
+    "table_count": 21,
+    "parser_metadata": {
+      "filename": "Capital Table.xlsx",
+      "sheets": [
+        {
+          "name": "Cap Table_Post Series A2",
+          "rows": 68,
+          "cols": 16
+        },
+        {
+          "name": "INDIVIDUAL",
+          "rows": 59,
+          "cols": 8
+        },
+        {
+          "name": "Company",
+          "rows": 11,
+          "cols": 15
+        },
+        {
+          "name": "DIRECT INDIVIDUAL",
+          "rows": 4,
+          "cols": 9
+        },
+        {
+          "name": "SAFE SPV INDIVIDUAL",
+          "rows": 25,
+          "cols": 8
+        },
+        {
+          "name": "BAMO SPV INDIVIDUAL",
+          "rows": 19,
+          "cols": 8
+        },
+        {
+          "name": "DIRECT COMPANY",
+          "rows": 9,
+          "cols": 15
+        },
+        {
+          "name": "SAFE SPV COMPANY",
+          "rows": 2,
+          "cols": 15
+        },
+        {
+          "name": "Bamo Investors Split",
+          "rows": 22,
+          "cols": 12
+        },
+        {
+          "name": "Cap Table_Prior To Completion",
+          "rows": 4,
+          "cols": 5
+        },
+        {
+          "name": "Calculations",
+          "rows": 131,
+          "cols": 13
+        },
+        {
+          "name": "SAFEs",
+          "rows": 60,
+          "cols": 17
+        },
+        {
+          "name": "Convertibles",
+          "rows": 12,
+          "cols": 16
+        },
+        {
+          "name": "Warrants",
+          "rows": 10,
+          "cols": 10
+        },
+        {
+          "name": "RSU pool",
+          "rows": 51,
+          "cols": 129
+        },
+        {
+          "name": "SAFEs_Converts_SSA_Schedule3A ",
+          "rows": 56,
+          "cols": 8
+        },
+        {
+          "name": "CDG_SSA_Schedule3",
+          "rows": 8,
+          "cols": 4
+        },
+        {
+          "name": "Investor SPV_SSA_Schedule3",
+          "rows": 13,
+          "cols": 5
+        },
+        {
+          "name": "DRWI_Share Issuance",
+          "rows": 8,
+          "cols": 3
+        },
+        {
+          "name": "DRWI_SAFE Holders",
+          "rows": 57,
+          "cols": 5
+        },
+        {
+          "name": "CN Holders_SSA_Shedule3C",
+          "rows": 8,
+          "cols": 7
+        }
+      ],
+      "total_sheets": 21
+    },
+    "ingested_at": "2026-04-13T22:25:31"
+  },
+  "c6e8e38c-55f": {
+    "doc_id": "c6e8e38c-55f",
+    "filename": "Performance overview - SPV2 -.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Performance overview - SPV2 -.pdf",
+    "document_type": "other",
+    "sha256": "dfcf6fe2381d906b09f3d49332b47c39ade540faca4f9346697c5d4fee22a55f",
+    "page_count": 7,
+    "chunk_count": 28,
+    "text_length": 4073,
+    "table_count": 21,
+    "parser_metadata": {
+      "filename": "Performance overview - SPV2 -.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:32"
+  },
+  "5518996b-0da": {
+    "doc_id": "5518996b-0da",
+    "filename": "Sharif Deal Memo.docx",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sharif Deal Memo.docx",
+    "document_type": "other",
+    "sha256": "e4332a59e493618cbd429c522aeca5ee83109bbbcfc2915db9107ad05f36540a",
+    "page_count": 13,
+    "chunk_count": 47,
+    "text_length": 89756,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "Sharif Deal Memo.docx",
+      "author": "Samer Sarraf",
+      "created": "2026-03-11",
+      "modified": "2026-03-11"
+    },
+    "ingested_at": "2026-04-13T22:25:32"
+  },
+  "04d2cd80-85e": {
+    "doc_id": "04d2cd80-85e",
+    "filename": "SPV Performance Slides.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\SPV Performance Slides.pdf",
+    "document_type": "other",
+    "sha256": "ee54ddd80a51fc0cd6803a710b8f2f01e7fa307b32c0f7775e4799a304e8fbb0",
+    "page_count": 2,
+    "chunk_count": 8,
+    "text_length": 1628,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "SPV Performance Slides.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:32"
+  },
+  "af901528-99f": {
+    "doc_id": "af901528-99f",
+    "filename": "Klaim_BridgeToSeriesB_FullDeck.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.1 Deck\\Klaim_BridgeToSeriesB_FullDeck.pdf",
+    "document_type": "company_presentation",
+    "sha256": "5b744a5a31ae244d78cf4e6be08fdb2ad8fb69b8742d0cbddf6a7aebed32a901",
+    "page_count": 73,
+    "chunk_count": 92,
+    "text_length": 46206,
+    "table_count": 16,
+    "parser_metadata": {
+      "filename": "Klaim_BridgeToSeriesB_FullDeck.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:37"
+  },
+  "dc7b3568-9a2": {
+    "doc_id": "dc7b3568-9a2",
+    "filename": "1.3.1.5 National Payment Acceleration Scheme_KSA_Feb23.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.1 Deck\\old\\1.3.1.5 National Payment Acceleration Scheme_KSA_Feb23.pdf",
+    "document_type": "company_presentation",
+    "sha256": "564aa2201863f25d4fc0bfbd8bf655af1554138fe2a491f297ebfe622faf6477",
+    "page_count": 39,
+    "chunk_count": 59,
+    "text_length": 18358,
+    "table_count": 21,
+    "parser_metadata": {
+      "filename": "1.3.1.5 National Payment Acceleration Scheme_KSA_Feb23.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:38"
+  },
+  "9769f04f-aa6": {
+    "doc_id": "9769f04f-aa6",
+    "filename": "Healthcare investment in KSA_May23.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.1 Deck\\old\\Healthcare investment in KSA_May23.pdf",
+    "document_type": "company_presentation",
+    "sha256": "3552ab0d41a74fce0fa299610d3fdf7f5921fd49c4148c8db2ed0f40b743e376",
+    "page_count": 50,
+    "chunk_count": 66,
+    "text_length": 37538,
+    "table_count": 17,
+    "parser_metadata": {
+      "filename": "Healthcare investment in KSA_May23.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:41"
+  },
+  "7a8f3bc5-49e": {
+    "doc_id": "7a8f3bc5-49e",
+    "filename": "Klaim_Bridge to Series B - Teaser.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.2 Teaser\\Klaim_Bridge to Series B - Teaser.pdf",
+    "document_type": "other",
+    "sha256": "865858fbcd895a248ea875ca485a7fc478e6a604bda9fbbe5c6bbd98e5fdb4c2",
+    "page_count": 27,
+    "chunk_count": 36,
+    "text_length": 22370,
+    "table_count": 7,
+    "parser_metadata": {
+      "filename": "Klaim_Bridge to Series B - Teaser.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:42"
+  },
+  "4a62225b-5c1": {
+    "doc_id": "4a62225b-5c1",
+    "filename": "Klaim_BridgeToSeriesB_Flow.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.3 Product Portfolio\\Klaim_BridgeToSeriesB_Flow.pdf",
+    "document_type": "other",
+    "sha256": "645da7d1b1d743b6824e9d09d4fa31765d92853184ba75b309499a878ceab09c",
+    "page_count": 10,
+    "chunk_count": 11,
+    "text_length": 6223,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Klaim_BridgeToSeriesB_Flow.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:43"
+  },
+  "c4fc9e84-179": {
+    "doc_id": "c4fc9e84-179",
+    "filename": "Klaim_BridgeToSeriesB_RealEstate.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.3 Product Portfolio\\Klaim_BridgeToSeriesB_RealEstate.pdf",
+    "document_type": "other",
+    "sha256": "13842775d7d280be4e617a9c9cc2a6c54ffa53568857972884fb231a45a1aa80",
+    "page_count": 14,
+    "chunk_count": 17,
+    "text_length": 10342,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Klaim_BridgeToSeriesB_RealEstate.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:44"
+  },
+  "d7b9a690-5ec": {
+    "doc_id": "d7b9a690-5ec",
+    "filename": "Klaim_BridgeToSeriesB_US.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.3 Product Portfolio\\Klaim_BridgeToSeriesB_US.pdf",
+    "document_type": "other",
+    "sha256": "1a7c93d2eacb6810d872e4efa13daa03d3b58f3d9bb04f2289ddbf9a06a0f885",
+    "page_count": 21,
+    "chunk_count": 30,
+    "text_length": 15817,
+    "table_count": 9,
+    "parser_metadata": {
+      "filename": "Klaim_BridgeToSeriesB_US.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:45"
+  },
+  "2a5f3a65-403": {
+    "doc_id": "2a5f3a65-403",
+    "filename": "1.3.6.1.1 Employee Database_Klaim_Feb2025.xlsx",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.4 HR\\1.3.6.1 Employee Database\\1.3.6.1.1 Employee Database_Klaim_Feb2025.xlsx",
+    "document_type": "other",
+    "sha256": "c90f044e810f349b4bb372102b8f4ac7f52df8dee4fa0dfc64786dfe799fb8d7",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 2796,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "1.3.6.1.1 Employee Database_Klaim_Feb2025.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet1",
+          "rows": 60,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-13T22:25:45"
+  },
+  "6600eb41-268": {
+    "doc_id": "6600eb41-268",
+    "filename": "1.3.6.3.1 01. Karim Kevin Dakki - Founder & CEO.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.4 HR\\1.3.6.2 Founder bios\\1.3.6.3.1 01. Karim Kevin Dakki - Founder & CEO.pdf",
+    "document_type": "other",
+    "sha256": "3db22f6c0a4c86f2ed6950dbc6e2cad65e4f3e9a7665f7ea96a12a81498aacdc",
+    "page_count": 4,
+    "chunk_count": 4,
+    "text_length": 11013,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.3.6.3.1 01. Karim Kevin Dakki - Founder & CEO.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:46"
+  },
+  "94487ace-c30": {
+    "doc_id": "94487ace-c30",
+    "filename": "1.3.6.3.2 02. Ahmad Ghafoor - Founder & CRO.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.4 HR\\1.3.6.2 Founder bios\\1.3.6.3.2 02. Ahmad Ghafoor - Founder & CRO.pdf",
+    "document_type": "business_plan",
+    "sha256": "0521b5f46204b0a2d0836a22df12fa800524b645857242e94e9d9928819bf1de",
+    "page_count": 2,
+    "chunk_count": 4,
+    "text_length": 3325,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "1.3.6.3.2 02. Ahmad Ghafoor - Founder & CRO.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:46"
+  },
+  "76da7c55-664": {
+    "doc_id": "76da7c55-664",
+    "filename": "06A 20241107 ESOP Plan (Final).pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.4 HR\\1.3.6.3 ESOP\\06A 20241107 ESOP Plan (Final).pdf",
+    "document_type": "other",
+    "sha256": "a1163aaa3b81fd0473087054937a2ffe71ea387e5cc1887e0769bfb8d797c59c",
+    "page_count": 11,
+    "chunk_count": 12,
+    "text_length": 30663,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "06A 20241107 ESOP Plan (Final).pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:48"
+  },
+  "849a9385-228": {
+    "doc_id": "849a9385-228",
+    "filename": "06B 20241107 ESOP Grant Agreement (Final).pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.4 HR\\1.3.6.3 ESOP\\06B 20241107 ESOP Grant Agreement (Final).pdf",
+    "document_type": "facility_agreement",
+    "sha256": "ca9b2fbbaaa74ae6842def7273095795dc3dbda9c52b0617208bdc5d0b902a27",
+    "page_count": 14,
+    "chunk_count": 17,
+    "text_length": 30016,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "06B 20241107 ESOP Grant Agreement (Final).pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:49"
+  },
+  "3c12af52-c95": {
+    "doc_id": "3c12af52-c95",
+    "filename": "1.3.7.1 01. Collection and Authentication of Provider's KYC Documents_SOP.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.5 Policies\\1.3.7.1 01. Collection and Authentication of Provider's KYC Documents_SOP.pdf",
+    "document_type": "other",
+    "sha256": "554476b7ea84ac6ed23f58aa0201547715ee7159776cca53017366f1e0c22939",
+    "page_count": 11,
+    "chunk_count": 17,
+    "text_length": 15266,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "1.3.7.1 01. Collection and Authentication of Provider's KYC Documents_SOP.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:51"
+  },
+  "927c91f6-748": {
+    "doc_id": "927c91f6-748",
+    "filename": "1.3.7.2 02. Lead Generation_SOP.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.5 Policies\\1.3.7.2 02. Lead Generation_SOP.pdf",
+    "document_type": "other",
+    "sha256": "e31460398e44569c9b0d95f73c17abe467c7f15a5dd1681ea83166e0ac5e75ae",
+    "page_count": 11,
+    "chunk_count": 17,
+    "text_length": 14487,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "1.3.7.2 02. Lead Generation_SOP.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:52"
+  },
+  "4a72c799-699": {
+    "doc_id": "4a72c799-699",
+    "filename": "1.3.7.3 03. Bank Account Change_SOP.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.5 Policies\\1.3.7.3 03. Bank Account Change_SOP.pdf",
+    "document_type": "other",
+    "sha256": "e0567f5aa5794eb891cad433d12bc4a37a8d1c1d83547ccfd8eff170fc84106a",
+    "page_count": 11,
+    "chunk_count": 17,
+    "text_length": 15217,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "1.3.7.3 03. Bank Account Change_SOP.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:53"
+  },
+  "6acdae30-534": {
+    "doc_id": "6acdae30-534",
+    "filename": "1.3.7.4 04. Document Control_SOP.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.5 Policies\\1.3.7.4 04. Document Control_SOP.pdf",
+    "document_type": "other",
+    "sha256": "8e3338e63725e16ca2d28299877eaeaecdddc0d02dff534dae2a2bda33c51e8a",
+    "page_count": 15,
+    "chunk_count": 20,
+    "text_length": 18534,
+    "table_count": 5,
+    "parser_metadata": {
+      "filename": "1.3.7.4 04. Document Control_SOP.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:55"
+  },
+  "644491b8-2a5": {
+    "doc_id": "644491b8-2a5",
+    "filename": "1.3.7.5 05. Investment Assessment_SOP.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.5 Policies\\1.3.7.5 05. Investment Assessment_SOP.pdf",
+    "document_type": "other",
+    "sha256": "02ccc5ae2ca28fbafc41d6801bbae6d190e0acb795bc500bd91569ef57848205",
+    "page_count": 11,
+    "chunk_count": 14,
+    "text_length": 14607,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "1.3.7.5 05. Investment Assessment_SOP.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:56"
+  },
+  "8c13b683-ac1": {
+    "doc_id": "8c13b683-ac1",
+    "filename": "1.3.7.6 06. Purchased Claims Payment Reconciliation_SOP.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Company Overview\\1.3.5 Policies\\1.3.7.6 06. Purchased Claims Payment Reconciliation_SOP.pdf",
+    "document_type": "other",
+    "sha256": "3f3bf6d713ea98ae468c3cfc195b85c4ebebc7ebdc88f78a226d49ff2e555554",
+    "page_count": 7,
+    "chunk_count": 13,
+    "text_length": 10340,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "1.3.7.6 06. Purchased Claims Payment Reconciliation_SOP.pdf"
+    },
+    "ingested_at": "2026-04-13T22:25:57"
+  },
+  "d4513e31-4c0": {
+    "doc_id": "d4513e31-4c0",
+    "filename": "Budget vs Actual_Aug_2025.xlsx",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.1 Management accounts\\1.5.1.1 Consolidated Accounts\\Budget vs Actual_Aug_2025.xlsx",
+    "document_type": "business_plan",
+    "sha256": "61a05844160d5e1a18f2dbefe4570d2423ae3f3048e5689aa7dd8354e630341a",
+    "page_count": 3,
+    "chunk_count": 3,
+    "text_length": 19711,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "Budget vs Actual_Aug_2025.xlsx",
+      "sheets": [
+        {
+          "name": "IS",
+          "rows": 36,
+          "cols": 50
+        },
+        {
+          "name": "IS - Annual",
+          "rows": 33,
+          "cols": 9
+        },
+        {
+          "name": "BS",
+          "rows": 14,
+          "cols": 46
+        }
+      ],
+      "total_sheets": 3
+    },
+    "ingested_at": "2026-04-13T22:26:03"
+  },
+  "ff06333c-e67": {
+    "doc_id": "ff06333c-e67",
+    "filename": "1.5.2.1.1 01. Klaim Holdings Limited_AFS_31Dec2021.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.1 FY2021\\1.5.2.1.1 01. Klaim Holdings Limited_AFS_31Dec2021.pdf",
+    "document_type": "business_plan",
+    "sha256": "533aefebf3a582b6cfed974840cf0c8cea6cf132bbee561fc28715592597cbd8",
+    "page_count": 33,
+    "chunk_count": 33,
+    "text_length": 66883,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.1.1 01. Klaim Holdings Limited_AFS_31Dec2021.pdf"
+    },
+    "ingested_at": "2026-04-13T22:26:06"
+  },
+  "75995754-f53": {
+    "doc_id": "75995754-f53",
+    "filename": "1.5.2.1.2 02. Klaim Technologies DMCC Limited_AFS_31Dec2021.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.1 FY2021\\1.5.2.1.2 02. Klaim Technologies DMCC Limited_AFS_31Dec2021.pdf",
+    "document_type": "business_plan",
+    "sha256": "d2a798ebc2bf7456ebf299758a4491b1fdb4dba6ffdd19a55193e7a94bfb749e",
+    "page_count": 29,
+    "chunk_count": 24,
+    "text_length": 44508,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.1.2 02. Klaim Technologies DMCC Limited_AFS_31Dec2021.pdf"
+    },
+    "ingested_at": "2026-04-13T22:26:08"
+  },
+  "bc4307a1-ae4": {
+    "doc_id": "bc4307a1-ae4",
+    "filename": "1.5.2.1.3 03. Klaim Kapital Technologies Limited_AFS_31Dec2021.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.1 FY2021\\1.5.2.1.3 03. Klaim Kapital Technologies Limited_AFS_31Dec2021.pdf",
+    "document_type": "business_plan",
+    "sha256": "28978ac186de67347100ef1746e58ecda7daffcc59f2a7983cdc29a066f816e2",
+    "page_count": 18,
+    "chunk_count": 20,
+    "text_length": 36010,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.1.3 03. Klaim Kapital Technologies Limited_AFS_31Dec2021.pdf"
+    },
+    "ingested_at": "2026-04-13T22:26:09"
+  },
+  "ec28a892-5cd": {
+    "doc_id": "ec28a892-5cd",
+    "filename": "1.5.2.1.4 04. Klaim Receivables Purchase SPV 1_AFS_31Dec2021.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.1 FY2021\\1.5.2.1.4 04. Klaim Receivables Purchase SPV 1_AFS_31Dec2021.pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "ba5c81de50254e32b352c5737db825f3776ed554d01518877d9e54a6e86aaa8a",
+    "page_count": 18,
+    "chunk_count": 20,
+    "text_length": 34403,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.1.4 04. Klaim Receivables Purchase SPV 1_AFS_31Dec2021.pdf"
+    },
+    "ingested_at": "2026-04-13T22:26:11"
+  },
+  "f5c7dc5f-1cb": {
+    "doc_id": "f5c7dc5f-1cb",
+    "filename": "1.5.2.2.1 Klaim Holdings Limited \u2013 AFS- 31 December 2022.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.2 FY2022\\1.5.2.2.1 Klaim Holdings Limited \u2013 AFS- 31 December 2022.pdf",
+    "document_type": "business_plan",
+    "sha256": "0d890d2bb7ea9b896d10ca280103ba44972cbd97d553d9cee0f37d4235a812b0",
+    "page_count": 39,
+    "chunk_count": 43,
+    "text_length": 89051,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.2.1 Klaim Holdings Limited \u2013 AFS- 31 December 2022.pdf"
+    },
+    "ingested_at": "2026-04-13T22:26:15"
+  },
+  "3309904a-27b": {
+    "doc_id": "3309904a-27b",
+    "filename": "1.5.2.2.2 Klaim Technologies DMCC_AFS_31Dec2022.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.2 FY2022\\1.5.2.2.2 Klaim Technologies DMCC_AFS_31Dec2022.pdf",
+    "document_type": "business_plan",
+    "sha256": "ef9d5d48009c9e5f685f8e062f098ac3bf12cd54be6c2e63eb33c55e161b4435",
+    "page_count": 28,
+    "chunk_count": 27,
+    "text_length": 50477,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.2.2 Klaim Technologies DMCC_AFS_31Dec2022.pdf"
+    },
+    "ingested_at": "2026-04-13T22:26:18"
+  },
+  "bdc18f0f-155": {
+    "doc_id": "bdc18f0f-155",
+    "filename": "1.5.2.2.3 Klaim Kapital Technologies Limited - AFS - 31 December 2022.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.2 FY2022\\1.5.2.2.3 Klaim Kapital Technologies Limited - AFS - 31 December 2022.pdf",
+    "document_type": "business_plan",
+    "sha256": "2028328a2d5341aeaecec0593d2cdc326a99c9fc5c0ddb56a185652eab8923f6",
+    "page_count": 26,
+    "chunk_count": 0,
+    "text_length": 550,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.2.3 Klaim Kapital Technologies Limited - AFS - 31 December 2022.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:24"
+  },
+  "b5acd08b-bc1": {
+    "doc_id": "b5acd08b-bc1",
+    "filename": "1.5.2.2.4 Klaim Receivables Purchase SPV 1 Limited - AFS - 31 December 2022.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.2 FY2022\\1.5.2.2.4 Klaim Receivables Purchase SPV 1 Limited - AFS - 31 December 2022.pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "270471da491afbdcdc71c0587846d54c0162be324406e5fdf8884229d7ce262f",
+    "page_count": 26,
+    "chunk_count": 31,
+    "text_length": 56077,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.2.4 Klaim Receivables Purchase SPV 1 Limited - AFS - 31 December 2022.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:26"
+  },
+  "81f6d7da-00c": {
+    "doc_id": "81f6d7da-00c",
+    "filename": "1.5.2.2.5 Klaim Receivable Purchase SPV 2 - AFS - 31 December 2022.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.2 FY2022\\1.5.2.2.5 Klaim Receivable Purchase SPV 2 - AFS - 31 December 2022.pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "d5de74adb46dfce4a1f9f4f714637dd397b37009ebd826cc0ecc2b29e3c91a4f",
+    "page_count": 21,
+    "chunk_count": 26,
+    "text_length": 46069,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.2.5 Klaim Receivable Purchase SPV 2 - AFS - 31 December 2022.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:28"
+  },
+  "7cfed29c-f40": {
+    "doc_id": "7cfed29c-f40",
+    "filename": "1.5.2.2.6 Klaim Information Technology - AFS 31 December 2022_English.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.2 FY2022\\1.5.2.2.6 Klaim Information Technology - AFS 31 December 2022_English.pdf",
+    "document_type": "business_plan",
+    "sha256": "b1572ffd8a9ed1f94c43accf9853cd122d700cc298f80575fc645d3e06012166",
+    "page_count": 19,
+    "chunk_count": 0,
+    "text_length": 396,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.2.6 Klaim Information Technology - AFS 31 December 2022_English.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:28"
+  },
+  "d8ce0b35-62e": {
+    "doc_id": "d8ce0b35-62e",
+    "filename": "1.5.2.3.1 Consolidated AFS_KHL_2023.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.3 FY2023\\1.5.2.3.1 Consolidated AFS_KHL_2023.pdf",
+    "document_type": "business_plan",
+    "sha256": "c4a6299e3e5ee430daad0ec01a74e071ebdd0b7771ab64550ebe934bae76ecec",
+    "page_count": 42,
+    "chunk_count": 52,
+    "text_length": 115422,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.3.1 Consolidated AFS_KHL_2023.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:33"
+  },
+  "1eb92ee7-3a1": {
+    "doc_id": "1eb92ee7-3a1",
+    "filename": "1.5.2.3.3 AFS _KKTL_2023.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.3 FY2023\\1.5.2.3.3 AFS _KKTL_2023.pdf",
+    "document_type": "business_plan",
+    "sha256": "baf45afe040051d76748f66c0fc3394fb2fb7d7e8a1ef4a3572e74f75efb909b",
+    "page_count": 30,
+    "chunk_count": 37,
+    "text_length": 72439,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.3.3 AFS _KKTL_2023.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:38"
+  },
+  "326ce67c-9ca": {
+    "doc_id": "326ce67c-9ca",
+    "filename": "1.5.2.3.4 AFS_KRP SPV1_2023.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.3 FY2023\\1.5.2.3.4 AFS_KRP SPV1_2023.pdf",
+    "document_type": "business_plan",
+    "sha256": "a7b116c34932a9129c7581f855c5ff5ca7a027635c2688e1c2e50ddc53f3caa4",
+    "page_count": 31,
+    "chunk_count": 38,
+    "text_length": 75524,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.3.4 AFS_KRP SPV1_2023.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:42"
+  },
+  "efcf5aa1-659": {
+    "doc_id": "efcf5aa1-659",
+    "filename": "1.5.2.3.5 AFS_KRP SPV2_2023.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.3 FY2023\\1.5.2.3.5 AFS_KRP SPV2_2023.pdf",
+    "document_type": "business_plan",
+    "sha256": "4e4ee12b4c20001073ab13b101bf7cde3f3565da340fc9b4ef0996e3e5611399",
+    "page_count": 29,
+    "chunk_count": 36,
+    "text_length": 72429,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.3.5 AFS_KRP SPV2_2023.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:47"
+  },
+  "850173c3-291": {
+    "doc_id": "850173c3-291",
+    "filename": "1.5.2.3.6 AFS_KRP SPV3_2023.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.3 FY2023\\1.5.2.3.6 AFS_KRP SPV3_2023.pdf",
+    "document_type": "business_plan",
+    "sha256": "31416049230f9e10c11cccd10c2d5f6c6a19d1fac4db967904068c0f0c73cd32",
+    "page_count": 24,
+    "chunk_count": 31,
+    "text_length": 61762,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.3.6 AFS_KRP SPV3_2023.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:50"
+  },
+  "4ccb445e-7e0": {
+    "doc_id": "4ccb445e-7e0",
+    "filename": "1.5.2.3.7 AFS_KITC (KSA)_2023.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.2 Audited Accounts\\1.5.2.3 FY2023\\1.5.2.3.7 AFS_KITC (KSA)_2023.pdf",
+    "document_type": "business_plan",
+    "sha256": "daa0363d1f2cb4b62a0877bbb52a35530b73cec6a76bec70eb35e1c5d628bc1a",
+    "page_count": 20,
+    "chunk_count": 0,
+    "text_length": 418,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.2.3.7 AFS_KITC (KSA)_2023.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:50"
+  },
+  "a711cab3-ca1": {
+    "doc_id": "a711cab3-ca1",
+    "filename": "BP Klaim_Sep 2025_Group Consolidated (ME+US)_V4.xlsx",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.3 Projections\\BP Klaim_Sep 2025_Group Consolidated (ME+US)_V4.xlsx",
+    "document_type": "business_plan",
+    "sha256": "bfb415b210214271d9a928c42fc95195d927f4a2853741962ad0cd2ad04731dc",
+    "page_count": 25,
+    "chunk_count": 25,
+    "text_length": 181028,
+    "table_count": 25,
+    "parser_metadata": {
+      "filename": "BP Klaim_Sep 2025_Group Consolidated (ME+US)_V4.xlsx",
+      "sheets": [
+        {
+          "name": "Group Consolidated BP >>>",
+          "rows": 7,
+          "cols": 1
+        },
+        {
+          "name": "Summary FS_yearly_Cons",
+          "rows": 203,
+          "cols": 14
+        },
+        {
+          "name": "Summary FS_monthly_Cons",
+          "rows": 202,
+          "cols": 113
+        },
+        {
+          "name": "Middle East BP >>>",
+          "rows": 7,
+          "cols": 1
+        },
+        {
+          "name": "Summary FS_yearly_ME",
+          "rows": 182,
+          "cols": 14
+        },
+        {
+          "name": "Summary FS_monthly_ME",
+          "rows": 205,
+          "cols": 114
+        },
+        {
+          "name": "Control_ME",
+          "rows": 288,
+          "cols": 102
+        },
+        {
+          "name": "UAE",
+          "rows": 128,
+          "cols": 115
+        },
+        {
+          "name": "KSA",
+          "rows": 103,
+          "cols": 115
+        },
+        {
+          "name": "OMAN",
+          "rows": 127,
+          "cols": 115
+        },
+        {
+          "name": "KLAIM X",
+          "rows": 423,
+          "cols": 115
+        },
+        {
+          "name": "Staff_ME",
+          "rows": 100,
+          "cols": 121
+        },
+        {
+          "name": "IS_Actual_ME",
+          "rows": 85,
+          "cols": 49
+        },
+        {
+          "name": "BS_Actual_ME",
+          "rows": 86,
+          "cols": 45
+        },
+        {
+          "name": "Summary FS_yearly_US",
+          "rows": 139,
+          "cols": 14
+        },
+        {
+          "name": "Summary FS_monthly_US",
+          "rows": 160,
+          "cols": 114
+        },
+        {
+          "name": "Control_US",
+          "rows": 146,
+          "cols": 102
+        },
+        {
+          "name": "US",
+          "rows": 118,
+          "cols": 115
+        },
+        {
+          "name": "Other Country_US",
+          "rows": 95,
+          "cols": 103
+        },
+        {
+          "name": "Staff_US",
+          "rows": 71,
+          "cols": 121
+        },
+        {
+          "name": "Shared Services_US",
+          "rows": 20,
+          "cols": 65
+        },
+        {
+          "name": "Pipeline_US",
+          "rows": 4,
+          "cols": 3
+        },
+        {
+          "name": "Employee Salaries_US",
+          "rows": 13,
+          "cols": 37
+        },
+        {
+          "name": "Sheet1_US",
+          "rows": 141,
+          "cols": 9
+        },
+        {
+          "name": "Sheet3_US",
+          "rows": 28,
+          "cols": 77
+        }
+      ],
+      "total_sheets": 25
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "893eaa04-d6e": {
+    "doc_id": "893eaa04-d6e",
+    "filename": "02 Corporate Tax Registration Certificate_DMCC.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.1 KT DMCC\\02 Corporate Tax Registration Certificate_DMCC.pdf",
+    "document_type": "business_plan",
+    "sha256": "be450df9db2492b2a5a28036f4ba8a08fc3163fefb09f9532759a94e4f785795",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2377,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "02 Corporate Tax Registration Certificate_DMCC.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "49390f06-1b3": {
+    "doc_id": "49390f06-1b3",
+    "filename": "1.5.4.1.1 01. VAT Registration_KT DMCC.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.1 KT DMCC\\1.5.4.1.1 01. VAT Registration_KT DMCC.pdf",
+    "document_type": "business_plan",
+    "sha256": "1bb71174d9824f78621098c7497b3da44e195157fe20c70ceb2a5ee0cff2089b",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1450,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.4.1.1 01. VAT Registration_KT DMCC.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "fab8851c-371": {
+    "doc_id": "fab8851c-371",
+    "filename": "1.5.4.2.1 01. VAT Certificate_KIT KSA.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.2 KIT KSA\\1.5.4.2.1 01. VAT Certificate_KIT KSA.PDF",
+    "document_type": "business_plan",
+    "sha256": "02cdf86924f3b805ad954c8f0698a5533d0bd34a4e907c5a4ec395a1271de278",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 1327,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.4.2.1 01. VAT Certificate_KIT KSA.PDF"
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "65fe401d-0a7": {
+    "doc_id": "65fe401d-0a7",
+    "filename": "1.5.4.2.2 02. GAZT Certificate_KIT KSA.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.2 KIT KSA\\1.5.4.2.2 02. GAZT Certificate_KIT KSA.pdf",
+    "document_type": "business_plan",
+    "sha256": "cd1feca11be48fa6b6255134d66e8d8ceacb52f692a5027ab29f0522cbcb3ec5",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 543,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.4.2.2 02. GAZT Certificate_KIT KSA.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "c336766e-ba8": {
+    "doc_id": "c336766e-ba8",
+    "filename": "1.5.4.2.3 03. GOSI Certificate_KIT KSA.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.2 KIT KSA\\1.5.4.2.3 03. GOSI Certificate_KIT KSA.pdf",
+    "document_type": "business_plan",
+    "sha256": "32604efddcfc2e7252fd721471fe6747057497df8e30ef734eef34b85af8ee25",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1452,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.4.2.3 03. GOSI Certificate_KIT KSA.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "00663283-ef5": {
+    "doc_id": "00663283-ef5",
+    "filename": "03 Corporate Tax Registration Certificate_KKTL.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.3 KKTL\\03 Corporate Tax Registration Certificate_KKTL.pdf",
+    "document_type": "business_plan",
+    "sha256": "dd2399f5e1ea291449c9e254a9cb80283bae3c53995ef3c28350a6d1b7c4e677",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2375,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "03 Corporate Tax Registration Certificate_KKTL.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:55"
+  },
+  "d66379a3-8ae": {
+    "doc_id": "d66379a3-8ae",
+    "filename": "1.5.4.3.1 VAT Registration KKTL (1).pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.3 KKTL\\1.5.4.3.1 VAT Registration KKTL (1).pdf",
+    "document_type": "business_plan",
+    "sha256": "4803f6a6fd363f3d6a61268c94256741017ab444eccaf9429eb94af843f10d1e",
+    "page_count": 1,
+    "chunk_count": 0,
+    "text_length": 0,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.4.3.1 VAT Registration KKTL (1).pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:57"
+  },
+  "d0f1692e-845": {
+    "doc_id": "d0f1692e-845",
+    "filename": "1.5.4.1.2 Corporate Tax Registration Certificate_KHL.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.4 KHL\\1.5.4.1.2 Corporate Tax Registration Certificate_KHL.pdf",
+    "document_type": "business_plan",
+    "sha256": "15d4086286a148bed352bd37f1a638039e997559ff590a297c3591cbf24784e7",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2319,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "1.5.4.1.2 Corporate Tax Registration Certificate_KHL.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:57"
+  },
+  "ead6ef5c-99b": {
+    "doc_id": "ead6ef5c-99b",
+    "filename": "04 Corporate Tax Registration Certificate_SPV1.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.5 SPV1\\04 Corporate Tax Registration Certificate_SPV1.pdf",
+    "document_type": "business_plan",
+    "sha256": "973767326f8b5305df12e3ca3317175a6d18373008ca6ae134b4eeecddea8fe4",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2400,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "04 Corporate Tax Registration Certificate_SPV1.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:58"
+  },
+  "e1bea652-2ef": {
+    "doc_id": "e1bea652-2ef",
+    "filename": "05 Corporate Tax Registration Certificate_ SPV2.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.6 SPV2\\05 Corporate Tax Registration Certificate_ SPV2.pdf",
+    "document_type": "business_plan",
+    "sha256": "3cae0eb78cb873b94f1dbeaae1193464b460008fe1dbc80ca222cfb9c1c5ed23",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2285,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "05 Corporate Tax Registration Certificate_ SPV2.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:58"
+  },
+  "759e6833-945": {
+    "doc_id": "759e6833-945",
+    "filename": "06 Corporate Tax Registration Certificate_SPV3.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.4 Taxation\\1.5.4.7 SPV3\\06 Corporate Tax Registration Certificate_SPV3.pdf",
+    "document_type": "business_plan",
+    "sha256": "a2ec904cb6f4c7f16dd82264279bc0957c5c10fda1f94f3a048ba30f17e9d5e1",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2397,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "06 Corporate Tax Registration Certificate_SPV3.pdf"
+    },
+    "ingested_at": "2026-04-13T22:27:58"
+  },
+  "40ee9dea-834": {
+    "doc_id": "40ee9dea-834",
+    "filename": "Klaim_Series A_Cap Table_2025.01.10_Res._V3.xlsx",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Financials and Projections\\1.5.5 CapTable\\Klaim_Series A_Cap Table_2025.01.10_Res._V3.xlsx",
+    "document_type": "business_plan",
+    "sha256": "bacd5a7463495c1985816303ccaa9dd2c145ce3c0d80038ea68164bb93e4b202",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1192,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Klaim_Series A_Cap Table_2025.01.10_Res._V3.xlsx",
+      "sheets": [
+        {
+          "name": "Cap Table_Post Series A1",
+          "rows": 60,
+          "cols": 4
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-13T22:27:58"
+  },
+  "d7957af5-f7c": {
+    "doc_id": "d7957af5-f7c",
+    "filename": "1.4.4.1.4 Abu Dhabi National Insurance Company PJSC - TearSheet.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.1 Abu Dhabi National Insurance Company PJSC (CIQ 9003966)\\1.4.4.1.4 Abu Dhabi National Insurance Company PJSC - TearSheet.PDF",
+    "document_type": "other",
+    "sha256": "49b9cc3f6287bfd3dd6174d614672fe0da533448a0f13fc530e888f931f0d747",
+    "page_count": 1,
+    "chunk_count": 7,
+    "text_length": 3486,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "1.4.4.1.4 Abu Dhabi National Insurance Company PJSC - TearSheet.PDF"
+    },
+    "ingested_at": "2026-04-13T22:27:58"
+  },
+  "ef88cb7c-71f": {
+    "doc_id": "ef88cb7c-71f",
+    "filename": "1.4.4.12.1.1 Neuron LLC \u2013 RiskGauge Report - 2023-04-22.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.12 Neuron LLC (CIQ 105289997)\\1.4.4.12.1 Credit Reports\\1.4.4.12.1.1 Neuron LLC \u2013 RiskGauge Report - 2023-04-22.pdf",
+    "document_type": "other",
+    "sha256": "0cffaf44990dfcbb5d1b7d29efb77e9d1c386c95b329b0017a8abfc47df34744",
+    "page_count": 3,
+    "chunk_count": 13,
+    "text_length": 10028,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "1.4.4.12.1.1 Neuron LLC \u2013 RiskGauge Report - 2023-04-22.pdf"
+    },
+    "ingested_at": "2026-04-13T22:28:00"
+  },
+  "543f4ca3-591": {
+    "doc_id": "543f4ca3-591",
+    "filename": "1.4.4.12.1.2 Neuron LLC \u2013 RiskGauge Report - 2023-04-24.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.12 Neuron LLC (CIQ 105289997)\\1.4.4.12.1 Credit Reports\\1.4.4.12.1.2 Neuron LLC \u2013 RiskGauge Report - 2023-04-24.pdf",
+    "document_type": "other",
+    "sha256": "5bfbee21879dc0b0744465f704cbe431a83ed54e17c2d31af7fa650888596d1b",
+    "page_count": 4,
+    "chunk_count": 17,
+    "text_length": 11571,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "1.4.4.12.1.2 Neuron LLC \u2013 RiskGauge Report - 2023-04-24.pdf"
+    },
+    "ingested_at": "2026-04-13T22:28:01"
+  },
+  "c4dc577f-549": {
+    "doc_id": "c4dc577f-549",
+    "filename": "144211~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.2 Almadallah Healthcare Management FZ LLC\\1.4.4.2.1 Credit Reports\\144211~1.PDF",
+    "document_type": "other",
+    "sha256": "74b85902e971a3eb87146827ecdd433e36e3a332021be056ff3421563d996b5f",
+    "page_count": 3,
+    "chunk_count": 13,
+    "text_length": 8739,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "144211~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:02"
+  },
+  "abd92ecd-991": {
+    "doc_id": "abd92ecd-991",
+    "filename": "144212~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.2 Almadallah Healthcare Management FZ LLC\\1.4.4.2.1 Credit Reports\\144212~1.PDF",
+    "document_type": "other",
+    "sha256": "809a0971a135bc2f24f66ea245157bc88d8de27193267057f01d008194d12bee",
+    "page_count": 4,
+    "chunk_count": 16,
+    "text_length": 10794,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "144212~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:03"
+  },
+  "6d1baf34-a04": {
+    "doc_id": "6d1baf34-a04",
+    "filename": "144213~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.2 Almadallah Healthcare Management FZ LLC\\1.4.4.2.1 Credit Reports\\144213~1.PDF",
+    "document_type": "other",
+    "sha256": "d98196cefdbd85932f72e21bc046efe0e160bd4f96b24de15a46b875f50b78de",
+    "page_count": 4,
+    "chunk_count": 16,
+    "text_length": 10702,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "144213~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:04"
+  },
+  "184b8f94-913": {
+    "doc_id": "184b8f94-913",
+    "filename": "144411~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.4 Emirates Insurance Company PSC\\1.4.4.4.1 Company Information\\144411~1.PDF",
+    "document_type": "other",
+    "sha256": "8a546bffcd3630cda7205e8c45588e8d7bfd6e2964b2791be9130105fd6ede17",
+    "page_count": 22,
+    "chunk_count": 0,
+    "text_length": 462,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "144411~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:07"
+  },
+  "77302525-24d": {
+    "doc_id": "77302525-24d",
+    "filename": "144422~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.4 Emirates Insurance Company PSC\\1.4.4.4.2 Credit Reports\\144422~1.PDF",
+    "document_type": "other",
+    "sha256": "b85682408dabe83b4e32e41e24cf0367ac081892f280754e274e2448754f8818",
+    "page_count": 1,
+    "chunk_count": 0,
+    "text_length": 0,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "144422~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:07"
+  },
+  "e98510a5-92f": {
+    "doc_id": "e98510a5-92f",
+    "filename": "144423~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.4 Emirates Insurance Company PSC\\1.4.4.4.2 Credit Reports\\144423~1.PDF",
+    "document_type": "other",
+    "sha256": "2c88f325742e3c0125e020341bc564e5445721cf00e6387072a7641ddc948952",
+    "page_count": 8,
+    "chunk_count": 32,
+    "text_length": 27674,
+    "table_count": 23,
+    "parser_metadata": {
+      "filename": "144423~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:10"
+  },
+  "3baeb672-c0b": {
+    "doc_id": "3baeb672-c0b",
+    "filename": "144431~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.4 Emirates Insurance Company PSC\\1.4.4.4.3 External Ratings\\144431~1.PDF",
+    "document_type": "other",
+    "sha256": "f6825e4fbe424cc51df3ce7594937964328d45fc7be60091919ac5abb61cd398",
+    "page_count": 10,
+    "chunk_count": 25,
+    "text_length": 35287,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "144431~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:14"
+  },
+  "210de139-15b": {
+    "doc_id": "210de139-15b",
+    "filename": "144432~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.4 Emirates Insurance Company PSC\\1.4.4.4.3 External Ratings\\144432~1.PDF",
+    "document_type": "other",
+    "sha256": "6bc00a16d3c83dd370319957450ba2c55f3112ff261999b2abbf6866e1b31185",
+    "page_count": 8,
+    "chunk_count": 18,
+    "text_length": 16219,
+    "table_count": 9,
+    "parser_metadata": {
+      "filename": "144432~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:15"
+  },
+  "14781005-74a": {
+    "doc_id": "14781005-74a",
+    "filename": "144442~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.4 Emirates Insurance Company PSC\\1.4.4.4.4 Financial Statements\\144442~1.PDF",
+    "document_type": "other",
+    "sha256": "9ea131fedc7af4fa04d5426e4fd0c8d578638c138c4be3b9e40f770c91b3ba38",
+    "page_count": 80,
+    "chunk_count": 0,
+    "text_length": 1738,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "144442~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:15"
+  },
+  "d1a34f2e-563": {
+    "doc_id": "d1a34f2e-563",
+    "filename": "1.4.4.5.1 Fathima Healthcare Group - No of employees (estimate) - LinkedIn 2023-04-24.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.5 FMC Network UAE MC LLC\\1.4.4.5.1 Fathima Healthcare Group - No of employees (estimate) - LinkedIn 2023-04-24.pdf",
+    "document_type": "other",
+    "sha256": "d96903c3a9b570490249cb60d976fa3ed4e07c02093545f385aae32860cb28d4",
+    "page_count": 2,
+    "chunk_count": 7,
+    "text_length": 2811,
+    "table_count": 5,
+    "parser_metadata": {
+      "filename": "1.4.4.5.1 Fathima Healthcare Group - No of employees (estimate) - LinkedIn 2023-04-24.pdf"
+    },
+    "ingested_at": "2026-04-13T22:28:16"
+  },
+  "f9f88fbe-214": {
+    "doc_id": "f9f88fbe-214",
+    "filename": "1.4.4.5.2 Fathima Healthcare Group - Turnover (estimate) - Facebook 2023-04-24.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.5 FMC Network UAE MC LLC\\1.4.4.5.2 Fathima Healthcare Group - Turnover (estimate) - Facebook 2023-04-24.pdf",
+    "document_type": "other",
+    "sha256": "7a2a9fcf558267cc0e531149d53bf23ca9eb30477a707b0111316bf9f0720910",
+    "page_count": 9,
+    "chunk_count": 19,
+    "text_length": 6803,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "1.4.4.5.2 Fathima Healthcare Group - Turnover (estimate) - Facebook 2023-04-24.pdf"
+    },
+    "ingested_at": "2026-04-13T22:28:18"
+  },
+  "fdac4e5e-650": {
+    "doc_id": "fdac4e5e-650",
+    "filename": "1.4.4.5.3 FMC Network UAE MC LLC \u2013 RiskGauge Report - 2023-04-24.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.5 FMC Network UAE MC LLC\\1.4.4.5.3 FMC Network UAE MC LLC \u2013 RiskGauge Report - 2023-04-24.pdf",
+    "document_type": "other",
+    "sha256": "b72c44ed0b6fe6f48b185d668c74e370c1b5de8fbcfe9d6687fdadb1db97689f",
+    "page_count": 4,
+    "chunk_count": 18,
+    "text_length": 12099,
+    "table_count": 14,
+    "parser_metadata": {
+      "filename": "1.4.4.5.3 FMC Network UAE MC LLC \u2013 RiskGauge Report - 2023-04-24.pdf"
+    },
+    "ingested_at": "2026-04-13T22:28:20"
+  },
+  "564649d5-425": {
+    "doc_id": "564649d5-425",
+    "filename": "144621~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.2 Credit Reports\\144621~1.PDF",
+    "document_type": "other",
+    "sha256": "1316ea34647107897aedd79fc232986b0eea58718e8dfda20feccffa677f6d5c",
+    "page_count": 4,
+    "chunk_count": 18,
+    "text_length": 12474,
+    "table_count": 13,
+    "parser_metadata": {
+      "filename": "144621~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:21"
+  },
+  "2dfe513b-151": {
+    "doc_id": "2dfe513b-151",
+    "filename": "144631~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.3 External Rating Reports\\144631~1.PDF",
+    "document_type": "other",
+    "sha256": "1f6354db3e22c68bcc6e3a1480a0051bb71f6a2ce01b71a87d082ef67afb1d46",
+    "page_count": 4,
+    "chunk_count": 5,
+    "text_length": 4812,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "144631~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:22"
+  },
+  "426d3cef-932": {
+    "doc_id": "426d3cef-932",
+    "filename": "144632~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.3 External Rating Reports\\144632~1.PDF",
+    "document_type": "business_plan",
+    "sha256": "215f446a7f49f850b68007ea1700b8a7a2411184099ac789e1fa0e5b333c9b02",
+    "page_count": 15,
+    "chunk_count": 31,
+    "text_length": 41113,
+    "table_count": 14,
+    "parser_metadata": {
+      "filename": "144632~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:26"
+  },
+  "5744a1f6-0d4": {
+    "doc_id": "5744a1f6-0d4",
+    "filename": "144633~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.3 External Rating Reports\\144633~1.PDF",
+    "document_type": "other",
+    "sha256": "f09e027981b0917ed33a202f29b0744936af2e74e1492ede0c1249ee308504b5",
+    "page_count": 2,
+    "chunk_count": 3,
+    "text_length": 4759,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "144633~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:27"
+  },
+  "132d2b44-536": {
+    "doc_id": "132d2b44-536",
+    "filename": "144634~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.3 External Rating Reports\\144634~1.PDF",
+    "document_type": "other",
+    "sha256": "77538fce3491d94f645eec984b5933ff5fb47719a14bf15426470de822132e63",
+    "page_count": 3,
+    "chunk_count": 20,
+    "text_length": 8283,
+    "table_count": 17,
+    "parser_metadata": {
+      "filename": "144634~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:28"
+  },
+  "51e51253-a52": {
+    "doc_id": "51e51253-a52",
+    "filename": "144635~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.3 External Rating Reports\\144635~1.PDF",
+    "document_type": "other",
+    "sha256": "fd8d3c1f5c083a4627809c55314201b47eb50c4bd8c1d99e534f07ec4339bcf1",
+    "page_count": 2,
+    "chunk_count": 7,
+    "text_length": 9931,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "144635~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:28"
+  },
+  "0ad7ff91-61b": {
+    "doc_id": "0ad7ff91-61b",
+    "filename": "1.4.4.6.4.6 Gulf Insurance Group - Annual Report 2021.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.4 Financial Statements\\1.4.4.6.4.6 Gulf Insurance Group - Annual Report 2021.pdf",
+    "document_type": "other",
+    "sha256": "751e7c77ffd54ae0ad74d0dfca3cba927bf15f8049d6f0bba97d32f3da5ee970",
+    "page_count": 70,
+    "chunk_count": 99,
+    "text_length": 91090,
+    "table_count": 28,
+    "parser_metadata": {
+      "filename": "1.4.4.6.4.6 Gulf Insurance Group - Annual Report 2021.pdf"
+    },
+    "ingested_at": "2026-04-13T22:28:49"
+  },
+  "67276bc7-e69": {
+    "doc_id": "67276bc7-e69",
+    "filename": "144641~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.4 Financial Statements\\144641~1.PDF",
+    "document_type": "other",
+    "sha256": "4d30ace3f6d865673e31afb7b09ac2cb8cacf7e5814713509837dbb32f48e3e2",
+    "page_count": 6,
+    "chunk_count": 18,
+    "text_length": 15467,
+    "table_count": 11,
+    "parser_metadata": {
+      "filename": "144641~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:50"
+  },
+  "c964d561-e4c": {
+    "doc_id": "c964d561-e4c",
+    "filename": "144642~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.4 Financial Statements\\144642~1.PDF",
+    "document_type": "other",
+    "sha256": "3d4d57368d58eedbd8fe113f8c1ea661397987cd2faec97056170b51f9bc0bcb",
+    "page_count": 17,
+    "chunk_count": 19,
+    "text_length": 34881,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "144642~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:52"
+  },
+  "a3722f6d-765": {
+    "doc_id": "a3722f6d-765",
+    "filename": "144643~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.4 Financial Statements\\144643~1.PDF",
+    "document_type": "other",
+    "sha256": "170ebc86d663411ac1813141d0167a33011622682722e2f164678535df39ba29",
+    "page_count": 18,
+    "chunk_count": 21,
+    "text_length": 39319,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "144643~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:54"
+  },
+  "fd8159bf-300": {
+    "doc_id": "fd8159bf-300",
+    "filename": "144644~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.4 Financial Statements\\144644~1.PDF",
+    "document_type": "other",
+    "sha256": "6cf6d4c90752bf7ec555bf36c7c50f6019e900ab40d97a3800fc6804123228b0",
+    "page_count": 22,
+    "chunk_count": 24,
+    "text_length": 50761,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "144644~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:28:56"
+  },
+  "49aec573-d5c": {
+    "doc_id": "49aec573-d5c",
+    "filename": "144645~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.6 Gulf Insurance Group\\1.4.4.6.4 Financial Statements\\144645~1.PDF",
+    "document_type": "other",
+    "sha256": "0511248378f22713bd7bbabec17fac05ce8ff621cb4f3de98bfd2f0890bf3573",
+    "page_count": 92,
+    "chunk_count": 116,
+    "text_length": 230432,
+    "table_count": 15,
+    "parser_metadata": {
+      "filename": "144645~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:29:05"
+  },
+  "5e01ccd8-997": {
+    "doc_id": "5e01ccd8-997",
+    "filename": "144711~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.7 Inayah TPA LLC\\1.4.4.7.1 Company Information\\144711~1.PDF",
+    "document_type": "other",
+    "sha256": "e55c8a61bb554435490759f63006dcfdbc65df5fa8b285a87d51bb8452192424",
+    "page_count": 3,
+    "chunk_count": 4,
+    "text_length": 3153,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "144711~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:29:05"
+  },
+  "785caafa-0fc": {
+    "doc_id": "785caafa-0fc",
+    "filename": "1.4.4.7.2.1 Ianayah TPA LLC \u2013 RiskGauge Report 2023-04-26.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.7 Inayah TPA LLC\\1.4.4.7.2 Credit Reports\\1.4.4.7.2.1 Ianayah TPA LLC \u2013 RiskGauge Report 2023-04-26.pdf",
+    "document_type": "other",
+    "sha256": "6bb433a8db349d473eab9a9d1e3ad8143d87cb9634381358cc46ed7815ae5e7f",
+    "page_count": 3,
+    "chunk_count": 15,
+    "text_length": 10041,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "1.4.4.7.2.1 Ianayah TPA LLC \u2013 RiskGauge Report 2023-04-26.pdf"
+    },
+    "ingested_at": "2026-04-13T22:29:06"
+  },
+  "bfd9d330-97d": {
+    "doc_id": "bfd9d330-97d",
+    "filename": "144722~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.7 Inayah TPA LLC\\1.4.4.7.2 Credit Reports\\144722~1.PDF",
+    "document_type": "other",
+    "sha256": "b1877254458ea61aa9cbcb75a319e1013fedcf1db549a983862ab42ed9b7476b",
+    "page_count": 8,
+    "chunk_count": 20,
+    "text_length": 24017,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "144722~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:29:09"
+  },
+  "71898671-16e": {
+    "doc_id": "71898671-16e",
+    "filename": "144911~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.9 NAS Administration Services LLC\\1.4.4.9.1 Credit Reports\\144911~1.PDF",
+    "document_type": "other",
+    "sha256": "624eef91e41439e8276137e8ffdfabf69ea3bbcb18a53f64d3d2e2949d57217d",
+    "page_count": 4,
+    "chunk_count": 17,
+    "text_length": 11507,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "144911~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:29:11"
+  },
+  "babd2cd9-7b9": {
+    "doc_id": "babd2cd9-7b9",
+    "filename": "144912~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.9 NAS Administration Services LLC\\1.4.4.9.1 Credit Reports\\144912~1.PDF",
+    "document_type": "other",
+    "sha256": "7fde6d706c99cf5cfa76bf06e9cbd4aa0c6f1df532d891a8334983850cb39a44",
+    "page_count": 3,
+    "chunk_count": 13,
+    "text_length": 9130,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "144912~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:29:12"
+  },
+  "da8d80f8-4e6": {
+    "doc_id": "da8d80f8-4e6",
+    "filename": "144913~1.PDF",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\Sample Insurer risk analysis\\1.4.4.9 NAS Administration Services LLC\\1.4.4.9.1 Credit Reports\\144913~1.PDF",
+    "document_type": "other",
+    "sha256": "6fec7adedf68585516676f348b878824ba3fadc1600a4dcb8815104a3c529248",
+    "page_count": 3,
+    "chunk_count": 13,
+    "text_length": 10129,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "144913~1.PDF"
+    },
+    "ingested_at": "2026-04-13T22:29:14"
+  },
+  "f6eac556-ded": {
+    "doc_id": "f6eac556-ded",
+    "filename": "Claims Purchase Opportunity in the US_v3 (1).pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\US Opportunity\\Claims Purchase Opportunity in the US_v3 (1).pdf",
+    "document_type": "other",
+    "sha256": "7377dc8a5813f748f3b2b0b62b25af6960facf9c337304744258f05c4aeb8a03",
+    "page_count": 29,
+    "chunk_count": 33,
+    "text_length": 65609,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "Claims Purchase Opportunity in the US_v3 (1).pdf"
+    },
+    "ingested_at": "2026-04-13T22:29:19"
+  },
+  "2847c5fd-806": {
+    "doc_id": "2847c5fd-806",
+    "filename": "Klaim US - 1st Pilot.pdf",
+    "filepath": "C:\\Users\\SharifEid\\credit-platform\\data\\klaim\\dataroom\\US Opportunity\\Klaim US - 1st Pilot.pdf",
+    "document_type": "other",
+    "sha256": "10d3656c0b4971989135c2fcc02e1971cdc8249c7a1bce864f2caf980a707f84",
+    "page_count": 8,
+    "chunk_count": 8,
+    "text_length": 5327,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "Klaim US - 1st Pilot.pdf"
+    },
+    "ingested_at": "2026-04-13T22:29:20"
+  }
+}

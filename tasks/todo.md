@@ -5,11 +5,21 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Next Session Priorities
 
+### Tamara Data Room + Memo (next session)
+- [ ] **Ingest Tamara data room** — user will provide path, ask before ingesting
+- [ ] **Sync Tamara to NotebookLM** — dual-engine for richer memo
+- [ ] **Generate Tamara Credit Memo (v2)** — with proper data room coverage
+- [ ] **Delete placeholder Tamara memo** (`reports/memos/Tamara_KSA/0ae5cbe3-095/`) — generated without data room
+
 ### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
 - [ ] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode
 - [ ] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration
 - [ ] **Copy slash commands to main repo .claude/commands/** — 6 new commands from worktree
+
+### Platform Improvements from Session 17
+- [ ] **NLM sync optimization** — cap at ~20 sources per sync for large data rooms, or sync by priority doc type
+- [ ] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape" in data room
 
 ### Klaim Data Room + Memo Exercise ✅ COMPLETE (session 17)
 1. [x] **Validate Legal Analysis tabs render** — all 8 tabs render with rich data

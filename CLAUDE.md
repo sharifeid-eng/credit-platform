@@ -387,7 +387,7 @@ credit-platform/
 ├── tests/
 │   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
 │   ├── test_analysis_silq.py   # Integration tests for SILQ analytics
-│   └── test_notebooklm_bridge.py  # NotebookLM bridge, dual engine, synthesizer tests (14 tests)
+│   └── test_notebooklm_bridge.py  # NotebookLM bridge, dual engine, synthesizer, NLM warning tests (19 tests)
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
@@ -1328,6 +1328,31 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **OperatorCenter:** 7 tabs (was 5) — added Briefing (priority cards, thesis alerts, recommendations, learning summary) and Learning (correction frequency, auto-rules, codification candidates).
   - **DataChat feedback:** Thumbs up/down buttons on AI responses. Thumbs-down fires CORRECTION_RECORDED, records in CompanyMind.
   - **263 tests passing** (was 249 — 14 NLM tests added in prior session).
+- ✅ **Klaim Data Room + Memo Exercise (session 17):**
+  - **Legal Analysis tabs** — all 8 validated rendering with extracted data from 4 facility PDFs
+  - **Account Debtor validation** — confirmed tape lacks payer column (Group = 143 providers, not 13 approved insurance payers). Recorded in Company Mind.
+  - **Consecutive breach history** — `annotate_covenant_eod()` + `covenant_history.json` verified working per MMA 18.3
+  - **Klaim data room ingested** — 87 files from `data/klaim/dataroom/`, 1,720 chunks, 1,334 pages. Intelligence System events fired (entity extraction + compilation).
+  - **Klaim Credit Memo** — 12 AI sections with dual-engine research (Claude RAG + NotebookLM). Full 5-layer context pipeline. Renders in MemoEditor.
+  - **Tamara Credit Memo** — 11/12 AI sections (covenant list-vs-dict bug fixed in analytics_bridge.py)
+- ✅ **Data room engine moved to company level:**
+  - Path: `data/{company}/dataroom/` (was `data/{company}/{product}/dataroom/`)
+  - `_dataroom_dir()` updated in engine.py, analytics_snapshot.py, notebooklm_bridge.py
+  - `dataroom` excluded from product discovery in `get_products()`
+  - Default ingest source: `data/{company}/dataroom/` (removed OneDrive fallback)
+  - `_EXCLUDE_DIRS` now blocks `chunks`/`analytics` subdirs instead of "dataroom" itself
+- ✅ **NLM unavailability warning system (replaces silent degradation):**
+  - `NotebookLMEngine.get_warning()` — structured warning with code, message, fix instructions
+  - `DualResearchEngine.query()` includes `nlm_warning` in response when NLM unavailable
+  - `dataroom/ingest` endpoint includes NLM sync warning in `nlm_sync` object
+  - **ResearchChat.jsx**: blocking NLMWarningBanner on first query — "Proceed without NLM" / "Retry Connection" buttons, session-level dismissal
+  - **DocumentLibrary.jsx**: NLM sync status strip after ingest (teal success / amber warning with fix)
+  - 5 new tests (268 total, all passing)
+- ✅ **Bug fixes (session 17):**
+  - `core/loader.py`: Added `covenant_history.json`, `facility_params.json`, `debtor_validation.json` to `_EXCLUDE` (was crashing snapshot sort with None date)
+  - `core/loader.py`: Added `_NON_PRODUCT_DIRS` set to exclude `dataroom`, `_master_mind`, `mind` from product discovery
+  - `core/memo/analytics_bridge.py`: `isinstance()` check for list vs dict covenant triggers (Tamara uses list, Klaim uses dict)
+  - `backend/main.py`: Null-safe sort in `list_companies` (`date or '0000-00-00'`)
 -----
 ## Known Gaps & Next Steps
 **Short term:**
