@@ -3426,6 +3426,20 @@ def dataroom_document_detail(company: str, product: str, doc_id: str):
     return result
 
 
+@app.get("/companies/{company}/products/{product}/dataroom/documents/{doc_id}/view")
+def dataroom_document_view(company: str, product: str, doc_id: str):
+    """Stream the original file for viewing in browser."""
+    import mimetypes
+    result = _dataroom_engine.get_document(company, product, doc_id)
+    if result.get('error'):
+        raise HTTPException(status_code=404, detail=result['error'])
+    filepath = result.get('filepath', '')
+    if not filepath or not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Source file not found on disk")
+    content_type = mimetypes.guess_type(filepath)[0] or 'application/octet-stream'
+    return FileResponse(filepath, media_type=content_type, filename=os.path.basename(filepath))
+
+
 @app.post("/companies/{company}/products/{product}/dataroom/ingest")
 def dataroom_ingest(company: str, product: str, source_dir: Optional[str] = None):
     """Scan and ingest a data room directory.

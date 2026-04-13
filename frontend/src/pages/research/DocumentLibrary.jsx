@@ -1,24 +1,76 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../../contexts/CompanyContext'
 import useBreakpoint from '../../hooks/useBreakpoint'
-import { getDataroomDocuments, getDataroomStats, ingestDataroom } from '../../services/api'
+import { getDataroomDocuments, getDataroomStats, ingestDataroom, getDataroomDocumentViewUrl } from '../../services/api'
 
-const TYPE_BADGES = {
-  pdf:   { bg: 'rgba(240,96,96,0.12)',  color: '#F06060', label: 'PDF' },
-  excel: { bg: 'rgba(45,212,191,0.12)',  color: '#2DD4BF', label: 'Excel' },
-  xlsx:  { bg: 'rgba(45,212,191,0.12)',  color: '#2DD4BF', label: 'Excel' },
-  xls:   { bg: 'rgba(45,212,191,0.12)',  color: '#2DD4BF', label: 'Excel' },
-  csv:   { bg: 'rgba(91,141,239,0.12)',  color: '#5B8DEF', label: 'CSV' },
-  json:  { bg: 'rgba(201,168,76,0.12)',  color: '#C9A84C', label: 'JSON' },
-  docx:  { bg: 'rgba(132,148,167,0.12)', color: '#8494A7', label: 'Word' },
-  ods:   { bg: 'rgba(45,212,191,0.12)',  color: '#2DD4BF', label: 'ODS' },
+// ── Category config (document_type → display) ────────────────────────────────
+
+const CATEGORY_CONFIG = {
+  facility_agreement:    { label: 'Facility Agreement',    color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
+  company_presentation:  { label: 'Company Presentation',  color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
+  business_plan:         { label: 'Business Plan',         color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  portfolio_tape:        { label: 'Portfolio Tape',        color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
+  financial_statements:  { label: 'Financial Statements',  color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+  legal_document:        { label: 'Legal Document',        color: '#F0C040', bg: 'rgba(240,192,64,0.12)' },
+  credit_report:         { label: 'Credit Report',         color: '#F06060', bg: 'rgba(240,96,96,0.12)' },
+  tape_summary:          { label: 'Analytics Snapshot',    color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  other:                 { label: 'Other',                 color: '#8494A7', bg: 'rgba(132,148,167,0.12)' },
 }
 
-function getTypeBadge(docType) {
-  const key = (docType || '').toLowerCase()
-  return TYPE_BADGES[key] || { bg: 'rgba(132,148,167,0.12)', color: '#8494A7', label: key.toUpperCase() || 'FILE' }
+function getCategoryConfig(docType) {
+  return CATEGORY_CONFIG[docType] || CATEGORY_CONFIG.other
 }
+
+// ── Folder breadcrumb extraction ─────────────────────────────────────────────
+
+function extractBreadcrumb(filepath, filename) {
+  if (!filepath) return null
+  // Find the path after "dataroom/" and before the filename
+  const dataroomIdx = filepath.toLowerCase().indexOf('dataroom')
+  if (dataroomIdx === -1) return null
+  const afterDataroom = filepath.slice(dataroomIdx + 'dataroom'.length + 1)
+  const filenameIdx = afterDataroom.lastIndexOf(filename)
+  if (filenameIdx <= 0) return null
+  const folderPath = afterDataroom.slice(0, filenameIdx).replace(/[/\\]+$/, '')
+  if (!folderPath) return null
+  // Simplify: take last 2 folder segments for display
+  const parts = folderPath.split(/[/\\]/).filter(Boolean)
+  if (parts.length <= 2) return parts.join(' > ')
+  return parts.slice(-2).join(' > ')
+}
+
+// ── Sort options ─────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = [
+  { key: 'name',     label: 'Name' },
+  { key: 'category', label: 'Category' },
+  { key: 'pages',    label: 'Pages' },
+  { key: 'date',     label: 'Date Ingested' },
+]
+
+function sortDocs(docs, sortKey) {
+  const sorted = [...docs]
+  switch (sortKey) {
+    case 'name':
+      sorted.sort((a, b) => (a.filename || '').localeCompare(b.filename || ''))
+      break
+    case 'category':
+      sorted.sort((a, b) => (a.document_type || 'zzz').localeCompare(b.document_type || 'zzz'))
+      break
+    case 'pages':
+      sorted.sort((a, b) => (b.page_count || 0) - (a.page_count || 0))
+      break
+    case 'date':
+      sorted.sort((a, b) => (b.ingested_at || '').localeCompare(a.ingested_at || ''))
+      break
+    default:
+      break
+  }
+  return sorted
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
 
 export default function DocumentLibrary() {
   const { company, product } = useCompany()
@@ -31,6 +83,8 @@ export default function DocumentLibrary() {
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
   const [nlmSyncResult, setNlmSyncResult] = useState(null)
+  const [activeCategory, setActiveCategory] = useState(null)
+  const [sortBy, setSortBy] = useState('name')
 
   useEffect(() => {
     if (!company || !product) return
@@ -54,7 +108,6 @@ export default function DocumentLibrary() {
     try {
       const ingestResult = await ingestDataroom(company, product)
       if (ingestResult?.nlm_sync) setNlmSyncResult(ingestResult.nlm_sync)
-      // Refresh documents after ingestion
       const [docsData, statsData] = await Promise.all([
         getDataroomDocuments(company, product).catch(() => []),
         getDataroomStats(company, product).catch(() => null),
@@ -68,9 +121,17 @@ export default function DocumentLibrary() {
     }
   }
 
-  const filtered = docs.filter(d =>
-    !search || (d.filename || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = useMemo(() => {
+    let result = docs
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(d => (d.filename || '').toLowerCase().includes(q))
+    }
+    if (activeCategory) {
+      result = result.filter(d => (d.document_type || 'other') === activeCategory)
+    }
+    return sortDocs(result, sortBy)
+  }, [docs, search, activeCategory, sortBy])
 
   const pad = isMobile ? 14 : 28
 
@@ -102,21 +163,18 @@ export default function DocumentLibrary() {
         </p>
       </div>
 
-      {/* Stats strip */}
+      {/* Stats strip — top-level metrics */}
       {stats && (
         <div style={{
           display: 'flex',
           gap: isMobile ? 12 : 20,
           flexWrap: 'wrap',
-          marginBottom: 20,
+          marginBottom: 12,
         }}>
           {[
-            { label: 'Total Documents', value: stats.total_documents ?? 0 },
-            { label: 'Total Pages', value: stats.total_pages ?? 0 },
-            { label: 'Total Chunks', value: stats.total_chunks ?? 0 },
-            ...(stats.by_type ? Object.entries(stats.by_type).map(([type, val]) => ({
-              label: type.toUpperCase(), value: typeof val === 'object' ? (val.count ?? 0) : (val ?? 0),
-            })) : []),
+            { label: 'Total Documents', value: stats.total_documents ?? 0, key: null },
+            { label: 'Total Pages', value: stats.total_pages ?? 0, key: null },
+            { label: 'Total Chunks', value: stats.total_chunks ?? 0, key: null },
           ].map((s, i) => (
             <motion.div
               key={s.label}
@@ -154,6 +212,57 @@ export default function DocumentLibrary() {
         </div>
       )}
 
+      {/* Category filter chips */}
+      {stats?.by_type && (
+        <div style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          marginBottom: 20,
+        }}>
+          <button
+            onClick={() => setActiveCategory(null)}
+            style={{
+              padding: '5px 12px',
+              fontSize: 11,
+              fontWeight: 600,
+              borderRadius: 20,
+              border: `1px solid ${!activeCategory ? 'var(--text-primary)' : 'var(--border)'}`,
+              background: !activeCategory ? 'rgba(232,234,240,0.1)' : 'transparent',
+              color: !activeCategory ? 'var(--text-primary)' : 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            All
+          </button>
+          {Object.entries(stats.by_type).map(([type, val]) => {
+            const cfg = getCategoryConfig(type)
+            const count = typeof val === 'object' ? (val.count ?? 0) : (val ?? 0)
+            const isActive = activeCategory === type
+            return (
+              <button
+                key={type}
+                onClick={() => setActiveCategory(isActive ? null : type)}
+                style={{
+                  padding: '5px 12px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 20,
+                  border: `1px solid ${isActive ? cfg.color : 'var(--border)'}`,
+                  background: isActive ? cfg.bg : 'transparent',
+                  color: isActive ? cfg.color : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                {cfg.label} ({count})
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* NLM sync status after ingest */}
       {nlmSyncResult && (
         <div style={{
@@ -180,7 +289,7 @@ export default function DocumentLibrary() {
         </div>
       )}
 
-      {/* Action bar */}
+      {/* Action bar: ingest + search + sort */}
       <div style={{
         display: 'flex',
         gap: 12,
@@ -206,16 +315,8 @@ export default function DocumentLibrary() {
             alignItems: 'center',
             gap: 8,
           }}
-          onMouseEnter={e => {
-            if (!ingesting) {
-              e.currentTarget.style.background = 'rgba(201,168,76,0.1)'
-            }
-          }}
-          onMouseLeave={e => {
-            if (!ingesting) {
-              e.currentTarget.style.background = 'transparent'
-            }
-          }}
+          onMouseEnter={e => { if (!ingesting) e.currentTarget.style.background = 'rgba(201,168,76,0.1)' }}
+          onMouseLeave={e => { if (!ingesting) e.currentTarget.style.background = 'transparent' }}
         >
           {ingesting && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
@@ -246,6 +347,26 @@ export default function DocumentLibrary() {
             onBlur={e => { e.target.style.borderColor = 'var(--border)' }}
           />
         </div>
+
+        {/* Sort dropdown */}
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+          style={{
+            padding: '9px 12px',
+            fontSize: 12,
+            background: 'var(--bg-deep)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            color: 'var(--text-muted)',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          {SORT_OPTIONS.map(o => (
+            <option key={o.key} value={o.key}>Sort: {o.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Error */}
@@ -313,14 +434,22 @@ export default function DocumentLibrary() {
             <line x1="9" y1="15" x2="15" y2="15" />
           </svg>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-            {search ? 'No matching documents' : 'No documents ingested yet'}
+            {search || activeCategory ? 'No matching documents' : 'No documents ingested yet'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto' }}>
-            {search
-              ? 'Try a different search term.'
+            {search || activeCategory
+              ? 'Try a different search term or category.'
               : "Click 'Ingest Data Room' to scan your data room and index documents for research."}
           </div>
         </motion.div>
+      )}
+
+      {/* Results count */}
+      {!loading && filtered.length > 0 && (activeCategory || search) && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Showing {filtered.length} of {docs.length} documents
+          {activeCategory && <> in <strong style={{ color: getCategoryConfig(activeCategory).color }}>{getCategoryConfig(activeCategory).label}</strong></>}
+        </div>
       )}
 
       {/* Document grid */}
@@ -332,7 +461,13 @@ export default function DocumentLibrary() {
         }}>
           <AnimatePresence>
             {filtered.map((doc, i) => (
-              <DocumentCard key={doc.id || doc.filename || i} doc={doc} index={i} />
+              <DocumentCard
+                key={doc.doc_id || doc.filename || i}
+                doc={doc}
+                index={i}
+                company={company}
+                product={product}
+              />
             ))}
           </AnimatePresence>
         </div>
@@ -343,65 +478,104 @@ export default function DocumentLibrary() {
   )
 }
 
-function DocumentCard({ doc, index }) {
+// ── Document card ────────────────────────────────────────────────────────────
+
+function DocumentCard({ doc, index, company, product }) {
   const [hovered, setHovered] = useState(false)
-  const badge = getTypeBadge(doc.type || doc.file_type)
+  const category = getCategoryConfig(doc.document_type || 'other')
+  const breadcrumb = extractBreadcrumb(doc.filepath, doc.filename)
+  const viewUrl = doc.doc_id ? getDataroomDocumentViewUrl(company, product, doc.doc_id) : null
+
+  // Determine if this file is viewable in browser (PDF, images)
+  const ext = (doc.filename || '').split('.').pop().toLowerCase()
+  const isViewable = ['pdf'].includes(ext)
+
+  function handleClick() {
+    if (isViewable && viewUrl) {
+      window.open(viewUrl, '_blank')
+    }
+  }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.3, delay: index * 0.03, ease: 'easeOut' }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.5), ease: 'easeOut' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={handleClick}
       style={{
         background: 'var(--bg-surface)',
-        border: `1px solid ${hovered ? 'var(--border-hover)' : 'var(--border)'}`,
+        border: `1px solid ${hovered ? (isViewable ? category.color + '40' : 'var(--border-hover)') : 'var(--border)'}`,
         borderRadius: 8,
         padding: 20,
-        cursor: 'default',
+        cursor: isViewable ? 'pointer' : 'default',
         transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast)',
         transform: hovered ? 'translateY(-2px)' : 'none',
         boxShadow: hovered ? '0 4px 20px rgba(0,0,0,0.15)' : 'none',
       }}
     >
-      {/* Top row: type badge + chunk count */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      {/* Top row: category badge + chunk count */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <span style={{
           fontSize: 9,
           fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
+          letterSpacing: '0.04em',
           padding: '3px 8px',
           borderRadius: 4,
-          background: badge.bg,
-          color: badge.color,
+          background: category.bg,
+          color: category.color,
         }}>
-          {badge.label}
+          {category.label}
         </span>
-        {doc.chunk_count != null && (
-          <span style={{
-            fontSize: 9,
-            fontFamily: 'var(--font-mono)',
-            color: 'var(--text-muted)',
-          }}>
-            {doc.chunk_count} chunks
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {doc.chunk_count != null && (
+            <span style={{
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-muted)',
+            }}>
+              {doc.chunk_count} chunks
+            </span>
+          )}
+          {isViewable && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+              stroke={hovered ? category.color : 'var(--text-faint)'}
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transition: 'stroke var(--transition-fast)' }}>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          )}
+        </div>
       </div>
 
       {/* Filename */}
       <div style={{
         fontSize: 13,
         fontWeight: 600,
-        color: 'var(--text-primary)',
-        marginBottom: 8,
+        color: hovered && isViewable ? category.color : 'var(--text-primary)',
+        marginBottom: breadcrumb ? 4 : 8,
         lineHeight: 1.4,
         wordBreak: 'break-word',
+        transition: 'color var(--transition-fast)',
       }}>
         {doc.filename || doc.name || 'Untitled'}
       </div>
+
+      {/* Folder breadcrumb */}
+      {breadcrumb && (
+        <div style={{
+          fontSize: 10,
+          color: 'var(--text-faint)',
+          marginBottom: 8,
+          fontStyle: 'italic',
+        }}>
+          {breadcrumb}
+        </div>
+      )}
 
       {/* Meta row */}
       <div style={{
@@ -417,17 +591,10 @@ function DocumentCard({ doc, index }) {
         {doc.ingested_at && (
           <span>{new Date(doc.ingested_at).toLocaleDateString()}</span>
         )}
-        {doc.size && (
-          <span>{formatSize(doc.size)}</span>
+        {doc.text_length > 0 && (
+          <span>{(doc.text_length / 1000).toFixed(1)}K chars</span>
         )}
       </div>
     </motion.div>
   )
-}
-
-function formatSize(bytes) {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

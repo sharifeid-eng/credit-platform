@@ -214,6 +214,8 @@ export const getDataroomStats = (co, prod) =>
   api.get(`/companies/${co}/products/${prod}/dataroom/stats`).then(r => r.data);
 export const ingestDataroom = (co, prod) =>
   api.post(`/companies/${co}/products/${prod}/dataroom/ingest`).then(r => r.data);
+export const getDataroomDocumentViewUrl = (co, prod, docId) =>
+  `${API_BASE}/companies/${co}/products/${prod}/dataroom/documents/${docId}/view`;
 export const postResearchChat = (co, prod, question, history = []) =>
   api.post(`/companies/${co}/products/${prod}/research/chat`, { question, history }).then(r => r.data);
 export const getNotebookLMStatus = () =>
