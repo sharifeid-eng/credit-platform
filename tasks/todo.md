@@ -5,32 +5,47 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Next Session Priorities
 
-### Intelligence System Integration
-- [ ] **Wire event listeners into backend main.py** — call `register_all_listeners()` at app startup
-- [ ] **Add thesis API endpoints** — GET/POST `/companies/{co}/products/{prod}/thesis`, `/thesis/drift`, `/thesis/log`
-- [ ] **Add briefing API endpoint** — GET `/operator/briefing`
-- [ ] **Add knowledge search endpoint** — GET `/knowledge/search`
-- [ ] **Add chat feedback endpoint** — POST `/companies/{co}/products/{prod}/chat-feedback`
-- [ ] **Wire TAPE_INGESTED event** into `_load()` helper in main.py
-- [ ] **Wire DOCUMENT_INGESTED event** into DataRoomEngine
-- [ ] **Wire MEMO_EDITED event** into memo section update endpoint (capture ai_version)
-- [ ] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode
-- [ ] **Create MorningBriefing.jsx component** — priority card view in OperatorCenter
-- [ ] **Add "Learning" tab to OperatorCenter** — correction dashboard
-- [ ] **Add DataChat thumbs-up/down feedback** — frontend + backend
+### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
+- [ ] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode
 - [ ] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration
-- [ ] **Add Layer 5 (thesis context) to AI prompts** — Phase 4C integration
 - [ ] **Copy slash commands to main repo .claude/commands/** — 6 new commands from worktree
 
-### Remaining from Prior Sessions
-- [ ] **Generate first Klaim Credit Memo** — tests full pipeline end-to-end
-- [ ] **Generate Tamara Credit Memo** — second test with summary-type company
-- [ ] **Validate Legal Analysis tabs render** — walk Klaim → Legal Analysis → all 8 tabs
-- [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors vs `Group` column
+### Klaim Data Room + Memo Exercise (do in order)
+1. [ ] **Validate Legal Analysis tabs render** — walk Klaim → Legal Analysis → all 8 tabs
+2. [ ] **Validate Account Debtors against tape** — cross-reference 13 approved debtors vs `Group` column
+3. [ ] **Implement consecutive breach history** — `covenant_history.json` for EoD determination
+4. [ ] **Test NotebookLM dual-engine end-to-end** — ingest Klaim data room, sync to NLM, verify Research Chat
+5. [ ] **Ingest Klaim data room** — documents auto-compile via Intelligence System events
+6. [ ] **Generate first Klaim Credit Memo** — tests full pipeline end-to-end with all 5 context layers
+7. [ ] **Generate Tamara Credit Memo** — second test with summary-type company
+
+### Other Remaining
 - [ ] **Store payment schedule** — $6M draw, 16 quarterly payments + bullet maturity 2030-02-01
-- [ ] **Implement consecutive breach history** — `covenant_history.json` for EoD determination
-- [ ] **Test NotebookLM dual-engine end-to-end** — merge feature branch to main, ingest Klaim data room, sync to NLM, verify dual-engine answers in Research Chat with engine badges
+
+---
+
+## Completed — 2026-04-13 (session 16: Intelligence System Integration)
+
+Wired the Intelligence System (built in session 13) into the live application — 8 files modified, 1 new file, 263 tests passing.
+
+**Phase 1: Backend Event Wiring**
+- [x] **Register listeners at startup** — `register_all_listeners()` in `lifespan()`, 4 event handlers active
+- [x] **Fire TAPE_INGESTED on first load** — dedup set per (company, product, snapshot) in `_load()`
+- [x] **Fire DOCUMENT_INGESTED** — in `core/dataroom/engine.py` `_ingest_single_file()` after parse/chunk
+- [x] **Fire MEMO_EDITED with AI version** — captures old content before update for learning engine
+- [x] **Add Layer 5 thesis context** — `build_mind_context()` now 5-layer (was 4), all AI outputs thesis-aware
+
+**Phase 2: API Endpoints (10 new)**
+- [x] **Create `backend/intelligence.py`** — thesis CRUD, drift check, briefing, KB search, learning, chat feedback
+- [x] **Register intelligence router** in `backend/main.py`
+- [x] **Add 6 intelligence commands** to operator COMMANDS list
+- [x] **Add 9 API functions** in `frontend/src/services/api.js`
+
+**Phase 3: Frontend**
+- [x] **Briefing tab in OperatorCenter** — priority cards, thesis alerts, since-last-session, recommendations, learning summary
+- [x] **Learning tab in OperatorCenter** — correction frequency, auto-rules, codification candidates
+- [x] **DataChat feedback buttons** — thumbs up/down on AI responses, fires CORRECTION_RECORDED
 
 ---
 

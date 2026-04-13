@@ -47,6 +47,13 @@ COMMANDS = [
     {"name": "/eod", "description": "End-of-session cleanup: tests, docs, commit, push", "category": "session"},
     {"name": "/simplify", "description": "Review changed code for reuse, quality, efficiency", "category": "session"},
     {"name": "/ops", "description": "Operator briefing — surfaces platform status in terminal", "category": "session"},
+    # Intelligence commands
+    {"name": "/morning", "description": "Morning briefing — thesis alerts, stale tapes, patterns", "category": "intelligence"},
+    {"name": "/thesis", "description": "View/edit investment thesis for current company", "category": "intelligence"},
+    {"name": "/drift", "description": "Check thesis drift against latest metrics", "category": "intelligence"},
+    {"name": "/learn", "description": "Review auto-generated learning rules from corrections", "category": "intelligence"},
+    {"name": "/emerge", "description": "Detect cross-company patterns", "category": "intelligence"},
+    {"name": "/know", "description": "Search the knowledge base", "category": "intelligence"},
     # Deep work modes
     {"name": "MODE 1: Codebase Health Audit", "description": "Comprehensive health check — tech debt, inconsistencies, silent failures", "category": "deep_work"},
     {"name": "MODE 2: Test Generation Sprint", "description": "Identify untested code paths, generate test suite", "category": "deep_work"},

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { postChat } from '../services/api'
+import { postChat, postChatFeedback } from '../services/api'
 import { useCompany } from '../contexts/CompanyContext'
 
 /**
@@ -87,7 +87,7 @@ export default function DataChat({ company, product, snapshot, currency }) {
           <Suggestions analysisType={analysisType} onSelect={q => { setInput(q); }} />
         )}
         {messages.map((m, i) => (
-          <Bubble key={i} msg={m} />
+          <Bubble key={i} msg={m} company={company} product={product} />
         ))}
         {loading && <TypingIndicator />}
         <div ref={bottomRef} />
@@ -134,8 +134,22 @@ export default function DataChat({ company, product, snapshot, currency }) {
 
 /* ── Sub-components ── */
 
-function Bubble({ msg }) {
+function Bubble({ msg, company, product }) {
   const isUser = msg.role === 'user'
+  const [feedback, setFeedback] = useState(null) // 'up' | 'down' | null
+
+  const handleFeedback = async (rating) => {
+    setFeedback(rating)
+    try {
+      await postChatFeedback(company, product, {
+        rating,
+        original_response: msg.text,
+      })
+    } catch (e) {
+      console.error('Feedback failed:', e)
+    }
+  }
+
   return (
     <div style={{
       alignSelf: isUser ? 'flex-end' : 'flex-start',
@@ -151,6 +165,45 @@ function Bubble({ msg }) {
       }}>
         {msg.text}
       </div>
+      {/* Feedback buttons for AI responses */}
+      {!isUser && !msg.isError && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 3, marginLeft: 4 }}>
+          {feedback ? (
+            <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>
+              {feedback === 'up' ? 'Thanks!' : 'Noted'}
+            </span>
+          ) : (
+            <>
+              <button
+                onClick={() => handleFeedback('up')}
+                title="Helpful"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                  fontSize: 11, color: 'var(--text-faint)', opacity: 0.6,
+                  transition: 'opacity 0.15s, color 0.15s',
+                }}
+                onMouseEnter={e => { e.target.style.opacity = 1; e.target.style.color = 'var(--teal)' }}
+                onMouseLeave={e => { e.target.style.opacity = 0.6; e.target.style.color = 'var(--text-faint)' }}
+              >
+                &#x25B2;
+              </button>
+              <button
+                onClick={() => handleFeedback('down')}
+                title="Not helpful"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+                  fontSize: 11, color: 'var(--text-faint)', opacity: 0.6,
+                  transition: 'opacity 0.15s, color 0.15s',
+                }}
+                onMouseEnter={e => { e.target.style.opacity = 1; e.target.style.color = '#F06060' }}
+                onMouseLeave={e => { e.target.style.opacity = 0.6; e.target.style.color = 'var(--text-faint)' }}
+              >
+                &#x25BC;
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -92,6 +92,11 @@ async def lifespan(app: FastAPI):
             print(f"[Laith] Database connection failed: {e}. Running in tape-only mode.")
     else:
         print("[Laith] No DATABASE_URL configured. Running in tape-only mode.")
+
+    # Register Intelligence System event listeners
+    from core.mind.listeners import register_all_listeners
+    register_all_listeners()
+
     yield
 
 
@@ -106,6 +111,9 @@ app.include_router(operator_router)
 
 from backend.auth_routes import router as auth_router
 app.include_router(auth_router)
+
+from backend.intelligence import router as intelligence_router
+app.include_router(intelligence_router)
 
 # Auth middleware — must be added BEFORE CORSMiddleware (Starlette processes
 # middleware in reverse order, so CORS runs first, then auth)
@@ -122,6 +130,9 @@ app.add_middleware(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+_tape_events_fired: set = set()
+
+
 def _load(company, product, snapshot):
     """Load and return the selected snapshot DataFrame + snapshot metadata."""
     snaps = get_snapshots(company, product)
@@ -135,7 +146,24 @@ def _load(company, product, snapshot):
             names = [s['filename'] for s in date_matches]
             raise HTTPException(status_code=400, detail=f"Ambiguous snapshot date '{snapshot}' matches {len(date_matches)} files: {', '.join(names)}. Please specify by filename.")
         sel = date_matches[0] if date_matches else snaps[-1]
-    return load_snapshot(sel['filepath']), sel
+    df = load_snapshot(sel['filepath'])
+
+    # Fire TAPE_INGESTED event (once per unique tape per session)
+    _key = (company, product, sel['filename'])
+    if _key not in _tape_events_fired:
+        _tape_events_fired.add(_key)
+        try:
+            from core.mind.event_bus import event_bus, Events
+            event_bus.publish(Events.TAPE_INGESTED, {
+                "company": company,
+                "product": product,
+                "snapshot": sel['filename'],
+                "metrics": {},  # listeners extract metrics from tape files directly
+            })
+        except Exception:
+            pass
+
+    return df, sel
 
 def _currency(company, product, requested):
     config = load_config(company, product)
@@ -3731,6 +3759,18 @@ def update_memo_section_endpoint(company: str, product: str, memo_id: str,
     if not content:
         raise HTTPException(status_code=400, detail="Content required")
 
+    # Capture old content before update (needed for learning engine)
+    old_content = ''
+    try:
+        old_memo = _memo_storage.load(company, product, memo_id)
+        if old_memo:
+            for s in old_memo.get('sections', []):
+                if s.get('key') == section_key:
+                    old_content = s.get('content', '')
+                    break
+    except Exception:
+        pass
+
     result = _memo_storage.update_section(memo_id, section_key, content)
     if not result or result.get('error'):
         raise HTTPException(status_code=404, detail=result.get('error', 'Update failed'))
@@ -3738,7 +3778,20 @@ def update_memo_section_endpoint(company: str, product: str, memo_id: str,
     # Record the edit in the company mind for learning
     try:
         cm = CompanyMind(company, product)
-        cm.record_memo_edit(memo_id, section_key, '', content)
+        cm.record_memo_edit(memo_id, section_key, old_content, content)
+    except Exception:
+        pass
+
+    # Fire MEMO_EDITED event for Intelligence System
+    try:
+        from core.mind.event_bus import event_bus, Events
+        event_bus.publish(Events.MEMO_EDITED, {
+            "company": company, "product": product,
+            "section_key": section_key,
+            "ai_version": old_content,
+            "analyst_version": content,
+            "memo_id": memo_id,
+        })
     except Exception:
         pass
 

@@ -5,7 +5,7 @@ import useBreakpoint from '../hooks/useBreakpoint'
 import {
   getOperatorStatus, getOperatorTodos, createOperatorTodo,
   updateOperatorTodo, deleteOperatorTodo, getOperatorMind,
-  updateOperatorMindEntry,
+  updateOperatorMindEntry, getOperatorBriefing, getOperatorLearning,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -483,6 +483,8 @@ export default function OperatorCenter() {
   const [todos, setTodos] = useState([])
   const [mindEntries, setMindEntries] = useState([])
   const [mindFilter, setMindFilter] = useState(null)
+  const [briefing, setBriefing] = useState(null)
+  const [learning, setLearning] = useState(null)
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -516,9 +518,15 @@ export default function OperatorCenter() {
     }
   }
 
-  // Load mind when tab switches to mind
+  // Load tab-specific data
   useEffect(() => {
     if (activeTab === 'mind') loadMind(mindFilter)
+    if (activeTab === 'briefing' && !briefing) {
+      getOperatorBriefing().then(setBriefing).catch(e => console.error('Briefing load failed:', e))
+    }
+    if (activeTab === 'learning' && !learning) {
+      getOperatorLearning().then(setLearning).catch(e => console.error('Learning load failed:', e))
+    }
   }, [activeTab, mindFilter])
 
   const handleAddTodo = async (item) => {
@@ -641,6 +649,8 @@ export default function OperatorCenter() {
           <TabButton label="Follow-ups" active={activeTab === 'todos'} onClick={() => setActiveTab('todos')} count={openTodos.length || null} />
           <TabButton label="Activity" active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} count={activity.length || null} />
           <TabButton label="Mind" active={activeTab === 'mind'} onClick={() => setActiveTab('mind')} />
+          <TabButton label="Briefing" active={activeTab === 'briefing'} onClick={() => setActiveTab('briefing')} />
+          <TabButton label="Learning" active={activeTab === 'learning'} onClick={() => setActiveTab('learning')} count={learning?.total_rules || null} />
         </div>
 
         {/* Tab content */}
@@ -677,10 +687,11 @@ export default function OperatorCenter() {
             {/* ── Commands Tab ── */}
             {activeTab === 'commands' && (
               <div>
-                {['framework', 'session', 'deep_work'].map(cat => {
+                {['framework', 'intelligence', 'session', 'deep_work'].map(cat => {
                   const cmds = (status?.commands || []).filter(c => c.category === cat)
-                  const labels = { framework: 'Framework Commands', session: 'Session Commands', deep_work: 'Deep Work Modes' }
-                  const accents = { framework: 'var(--teal)', session: 'var(--gold)', deep_work: 'var(--blue)' }
+                  if (!cmds.length) return null
+                  const labels = { framework: 'Framework Commands', intelligence: 'Intelligence Commands', session: 'Session Commands', deep_work: 'Deep Work Modes' }
+                  const accents = { framework: 'var(--teal)', intelligence: '#A78BFA', session: 'var(--gold)', deep_work: 'var(--blue)' }
                   return (
                     <div key={cat} style={{ marginBottom: 28 }}>
                       <SectionLabel text={labels[cat]} accent={accents[cat]} />
@@ -758,6 +769,273 @@ export default function OperatorCenter() {
                 ) : (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
                     No mind entries found. Knowledge accumulates as you use AI features.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Briefing Tab ── */}
+            {activeTab === 'briefing' && (
+              <div style={{ maxWidth: 800 }}>
+                <SectionLabel text="Morning Briefing" accent="#A78BFA" />
+                {!briefing ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+                    Loading briefing...
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* Priority Actions */}
+                    {(briefing.priority_actions || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 10 }}>
+                          Priority Actions
+                        </div>
+                        {briefing.priority_actions.map((item, i) => (
+                          <div key={i} style={{
+                            display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 14px',
+                            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                            borderRadius: 8, marginBottom: 8,
+                          }}>
+                            <SeverityBadge severity={item.severity} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                                {item.title}
+                                {item.company && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>{item.company}</span>}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.description}</div>
+                              {item.action && <div style={{ fontSize: 10, color: 'var(--gold)', marginTop: 4 }}>{item.action}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Since Last Session */}
+                    {(briefing.since_last_session || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 10 }}>
+                          Since Last Session
+                        </div>
+                        {briefing.since_last_session.map((item, i) => (
+                          <div key={i} style={{
+                            padding: '8px 14px', background: 'var(--bg-surface)',
+                            border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6,
+                          }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>{item.title}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.description}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Thesis Alerts */}
+                    {(briefing.thesis_alerts || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#F06060', marginBottom: 10 }}>
+                          Thesis Alerts
+                        </div>
+                        {briefing.thesis_alerts.map((alert, i) => (
+                          <div key={i} style={{
+                            padding: '10px 14px', background: 'rgba(240,96,96,0.08)',
+                            border: '1px solid rgba(240,96,96,0.2)', borderRadius: 8, marginBottom: 8,
+                          }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#F06060' }}>{alert.company || 'Unknown'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{alert.claim || alert.description || ''}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {(briefing.recommendations || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--teal)', marginBottom: 10 }}>
+                          Recommendations
+                        </div>
+                        {briefing.recommendations.map((rec, i) => (
+                          <div key={i} style={{
+                            padding: '8px 14px', fontSize: 12, color: 'var(--text-primary)',
+                            background: 'rgba(45,212,191,0.06)', border: '1px solid rgba(45,212,191,0.15)',
+                            borderRadius: 8, marginBottom: 6,
+                          }}>
+                            {rec}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Learning Summary */}
+                    {briefing.learning_summary && (
+                      <div style={{
+                        padding: '12px 16px', background: 'var(--bg-surface)',
+                        border: '1px solid var(--border)', borderRadius: 8,
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                          Learning Summary
+                        </div>
+                        <div style={{ display: 'flex', gap: 24 }}>
+                          <div>
+                            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                              {briefing.learning_summary.total_rules ?? 0}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Total Rules</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--gold)' }}>
+                              {briefing.learning_summary.new_since_last_session ?? 0}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>New Since Last</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Empty state */}
+                    {!(briefing.priority_actions?.length || briefing.since_last_session?.length || briefing.thesis_alerts?.length) && (
+                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+                        No briefing items. Start using Intelligence System features to populate the briefing.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Learning Tab ── */}
+            {activeTab === 'learning' && (
+              <div style={{ maxWidth: 800 }}>
+                <SectionLabel text="Learning Engine" accent="#A78BFA" />
+                {!learning ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+                    Loading learning data...
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* Stats bar */}
+                    <div style={{ display: 'flex', gap: 20 }}>
+                      {[
+                        { label: 'Corrections', value: learning.total_corrections ?? 0, color: 'var(--text-primary)' },
+                        { label: 'Rules Generated', value: learning.total_rules ?? 0, color: 'var(--gold)' },
+                        { label: 'Patterns', value: (learning.patterns || []).length, color: 'var(--teal)' },
+                      ].map(s => (
+                        <div key={s.label} style={{
+                          padding: '12px 16px', background: 'var(--bg-surface)',
+                          border: '1px solid var(--border)', borderRadius: 8, flex: 1,
+                        }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: s.color }}>{s.value}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Correction Frequency */}
+                    {learning.frequency?.by_type && Object.keys(learning.frequency.by_type).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 10 }}>
+                          Correction Types
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {Object.entries(learning.frequency.by_type).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                            <div key={type} style={{
+                              padding: '6px 12px', background: 'var(--bg-surface)',
+                              border: '1px solid var(--border)', borderRadius: 6,
+                              fontSize: 11, fontFamily: 'var(--font-mono)',
+                            }}>
+                              <span style={{ color: 'var(--text-primary)' }}>{type}</span>
+                              <span style={{ color: 'var(--gold)', marginLeft: 8 }}>{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Auto-Generated Rules */}
+                    {(learning.rules || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--gold)', marginBottom: 10 }}>
+                          Auto-Generated Rules ({learning.rules.length})
+                        </div>
+                        {learning.rules.slice(0, 20).map((rule, i) => (
+                          <div key={rule.id || i} style={{
+                            padding: '10px 14px', background: 'var(--bg-surface)',
+                            border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8,
+                          }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '0.08em', padding: '2px 7px', borderRadius: 4,
+                                background: 'rgba(167,139,250,0.15)', color: '#A78BFA',
+                                border: '1px solid rgba(167,139,250,0.3)',
+                              }}>
+                                rule
+                              </span>
+                              {rule._company && (
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{rule._company}</span>
+                              )}
+                              <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                                {rule.timestamp?.slice(0, 10) || ''}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                              {rule.content?.slice(0, 200) || ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Codification Candidates */}
+                    {(learning.frequency?.codification_candidates || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--teal)', marginBottom: 10 }}>
+                          Codification Candidates
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                          These correction types appear 3+ times — consider promoting to methodology.
+                        </div>
+                        {learning.frequency.codification_candidates.map((c, i) => (
+                          <div key={i} style={{
+                            padding: '8px 14px', background: 'rgba(45,212,191,0.06)',
+                            border: '1px solid rgba(45,212,191,0.15)', borderRadius: 8, marginBottom: 6,
+                            fontSize: 12, color: 'var(--teal)', fontFamily: 'var(--font-mono)',
+                          }}>
+                            {c}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recent Corrections */}
+                    {(learning.corrections || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 10 }}>
+                          Recent Corrections ({learning.corrections.length})
+                        </div>
+                        {learning.corrections.slice(0, 15).map((corr, i) => (
+                          <div key={corr.id || i} style={{
+                            padding: '8px 14px', background: 'var(--bg-surface)',
+                            border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6,
+                          }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>{corr._company || ''}</span>
+                              <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                                {corr.timestamp?.slice(0, 10) || ''}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {corr.content?.slice(0, 150) || ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Empty state */}
+                    {!(learning.total_corrections || learning.total_rules) && (
+                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+                        No learning data yet. Corrections from memo edits and chat feedback will appear here.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

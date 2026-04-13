@@ -302,6 +302,19 @@ export const updateOperatorMindEntry = (id, update) => api.patch(`/operator/mind
 export const sendOperatorDigest      = (webhookUrl = null) =>
   api.post('/operator/digest', null, { params: webhookUrl ? { webhook_url: webhookUrl } : {} }).then(r => r.data);
 
+// ── Intelligence System ────────────────────────────────────────────────────
+export const getOperatorBriefing     = () => api.get('/operator/briefing').then(r => r.data);
+export const getOperatorLearning     = () => api.get('/operator/learning').then(r => r.data);
+export const getOperatorLearningRules = () => api.get('/operator/learning/rules').then(r => r.data);
+export const getThesis               = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis`).then(r => r.data);
+export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
+export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);
+export const getThesisLog            = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/log`).then(r => r.data);
+export const searchKnowledge         = (q, company, categories) =>
+  api.get('/knowledge/search', { params: { q, ...(company ? { company } : {}), ...(categories ? { categories } : {}) } }).then(r => r.data);
+export const postChatFeedback        = (co, prod, feedback) =>
+  api.post(`/companies/${co}/products/${prod}/chat-feedback`, feedback).then(r => r.data);
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 export const getAuthMe             = () => api.get('/auth/me').then(r => r.data);
 export const getAuthLogoutUrl      = () => api.get('/auth/logout-url').then(r => r.data);

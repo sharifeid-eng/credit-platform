@@ -550,6 +550,20 @@ class DataRoomEngine:
         # Update registry
         registry[doc_id] = doc_record
 
+        # Fire DOCUMENT_INGESTED event for Intelligence System
+        try:
+            from core.mind.event_bus import event_bus, Events
+            event_bus.publish(Events.DOCUMENT_INGESTED, {
+                "company": company,
+                "product": product,
+                "doc_id": doc_id,
+                "text": (parse_result.text[:5000] if parse_result.text else ""),
+                "document_type": doc_type.value,
+                "filename": path.name,
+            })
+        except Exception:
+            pass
+
         return doc_record
 
     def _remove_doc(self, company: str, product: str, doc_id: str, registry: dict):

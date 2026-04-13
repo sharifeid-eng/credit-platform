@@ -3,6 +3,16 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Event deduplication needed when helper is called per-endpoint
+
+**Discovery:** `_load()` in `backend/main.py` is called by 30+ chart endpoints on every request. Firing `TAPE_INGESTED` inside `_load()` without deduplication would trigger entity extraction, thesis drift checks, and compilation 30+ times per page load. Solution: module-level `_tape_events_fired: set` that tracks `(company, product, snapshot)` tuples — fires once per unique tape per process lifetime.
+**Rule:** When wiring events into helper functions that are called from many endpoints, always add deduplication. A module-level set is the simplest approach for per-session dedup. It resets on server restart, which is correct behavior. The cost of a 30-element set is negligible; the cost of 30 redundant entity extractions is not.
+
+## 2026-04-13 — Memo edit learning requires capturing old content BEFORE update
+
+**Discovery:** The memo section update endpoint was passing `''` for `ai_version` to `cm.record_memo_edit()`. The learning engine skips corrections where `ai_words == 0` (empty original). The fix is to load the memo before `update_section()` to capture the old content, then pass it as `ai_version`. This adds one file read but is necessary for the learning loop to function.
+**Rule:** When recording before/after pairs for learning, always capture the "before" state BEFORE the mutation. This seems obvious but the original code was written before the learning engine existed — the empty string was a placeholder that became a bug when the downstream consumer was built.
+
 ## 2026-04-13 — Backend nested objects vs frontend flat value assumptions
 
 **Discovery:** `DataRoomEngine.get_stats()` returns `by_type` as `{"pdf": {"count": 5, "chunks": 20, "pages": 100}}` but `DocumentLibrary.jsx` treated each value as a plain number (`count` directly), causing a React render crash that blanked the entire page. No error boundary caught it.

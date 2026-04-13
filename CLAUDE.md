@@ -202,6 +202,7 @@ credit-platform/
 │   ├── cf_auth.py          # Cloudflare Access JWT verification, auth middleware, user auto-provision
 │   ├── auth_routes.py      # Auth API routes (/auth/me, /auth/users CRUD)
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
+│   ├── intelligence.py     # Intelligence System endpoints (thesis, briefing, learning, KB search, feedback)
 │   ├── operator.py         # Operator Command Center endpoints (status, todo, mind review, digest)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
@@ -555,6 +556,19 @@ Key columns in loan tape files:
 |`/operator/mind`                       |GET    |Browse all mind entries (master + company)|
 |`/operator/mind/{id}`                  |PATCH  |Promote/archive a mind entry             |
 |`/operator/digest`                     |POST   |Generate weekly digest (Slack or JSON)   |
+|`/operator/briefing`                   |GET    |Morning briefing (priority actions, thesis alerts, recommendations)|
+|`/operator/learning`                   |GET    |Corrections, auto-rules, codification candidates|
+|`/operator/learning/rules`             |GET    |All active learning rules across companies|
+
+**Intelligence System endpoints:**
+|Endpoint                                                     |Method |Description                        |
+|-------------------------------------------------------------|-------|-----------------------------------|
+|`/companies/{co}/products/{p}/thesis`                        |GET    |Load current investment thesis     |
+|`/companies/{co}/products/{p}/thesis`                        |POST   |Create or update thesis            |
+|`/companies/{co}/products/{p}/thesis/drift`                  |GET    |Check drift against latest metrics |
+|`/companies/{co}/products/{p}/thesis/log`                    |GET    |Thesis change history              |
+|`/knowledge/search`                                          |GET    |Unified KB search (mind+lessons+decisions+entities)|
+|`/companies/{co}/products/{p}/chat-feedback`                 |POST   |Record thumbs up/down on AI chat   |
 
 All tape chart endpoints accept: `snapshot`, `as_of_date`, `currency` query params.
 Chat endpoint also accepts `snapshot`, `currency`, `as_of_date` in the POST body (frontend sends them there).
@@ -1307,6 +1321,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **6 Slash Commands:** `/morning` (session-start briefing), `/thesis {company}` (create/review thesis), `/drift` (check all theses), `/learn` (review corrections + auto-rules), `/emerge` (cross-company patterns), `/know {question}` (KB search).
   - **Tests:** 93 new tests (42 foundation + 51 system), all 249 total passing.
   - **Architecture:** JSONL-first (no migration), lazy schema upgrade, event bus with disable() for test isolation, backward-compatible metadata._graph storage. File-based, no new PostgreSQL dependency.
+- ✅ **Intelligence System — Backend Integration (wired into live app):**
+  - **Event wiring:** `register_all_listeners()` called at app startup. 4 events fire from live endpoints: TAPE_INGESTED (deduped per session), DOCUMENT_INGESTED (from dataroom engine), MEMO_EDITED (with old content for learning), CORRECTION_RECORDED (from chat feedback).
+  - **Layer 5 AI context:** `build_mind_context()` now assembles 5 layers (was 4). Layer 5 = ThesisTracker.get_ai_context(). All 4 `_build_*_full_context()` functions benefit automatically. Backward-compatible (empty string when no thesis exists).
+  - **10 API endpoints in `backend/intelligence.py`:** thesis CRUD + drift check + log, morning briefing, KB search, learning summary + rules, chat feedback. Router registered in main.py.
+  - **OperatorCenter:** 7 tabs (was 5) — added Briefing (priority cards, thesis alerts, recommendations, learning summary) and Learning (correction frequency, auto-rules, codification candidates).
+  - **DataChat feedback:** Thumbs up/down buttons on AI responses. Thumbs-down fires CORRECTION_RECORDED, records in CompanyMind.
+  - **263 tests passing** (was 249 — 14 NLM tests added in prior session).
 -----
 ## Known Gaps & Next Steps
 **Short term:**
@@ -1385,19 +1406,18 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Data extraction fixed — 73 KPIs, 136 financials, 5 demographic dims, 51 BP metrics, 152 FM metrics
 - [x] Landing page — dual flags (SA+AE), auto-rotating carousel (3.5s crossfade, dot indicators, pause-on-hover)
 - [x] Financial Performance trend chart + Business Plan projection chart + Demographics grouped bars
-**Intelligence System — Integration (backend wiring + frontend):**
-- [ ] Wire `register_all_listeners()` into backend main.py app startup
-- [ ] Add thesis API endpoints (GET/POST thesis, drift, log)
-- [ ] Add briefing API endpoint (GET /operator/briefing)
-- [ ] Add knowledge search endpoint (GET /knowledge/search)
-- [ ] Add chat feedback endpoint (POST chat-feedback)
-- [ ] Wire TAPE_INGESTED/DOCUMENT_INGESTED/MEMO_EDITED events into existing endpoints
+**Intelligence System — Integration ✅ (partial — backend wiring + Operator Center + DataChat):**
+- [x] Wire `register_all_listeners()` into backend main.py app startup
+- [x] Add thesis API endpoints (GET/POST thesis, drift, log)
+- [x] Add briefing API endpoint (GET /operator/briefing)
+- [x] Add knowledge search endpoint (GET /knowledge/search)
+- [x] Add chat feedback endpoint (POST chat-feedback)
+- [x] Wire TAPE_INGESTED/DOCUMENT_INGESTED/MEMO_EDITED events into existing endpoints
+- [x] Add Briefing + Learning tabs to OperatorCenter
+- [x] Add DataChat thumbs-up/down feedback buttons
+- [x] Add Layer 5 (thesis context) to AI prompts — `build_mind_context()` now 5-layer
 - [ ] Create ThesisTracker.jsx frontend (pillar cards, drift history, edit mode)
-- [ ] Create MorningBriefing.jsx in OperatorCenter (priority card view)
-- [ ] Add "Learning" tab to OperatorCenter (correction dashboard)
-- [ ] Add DataChat thumbs-up/down feedback buttons
 - [ ] Enhance build_mind_context() with graph-aware scoring (Phase 1B)
-- [ ] Add Layer 5 (thesis context) to AI prompts (Phase 4C)
 - [ ] Copy 6 new slash commands from worktree to main repo .claude/commands/
 **Research Hub & Memo — Near-term:**
 - [ ] CSV tape classifier improvement (currently classified as "other" instead of "portfolio_tape")

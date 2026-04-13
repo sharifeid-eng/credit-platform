@@ -4,11 +4,12 @@ Living Mind — Two-tier institutional memory for the Laith credit platform.
 Master Mind: Fund-level knowledge (analytical preferences, IC norms, cross-company patterns)
 Company Mind: Per-company knowledge (corrections, memo edits, findings, data quality)
 
-The build_mind_context() function assembles a 4-layer knowledge context for any AI prompt:
+The build_mind_context() function assembles a 5-layer knowledge context for any AI prompt:
     Layer 1 -- Framework (codified rules from FRAMEWORK_INDEX.md)
     Layer 2 -- Master Mind (fund-level lessons)
     Layer 3 -- Methodology (codified company rules)
     Layer 4 -- Company Mind (company-level lessons)
+    Layer 5 -- Thesis (investment thesis + drift alerts)
 """
 
 from __future__ import annotations
@@ -27,17 +28,18 @@ __all__ = ["MasterMind", "CompanyMind", "build_mind_context", "MindLayeredContex
 
 @dataclass
 class MindLayeredContext:
-    """The assembled 4-layer context for an AI prompt."""
+    """The assembled 5-layer context for an AI prompt."""
 
     framework: str       # Layer 1: codified framework principles
     master_mind: str     # Layer 2: fund-level lessons
     methodology: str     # Layer 3: codified company methodology
     company_mind: str    # Layer 4: company-level lessons
-    total_entries: int   # Total mind entries included (L2 + L4)
+    thesis: str = ""     # Layer 5: investment thesis + drift alerts
+    total_entries: int = 0  # Total mind entries included (L2 + L4)
 
     @property
     def formatted(self) -> str:
-        """Return the full formatted context block, all 4 layers combined.
+        """Return the full formatted context block, all 5 layers combined.
 
         Layers are separated by blank lines. Empty layers are omitted.
         """
@@ -50,12 +52,14 @@ class MindLayeredContext:
             parts.append(self.methodology)
         if self.company_mind:
             parts.append(self.company_mind)
+        if self.thesis:
+            parts.append(self.thesis)
         return "\n\n".join(parts)
 
     @property
     def is_empty(self) -> bool:
         """True if no context was assembled at all."""
-        return not any([self.framework, self.master_mind, self.methodology, self.company_mind])
+        return not any([self.framework, self.master_mind, self.methodology, self.company_mind, self.thesis])
 
 
 def build_mind_context(
@@ -133,10 +137,22 @@ def build_mind_context(
         logger.warning("build_mind_context: Layer 4 (company mind) failed: %s", e)
         company_formatted = ""
 
+    # Layer 5: Investment Thesis (thesis + drift alerts)
+    thesis_ctx = ""
+    try:
+        from core.mind.thesis import ThesisTracker
+        tracker = ThesisTracker(company, product)
+        thesis = tracker.load()
+        if thesis:
+            thesis_ctx = tracker.get_ai_context()
+    except Exception as e:
+        logger.warning("build_mind_context: Layer 5 (thesis) failed: %s", e)
+
     return MindLayeredContext(
         framework=framework_ctx,
         master_mind=master_formatted,
         methodology=methodology_ctx,
         company_mind=company_formatted,
+        thesis=thesis_ctx,
         total_entries=total_entries,
     )
