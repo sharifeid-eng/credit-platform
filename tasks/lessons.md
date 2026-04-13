@@ -3,6 +3,11 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Backend nested objects vs frontend flat value assumptions
+
+**Discovery:** `DataRoomEngine.get_stats()` returns `by_type` as `{"pdf": {"count": 5, "chunks": 20, "pages": 100}}` but `DocumentLibrary.jsx` treated each value as a plain number (`count` directly), causing a React render crash that blanked the entire page. No error boundary caught it.
+**Rule:** When a backend API returns nested objects where the frontend expects flat values, the crash is silent (blank page, no error message). Always check API response shape against frontend consumption. When adding structured data to an existing API response, check all consumers — the frontend may have been written against a simpler schema or a different version of the backend.
+
 ## 2026-04-13 — Absolute-positioned badges need flow content padding reservation
 
 **Discovery:** KpiCard's trend badge (`position: absolute; top: 12; right: 12`) overlapped the label text on wider desktop cards where "COLLECTION RATE" extended into the badge area. The label had no `paddingRight` to reserve space for the badge. Same pattern existed between the stale "TAPE DATE" badge and trend badge (both in top-right corner), and in TamaraDashboard threshold labels when values are close together.

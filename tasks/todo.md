@@ -34,6 +34,12 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-13 (session 15: Document Library bugfix)
+
+- [x] **Fix blank Document Library page** — `stats.by_type` entries are objects `{count, chunks, pages}` but frontend treated them as plain numbers, crashing the React render. Fixed to extract `.count` from each entry.
+
+---
+
 ## Completed — 2026-04-13 (session 14: UI collision audit + fixes)
 
 Fixed absolute-vs-flow positioning collisions across the platform:
