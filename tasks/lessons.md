@@ -100,6 +100,19 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-13 — Adopted Karpathy coding discipline principles into CLAUDE.md
+
+**Context:** Adapted Andrej Karpathy's 4 LLM coding principles (via `forrestchang/andrej-karpathy-skills`) into the project's Workflow Rules. The principles address the three most common LLM coding pitfalls: silent assumptions, overcomplicated code, and drive-by refactoring.
+**What changed:**
+- Added "Coding Discipline" section to CLAUDE.md with 4 explicit principles (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution)
+- Strengthened Planning with "state assumptions" and "surface ambiguity" rules — directly addressing 10+ lessons.md entries caused by silent assumptions (NotebookLM API, sort order, registry format, subagent function names)
+- Tightened Subagent rule with quality gates (spec + success criteria + constraints) — directly addressing analytics_bridge phantom import lesson
+- Tightened bug fixing from "just fix it" to "reproduce with test → find root cause → fix" — directly addressing the 28 red team findings pattern
+- Added "test-first by default" to Verification with non-1.0 FX multiplier requirement — directly addressing the weighted_avg_discount double-multiply lesson
+**Rule:** These are preventive rules. Most lessons.md entries document post-hoc corrections. The Karpathy principles encode the discipline that would have prevented those mistakes. Review them alongside lessons.md at session start.
+
+---
+
 ## 2026-04-11 — EOD MUST merge feature branch into main before pushing
 **Mistake:** `/eod` Step 9 says "push to main" but when work was done on a feature branch (`claude/prepare-context-DToUt`), I pushed to the feature branch instead and rationalized skipping the merge. The deploy script pulls `main` — so the code never reached production.
 **Rule:** EOD Step 9 is non-negotiable: if on a feature branch, `git checkout main && git merge <branch> --no-edit && git push origin main`. The `/eod` command has been updated to make this explicit. Never skip this step regardless of what the session task instructions say about which branch to develop on.

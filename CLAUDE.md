@@ -13,15 +13,59 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 - Enter plan mode for any non-trivial task (3+ steps or architectural decisions). Write the plan to `tasks/todo.md` with checkable items.
 - If something goes sideways, STOP and re-plan immediately — don't keep pushing.
 - Write detailed specs upfront to reduce ambiguity. Check in with the user before starting implementation.
+- **State assumptions explicitly.** Before implementing any non-trivial feature, list your assumptions (data availability, API contract, column names, user workflow, external service behavior). If uncertain about any, ask — don't guess silently. (See lessons.md: NotebookLM API, sort order, registry format — all caused by silent assumptions.)
+- **Surface ambiguity.** If a requirement could have 2+ interpretations, present all of them and ask the user to pick. Don't silently choose one. Example: "Add export" could mean API endpoint, file download, or background job — name the options.
+
+### Coding Discipline (adapted from Karpathy's principles)
+
+**These four principles are binding for all non-trivial work. For obvious one-liners, use judgment.**
+
+**1. Think Before Coding — Don't assume. Don't hide confusion. Surface tradeoffs.**
+- State your assumptions before writing code. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+- **For third-party integrations:** Install the package, inspect the API surface (`dir()`, `inspect.signature()`), write a minimal test BEFORE writing production code. Never code against a guessed interface.
+
+**2. Simplicity First — Minimum code that solves the problem. Nothing speculative.**
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+- **Prefer files over infrastructure.** Before adding a database table, cache layer, or new storage format, verify you can't solve it with existing files (JSON, JSONL, CSV in `data/`) + in-process query.
+- **Litmus test:** "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+**3. Surgical Changes — Touch only what you must. Clean up only your own mess.**
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Remove imports/variables/functions that YOUR changes made unused. Don't remove pre-existing dead code unless asked.
+- **The test:** Every changed line should trace directly to the user's request.
+
+**4. Goal-Driven Execution — Define success criteria. Loop until verified.**
+- Transform tasks into verifiable goals:
+  - "Add validation" → "Write tests for invalid inputs, then make them pass"
+  - "Fix the bug" → "Write a test that reproduces it, then make it pass"
+  - "Refactor X" → "Ensure tests pass before and after"
+- For multi-step tasks, state a brief plan with verification per step:
+  ```
+  1. [Step] → verify: [check]
+  2. [Step] → verify: [check]
+  3. [Step] → verify: [check]
+  ```
+- Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 ### Execution
-- **Subagents:** Offload research, exploration, and parallel analysis to subagents. One task per subagent for focused execution. Keep main context window clean.
+- **Subagents:** Offload research, exploration, and parallel analysis to subagents. One task per subagent for focused execution. Keep main context window clean. **Quality gate:** Every subagent prompt must include (a) a written spec (what to do and why), (b) success criteria (3 items), (c) known constraints (specific modules, APIs, files to use). No blank-check subagents. When a subagent writes cross-module imports, verify function names exist (`grep "def function_name" target_module.py`).
 - **Simplicity first:** Make every change as simple as possible. Minimal impact. Only touch what's necessary.
 - **No laziness:** Find root causes. No temporary fixes. Senior developer standards.
-- **Autonomous bug fixing:** When given a bug report, just fix it. Point at logs, errors, failing tests — then resolve them. Zero context switching required from the user.
+- **Autonomous bug fixing:** When given a bug report: (1) reproduce it with a test, (2) find the root cause (check `tasks/lessons.md` for related patterns), (3) fix it. If the bug might be systemic (affects other companies, other endpoints), flag it before patching — don't silently fix one instance.
 
 ### Verification
 - Never mark a task complete without proving it works — run tests, check logs, demonstrate correctness.
+- **Test-first by default.** Before implementing: write the test for the happy path. Implementation is done when that test passes. Then add 2-3 edge-case tests. For financial functions, include at least one test with a non-1.0 FX multiplier.
 - When a task depends on external data (tape edits, DB migrations), **verify the data first** before updating code that references it.
 - Ask yourself: "Would a staff engineer approve this?"
 
