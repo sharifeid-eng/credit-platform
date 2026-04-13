@@ -30,6 +30,7 @@ export default function DocumentLibrary() {
   const [ingesting, setIngesting] = useState(false)
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
+  const [nlmSyncResult, setNlmSyncResult] = useState(null)
 
   useEffect(() => {
     if (!company || !product) return
@@ -51,7 +52,8 @@ export default function DocumentLibrary() {
     setIngesting(true)
     setError(null)
     try {
-      await ingestDataroom(company, product)
+      const ingestResult = await ingestDataroom(company, product)
+      if (ingestResult?.nlm_sync) setNlmSyncResult(ingestResult.nlm_sync)
       // Refresh documents after ingestion
       const [docsData, statsData] = await Promise.all([
         getDataroomDocuments(company, product).catch(() => []),
@@ -149,6 +151,32 @@ export default function DocumentLibrary() {
               </div>
             </motion.div>
           ))}
+        </div>
+      )}
+
+      {/* NLM sync status after ingest */}
+      {nlmSyncResult && (
+        <div style={{
+          padding: '10px 16px',
+          borderRadius: 6,
+          background: nlmSyncResult.warning
+            ? 'rgba(240,192,64,0.08)'
+            : 'rgba(45,212,191,0.08)',
+          border: `1px solid ${nlmSyncResult.warning
+            ? 'rgba(240,192,64,0.2)'
+            : 'rgba(45,212,191,0.2)'}`,
+          fontSize: 12,
+          color: nlmSyncResult.warning ? '#F0C040' : '#2DD4BF',
+          marginBottom: 16,
+        }}>
+          {nlmSyncResult.warning
+            ? <>
+                <strong>NLM:</strong> {nlmSyncResult.warning.message}
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, display: 'block', marginTop: 4, color: 'var(--text-faint)' }}>
+                  {nlmSyncResult.warning.fix}
+                </span>
+              </>
+            : `NLM sync: ${nlmSyncResult.uploaded || 0} uploaded, ${nlmSyncResult.skipped || 0} already synced`}
         </div>
       )}
 

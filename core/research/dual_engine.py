@@ -115,10 +115,23 @@ class DualResearchEngine:
         # Step 2: NotebookLM (optional but encouraged)
         nlm_result = None
         nlm_available = False
+        nlm_warning = None
 
         if use_notebooklm:
             self._try_init_nlm()
             nlm_available = self.nlm_engine is not None and self.nlm_engine.available
+
+            if not nlm_available:
+                nlm_warning = (
+                    self.nlm_engine.get_warning()
+                    if self.nlm_engine is not None
+                    else {
+                        "code": "nlm_not_installed",
+                        "message": "NotebookLM library is not installed. Research will use Claude RAG only.",
+                        "fix": "Install with 'pip install notebooklm-py' then run 'notebooklm login'.",
+                        "severity": "warning",
+                    }
+                )
 
             if nlm_available:
                 try:
@@ -153,6 +166,7 @@ class DualResearchEngine:
                 "chunks_searched": claude_result.get("chunks_searched", 0),
                 "mind_context_used": claude_result.get("mind_context_used", False),
                 "nlm_available": nlm_available,
+                "nlm_warning": None,
                 "nlm_references": nlm_result.get("references", []),
                 "nlm_conversation_id": nlm_result.get("conversation_id"),
             }
@@ -168,6 +182,7 @@ class DualResearchEngine:
             "chunks_searched": claude_result.get("chunks_searched", 0),
             "mind_context_used": claude_result.get("mind_context_used", False),
             "nlm_available": nlm_available,
+            "nlm_warning": nlm_warning,
             "nlm_references": [],
             "nlm_conversation_id": None,
         }

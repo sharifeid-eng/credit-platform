@@ -206,13 +206,27 @@ export default function ResearchChat() {
   const [loading, setLoading] = useState(false)
   const [nlmStatus, setNlmStatus] = useState(null)
   const [syncing, setSyncing] = useState(false)
+  const [nlmDismissed, setNlmDismissed] = useState(false)
+  const [nlmWarning, setNlmWarning] = useState(null)
+  const [pendingQuestion, setPendingQuestion] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   // Fetch NLM status on mount
   useEffect(() => {
     getNotebookLMStatus()
-      .then(setNlmStatus)
+      .then(status => {
+        setNlmStatus(status)
+        if (status && !status.available) {
+          setNlmWarning(
+            status.library_installed && !status.authenticated
+              ? { code: 'nlm_auth_expired', message: 'NotebookLM authentication has expired. Research will use Claude RAG only.', fix: "Run 'notebooklm login' in the project virtual environment to re-authenticate." }
+              : !status.library_installed
+                ? { code: 'nlm_not_installed', message: 'NotebookLM library is not installed. Research will use Claude RAG only.', fix: "Install with 'pip install notebooklm-py' then run 'notebooklm login'." }
+                : null
+          )
+        }
+      })
       .catch(() => setNlmStatus(null))
   }, [])
 
@@ -250,6 +264,13 @@ export default function ResearchChat() {
   async function send(question) {
     const q = (question || input).trim()
     if (!q || loading) return
+
+    // Block first query if NLM is unavailable and user hasn't acknowledged
+    if (nlmWarning && !nlmDismissed) {
+      setPendingQuestion(q)
+      setInput('')
+      return
+    }
     setInput('')
     setMessages(prev => [...prev, { role: 'user', text: q }])
     setLoading(true)
@@ -278,6 +299,31 @@ export default function ResearchChat() {
 
   function onKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  }
+
+  function handleNlmDismiss() {
+    setNlmDismissed(true)
+    if (pendingQuestion) {
+      const q = pendingQuestion
+      setPendingQuestion(null)
+      // Use setTimeout to let state update before re-sending
+      setTimeout(() => send(q), 0)
+    }
+  }
+
+  async function handleNlmRetry() {
+    try {
+      const status = await getNotebookLMStatus()
+      setNlmStatus(status)
+      if (status && status.available) {
+        setNlmWarning(null)
+        if (pendingQuestion) {
+          const q = pendingQuestion
+          setPendingQuestion(null)
+          setTimeout(() => send(q), 0)
+        }
+      }
+    } catch { /* status check failed, warning stays */ }
   }
 
   const pad = isMobile ? 14 : 28
@@ -348,8 +394,61 @@ export default function ResearchChat() {
           scrollbarWidth: 'thin',
           scrollbarColor: 'var(--border) transparent',
         }}>
+          {/* NLM Warning Banner — blocks first query until user acknowledges */}
+          {pendingQuestion && nlmWarning && !nlmDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                margin: '8px 0',
+                padding: '16px 20px',
+                background: 'rgba(240,192,64,0.08)',
+                border: '1px solid rgba(240,192,64,0.25)',
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#F0C040', marginBottom: 6 }}>
+                NotebookLM Unavailable
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {nlmWarning.message}
+              </div>
+              <div style={{
+                fontSize: 11, color: 'var(--text-faint)',
+                fontFamily: 'var(--font-mono)',
+                padding: '6px 10px',
+                background: 'var(--bg-deep)',
+                borderRadius: 4,
+                margin: '8px 0 12px',
+              }}>
+                {nlmWarning.fix}
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={handleNlmDismiss}
+                  style={{
+                    padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    background: 'var(--accent-gold)', color: '#000', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  Proceed without NLM
+                </button>
+                <button
+                  onClick={handleNlmRetry}
+                  style={{
+                    padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    background: 'transparent', color: 'var(--text-muted)',
+                    border: '1px solid var(--border)', cursor: 'pointer',
+                  }}
+                >
+                  Retry Connection
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Welcome state */}
-          {messages.length === 0 && !loading && (
+          {messages.length === 0 && !loading && !pendingQuestion && (
             <div style={{ padding: '40px 0', textAlign: 'center' }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 16 }}>
                 <circle cx="11" cy="11" r="8" />

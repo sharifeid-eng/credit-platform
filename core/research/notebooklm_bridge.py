@@ -84,6 +84,24 @@ class NotebookLMEngine:
             "notebooks_cached": len(self._notebook_ids),
         }
 
+    def get_warning(self):
+        """Return a structured warning if NLM is not available, or None if OK."""
+        if self.available:
+            return None
+        if self._use_python or self._use_cli:
+            return {
+                "code": "nlm_auth_expired",
+                "message": "NotebookLM authentication has expired. Research will use Claude RAG only.",
+                "fix": "Run 'notebooklm login' in the project virtual environment to re-authenticate.",
+                "severity": "warning",
+            }
+        return {
+            "code": "nlm_not_installed",
+            "message": "NotebookLM library is not installed. Research will use Claude RAG only.",
+            "fix": "Install with 'pip install notebooklm-py' then run 'notebooklm login'.",
+            "severity": "warning",
+        }
+
     # ------------------------------------------------------------------
     # Availability probing
     # ------------------------------------------------------------------

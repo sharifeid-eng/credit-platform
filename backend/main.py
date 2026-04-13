@@ -3446,15 +3446,33 @@ def dataroom_ingest(company: str, product: str, source_dir: Optional[str] = None
     # Auto-sync to NotebookLM if available
     try:
         nlm_sync = _research_engine.sync_to_notebooklm(company, product)
+        nlm_avail = nlm_sync.get("notebook_id") is not None
         result["nlm_sync"] = {
             "uploaded": nlm_sync.get("uploaded", 0),
             "skipped": nlm_sync.get("skipped", 0),
             "errors": nlm_sync.get("errors", []),
-            "available": nlm_sync.get("notebook_id") is not None,
+            "available": nlm_avail,
         }
+        if not nlm_avail:
+            nlm_eng = getattr(_research_engine, 'nlm_engine', None)
+            result["nlm_sync"]["warning"] = nlm_eng.get_warning() if nlm_eng else {
+                "code": "nlm_not_installed",
+                "message": "NotebookLM not installed. Documents were not synced.",
+                "fix": "Install with 'pip install notebooklm-py' then run 'notebooklm login'.",
+                "severity": "warning",
+            }
     except Exception as exc:
         logger.warning("NLM sync after ingest failed: %s", exc)
-        result["nlm_sync"] = {"available": False, "error": str(exc)}
+        result["nlm_sync"] = {
+            "available": False,
+            "error": str(exc),
+            "warning": {
+                "code": "nlm_sync_error",
+                "message": f"NLM sync failed: {exc}",
+                "fix": "Check NotebookLM authentication and try again.",
+                "severity": "warning",
+            },
+        }
 
     return result
 

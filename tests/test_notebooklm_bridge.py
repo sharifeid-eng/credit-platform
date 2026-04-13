@@ -334,3 +334,71 @@ class TestCitationMerging:
         # Re-numbered sequentially
         assert combined[0]["index"] == 1
         assert combined[1]["index"] == 2
+
+
+# ── NLM Warning tests ────────────────────────────────────────────────────────
+
+class TestNLMWarning:
+    """Test that NLM unavailability produces actionable warnings."""
+
+    def test_get_warning_returns_none_when_available(self):
+        from core.research.notebooklm_bridge import NotebookLMEngine
+        engine = NotebookLMEngine.__new__(NotebookLMEngine)
+        engine.available = True
+        assert engine.get_warning() is None
+
+    def test_get_warning_returns_auth_code_when_installed(self):
+        from core.research.notebooklm_bridge import NotebookLMEngine
+        engine = NotebookLMEngine.__new__(NotebookLMEngine)
+        engine.available = False
+        engine._use_python = True
+        engine._use_cli = False
+        warning = engine.get_warning()
+        assert warning["code"] == "nlm_auth_expired"
+        assert "notebooklm login" in warning["fix"]
+
+    def test_get_warning_returns_not_installed_code(self):
+        from core.research.notebooklm_bridge import NotebookLMEngine
+        engine = NotebookLMEngine.__new__(NotebookLMEngine)
+        engine.available = False
+        engine._use_python = False
+        engine._use_cli = False
+        warning = engine.get_warning()
+        assert warning["code"] == "nlm_not_installed"
+        assert "pip install" in warning["fix"]
+
+    def test_dual_engine_query_includes_warning_when_unavailable(self):
+        from core.research.dual_engine import DualResearchEngine
+        engine = DualResearchEngine.__new__(DualResearchEngine)
+        engine._nlm_checked = True
+        engine.nlm_engine = None
+        engine.synthesizer = MagicMock()
+        engine.claude_engine = MagicMock()
+        engine.claude_engine.query.return_value = {
+            "answer": "Claude answer",
+            "citations": [],
+            "engine": "claude",
+            "chunks_searched": 3,
+            "mind_context_used": False,
+        }
+        result = engine.query("klaim", "UAE_healthcare", "test")
+        assert result["nlm_warning"] is not None
+        assert result["nlm_warning"]["code"] == "nlm_not_installed"
+
+    def test_dual_engine_query_no_warning_when_nlm_disabled(self):
+        from core.research.dual_engine import DualResearchEngine
+        engine = DualResearchEngine.__new__(DualResearchEngine)
+        engine._nlm_checked = True
+        engine.nlm_engine = None
+        engine.synthesizer = MagicMock()
+        engine.claude_engine = MagicMock()
+        engine.claude_engine.query.return_value = {
+            "answer": "Claude answer",
+            "citations": [],
+            "engine": "claude",
+            "chunks_searched": 3,
+            "mind_context_used": False,
+        }
+        result = engine.query("klaim", "UAE_healthcare", "test",
+                              use_notebooklm=False)
+        assert result.get("nlm_warning") is None
