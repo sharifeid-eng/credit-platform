@@ -5,6 +5,10 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Next Session Priorities
 
+### Klaim — Pending Confirmation
+- [ ] **Confirm April tape scope with Klaim** — is it active-deals-only (357) or full portfolio? If full, load as snapshot. If active-only, request full export with new columns.
+- [ ] **Load confirmed tape as platform snapshot** — once scope confirmed, move from staging/ to main dir
+
 ### Tamara Data Room + Memo (next session)
 - [ ] **Ingest Tamara data room** — user will provide path, ask before ingesting
 - [ ] **Sync Tamara to NotebookLM** — dual-engine for richer memo
@@ -32,6 +36,18 @@ Track active work here. Claude updates this as tasks progress.
 
 ### Other Remaining
 - [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
+
+---
+
+## Completed — 2026-04-14 (session 17 continued: April tape + platform enhancements)
+
+- [x] **April 14 tape assessment** — 357 deals (active-only extract), 5 new columns incl Expected collection days + Collection days so far. Moved to staging/ pending Klaim scope confirmation.
+- [x] **Direct DPD in compute_par()** — when Expected collection days available, computes exact DPD per deal (replaces shortfall proxy). Falls back to proxy for older tapes.
+- [x] **DSO Operational enhancement** — per-deal `true_dso - expected_collection_days` when available
+- [x] **Paid vs Due covenant temporal filtering** — filters to deals with expected payment date in period
+- [x] **Concern list updated** — expected payment date gap marked PARTIALLY_ADDRESSED, payer gap still OPEN
+- [x] **Data room cleanup** — refreshed registry (87→76 docs, 11 pruned), search index rebuilt
+- [x] **Document Library enhancements** — category filters, colored badges, sort, breadcrumbs, file viewing endpoint, text length
 
 ---
 

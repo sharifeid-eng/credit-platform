@@ -130,7 +130,8 @@ The platform allows analysts and investment committee members to:
 **Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, rent payment financing (RNPL), and BNPL consumer instalment lending.
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook) and JSON files (Tamara data room ingestion).
 **Data notes:**
-- **Tapes available:** Sep 2025 (25 cols), Dec 2025 (xlsx), Feb 2026 (25 cols), Mar 2026 (60 cols — latest)
+- **Tapes available:** Sep 2025 (25 cols), Dec 2025 (xlsx), Feb 2026 (25 cols), Mar 2026 (60 cols — latest full snapshot), Apr 2026 (65 cols — active-only, in staging/, pending Klaim confirmation)
+- Apr 2026 tape adds 5 columns: `Expected collection days`, `Collection days so far`, `AccountManager`, `SalesManager`, `Provider`. Only 357 deals (active-only extract). Enables direct DPD for PAR when loaded.
 - Sep 2025 tape has `Expected IRR` and `Actual IRR` columns; Dec 2025 and Feb 2026 do not
 - Mar 2026 tape restored IRR and added 35 new columns: collection curves (26 cols for expected/actual at 30d intervals up to 390d), `Owner`, `Released from`, `Collected till date by owner`, VAT columns, `FundStatus`
 - `Actual IRR for owner` column in Mar 2026 tape has **garbage data** (mean ~2.56e44) — excluded from all analysis
@@ -1362,6 +1363,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - File viewing: PDF cards clickable, open in new browser tab via `GET /dataroom/documents/{id}/view` endpoint (streams original file with correct MIME type)
   - Text length shown in card metadata (e.g. "18.4K chars")
   - Results count when filtered ("Showing 3 of 87 documents in Company Presentation")
+- ✅ **Direct DPD from Expected collection days (session 17 continued):**
+  - `compute_par()`: when `Expected collection days` column available, computes `DPD = max(0, today - (Deal date + Expected collection days))` per deal. Replaces shortfall proxy. Method reported as `direct` vs `proxy`. Falls back to proxy for older tapes.
+  - `compute_dso()`: DSO Operational = `true_dso - Expected collection days` per deal (was crude `median_term * 0.5` proxy)
+  - `compute_klaim_covenants()` Paid vs Due: temporal filtering — only counts deals with expected payment date in period (was all deals with Deal date in period)
+  - April 14 tape assessed: 357 deals (active-only extract), 5 new columns. Moved to `staging/` pending Klaim scope confirmation. Not loaded as platform snapshot.
 -----
 ## Known Gaps & Next Steps
 **Short term:**

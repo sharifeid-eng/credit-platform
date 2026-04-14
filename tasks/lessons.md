@@ -3,6 +3,13 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-14 — New tapes must be assessed for scope before loading as snapshots
+
+**Discovery:** April 14 tape had 357 deals (99.4% active) vs March's 7,697 (81% completed). Loading it as a regular snapshot would show 45% collection rate vs 91%, alarming the dashboard. It was an active-deals-only extract, not a full portfolio snapshot. The test suite also broke because `_find_latest_tape()` picked it up automatically and tests assumed a mature portfolio.
+**Rule:** When a new tape arrives: (1) check deal count vs prior tape — a 90%+ drop means different scope, (2) check Status distribution — if >90% Executed, it's likely active-only, (3) confirm with the company before loading, (4) use a `staging/` folder for unconfirmed tapes to keep them out of the platform and test fixtures.
+
+---
+
 ## 2026-04-13 — Memo generation: dual-engine produces different, not always longer, output
 
 **Discovery:** Comparing Claude-only vs dual-engine memos: total length was similar (~50K chars), but distribution changed. Dual-engine added depth to exec summary (+295), market context (+763), credit quality (+249), investment thesis (+284), but was shorter on portfolio analytics (-1013), covenants (-583), and financials (-497). The NLM contribution appears to add external context and cross-references where available, but also introduces discipline — sections where NLM found no relevant sources got honest disclaimers ("relevance scores ranging from 0.11 to 0.25") rather than speculative padding.
