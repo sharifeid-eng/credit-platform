@@ -3,6 +3,13 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-14 — load_dotenv() does not override existing env vars by default
+
+**Discovery:** `ANTHROPIC_API_KEY` was set as an empty string in the parent shell environment. `load_dotenv()` (python-dotenv) does NOT override existing env vars by default — it only sets vars that don't exist yet. So even though `.env` had the correct key, `os.environ.get("ANTHROPIC_API_KEY")` returned `""` (empty string, falsy), causing Claude RAG synthesis to silently fall back to retrieval-only mode.
+**Rule:** Always use `load_dotenv(override=True)` when the `.env` file should be the source of truth. This is especially important for API keys that may exist as empty strings in CI/CD, Docker, or inherited shell environments. Without `override=True`, a stale empty env var silently shadows the `.env` value.
+
+---
+
 ## 2026-04-14 — Mobile flex layouts need explicit flex-direction: column
 
 **Discovery:** MemoEditor's main layout container used `display: flex` (defaults to `flex-direction: row`). On desktop, the sidebar nav + content panel worked fine side-by-side. On mobile, the horizontal tab bar and content panel were also side-by-side, causing the content to get 0 width and be clipped by `overflow: hidden`. The page appeared completely blank — no tabs, no content, just an empty bordered box.
