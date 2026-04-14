@@ -24,10 +24,17 @@
   "tape_columns_checked": ["Group", "Product"],
   "group_column_contains": "healthcare_provider_names",
   "unique_groups_count": 143,
+  "expected_payment_date_gap": {
+    "status": "PARTIALLY_ADDRESSED",
+    "updated_at": "2026-04-14",
+    "detail": "April 14 tape adds 'Expected collection days' (53-364d range, mean 88d) and 'Collection days so far' columns. Enables direct DPD calculation for PAR and temporal Paid vs Due covenant. However: (1) only available on April tape, older tapes still use proxies, (2) April tape appears to be active-deals-only (357 deals vs 7,697 in March) — awaiting Klaim confirmation on tape scope.",
+    "remaining_gap": "Need Klaim to confirm whether April tape is active-only or full portfolio. Once confirmed, the new columns enable contractual PAR and Paid vs Due measurements."
+  },
   "recommendations": [
-    "Request Klaim add an 'Insurance Company' or 'Payer' column to future tape exports",
-    "Until payer data is available, assume all receivables are from approved debtors (optimistic) or flag as unverifiable (conservative)",
-    "The 10% non-eligible debtor concentration limit cannot be enforced from tape data alone",
+    "STILL OPEN: Request Klaim add an 'Insurance Company' or 'Payer' column — Account Debtor gap remains",
+    "RESOLVED (partial): Expected collection days now in April tape — enables direct DPD for PAR",
+    "PENDING: Confirm with Klaim whether April tape is active-deals-only or full portfolio snapshot",
+    "The 10% non-eligible debtor concentration limit STILL cannot be enforced from tape data alone",
     "Consider adding payer identification to the Integration API invoice schema (extra_data JSONB field)"
   ],
   "mrpa_concentration_limit_d": {

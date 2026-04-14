@@ -1121,11 +1121,26 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     # Amount paid in period / Amount due in period
     pvd_threshold = facility_params.get('paid_vs_due_limit', 0.95)
     pvd_ratio = 0
+    amount_due = 0
+    amount_paid = 0
+    pvd_method = 'proxy'
     if 'Expected total' in df.columns and 'Collected till date' in df.columns:
-        period_deals = df[
-            (df['Deal date'] <= period_end) &
-            (df['Status'] == 'Executed') if 'Status' in df.columns else True
-        ]
+        if 'Expected collection days' in df.columns:
+            # Direct: filter to deals whose expected payment date falls within the period
+            import pandas as _pd2
+            exp_days = df['Expected collection days'].fillna(0).astype(float)
+            df_pvd = df.copy()
+            df_pvd['_exp_pay_date'] = df_pvd['Deal date'] + _pd2.to_timedelta(exp_days, unit='D')
+            period_deals = df_pvd[
+                (df_pvd['_exp_pay_date'] <= period_end) &
+                (df_pvd['Status'] == 'Executed') if 'Status' in df_pvd.columns else True
+            ]
+            pvd_method = 'direct'
+        else:
+            period_deals = df[
+                (df['Deal date'] <= period_end) &
+                (df['Status'] == 'Executed') if 'Status' in df.columns else True
+            ]
         amount_due = period_deals['Expected total'].sum() * mult if 'Expected total' in period_deals.columns else 0
         amount_paid = period_deals['Collected till date'].sum() * mult if len(period_deals) else 0
         pvd_ratio = amount_paid / amount_due if amount_due > 0 else 0
