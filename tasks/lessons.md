@@ -30,6 +30,11 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 **Discovery:** `_memo_storage.update_section()` requires `(company, product, memo_id, section_key, content)` but both call sites in `main.py` passed only `(memo_id, section_key, content)` — missing `company` and `product`. This caused a TypeError on any section edit or regeneration attempt. The bug was introduced when the endpoint handler parameters didn't match the storage method signature.
 **Rule:** When calling a storage/service method from an endpoint handler, always verify that the handler's path parameters (`company`, `product`, `memo_id`) are forwarded in the correct order. If the method signature has 5+ positional args, use keyword arguments to make the mapping explicit and prevent positional misalignment.
 
+## 2026-04-14 — New tapes must be assessed for scope before loading as snapshots
+
+**Discovery:** April 14 tape had 357 deals (99.4% active) vs March's 7,697 (81% completed). Loading it as a regular snapshot would show 45% collection rate vs 91%, alarming the dashboard. It was an active-deals-only extract, not a full portfolio snapshot. The test suite also broke because `_find_latest_tape()` picked it up automatically and tests assumed a mature portfolio.
+**Rule:** When a new tape arrives: (1) check deal count vs prior tape — a 90%+ drop means different scope, (2) check Status distribution — if >90% Executed, it's likely active-only, (3) confirm with the company before loading, (4) use a `staging/` folder for unconfirmed tapes to keep them out of the platform and test fixtures.
+
 ---
 
 ## 2026-04-13 — Memo generation: dual-engine produces different, not always longer, output
