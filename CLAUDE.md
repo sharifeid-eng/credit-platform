@@ -801,7 +801,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Completed-only margins** — All margin calculations in Returns use completed deals only to avoid penalising vintages still collecting. `realised_margin` = `completed_margin`. Discount band, new vs repeat, and monthly margins also filtered to completed.
 - **Expected collection rate** — Collection velocity endpoint returns `expected_rate = Expected till date / Purchase value` per month when column available (`has_forecast` flag). Frontend renders as blue dashed line alongside actual rate bars.
 - **Sidebar navigation architecture** — Company pages use a persistent 240px sidebar (`Sidebar.jsx`) within `CompanyLayout`. On mobile, sidebar becomes a slide-in drawer (fixed position, `translateX` animation) with dark backdrop overlay, coordinated via `MobileMenuContext`. Hamburger button in Navbar toggles the drawer. Auto-closes on route change, locks body scroll when open. Tabs are `<Link>` elements (not buttons). Active state: gold left border + text.
-- **Mobile responsiveness architecture** — All styling uses inline `style={{}}` objects (no Tailwind classes). Responsive behavior uses a `useBreakpoint()` hook (`frontend/src/hooks/useBreakpoint.js`) returning `{ isMobile, isTablet, isDesktop }` via `matchMedia` listeners. For grid columns, CSS `auto-fill`/`auto-fit` with `minmax()` is preferred over JS breakpoints — intrinsically responsive. Breakpoints: mobile < 768px, tablet 768-1023px, desktop >= 1024px. `--navbar-height` CSS variable responds to viewport.
+- **Mobile responsiveness architecture** — All styling uses inline `style={{}}` objects (no Tailwind classes). Responsive behavior uses a `useBreakpoint()` hook (`frontend/src/hooks/useBreakpoint.js`) returning `{ isMobile, isTablet, isDesktop }` via `matchMedia` listeners. For grid columns, CSS `auto-fill`/`auto-fit` with `minmax()` is preferred over JS breakpoints — intrinsically responsive. Breakpoints: mobile < 768px, tablet 768-1023px, desktop >= 1024px. `--navbar-height` CSS variable responds to viewport. **Important:** Any flex container that switches between sidebar (desktop) and stacked (mobile) layout MUST include `flexDirection: isMobile ? 'column' : 'row'` — the default `row` breaks mobile.
 - **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
 - **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
 - **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
@@ -1291,7 +1291,8 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - AI section generator with mind context
   - Versioning: draft → review → final
   - PDF export in dark theme
-  - Frontend: MemoBuilder wizard, MemoEditor, MemoArchive
+  - Frontend: MemoBuilder wizard, MemoEditor (mobile-responsive), MemoArchive
+  - Bug fixes: MemoEditor mobile layout (flex-direction), section edit/regenerate endpoint args
 - ✅ **Legal Analysis (third analytical pillar):**
   - 5-pass Claude extraction from facility agreement PDFs
   - Pydantic schemas for all extracted terms

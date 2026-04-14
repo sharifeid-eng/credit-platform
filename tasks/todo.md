@@ -35,6 +35,16 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-14 (session 18: Bug fixes)
+
+**MemoEditor blank on mobile:**
+- [x] **Fix flex-direction on mobile** — main layout container defaulted to `flex-direction: row`, causing horizontal section tabs and content panel to lay side-by-side on mobile. Content got squeezed to 0 width and clipped by `overflow: hidden`. Fixed by adding `flexDirection: isMobile ? 'column' : 'row'`.
+
+**Memo section edit/regenerate crash:**
+- [x] **Fix missing arguments in update_section calls** — both PATCH (edit) and POST (regenerate) endpoints called `_memo_storage.update_section(memo_id, section_key, content)` but method requires `(company, product, memo_id, section_key, content)`. TypeError on any attempt to edit or regenerate a section. Fixed at `backend/main.py:3802` and `:3842`.
+
+---
+
 ## Completed — 2026-04-13 (session 17: Klaim Data Room + Memo Exercise)
 
 End-to-end validation of the full analysis pipeline — Legal Analysis, Data Room, Intelligence System events, and Memo Engine.

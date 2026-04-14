@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-14 — Mobile flex layouts need explicit flex-direction: column
+
+**Discovery:** MemoEditor's main layout container used `display: flex` (defaults to `flex-direction: row`). On desktop, the sidebar nav + content panel worked fine side-by-side. On mobile, the horizontal tab bar and content panel were also side-by-side, causing the content to get 0 width and be clipped by `overflow: hidden`. The page appeared completely blank — no tabs, no content, just an empty bordered box.
+**Rule:** Any flex container that switches between a sidebar layout (desktop) and a stacked layout (mobile) MUST include `flexDirection: isMobile ? 'column' : 'row'`. The default `row` breaks mobile. Audit all `display: flex` containers that have both a `{!isMobile && ...}` desktop child and a `{isMobile && ...}` mobile child — the parent layout must also be responsive.
+
+## 2026-04-14 — Always verify argument count when calling storage/service methods
+
+**Discovery:** `_memo_storage.update_section()` requires `(company, product, memo_id, section_key, content)` but both call sites in `main.py` passed only `(memo_id, section_key, content)` — missing `company` and `product`. This caused a TypeError on any section edit or regeneration attempt. The bug was introduced when the endpoint handler parameters didn't match the storage method signature.
+**Rule:** When calling a storage/service method from an endpoint handler, always verify that the handler's path parameters (`company`, `product`, `memo_id`) are forwarded in the correct order. If the method signature has 5+ positional args, use keyword arguments to make the mapping explicit and prevent positional misalignment.
+
+---
+
 ## 2026-04-13 — Memo generation: dual-engine produces different, not always longer, output
 
 **Discovery:** Comparing Claude-only vs dual-engine memos: total length was similar (~50K chars), but distribution changed. Dual-engine added depth to exec summary (+295), market context (+763), credit quality (+249), investment thesis (+284), but was shorter on portfolio analytics (-1013), covenants (-583), and financials (-497). The NLM contribution appears to add external context and cross-references where available, but also introduces discipline — sections where NLM found no relevant sources got honest disclaimers ("relevance scores ranging from 0.11 to 0.25") rather than speculative padding.
