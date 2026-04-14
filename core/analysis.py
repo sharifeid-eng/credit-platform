@@ -858,30 +858,35 @@ def compute_dso(df, mult, as_of_date=None):
         })
 
     # DSO Operational — days from expected due date to actual collection
-    # "Due date" for Klaim = Deal date + median deal term (derived from completed deals)
     dso_ops = {'dso_operational_available': False}
-    if 'Expected till date' in df.columns and has_curves:
-        # Approximate: operational delay = true_dso - expected_dso
-        # where expected_dso = deal_age at which Expected till date % reaches 90%
-        # Simpler: operational DSO = true_dso minus the median deal term
-        median_deal_age = float((valid['true_dso']).median()) if len(valid) > 0 else 0
-        # Compute how many deals collected AFTER their expected timeline
-        # Use: deal_age at completion vs expected term proxy
+    if 'Expected collection days' in df.columns and len(valid) > 0:
+        # Direct method: operational delay = true_dso - expected_collection_days per deal
+        valid_copy = valid.copy()
+        exp_days = valid_copy['Expected collection days'].fillna(0).astype(float)
+        valid_copy['dso_operational'] = (valid_copy['true_dso'] - exp_days).clip(lower=0)
+        ops_vals = valid_copy['dso_operational']
+        ops_coll = valid_copy['Collected till date'] * mult
+        ops_total = ops_coll.sum()
+        dso_ops = {
+            'dso_operational_available': True,
+            'dso_operational_method': 'direct',
+            'dso_operational_weighted': round(float((ops_vals * ops_coll).sum() / ops_total), 1) if ops_total else 0,
+            'dso_operational_median': round(float(ops_vals.median()), 1),
+        }
+    elif 'Expected till date' in df.columns and has_curves and len(valid) > 0:
+        # Proxy method: operational delay = true_dso - (median_term * 0.5)
         if 'Deal date' in valid.columns:
             valid_copy = valid.copy()
             today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
             valid_copy['deal_age'] = (today - valid_copy['Deal date']).dt.days
-            # Operational delay = true_dso - (deal_age * expected_collection_pct)
-            # Simpler: just report true_dso vs a reference benchmark
-            # Expected deal term: median of deal_age for completed deals
             median_term = float(valid_copy['deal_age'].median())
-            # DSO from due: how many extra days beyond median term to collect
             valid_copy['dso_operational'] = (valid_copy['true_dso'] - median_term * 0.5).clip(lower=0)
             ops_vals = valid_copy['dso_operational']
             ops_coll = valid_copy['Collected till date'] * mult
             ops_total = ops_coll.sum()
             dso_ops = {
                 'dso_operational_available': True,
+                'dso_operational_method': 'proxy',
                 'dso_operational_weighted': round(float((ops_vals * ops_coll).sum() / ops_total), 1) if ops_total else 0,
                 'dso_operational_median': round(float(ops_vals.median()), 1),
             }
@@ -1375,25 +1380,37 @@ def compute_par(df, mult, as_of_date=None):
     if total_active_outstanding <= 0:
         return {'available': False}
 
-    # Method 1: Primary — Expected till date column
-    if 'Expected till date' in df.columns:
-        active['expected'] = active['Expected till date'].fillna(0) * mult
-        active['collected'] = active['Collected till date'] * mult
-        active['shortfall'] = (active['expected'] - active['collected']).clip(lower=0)
+    # Method 1: Primary — uses Expected collection days (direct DPD) or
+    # Expected till date (shortfall proxy), whichever is available
+    has_expected_days = 'Expected collection days' in df.columns
+    if has_expected_days or 'Expected till date' in df.columns:
 
-        # For Klaim receivables, "days past due" is derived from the shortfall:
-        # We estimate how many days of collection the deal is behind.
-        # shortfall_ratio = shortfall / purchase_value gives % of deal still behind.
-        # Then estimate DPD = deal_age * shortfall_ratio (how many deal-days are "missing").
-        active['deal_age'] = (today - active['Deal date']).dt.days
-        pv = (active['Purchase value'] * mult).replace(0, float('nan'))
-        active['shortfall_ratio'] = active['shortfall'] / pv
-        active['shortfall_ratio'] = active['shortfall_ratio'].fillna(0)
-
-        # Estimated DPD: deal_age * shortfall_ratio gives an approximation of
-        # how many days worth of collection are outstanding.
-        # A deal that is 200 days old with 15% shortfall has ~30 estimated DPD.
-        active['est_dpd'] = active['deal_age'] * active['shortfall_ratio']
+        if has_expected_days:
+            # Direct DPD: expected payment date = Deal date + Expected collection days
+            # DPD = max(0, today - expected payment date)
+            exp_days = active['Expected collection days'].fillna(0).astype(float)
+            active['expected_payment_date'] = active['Deal date'] + pd.to_timedelta(exp_days, unit='D')
+            active['est_dpd'] = (today - active['expected_payment_date']).dt.days.clip(lower=0)
+            # Still compute shortfall for the mask (need outstanding > 0 and behind schedule)
+            active['collected'] = active['Collected till date'] * mult
+            if 'Expected till date' in df.columns:
+                active['expected'] = active['Expected till date'].fillna(0) * mult
+                active['shortfall'] = (active['expected'] - active['collected']).clip(lower=0)
+            else:
+                # Without Expected till date, mark all past-due deals as having shortfall
+                active['shortfall'] = (active['est_dpd'] > 0).astype(float)
+            par_method = 'direct'
+        else:
+            # Proxy DPD: shortfall_ratio × deal_age
+            active['expected'] = active['Expected till date'].fillna(0) * mult
+            active['collected'] = active['Collected till date'] * mult
+            active['shortfall'] = (active['expected'] - active['collected']).clip(lower=0)
+            active['deal_age'] = (today - active['Deal date']).dt.days
+            pv = (active['Purchase value'] * mult).replace(0, float('nan'))
+            active['shortfall_ratio'] = active['shortfall'] / pv
+            active['shortfall_ratio'] = active['shortfall_ratio'].fillna(0)
+            active['est_dpd'] = active['deal_age'] * active['shortfall_ratio']
+            par_method = 'proxy'
 
         def _par_at(threshold_days):
             mask = (
@@ -1421,7 +1438,7 @@ def compute_par(df, mult, as_of_date=None):
 
         return {
             'available': True,
-            'method': 'expected',
+            'method': 'direct' if has_expected_days else 'expected',
             # Active perspective (monitoring) — denominator = active outstanding
             'par30': round(par30, 4),
             'par60': round(par60, 4),
