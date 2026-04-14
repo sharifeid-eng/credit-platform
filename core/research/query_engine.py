@@ -377,6 +377,12 @@ class ClaudeQueryEngine:
 
         self._client_checked = True
 
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+        except ImportError:
+            pass
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             logger.warning(

@@ -847,7 +847,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **PDF parsing pipeline** — `core/legal_parser.py` uses PyMuPDF (`pymupdf4llm`) for markdown conversion preserving headers/structure, plus `pdfplumber` for table extraction (advance rate schedules, concentration tier tables). Semantic chunking by article/section headers (legal docs are well-structured). Definitions section isolated first as context for all subsequent extraction passes.
 - **Legal extraction schema** — `core/LEGAL_EXTRACTION_SCHEMA.md` defines extraction taxonomy (7 sections), Pydantic models in `core/legal_schemas.py`, confidence grading (HIGH >= 0.85, MED >= 0.70, LOW < 0.70), and facility_params mapping table (12 fields). Companion to ANALYSIS_FRAMEWORK.md Section 16.
 - **Living Mind 4-layer architecture** — Framework (codified rules) → Master Mind (fund lessons) → Methodology (company rules) → Company Mind (position notes). Every AI prompt sees all 4 layers. Knowledge flows upward: fast corrections → consolidation → codification.
-- **Dual-engine research** — Claude RAG (primary) + NotebookLM (second opinion, first-class). Both run on every query when available, synthesis merges best insights with citation origin tracking. `notebooklm-py` v0.3.4 via Python API (preferred) or CLI fallback. Auth: `notebooklm login` (browser OAuth, saves to `~/.notebooklm/storage_state.json`) or `NOTEBOOKLM_AUTH_JSON` env var (headless). Notebook IDs + synced sources persisted to `data/{co}/{prod}/dataroom/notebooklm_state.json`. Data room ingest auto-syncs to NLM. Chat persona configured for credit analysis. Frontend shows engine badges (blue=Claude, teal=NLM, gold=merged), NLM status indicator, and synthesis notes. Graceful fallback to Claude-only when NLM unavailable.
+- **Dual-engine research** — Claude RAG (primary) + NotebookLM (second opinion, first-class). Both run on every query when available, synthesis merges best insights with citation origin tracking. `notebooklm-py` v0.3.4 via Python API (preferred) or CLI fallback. Auth: `notebooklm login` (browser OAuth, saves to `~/.notebooklm/storage_state.json`) or `NOTEBOOKLM_AUTH_JSON` env var (headless). Notebook IDs + synced sources persisted to `data/{co}/{prod}/dataroom/notebooklm_state.json`. Data room ingest auto-syncs to NLM. Chat persona configured for credit analysis. Frontend shows engine badges (blue=Claude, teal=NLM, gold=merged), NLM status indicator, and synthesis notes. Graceful fallback to Claude-only when NLM unavailable. **Important:** `ClaudeQueryEngine._get_client()` uses `load_dotenv(override=True)` to ensure `.env` values override empty env vars inherited from parent shell — without `override`, an empty `ANTHROPIC_API_KEY` in the shell silently disables Claude synthesis.
 - **Analytics-as-source** — Platform-computed analytics (tape summaries, PAR, DSO) snapshotted into the data room as searchable documents. Memos can cite "Tape Analytics — PAR Analysis, Mar 2026" alongside "HSBC Investor Report, Jan 2026".
 - **Memo feedback loop** — Analyst edits to AI-generated memo sections are recorded in Company Mind. Future memos benefit from accumulated style preferences and corrections.
 - **Legal extraction caching** — Extract once per PDF, cache forever. 5-pass Claude pipeline (~$1.25/doc). 3-tier merge: document > manual > hardcoded.
@@ -1280,11 +1280,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Rules-based insight extraction at ingest time
   - Analytics snapshots as searchable research sources
   - Frontend: DocumentLibrary, ResearchChat (engine badges, NLM status indicator, sync button, synthesis notes)
+  - **Tamara data room ingested** (session 19): 226 files, 5,504 chunks, 2,388 pages, 10 document types classified, Claude RAG synthesis working
+  - **Klaim data room ingested** (session 17): 28 docs, 492 chunks, 320 pages
 - ✅ **Living Mind (institutional memory):**
   - Master Mind: fund-level preferences, IC norms, cross-company patterns
   - Company Mind: per-company corrections, findings, IC feedback, data quality
   - 4-layer context injected into ALL AI prompts
   - Klaim seeded with legal analysis findings (6 data quality + 4 findings + 2 IC feedback)
+  - Tamara KSA seeded with entity extraction from data room (Event of Default risk flag from HSBC reports)
 - ✅ **IC Memo Engine:**
   - 4 templates: Credit Memo, Due Diligence, Monthly Monitoring, Quarterly Review
   - Analytics Bridge: live metrics from tape/portfolio analytics

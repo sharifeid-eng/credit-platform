@@ -6,8 +6,8 @@ Track active work here. Claude updates this as tasks progress.
 ## Next Session Priorities
 
 ### Tamara Data Room + Memo (next session)
-- [ ] **Ingest Tamara data room** — user will provide path, ask before ingesting
-- [ ] **Sync Tamara to NotebookLM** — dual-engine for richer memo
+- [x] **Ingest Tamara data room** — 226 files, 5,504 chunks, 2,388 pages, zero errors
+- [ ] **Sync Tamara to NotebookLM** — NLM auth expired, Claude-only mode active
 - [ ] **Generate Tamara Credit Memo (v2)** — with proper data room coverage
 - [ ] **Delete placeholder Tamara memo** (`reports/memos/Tamara_KSA/0ae5cbe3-095/`) — generated without data room
 
@@ -32,6 +32,22 @@ Track active work here. Claude updates this as tasks progress.
 
 ### Other Remaining
 - [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
+
+---
+
+## Completed — 2026-04-14 (session 19: Tamara Data Room Ingestion)
+
+**Tamara Data Room:**
+- [x] **Ingest 226 files** — PDF, Excel, DOCX, JSON across Financials, Legal DD, Portfolio Reporting, KYC, Business Plans, Investor Reports
+- [x] **Document classification** — 10 types: 96 vintage cohorts, 36 demographics, 30 investor reports, 6 legal docs, 6 presentations, 4 FDD, 3 business plans, 2 financial models, 1 memo, 42 other
+- [x] **Search index built** — 5,504 chunks, TF-IDF index (63MB)
+- [x] **Analytics snapshots** — KSA + UAE tape analytics snapshotted as searchable research sources
+- [x] **Claude RAG working** — AI synthesis returning answers with document citations
+- [x] **Company Mind seeded** — 1 entity (Event of Default risk flag from HSBC report) + compilation log
+- [x] **NotebookLM** — auth expired, Claude-only mode (graceful degradation)
+
+**Bug fix:**
+- [x] **Fix `load_dotenv` not overriding empty env vars** — `core/research/query_engine.py` now uses `load_dotenv(override=True)` so `ANTHROPIC_API_KEY` set as empty string in parent shell gets overridden by `.env` value
 
 ---
 
