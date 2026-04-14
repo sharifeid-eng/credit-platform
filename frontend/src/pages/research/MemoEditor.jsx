@@ -398,6 +398,7 @@ export default function MemoEditor() {
       {/* Main layout: section nav + content */}
       <div style={{
         display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
         gap: 0,
         minHeight: 500,
         border: '1px solid var(--border)',

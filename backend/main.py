@@ -3799,7 +3799,7 @@ def update_memo_section_endpoint(company: str, product: str, memo_id: str,
     except Exception:
         pass
 
-    result = _memo_storage.update_section(memo_id, section_key, content)
+    result = _memo_storage.update_section(company, product, memo_id, section_key, content)
     if not result or result.get('error'):
         raise HTTPException(status_code=404, detail=result.get('error', 'Update failed'))
 
@@ -3839,7 +3839,7 @@ def regenerate_memo_section_endpoint(company: str, product: str, memo_id: str,
         if not new_section:
             raise HTTPException(status_code=500, detail="Section regeneration returned empty")
 
-        _memo_storage.update_section(memo_id, section_key, new_section.get('content', ''))
+        _memo_storage.update_section(company, product, memo_id, section_key, new_section.get('content', ''))
         return new_section
 
     except Exception as e:
