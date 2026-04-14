@@ -248,6 +248,12 @@ const PROMPTS = {
     'How do roll rates compare across DPD buckets?',
     'What is the recovery rate and size of the legal recovery pipeline?',
   ],
+  aajil: [
+    'What is the DPD 60+ rate and how does the trust score system work?',
+    'How has GMV and customer growth trended since inception?',
+    'What are the key underwriting thresholds by customer type?',
+    'How does the collections process escalate across DPD phases?',
+  ],
   default: [
     'Which provider groups have the highest denial rates?',
     'What are the current portfolio margins and how do they vary by discount band?',

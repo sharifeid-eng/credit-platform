@@ -1,0 +1,25 @@
+{
+  "currency": "SAR",
+  "usd_rate": 0.2667,
+  "company": "Aajil",
+  "product": "KSA",
+  "description": "SME raw materials trade credit — KSA industrial sector",
+  "analysis_type": "aajil",
+  "hide_portfolio_tabs": true,
+  "dpd_thresholds": [7, 30, 60, 90],
+  "tabs": [
+    { "slug": "overview", "label": "Overview" },
+    { "slug": "traction", "label": "Traction" },
+    { "slug": "delinquency", "label": "Delinquency" },
+    { "slug": "collections", "label": "Collections" },
+    { "slug": "cohort-analysis", "label": "Cohort Analysis" },
+    { "slug": "concentration", "label": "Concentration" },
+    { "slug": "underwriting", "label": "Underwriting" },
+    { "slug": "trust-collections", "label": "Trust & Collections" },
+    { "slug": "customer-segments", "label": "Customer Segments" },
+    { "slug": "yield-margins", "label": "Yield & Margins" },
+    { "slug": "loss-waterfall", "label": "Loss Waterfall" },
+    { "slug": "covenants", "label": "Covenants" },
+    { "slug": "notes", "label": "Data Notes" }
+  ]
+}

@@ -37,6 +37,14 @@ const SUGGESTED_QUESTIONS = {
     'Summarize the key credit quality indicators',
     'What are the write-off trends and fraud patterns?',
   ],
+  aajil: [
+    'What is the business model and how does the raw materials credit work?',
+    'What are the underwriting criteria and financial ratio thresholds?',
+    'How does the trust score system drive collections strategy?',
+    'What are the key risk mitigation factors?',
+    'What is the DPD profile and collections phase breakdown?',
+    'Who are the key investors and what is the growth trajectory?',
+  ],
   default: [
     'What are the key risk factors in this portfolio?',
     'Summarize the facility structure and terms',

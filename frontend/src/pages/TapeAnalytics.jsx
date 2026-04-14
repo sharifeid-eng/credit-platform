@@ -48,6 +48,7 @@ import SilqUnderwritingDriftChart from '../components/charts/silq/SilqUnderwriti
 import SilqCdrCcrChart           from '../components/charts/silq/SilqCdrCcrChart'
 import EjariDashboard          from './EjariDashboard'
 import TamaraDashboard         from './TamaraDashboard'
+import AajilDashboard          from './AajilDashboard'
 
 import { TAPE_TABS } from '../components/Sidebar'
 
@@ -86,6 +87,15 @@ export default function TapeAnalytics() {
     return (
       <div style={{ padding: isMobile ? '12px 14px' : '16px 28px' }}>
         <TamaraDashboard />
+      </div>
+    )
+  }
+
+  // Aajil: render SME trade credit dashboard
+  if (analysisType === 'aajil') {
+    return (
+      <div style={{ padding: isMobile ? '12px 14px' : '16px 28px' }}>
+        <AajilDashboard />
       </div>
     )
   }

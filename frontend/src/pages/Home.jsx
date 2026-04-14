@@ -12,6 +12,7 @@ function getCompanyMeta(companyName) {
   if (n.includes('silq'))   return { countryCode: 'sa', region: 'KSA', assetClass: 'POS Lending'            }
   if (n.includes('ejari'))  return { countryCode: 'sa', region: 'KSA', assetClass: 'Rent Finance'           }
   if (n.includes('tamara')) return { countryCode: ['sa', 'ae'], region: 'KSA & UAE', assetClass: 'BNPL'     }
+  if (n.includes('aajil'))  return { countryCode: 'sa', region: 'KSA', assetClass: 'SME Trade Credit'      }
   return { countryCode: null, region: '', assetClass: '' }
 }
 
