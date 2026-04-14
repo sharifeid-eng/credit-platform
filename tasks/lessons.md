@@ -8,6 +8,16 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 **Discovery:** `ANTHROPIC_API_KEY` was set as an empty string in the parent shell environment. `load_dotenv()` (python-dotenv) does NOT override existing env vars by default — it only sets vars that don't exist yet. So even though `.env` had the correct key, `os.environ.get("ANTHROPIC_API_KEY")` returned `""` (empty string, falsy), causing Claude RAG synthesis to silently fall back to retrieval-only mode.
 **Rule:** Always use `load_dotenv(override=True)` when the `.env` file should be the source of truth. This is especially important for API keys that may exist as empty strings in CI/CD, Docker, or inherited shell environments. Without `override=True`, a stale empty env var silently shadows the `.env` value.
 
+## 2026-04-14 — Competitive platform analysis is high-value for onboarding
+
+**Discovery:** Researching the Cascade Debt platform (Aajil's existing reporting tool) before designing the dashboard yielded 6 concrete features to learn from: DPD 7 threshold, Traction dual view, Loan/Borrower cohort toggle, With/Without Cure toggle, Weekly Collection Rates, and global "Display by" segmentation. Several of these are gaps in our existing platform that apply to ALL companies, not just Aajil.
+**Rule:** When onboarding a new company that uses an external reporting tool, always explore that tool first. It reveals (1) what data columns to expect in the tape, (2) what visualizations the IC is already familiar with, (3) platform-wide feature gaps to address. The "Display by" segmentation and configurable DPD thresholds are direct lessons that improve the entire platform.
+
+## 2026-04-14 — New company onboarding follows the Tamara pattern when tape is pending
+
+**Discovery:** Aajil has an investor deck but no loan tape yet (coming from Cascade Debt). The correct pattern is data-room-ingestion → JSON snapshot → read-only dashboard → Phase B conversion to SILQ-style DataFrame compute functions when tape arrives. This is exactly the Tamara pattern. Key files: `scripts/prepare_{company}_data.py` → `core/analysis_{company}.py` → `{Company}Dashboard.jsx`. Backend routing branches needed in 6+ locations in main.py.
+**Rule:** For companies without a tape: (1) create extraction script that produces JSON, (2) write parser/enrichment analysis module, (3) build read-only dashboard, (4) document expected tape columns in methodology for Phase B. Always wire ALL routing branches: /summary, /date-range, /methodology, /aggregate-stats, AI context builders, tab insight lists.
+
 ---
 
 ## 2026-04-14 — Mobile flex layouts need explicit flex-direction: column

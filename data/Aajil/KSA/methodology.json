@@ -1,0 +1,204 @@
+{
+  "analysis_type": "aajil",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Portfolio Overview",
+      "level": 1,
+      "order": 1,
+      "prose": "Aajil is an SME lending fintech providing ultra-short-term raw materials trade credit to industrial SMEs in Saudi Arabia. The fund purchases raw materials from pre-vetted suppliers and instantly sells on credit to manufacturers, contractors, and wholesale traders. Revenue is locked at origination (margin + admin fee). Asset-light structure — Aajil never holds inventory.",
+      "metrics": [
+        {"name": "AUM (Outstanding)", "formula": "Sum of outstanding balances across all active transactions", "unit": "SAR", "level": 1},
+        {"name": "GMV Disbursed", "formula": "Cumulative value of all disbursements to date", "unit": "SAR", "level": 1},
+        {"name": "Total Transactions", "formula": "Count of all credit transactions originated", "unit": "#", "level": 1},
+        {"name": "Active Customers", "formula": "Count of distinct customers with active facilities", "unit": "#", "level": 1},
+        {"name": "Avg Deals per Customer", "formula": "Total transactions / Total customers served", "unit": "x", "level": 1},
+        {"name": "Credit-to-Revenue Ratio", "formula": "Credit facility / Customer annual revenue", "unit": "%", "level": 1}
+      ],
+      "tables": [],
+      "notes": [
+        "Current data from investor deck (Mar 2026). Loan tape from Cascade Debt pending.",
+        "AUM (SAR 120M) is outstanding balance. GMV (>SAR 340M) is cumulative disbursements.",
+        "Currency: SAR (Saudi Riyal). USD conversion at 0.2667."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "traction",
+      "title": "Traction (Volume & Balance)",
+      "level": 1,
+      "order": 2,
+      "prose": "Traction measures origination volume (new credit deployed per period) and outstanding balance (AUM). Inspired by the Cascade Debt reporting format, the platform shows both Volume and Balance views with MoM/QoQ/YoY growth rates for context.",
+      "metrics": [
+        {"name": "Monthly Disbursement Volume", "formula": "Sum of new disbursements in the period", "unit": "SAR", "level": 1},
+        {"name": "Outstanding Balance", "formula": "Sum of principal outstanding across all active transactions", "unit": "SAR", "level": 1},
+        {"name": "MoM Growth", "formula": "(Current month volume - Prior month) / Prior month", "unit": "%", "level": 5},
+        {"name": "QoQ Growth", "formula": "(Current quarter volume - Prior quarter) / Prior quarter", "unit": "%", "level": 5},
+        {"name": "YoY Growth", "formula": "(Current year volume - Prior year) / Prior year", "unit": "%", "level": 5}
+      ],
+      "tables": [],
+      "notes": ["With tape data: monthly granularity. Current data: annual granularity from investor deck."],
+      "subsections": []
+    },
+    {
+      "id": "cash-conversion",
+      "title": "Cash Conversion & Collections",
+      "level": 2,
+      "order": 3,
+      "prose": "For instalment-based SME credit, cash conversion is measured through collection rates by vintage and instalment on-time rates. The Cascade Debt platform tracks 'Cash Collected by Cohort' — the percentage of each monthly vintage's disbursement that has been repaid.",
+      "metrics": [
+        {"name": "Collection Rate (GLR)", "formula": "Total collected / Total disbursed per vintage", "unit": "%", "level": 2},
+        {"name": "Instalment On-Time Rate", "formula": "Instalments paid on or before due date / Total instalments due", "unit": "%", "level": 2},
+        {"name": "DSO", "formula": "Cash-weighted days from disbursement to collection", "unit": "days", "level": 2},
+        {"name": "Principal Collection Rate", "formula": "Principal collected / Principal disbursed per vintage", "unit": "%", "level": 2}
+      ],
+      "tables": [],
+      "notes": [
+        "Total collections include principal + margin + admin fee. Principal-only view isolates capital recovery.",
+        "Cascade offers 'Payment Breakdown' toggle to split total vs principal collections."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "credit-quality",
+      "title": "Credit Quality (Delinquency & DPD)",
+      "level": 3,
+      "order": 4,
+      "prose": "Aajil uses contractual DPD (Days Past Due) as the primary credit quality clock. The platform tracks 4 DPD thresholds — 7, 30, 60, and 90 days — with DPD 7 serving as an early warning signal unique to SME trade credit (shorter tenor means earlier signals matter). DPD 60+ triggers the Legal collections phase.",
+      "metrics": [
+        {"name": "PAR 7+", "formula": "Outstanding with DPD > 7 / Total active outstanding", "unit": "%", "level": 3},
+        {"name": "PAR 30+", "formula": "Outstanding with DPD > 30 / Total active outstanding", "unit": "%", "level": 3},
+        {"name": "PAR 60+", "formula": "Outstanding with DPD > 60 / Total active outstanding", "unit": "%", "level": 3},
+        {"name": "PAR 90+", "formula": "Outstanding with DPD > 90 / Total active outstanding", "unit": "%", "level": 3},
+        {"name": "Rolling Default Rate", "formula": "DPD>X balance / Total originated (rolling window)", "unit": "%", "level": 3}
+      ],
+      "tables": [],
+      "notes": [
+        "DPD 7 is Aajil-specific: early warning for short-tenor credit (4-5 month avg). Configurable via dpd_thresholds in config.",
+        "Rolling Default Rate follows Cascade Debt methodology: tracks cumulative default rate over time.",
+        "Self-reported DPD60+ < 5% (trailing 12 months as of Dec 2025)."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "trust-scores",
+      "title": "Trust Score System",
+      "level": 3,
+      "order": 5,
+      "prose": "Aajil's proprietary Trust Score system (1-5, Green to Critical) drives collections strategy. Each borrower receives a score based on payment history, which determines the collections approach: Green (5) receives enablement-first support, while Critical (1-2) triggers 48-hour payment deadlines and legal preparation.",
+      "metrics": [
+        {"name": "Trust Score Distribution", "formula": "Count of active customers by trust score (1-5)", "unit": "#", "level": 3},
+        {"name": "Score Migration", "formula": "Trust score changes by customer over time", "unit": "transition matrix", "level": 5}
+      ],
+      "tables": [],
+      "notes": [
+        "Green (5): Good history. Amber (4): Minor delays. Red (3): Repeated issues. Critical (1-2): Severe risk.",
+        "Collections phases: Preventive (-15 to 0 DPD), Active (1-60 DPD), Legal (60+ DPD).",
+        "SIMAH: NPL notice at 150 days, auto-reporting at 180 days."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "vintage-analysis",
+      "title": "Vintage / Cohort Analysis",
+      "level": 3,
+      "order": 6,
+      "prose": "Vintage analysis tracks delinquency development by Month on Books (MoB) for each origination cohort. The Cascade Debt platform provides vintage curves with configurable DPD thresholds (30/60/90), measurement basis (Original Balance vs Number of Loans), cohort type (Loan vs Borrower), and a cure toggle (With/Without Cure).",
+      "metrics": [
+        {"name": "Vintage DPD Curve", "formula": "DPD>X rate at each MoB for each origination vintage", "unit": "% of original balance", "level": 3},
+        {"name": "Cure Rate", "formula": "Loans cured (returned to current) / Loans that were delinquent", "unit": "%", "level": 3}
+      ],
+      "tables": [],
+      "notes": [
+        "Cascade supports Loan-level and Borrower-level cohorts (dedup by customer's first transaction).",
+        "'Without Cure' mode counts a loan as defaulted once even if it later cures — shows true loss exposure.",
+        "Color-coded heatmap table: green (low DPD) to red (high DPD)."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "loss-attribution",
+      "title": "Loss Attribution",
+      "level": 4,
+      "order": 7,
+      "prose": "Loss attribution tracks the waterfall from origination through default to recovery. Default is defined as DPD 60+ (the Legal phase trigger). Recovery includes promissory note enforcement and asset recovery. Net loss = Gross default - Recoveries.",
+      "metrics": [
+        {"name": "Gross Default Rate", "formula": "DPD60+ balance / Originated per vintage", "unit": "%", "level": 4},
+        {"name": "Recovery Rate", "formula": "Recovered post-default / Gross default balance", "unit": "%", "level": 4},
+        {"name": "Net Loss Rate", "formula": "(Default - Recovery) / Originated per vintage", "unit": "%", "level": 4},
+        {"name": "LGD", "formula": "Net loss / Gross default per defaulted transaction", "unit": "%", "level": 4},
+        {"name": "Yield", "formula": "(Margin + Admin fee) / Disbursed amount", "unit": "%", "level": 4}
+      ],
+      "tables": [],
+      "notes": [
+        "Promissory notes provide additional recovery channel beyond standard collections.",
+        "Asset-based lending (raw materials) provides some recovery floor vs unsecured credit."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "concentration",
+      "title": "Concentration",
+      "level": 1,
+      "order": 8,
+      "prose": "Concentration risk is tracked across customer type (Manufacturer/Contractor/Trader), individual customer exposure, supplier concentration, and sector/industry diversification.",
+      "metrics": [
+        {"name": "HHI (Customer)", "formula": "Sum of squared customer shares", "unit": "index", "level": 1},
+        {"name": "Top-N Customer Share", "formula": "Top 5/10 customers as % of AUM", "unit": "%", "level": 1},
+        {"name": "Customer Type Mix", "formula": "AUM by Manufacturer / Contractor / Trader", "unit": "%", "level": 1}
+      ],
+      "tables": [],
+      "notes": ["Segmentation mirrors Cascade 'Display by' dimensions: Customer Type, Product Type, Term Group."],
+      "subsections": []
+    },
+    {
+      "id": "underwriting",
+      "title": "Underwriting",
+      "level": 5,
+      "order": 9,
+      "prose": "Aajil uses a 4-stage underwriting process: Sales Screening, Risk Assessment, Credit Report, and Credit Decision Committee (CDC). Financial ratio thresholds vary by customer type. Non-CDC approval is permitted for facilities under SAR 400K that meet all assessment criteria.",
+      "metrics": [
+        {"name": "Avg Assessment Time", "formula": "Hours from complete documentation to decision", "unit": "hours", "level": 5},
+        {"name": "Approval Rate", "formula": "Approved / Total applications", "unit": "%", "level": 5},
+        {"name": "CDC Escalation Rate", "formula": "Applications requiring CDC review / Total", "unit": "%", "level": 5}
+      ],
+      "tables": [],
+      "notes": [
+        "Min revenue: SAR 5M. Max leverage: 50% with current ratio < 1.0. Max funded exposure: 30% of revenue.",
+        "Financial thresholds differ by customer type — documented in Financial Ratio Thresholds section."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "forward-signals",
+      "title": "Forward-Looking Signals",
+      "level": 5,
+      "order": 10,
+      "prose": "Forward signals combine trust score migration (leading DPD indicator), underwriting drift (vintage-over-vintage quality changes), concentration trends (HHI time series), and growth rates (MoM/QoQ/YoY).",
+      "metrics": [
+        {"name": "Trust Score Migration", "formula": "Score changes per customer over consecutive periods", "unit": "transition matrix", "level": 5},
+        {"name": "Underwriting Drift", "formula": "Per-vintage quality metrics vs historical norms", "unit": "z-score", "level": 5},
+        {"name": "MoM/QoQ/YoY Growth", "formula": "Period-over-period growth in origination volume", "unit": "%", "level": 5}
+      ],
+      "tables": [],
+      "notes": ["Trust score deterioration precedes DPD events — primary leading indicator for Aajil."],
+      "subsections": []
+    },
+    {
+      "id": "data-source",
+      "title": "Data Source & Caveats",
+      "level": null,
+      "order": 11,
+      "prose": "Current analysis is based on the Aajil investor deck (Mar 2026, 47 pages). Loan-level tape data is available via Cascade Debt (app.cascadedebt.com) and will be ingested when provided. The tape will unlock full live computation across all metrics.",
+      "metrics": [],
+      "tables": [],
+      "notes": [
+        "All current metrics are static extractions from the investor deck — not live computations.",
+        "Cascade Debt provides: Traction, Delinquency (7/30/60/90 DPD), Collection, Cohort (vintage analysis).",
+        "Expected tape columns: Transaction_ID, Customer_ID, Customer_Type, Disbursement_Date, Maturity_Date, Disbursed_Amount, Outstanding_Amount, Total_Collected, DPD, Trust_Score, Loan_Status, Loan_Grade, Product_Type.",
+        "When tape arrives, this module transitions from JSON-parser to SILQ-style DataFrame compute functions."
+      ],
+      "subsections": []
+    }
+  ]
+}

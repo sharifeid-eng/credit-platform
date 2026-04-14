@@ -127,7 +127,8 @@ The platform allows analysts and investment committee members to:
 - **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (4 tapes: Nov 2025, Jan 2026, Feb 2026, Mar 2026). Three product types: BNPL, RBF, RCL (Revolving Credit Line). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
 - **Ejari** — Rent Now Pay Later (RNPL), KSA. Data in USD. **Read-only summary** — no raw loan tape, only a pre-computed ODS workbook with 13 sheets of analysis. Rendered as a dedicated dashboard (`EjariDashboard.jsx`) without live computation. Parser: `core/analysis_ejari.py`. Config: `analysis_type: "ejari_summary"`. Live dataset: `data/Ejari/RNPL/`
 - **Tamara** — Buy Now Pay Later (BNPL + BNPL+), KSA & UAE. Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants). **Data room ingestion** — ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models) parsed by `scripts/prepare_tamara_data.py` into structured JSON snapshots. Two products: KSA (SAR, 14 tabs) and UAE (AED, 10 tabs). Dashboard: `TamaraDashboard.jsx`. Parser: `core/analysis_tamara.py`. Config: `analysis_type: "tamara_summary"`. Securitisation: KSA $2.375B (Goldman, Citi, Apollo), UAE $131M (Goldman). Live dataset: `data/Tamara/{KSA,UAE}/`
-**Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, rent payment financing (RNPL), and BNPL consumer instalment lending.
+- **Aajil** — SME raw materials trade credit, KSA. Data in SAR. **Investor deck data** — no loan tape yet (pending from Cascade Debt platform). 47-page investor deck parsed into structured JSON snapshot. 206 customers, 1,136 transactions, SAR 120M AUM, >SAR 340M GMV, DPD60+ <5%. 3 customer types: Manufacturer, Contractor, Wholesale Trader. Dashboard: `AajilDashboard.jsx` (13 tabs). Parser: `core/analysis_aajil.py`. Config: `analysis_type: "aajil"`. Extraction: `scripts/prepare_aajil_data.py`. Live dataset: `data/Aajil/KSA/`. Uses Cascade Debt (app.cascadedebt.com) as external reporting platform.
+**Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, rent payment financing (RNPL), BNPL consumer instalment lending, and SME trade credit (raw materials).
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook) and JSON files (Tamara data room ingestion).
 **Data notes:**
 - **Tapes available:** Sep 2025 (25 cols), Dec 2025 (xlsx), Feb 2026 (25 cols), Mar 2026 (60 cols — latest)
@@ -257,6 +258,7 @@ credit-platform/
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── analysis_ejari.py   # Ejari ODS workbook parser (read-only summary, 12 sections)
 │   ├── analysis_tamara.py  # Tamara BNPL JSON parser + enrichment (data room ingestion pattern)
+│   ├── analysis_aajil.py   # Aajil SME trade credit JSON parser + enrichment (investor deck pattern)
 │   ├── research_report.py  # Platform-level credit research report PDF generator (any company)
 │   ├── database.py         # SQLAlchemy 2.0 engine/session setup (DB-optional mode)
 │   ├── db_loader.py        # DB → tape-compatible DataFrame bridge (Klaim + SILQ mappers)
@@ -305,7 +307,8 @@ credit-platform/
 │   │   │   ├── OperatorCenter.jsx  # Operator Command Center (5-tab: health, commands, follow-ups, activity, mind)
 │   │   │   ├── UserManagement.jsx  # Admin user management page (/admin/users)
 │   │   │   ├── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
-│   │   │   └── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
+│   │   │   ├── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
+│   │   │   └── AajilDashboard.jsx  # Aajil SME trade credit dashboard (13 tabs, Cascade-inspired Traction + GrowthStats)
 │   │   │   ├── research/          # Research Hub pages
 │   │   │   │   ├── DocumentLibrary.jsx   # Browse ingested documents
 │   │   │   │   ├── ResearchChat.jsx      # AI chat across all documents
@@ -393,6 +396,7 @@ credit-platform/
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
 │   ├── sync_framework_registry.py  # Auto-generate Section 12 in ANALYSIS_FRAMEWORK.md from metric registry
 │   ├── prepare_tamara_data.py  # Data room ETL: reads ~100 source files → structured JSON snapshots for Tamara
+│   ├── prepare_aajil_data.py   # Investor deck extraction → structured JSON snapshot for Aajil
 │   └── seed_master_mind.py     # Seeds master mind from ANALYSIS_FRAMEWORK.md + CLAUDE.md lessons
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
@@ -1249,10 +1253,20 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - ReportLab Platypus composition with styled tables, cover page, page numbering
   - Accepts optional `ai_narrative` parameter for Claude-powered narrative sections
   - Extensible: generic fallback builder for non-Tamara companies, company-specific builders can be added
-- ✅ **Three data ingestion patterns now supported:**
+- ✅ **Four data ingestion patterns now supported:**
   - **Raw Tape** (Klaim, SILQ): CSV/Excel loan-level data → live computation per request
   - **Pre-computed Summary** (Ejari): Single ODS workbook → parse once, render
   - **Data Room Ingestion** (Tamara): ~100 multi-format files → ETL script → JSON snapshot → parser → dashboard
+  - **Investor Deck Extraction** (Aajil): Single PDF → manual data extraction script → JSON snapshot → parser → dashboard
+- ✅ **Aajil SME Trade Credit onboarded (session 19):**
+  - New asset class: SME raw materials trade credit (KSA, SAR) — 5th portfolio company
+  - `analysis_type: "aajil"` — investor deck JSON parser + 13-tab dashboard
+  - Cascade Debt platform (app.cascadedebt.com) researched as competitive intelligence
+  - Cascade-inspired features: configurable DPD thresholds (7/30/60/90 in config.json), Traction dual view (Volume + Balance), GrowthStats component (MoM/QoQ/YoY)
+  - 13 tabs: Overview, Traction, Delinquency, Collections, Cohort Analysis, Concentration, Underwriting, Trust & Collections, Customer Segments, Yield & Margins, Loss Waterfall, Covenants, Data Notes
+  - Trust score system visualization (5=Green to 1=Critical), collections phase timeline, underwriting funnel, financial ratio thresholds by customer type
+  - AI executive summary context builder, DataChat + ResearchChat suggested questions
+  - Pending: loan tape from Cascade Debt → Phase B conversion to DataFrame compute functions
 - ✅ **Tamara P0 fixes — data extraction, AI context, dashboard charts:**
   - Fixed column-offset bug (labels in col 1 not col 0) across investor reporting, business plan, financial master parsers
   - Fixed demographics pivot (AE+SA side-by-side → per-country dimension extraction)

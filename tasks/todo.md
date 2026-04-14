@@ -5,11 +5,25 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Next Session Priorities
 
-### Tamara Data Room + Memo (next session)
-- [x] **Ingest Tamara data room** — 226 files, 5,504 chunks, 2,388 pages, zero errors
-- [ ] **Sync Tamara to NotebookLM** — NLM auth expired, Claude-only mode active
+### Aajil — Phase B (when tape arrives from Cascade Debt)
+- [ ] **Obtain Aajil loan tape** from Cascade Debt platform export
+- [ ] **Convert `analysis_aajil.py` from JSON parser to DataFrame compute functions** (SILQ pattern)
+- [ ] **Add `validation_aajil.py`** for tape quality checks
+- [ ] **Build chart components** in `frontend/src/components/charts/aajil/`
+- [ ] **Implement Loan/Borrower cohort toggle** (Cascade feature)
+- [ ] **Implement With/Without Cure toggle** (Cascade feature)
+- [ ] **Write `tests/test_analysis_aajil.py`**
+
+### Cascade-Inspired Platform Improvements
+- [ ] **Configurable DPD thresholds** — read from config.json, apply across SILQ + Aajil analysis modules
+- [ ] **GrowthStats component** platform-wide — MoM/QoQ/YoY growth rates on all Overview tabs
+- [ ] **Traction dual view** — Volume + Balance as optional tab for all companies
+
+### Tamara Data Room + Memo
+- [ ] **Ingest Tamara data room** — user will provide path, ask before ingesting
+- [ ] **Sync Tamara to NotebookLM** — dual-engine for richer memo
 - [ ] **Generate Tamara Credit Memo (v2)** — with proper data room coverage
-- [ ] **Delete placeholder Tamara memo** (`reports/memos/Tamara_KSA/0ae5cbe3-095/`) — generated without data room
+- [ ] **Delete placeholder Tamara memo** (`reports/memos/Tamara_KSA/0ae5cbe3-095/`)
 
 ### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
@@ -18,8 +32,8 @@ Track active work here. Claude updates this as tasks progress.
 - [ ] **Copy slash commands to main repo .claude/commands/** — 6 new commands from worktree
 
 ### Platform Improvements from Session 17
-- [ ] **NLM sync optimization** — cap at ~20 sources per sync for large data rooms, or sync by priority doc type
-- [ ] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape" in data room
+- [ ] **NLM sync optimization** — cap at ~20 sources per sync for large data rooms
+- [ ] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape"
 
 ### Klaim Data Room + Memo Exercise ✅ COMPLETE (session 17)
 1. [x] **Validate Legal Analysis tabs render** — all 8 tabs render with rich data
@@ -35,19 +49,28 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
-## Completed — 2026-04-14 (session 19: Tamara Data Room Ingestion)
+## Completed — 2026-04-14 (session 19: Aajil Onboarding + Cascade Debt Intelligence)
 
-**Tamara Data Room:**
-- [x] **Ingest 226 files** — PDF, Excel, DOCX, JSON across Financials, Legal DD, Portfolio Reporting, KYC, Business Plans, Investor Reports
-- [x] **Document classification** — 10 types: 96 vintage cohorts, 36 demographics, 30 investor reports, 6 legal docs, 6 presentations, 4 FDD, 3 business plans, 2 financial models, 1 memo, 42 other
-- [x] **Search index built** — 5,504 chunks, TF-IDF index (63MB)
-- [x] **Analytics snapshots** — KSA + UAE tape analytics snapshotted as searchable research sources
-- [x] **Claude RAG working** — AI synthesis returning answers with document citations
-- [x] **Company Mind seeded** — 1 entity (Event of Default risk flag from HSBC report) + compilation log
-- [x] **NotebookLM** — auth expired, Claude-only mode (graceful degradation)
+**Aajil — New portfolio company onboarded (SME raw materials trade credit, KSA):**
+- [x] **Cascade Debt platform research** — explored entire app.cascadedebt.com: Analytics (Traction, Delinquency, Collection, Cohort), Analytics Pro (Weekly Collection Rates), Administration. Mapped all features, filters, and data model.
+- [x] **Investor deck analysis** — read 47-page Aajil pitch deck, extracted all KPIs, underwriting criteria, trust score system, financial thresholds, collections process
+- [x] **Directory structure + config** — `data/Aajil/KSA/config.json` (analysis_type: "aajil", 13 tabs, dpd_thresholds: [7,30,60,90])
+- [x] **Data extraction script** — `scripts/prepare_aajil_data.py` produces 14-section JSON snapshot
+- [x] **Analysis module** — `core/analysis_aajil.py` (parser + enrichment + `get_aajil_summary()`)
+- [x] **Static methodology** — `data/Aajil/KSA/methodology.json` (11 L1-L5 sections for SME trade credit)
+- [x] **Backend wiring** — `/aajil-summary` endpoint, `/summary` routing, `/methodology` routing, `/date-range` routing, AI executive summary context builder (`_build_aajil_full_context`), section guidance
+- [x] **Dashboard** — `frontend/src/pages/AajilDashboard.jsx` (29KB, 13 tabs: Overview, Traction, Delinquency, Collections, Cohort Analysis, Concentration, Underwriting, Trust & Collections, Customer Segments, Yield & Margins, Loss Waterfall, Covenants, Data Notes)
+- [x] **Frontend routing** — `TapeAnalytics.jsx` aajil branch, `api.js` getAajilSummary, Home.jsx country metadata, DataChat + ResearchChat suggested questions
+- [x] **GrowthStats component** — Cascade-inspired MoM/QoQ/YoY growth rates (inline in AajilDashboard, reusable pattern)
 
-**Bug fix:**
-- [x] **Fix `load_dotenv` not overriding empty env vars** — `core/research/query_engine.py` now uses `load_dotenv(override=True)` so `ANTHROPIC_API_KEY` set as empty string in parent shell gets overridden by `.env` value
+**Cascade Debt learnings documented:**
+- [x] DPD 7 threshold as early warning (implemented via config.json dpd_thresholds)
+- [x] Traction dual view (Volume + Balance) — built as Aajil tab
+- [x] Vintage Analysis toggles (Loan/Borrower, With/Without Cure) — documented for Phase B
+- [x] Weekly Collection Rates (Total vs Principal) — documented for Phase B
+- [x] "Display by" global segmentation — documented for future
+
+**Verification:** 268 tests passing, all 3 backend endpoints working (companies, summary, aajil-summary, methodology)
 
 ---
 

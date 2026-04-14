@@ -34,6 +34,7 @@ from core.consistency import run_consistency_check
 from core.reporter import generate_ai_analysis, save_pdf_report
 from core.analysis_ejari import parse_ejari_workbook
 from core.analysis_tamara import parse_tamara_data, get_tamara_summary_kpis
+from core.analysis_aajil import parse_aajil_data, get_aajil_summary
 from core.analysis_silq import (
     compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
@@ -322,6 +323,14 @@ def get_methodology_endpoint(analysis_type: str):
                     return json.load(f)
         raise HTTPException(status_code=404, detail="Tamara methodology not found")
 
+    if analysis_type == 'aajil':
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        mpath = os.path.join(base, 'data', 'Aajil', 'KSA', 'methodology.json')
+        if os.path.exists(mpath):
+            with open(mpath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        raise HTTPException(status_code=404, detail="Aajil methodology not found")
+
     result = get_methodology(analysis_type)
     if not result['sections']:
         raise HTTPException(status_code=404, detail=f"No methodology registered for: {analysis_type}")
@@ -520,7 +529,7 @@ def get_product_config(company: str, product: str):
 @app.get("/companies/{company}/products/{product}/date-range")
 def get_date_range(company: str, product: str, snapshot: Optional[str] = None):
     at = _get_analysis_type(company, product)
-    if at in ('ejari_summary', 'tamara_summary'):
+    if at in ('ejari_summary', 'tamara_summary', 'aajil'):
         snaps = get_snapshots(company, product)
         snap_date = snaps[-1]['date'] if snaps else ''
         return {'min_date': snap_date, 'max_date': snap_date, 'snapshot_date': snap_date}
@@ -601,6 +610,28 @@ def get_summary(company: str, product: str,
                 'merchants': kpis.get('merchants', 0),
                 'face_value_label': kpis.get('face_value_label', 'Face Value'),
                 'deals_label': kpis.get('deals_label', 'Deals')}
+    if at == 'aajil':
+        try:
+            snaps = get_snapshots(company, product)
+            if snaps:
+                filepath = snaps[-1]['filepath']
+                if filepath not in _aajil_cache:
+                    _aajil_cache[filepath] = parse_aajil_data(filepath)
+                kpis = get_aajil_summary(_aajil_cache[filepath])
+            else:
+                kpis = {'total_purchase_value': 0, 'total_deals': 0}
+        except Exception:
+            kpis = {'total_purchase_value': 0, 'total_deals': 0}
+        return {'company': company, 'product': product, 'display_currency': 'SAR',
+                'total_deals': kpis.get('total_deals', 0), 'total_purchase_value': kpis.get('total_purchase_value', 0),
+                'total_collected': kpis.get('total_collected', 0), 'total_denied': 0, 'total_pending': 0,
+                'total_expected': 0, 'collection_rate': kpis.get('collection_rate', 0), 'denial_rate': 0,
+                'pending_rate': 0, 'active_deals': 0, 'completed_deals': 0,
+                'avg_discount': 0, 'dso_available': False, 'hhi_group': 0,
+                'top_1_group_pct': 0, 'analysis_type': 'aajil',
+                'face_value_label': kpis.get('face_value_label', 'Face Value'),
+                'deals_label': kpis.get('deals_label', 'Deals'),
+                'total_customers': kpis.get('total_customers', 0)}
     if at == 'silq':
         df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
@@ -1100,6 +1131,19 @@ def get_tamara_summary(company: str, product: str, snapshot: Optional[str] = Non
         _tamara_cache[filepath] = parse_tamara_data(filepath)
     return _tamara_cache[filepath]
 
+# ── Aajil endpoint ──────────────────────────────────────────────────────────
+
+_aajil_cache = _BoundedCache()
+
+@app.get("/companies/{company}/products/{product}/aajil-summary")
+def get_aajil_summary_endpoint(company: str, product: str, snapshot: Optional[str] = None):
+    """Return parsed Aajil SME trade credit data as structured JSON."""
+    sel = _resolve_snapshot(company, product, snapshot)
+    filepath = sel['filepath']
+    if filepath not in _aajil_cache:
+        _aajil_cache[filepath] = parse_aajil_data(filepath)
+    return _aajil_cache[filepath]
+
 # ── Research Report endpoint (platform-level) ───────────────────────────────
 
 @app.post("/companies/{company}/products/{product}/research-report")
@@ -1335,7 +1379,7 @@ def get_ai_cache_status(company: str, product: str,
     at = _get_analysis_type(company, product)
     if at == 'silq':
         tabs = ['delinquency', 'collections', 'concentration', 'cohort', 'yield-margins', 'tenure']
-    elif at in ('ejari_summary', 'tamara_summary'):
+    elif at in ('ejari_summary', 'tamara_summary', 'aajil'):
         tabs = []
     else:
         tabs = ['deployment', 'collection', 'denial-trend', 'ageing', 'revenue',
@@ -1801,6 +1845,78 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
     return '\n'.join(sections)
 
 
+def _build_aajil_full_context(data):
+    """Build analytics context from parsed Aajil SME trade credit JSON snapshot."""
+    sections = []
+    co = data.get('company_overview', {})
+    ov = data.get('overview', {})
+
+    sections.append("COMPANY OVERVIEW:")
+    sections.append(f"  Company: Aajil (Buildnow) — SME raw materials trade credit, KSA")
+    sections.append(f"  AUM (Outstanding): SAR {co.get('aum_sar', 0):,.0f} (${co.get('aum_usd', 0):,.0f})")
+    sections.append(f"  GMV Disbursed: >SAR {co.get('gmv_sar', 0):,.0f} (>${co.get('gmv_usd', 0):,.0f})")
+    sections.append(f"  Total Customers: {co.get('total_customers', 0)}")
+    sections.append(f"  Total Transactions: {co.get('total_transactions', 0)}")
+    sections.append(f"  Avg Deals/Customer: {co.get('avg_deals_per_customer', 0)}")
+    sections.append(f"  Avg Tenor: {co.get('avg_tenor_months', 0)} months (max {co.get('max_tenor_months', 0)})")
+    sections.append(f"  DPD60+: <{co.get('dpd60_plus_rate', 0)*100:.0f}% (trailing 12 months, Dec 2025)")
+    sections.append(f"  PN Coverage: {co.get('pn_coverage', 0)*100:.0f}%")
+    sections.append(f"  Credit/Revenue: {co.get('credit_as_pct_revenue', 'N/A')}")
+    sections.append(f"  Employees: {co.get('employees', 0)}")
+
+    milestones = data.get('gmv_milestones', [])
+    if milestones:
+        sections.append("")
+        sections.append("GMV GROWTH (CUMULATIVE):")
+        for m in milestones:
+            sections.append(f"  {m['year']}: SAR {m['gmv_sar']:,.0f}")
+        if ov.get('gmv_yoy_growth'):
+            sections.append(f"  YoY Growth: {ov['gmv_yoy_growth']}%")
+
+    cg = data.get('customer_growth', [])
+    if cg:
+        sections.append("")
+        sections.append("CUSTOMER GROWTH:")
+        for c in cg:
+            sections.append(f"  {c['date']}: {c['total_customers']} customers")
+
+    sections.append("")
+    sections.append("CUSTOMER TYPES: Manufacturer, Contractor, Wholesale Trader")
+    sections.append("RISK MITIGATION: Asset-based (raw materials, not cash), promissory notes (100%), short tenor (4-5mo), instalment repayment, diversified sectors")
+
+    ts = data.get('trust_score_system', {})
+    if ts:
+        sections.append("")
+        sections.append("TRUST SCORE SYSTEM: 5=Green, 4=Amber, 3=Red, 2-1=Critical")
+        sections.append("COLLECTIONS PHASES: Preventive (-15 to 0 DPD), Active (1-60 DPD), Legal (60+ DPD)")
+
+    uw = data.get('underwriting', {})
+    if uw:
+        sections.append("")
+        sections.append("UNDERWRITING: 4-stage (Sales Screening → Risk Assessment → Credit Report → CDC)")
+        sections.append(f"  Min Revenue: SAR {uw.get('min_revenue_sar', 0):,.0f}")
+        sections.append(f"  Max Leverage: {uw.get('max_leverage', 0)*100:.0f}%")
+        sections.append(f"  Non-CDC Limit: SAR {uw.get('non_cdc_approval_limit_sar', 0):,.0f}")
+
+    sections.append("")
+    sections.append("DATA CAVEAT: All data from investor deck (Mar 2026). Loan tape from Cascade Debt platform pending.")
+
+    # Inject Living Mind context
+    try:
+        from core.mind.master_mind import MasterMind
+        from core.mind.company_mind import CompanyMind
+        mind_ctx = build_mind_context('Aajil', 'KSA',
+                                       'executive_summary', analysis_type='aajil')
+        if not mind_ctx.is_empty:
+            sections.append("")
+            sections.append("PLATFORM MEMORY:")
+            sections.append(mind_ctx.formatted)
+    except Exception:
+        pass
+
+    return '\n'.join(sections)
+
+
 def _build_tamara_full_context(data):
     """Build comprehensive analytics context from parsed Tamara BNPL JSON snapshot."""
     sections = []
@@ -2074,6 +2190,16 @@ def get_executive_summary(company: str, product: str,
         company_desc = f"Tamara Buy Now Pay Later (BNPL + BNPL+) portfolio in {product}"
         disp = 'SAR' if product == 'KSA' else 'AED'
         n_metrics = len([l for l in context.split('\n') if l.strip()])
+    elif at == 'aajil':
+        sel = _resolve_snapshot(company, product, snapshot)
+        filepath = sel['filepath']
+        if filepath not in _aajil_cache:
+            _aajil_cache[filepath] = parse_aajil_data(filepath)
+        aajil_data = _aajil_cache[filepath]
+        context = _build_aajil_full_context(aajil_data)
+        company_desc = "Aajil SME raw materials trade credit portfolio in KSA"
+        disp = 'SAR'
+        n_metrics = len([l for l in context.split('\n') if l.strip()])
     elif at == 'ejari_summary':
         sel = _resolve_snapshot(company, product, snapshot)
         filepath = sel['filepath']
@@ -2116,6 +2242,13 @@ def get_executive_summary(company: str, product: str,
             "Portfolio Overview, Delinquency & DPD, Collections by Product, "
             "Cohort Performance, Concentration, Yield & Tenure"
         ),
+        'aajil': (
+            "Portfolio Overview & Scale, Traction (Volume & Balance), "
+            "Delinquency & DPD (7/30/60/90), Collections by Vintage, "
+            "Vintage Cohort Analysis, Concentration & Customer Types, "
+            "Underwriting & Risk Mitigation, Trust Score Distribution, "
+            "Customer Segments, Forward Signals"
+        ),
     }
     sections_for = section_guidance.get(at,
         "Portfolio Overview, Cohort Performance, Collection & DSO, "
@@ -2127,6 +2260,7 @@ def get_executive_summary(company: str, product: str,
         'tamara_summary': "overview, vintage, delinquency, default-analysis, dilution, collections, concentration, covenant-compliance, facility-structure, demographics, financial-performance, business-plan, bnpl-plus, notes",
         'ejari_summary': "overview, cohort, loss-waterfall, roll-rates, historical, collections-month, collections-orig, segments, credit-quality, najiz, writeoffs, notes",
         'silq': "overview, delinquency, collections, concentration, cohort-analysis, yield-margins, tenure, covenants",
+        'aajil': "overview, traction, delinquency, collections, cohort-analysis, concentration, underwriting, trust-collections, customer-segments, yield-margins, loss-waterfall, covenants, notes",
     }
     tabs_for = tab_slugs.get(at,
         "overview, actual-vs-expected, deployment, collection, denial-trend, ageing, revenue, portfolio-tab, cohort-analysis, returns, risk-migration, loss-waterfall, recovery-analysis, underwriting-drift, segment-analysis, seasonality, cdr-ccr"
@@ -3343,7 +3477,7 @@ def dataroom_snapshot_analytics(company: str, product: str,
     """
     at = _get_analysis_type(company, product)
 
-    if at in ('ejari_summary', 'tamara_summary'):
+    if at in ('ejari_summary', 'tamara_summary', 'aajil'):
         # For read-only summaries, snapshot the parsed data
         try:
             snaps = get_snapshots(company, product)
