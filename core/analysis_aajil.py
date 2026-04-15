@@ -99,7 +99,7 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
     accrued = df[df[C_STATUS] == 'Accrued']
     written_off = df[df[C_STATUS] == 'Written Off']
 
-    total_bill = df[C_BILL].sum() * mult
+    total_principal = df[C_PRINCIPAL].sum() * mult
     total_sale = df[C_SALE_TOTAL].sum() * mult
     total_realised = df[C_REALISED].fillna(0).sum() * mult
     total_receivable = df[C_RECEIVABLE].fillna(0).sum() * mult
@@ -112,17 +112,17 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
     emi_count = len(df[df[C_DEAL_TYPE] == 'EMI'])
     bullet_count = len(df[df[C_DEAL_TYPE] == 'Bullet'])
 
-    collection_rate = total_realised / (total_realised + total_receivable) if (total_realised + total_receivable) > 0 else 0
+    collection_rate = total_realised / total_principal if total_principal > 0 else 0
     wo_rate = len(written_off) / n if n > 0 else 0
 
     # Customer HHI
-    cust_shares = df.groupby(C_CUSTOMER_ID)[C_BILL].sum()
+    cust_shares = df.groupby(C_CUSTOMER_ID)[C_PRINCIPAL].sum()
     total_cust = cust_shares.sum()
     hhi = ((cust_shares / total_cust) ** 2).sum() if total_cust > 0 else 0
 
     return {
         'total_deals': n,
-        'total_bill_notional': _safe(total_bill),
+        'total_principal': _safe(total_principal),
         'total_sale_total': _safe(total_sale),
         'total_realised': _safe(total_realised),
         'total_receivable': _safe(total_receivable),
@@ -144,7 +144,7 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
         'avg_tenure': _safe(df[C_TENURE].dropna().mean()),
         'avg_monthly_yield': _safe(df[C_MONTHLY_YIELD].dropna().mean()),
         'avg_total_yield': _safe(df[C_TOTAL_YIELD].dropna().mean()),
-        'avg_deal_size': _safe(total_bill / n),
+        'avg_deal_size': _safe(total_principal / n),
         'hhi_customer': _safe(hhi),
         'date_range': {
             'min': _safe(df[C_INVOICE_DATE].min()),
@@ -162,7 +162,7 @@ def compute_aajil_traction(df, mult=1, ref_date=None, aux=None):
 
     # Volume: monthly disbursements
     vol = df_c.groupby('month').agg(
-        disbursed=(C_BILL, 'sum'),
+        disbursed=(C_PRINCIPAL, 'sum'),
         count=(C_TXN_ID, 'count'),
     ).reset_index()
     vol['month_str'] = vol['month'].astype(str)
@@ -172,7 +172,7 @@ def compute_aajil_traction(df, mult=1, ref_date=None, aux=None):
                'count': int(r['count'])} for _, r in vol.iterrows()]
 
     # By Deal Type
-    vol_by_type = df_c.groupby(['month', C_DEAL_TYPE])[C_BILL].sum().unstack(fill_value=0) * mult
+    vol_by_type = df_c.groupby(['month', C_DEAL_TYPE])[C_PRINCIPAL].sum().unstack(fill_value=0) * mult
     by_type = []
     for m in vol_by_type.index:
         row = {'date': str(m)}
@@ -180,21 +180,30 @@ def compute_aajil_traction(df, mult=1, ref_date=None, aux=None):
             row[dt] = _safe(vol_by_type.loc[m, dt])
         by_type.append(row)
 
-    # Growth stats
+    # Growth stats — use last FULL month (skip partial current month)
+    # Detect partial month: if last month has < 25 days of data, skip it
     growth = {}
+    full_vol = vol
     if len(vol) >= 2:
-        last = vol.iloc[-1]['disbursed']
-        prev = vol.iloc[-2]['disbursed']
+        last_month = vol.iloc[-1]['month']
+        last_month_days = df_c[df_c['month'] == last_month][C_INVOICE_DATE].dt.day.max()
+        if last_month_days and last_month_days < 25:
+            full_vol = vol.iloc[:-1]  # Exclude partial month
+
+    if len(full_vol) >= 2:
+        last = full_vol.iloc[-1]['disbursed']
+        prev = full_vol.iloc[-2]['disbursed']
         if prev > 0:
             growth['mom_pct'] = _safe((last - prev) / prev * 100)
-    if len(vol) >= 4:
-        q_now = vol.iloc[-3:]['disbursed'].sum()
-        q_prev = vol.iloc[-6:-3]['disbursed'].sum() if len(vol) >= 6 else 0
+        growth['as_of'] = str(full_vol.iloc[-1]['month'])
+    if len(full_vol) >= 4:
+        q_now = full_vol.iloc[-3:]['disbursed'].sum()
+        q_prev = full_vol.iloc[-6:-3]['disbursed'].sum() if len(full_vol) >= 6 else 0
         if q_prev > 0:
             growth['qoq_pct'] = _safe((q_now - q_prev) / q_prev * 100)
-    if len(vol) >= 13:
-        y_now = vol.iloc[-12:]['disbursed'].sum()
-        y_prev = vol.iloc[-24:-12]['disbursed'].sum() if len(vol) >= 24 else 0
+    if len(full_vol) >= 13:
+        y_now = full_vol.iloc[-12:]['disbursed'].sum()
+        y_prev = full_vol.iloc[-24:-12]['disbursed'].sum() if len(full_vol) >= 24 else 0
         if y_prev > 0:
             growth['yoy_pct'] = _safe((y_now - y_prev) / y_prev * 100)
 
@@ -205,19 +214,17 @@ def compute_aajil_traction(df, mult=1, ref_date=None, aux=None):
     bal_by_month.columns = ['month', 'receivable']
     # Build cumulative balance: sum of receivable from all months up to each point
     balance_monthly = []
-    cum_bal = 0
     for _, r in vol.iterrows():
         m = r['month']
         month_recv = bal_by_month.loc[bal_by_month['month'] == m, 'receivable']
         recv = float(month_recv.iloc[0]) * mult if len(month_recv) > 0 else 0
-        cum_bal += recv
-        balance_monthly.append({'date': r['month_str'], 'balance_sar': _safe(cum_bal)})
+        balance_monthly.append({'date': r['month_str'], 'balance_sar': _safe(recv)})
 
     return {
         'volume_monthly': volume,
         'balance_monthly': balance_monthly,
         'volume_by_deal_type': by_type,
-        'total_disbursed': _safe(df[C_BILL].sum() * mult),
+        'total_disbursed': _safe(df[C_PRINCIPAL].sum() * mult),
         'latest_balance': _safe(total_outstanding),
         'volume_summary_stats': growth,
         'deal_types': sorted(df[C_DEAL_TYPE].dropna().unique().tolist()),
@@ -322,7 +329,7 @@ def compute_aajil_collections(df, mult=1, ref_date=None, aux=None):
 
     # Per-vintage collection rate
     vintages = df_c.groupby('vintage').agg(
-        originated=(C_BILL, 'sum'),
+        originated=(C_PRINCIPAL, 'sum'),
         realised=(C_REALISED, lambda x: x.fillna(0).sum()),
         receivable=(C_RECEIVABLE, lambda x: x.fillna(0).sum()),
         count=(C_TXN_ID, 'count'),
@@ -340,7 +347,7 @@ def compute_aajil_collections(df, mult=1, ref_date=None, aux=None):
                 'count': int(r['count'])}
                for _, r in vintages.iterrows()]
 
-    total_originated = df[C_BILL].sum() * mult
+    total_originated = df[C_PRINCIPAL].sum() * mult
     total_collected = df[C_REALISED].fillna(0).sum() * mult
     overall_rate = total_collected / total_originated if total_originated > 0 else 0
 
@@ -361,7 +368,7 @@ def compute_aajil_cohorts(df, mult=1, ref_date=None, aux=None):
     # Build cohort summary from Deals sheet
     overdue_rounded = df_c[C_OVERDUE_INST].fillna(0).round().astype(int)
     cohorts = df_c.groupby('vintage_q').agg(
-        originated=(C_BILL, 'sum'),
+        originated=(C_PRINCIPAL, 'sum'),
         count=(C_TXN_ID, 'count'),
         realised=(C_REALISED, lambda x: x.fillna(0).sum()),
         receivable=(C_RECEIVABLE, lambda x: x.fillna(0).sum()),
@@ -468,7 +475,7 @@ def compute_aajil_concentration(df, mult=1, ref_date=None, aux=None):
     """Customer and industry concentration."""
     # Customer concentration
     cust = df.groupby(C_CUSTOMER_ID).agg(
-        volume=(C_BILL, 'sum'),
+        volume=(C_PRINCIPAL, 'sum'),
         count=(C_TXN_ID, 'count'),
     ).sort_values('volume', ascending=False).reset_index()
     cust['volume'] *= mult
@@ -492,7 +499,7 @@ def compute_aajil_concentration(df, mult=1, ref_date=None, aux=None):
     ind = df.copy()
     ind['industry_bucket'] = _bucket_industry(ind[C_INDUSTRY])
     ind_agg = ind.groupby('industry_bucket').agg(
-        volume=(C_BILL, 'sum'),
+        volume=(C_PRINCIPAL, 'sum'),
         count=(C_TXN_ID, 'count'),
     ).sort_values('volume', ascending=False).reset_index()
     ind_agg['volume'] *= mult
@@ -504,7 +511,7 @@ def compute_aajil_concentration(df, mult=1, ref_date=None, aux=None):
                   for _, r in ind_agg.iterrows()]
 
     # Deal type mix
-    dt_mix = df.groupby(C_DEAL_TYPE)[C_BILL].sum() * mult
+    dt_mix = df.groupby(C_DEAL_TYPE)[C_PRINCIPAL].sum() * mult
     dt_total = dt_mix.sum()
     deal_type_mix = [{'deal_type': dt, 'volume': _safe(v), 'share': _safe(v / dt_total if dt_total > 0 else 0)}
                      for dt, v in dt_mix.items()]
@@ -528,8 +535,8 @@ def compute_aajil_underwriting(df, mult=1, ref_date=None, aux=None):
     df_c['vintage_q'] = df_c[C_INVOICE_DATE].dt.to_period('Q')
 
     vintages = df_c.groupby('vintage_q').agg(
-        avg_deal_size=(C_BILL, 'mean'),
-        median_deal_size=(C_BILL, 'median'),
+        avg_deal_size=(C_PRINCIPAL, 'mean'),
+        median_deal_size=(C_PRINCIPAL, 'median'),
         avg_tenure=(C_TENURE, 'mean'),
         avg_yield=(C_TOTAL_YIELD, 'mean'),
         avg_monthly_yield=(C_MONTHLY_YIELD, 'mean'),
@@ -560,7 +567,7 @@ def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
     """Revenue decomposition and yield analysis."""
     total_margin = df[C_MARGIN].fillna(0).sum() * mult
     total_fees = df[C_ORIG_FEE].fillna(0).sum() * mult
-    total_bill = df[C_BILL].sum() * mult
+    total_principal = df[C_PRINCIPAL].sum() * mult
     total_revenue = total_margin + total_fees
 
     # Distribution of yields
@@ -587,7 +594,7 @@ def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
         avg_yield=(C_TOTAL_YIELD, 'mean'),
         margin=(C_MARGIN, lambda x: x.fillna(0).sum()),
         fees=(C_ORIG_FEE, lambda x: x.fillna(0).sum()),
-        bill=(C_BILL, 'sum'),
+        bill=(C_PRINCIPAL, 'sum'),
     ).reset_index()
     vintage_yield = [{'vintage': str(r['vintage_q']),
                       'avg_yield': _safe(r['avg_yield']),
@@ -598,7 +605,7 @@ def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
         'total_margin': _safe(total_margin),
         'total_fees': _safe(total_fees),
         'total_revenue': _safe(total_revenue),
-        'revenue_over_gmv': _safe(total_revenue / total_bill if total_bill > 0 else 0),
+        'revenue_over_gmv': _safe(total_revenue / total_principal if total_principal > 0 else 0),
         'avg_total_yield': _safe(yields.mean()),
         'median_total_yield': _safe(yields.median()),
         'avg_monthly_yield': _safe(monthly_yields.mean()),
@@ -617,10 +624,10 @@ def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
 
 def compute_aajil_loss_waterfall(df, mult=1, ref_date=None, aux=None):
     """Loss waterfall: Originated → Realised → Accrued → Written Off."""
-    total_originated = df[C_BILL].sum() * mult
-    total_realised = df[df[C_STATUS] == 'Realised'][C_BILL].sum() * mult
-    total_accrued = df[df[C_STATUS] == 'Accrued'][C_BILL].sum() * mult
-    total_wo_originated = df[df[C_STATUS] == 'Written Off'][C_BILL].sum() * mult
+    total_originated = df[C_PRINCIPAL].sum() * mult
+    total_realised = df[df[C_STATUS] == 'Realised'][C_PRINCIPAL].sum() * mult
+    total_accrued = df[df[C_STATUS] == 'Accrued'][C_PRINCIPAL].sum() * mult
+    total_wo_originated = df[df[C_STATUS] == 'Written Off'][C_PRINCIPAL].sum() * mult
     total_wo_amount = df[C_WRITTEN_OFF].fillna(0).sum() * mult
     total_wo_vat_recovered = df[C_WO_VAT].fillna(0).sum() * mult
 
@@ -630,7 +637,7 @@ def compute_aajil_loss_waterfall(df, mult=1, ref_date=None, aux=None):
     df_c = df.copy()
     df_c['vintage_q'] = df_c[C_INVOICE_DATE].dt.to_period('Q')
     by_vintage = df_c.groupby('vintage_q').agg(
-        originated=(C_BILL, 'sum'),
+        originated=(C_PRINCIPAL, 'sum'),
         wo_count=(C_STATUS, lambda x: (x == 'Written Off').sum()),
         wo_amount=(C_WRITTEN_OFF, lambda x: x.fillna(0).sum()),
     ).reset_index()
@@ -670,10 +677,10 @@ def compute_aajil_customer_segments(df, mult=1, ref_date=None, aux=None):
         dt_segs.append({
             'segment': dt,
             'count': len(sub),
-            'volume': _safe(sub[C_BILL].sum() * mult),
-            'avg_deal_size': _safe(sub[C_BILL].mean() * mult),
+            'volume': _safe(sub[C_PRINCIPAL].sum() * mult),
+            'avg_deal_size': _safe(sub[C_PRINCIPAL].mean() * mult),
             'avg_tenure': _safe(sub[C_TENURE].dropna().mean()),
-            'collection_rate': _safe(sub[C_REALISED].fillna(0).sum() / (sub[C_REALISED].fillna(0).sum() + sub[C_RECEIVABLE].fillna(0).sum()) if (sub[C_REALISED].fillna(0).sum() + sub[C_RECEIVABLE].fillna(0).sum()) > 0 else 0),
+            'collection_rate': _safe(sub[C_REALISED].fillna(0).sum() / max(sub[C_PRINCIPAL].sum(), 1)),
             'overdue_pct': _safe((sub[C_OVERDUE_INST].fillna(0) > 0).mean()),
             'avg_yield': _safe(sub[C_TOTAL_YIELD].dropna().mean()),
             'wo_count': int((sub[C_STATUS] == 'Written Off').sum()),
@@ -689,15 +696,15 @@ def compute_aajil_customer_segments(df, mult=1, ref_date=None, aux=None):
         ind_segs.append({
             'segment': ind,
             'count': len(sub),
-            'volume': _safe(sub[C_BILL].sum() * mult),
-            'avg_deal_size': _safe(sub[C_BILL].mean() * mult),
-            'collection_rate': _safe(sub[C_REALISED].fillna(0).sum() / max(sub[C_REALISED].fillna(0).sum() + sub[C_RECEIVABLE].fillna(0).sum(), 1)),
+            'volume': _safe(sub[C_PRINCIPAL].sum() * mult),
+            'avg_deal_size': _safe(sub[C_PRINCIPAL].mean() * mult),
+            'collection_rate': _safe(sub[C_REALISED].fillna(0).sum() / max(sub[C_PRINCIPAL].sum(), 1)),
         })
     ind_segs.sort(key=lambda x: x['volume'] or 0, reverse=True)
     segments['by_industry'] = ind_segs
 
     # By customer size tier
-    cust_vol = df.groupby(C_CUSTOMER_ID)[C_BILL].sum()
+    cust_vol = df.groupby(C_CUSTOMER_ID)[C_PRINCIPAL].sum()
     tier_bins = [0, 500_000, 2_000_000, 5_000_000, float('inf')]
     tier_labels = ['Small (<500K)', 'Medium (500K-2M)', 'Large (2M-5M)', 'Enterprise (5M+)']
     cust_tiers = pd.cut(cust_vol, bins=tier_bins, labels=tier_labels)
@@ -709,7 +716,7 @@ def compute_aajil_customer_segments(df, mult=1, ref_date=None, aux=None):
             'segment': tier,
             'customer_count': len(custs_in_tier),
             'deal_count': len(sub),
-            'volume': _safe(sub[C_BILL].sum() * mult),
+            'volume': _safe(sub[C_PRINCIPAL].sum() * mult),
         })
     segments['by_customer_size'] = tier_segs
 
@@ -726,7 +733,7 @@ def compute_aajil_seasonality(df, mult=1, ref_date=None, aux=None):
     df_c['month'] = df_c[C_INVOICE_DATE].dt.month
 
     monthly = df_c.groupby(['year', 'month']).agg(
-        volume=(C_BILL, 'sum'),
+        volume=(C_PRINCIPAL, 'sum'),
         count=(C_TXN_ID, 'count'),
     ).reset_index()
     monthly['volume'] *= mult
@@ -742,7 +749,7 @@ def compute_aajil_seasonality(df, mult=1, ref_date=None, aux=None):
         months_data.append(row)
 
     # Seasonal index
-    month_avg = df_c.groupby('month')[C_BILL].sum() * mult
+    month_avg = df_c.groupby('month')[C_PRINCIPAL].sum() * mult
     overall_avg = month_avg.mean()
     seasonal_index = [{'month': m, 'index': _safe(month_avg.get(m, 0) / overall_avg if overall_avg > 0 else 0)}
                       for m in range(1, 13)]

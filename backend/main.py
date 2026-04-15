@@ -627,7 +627,7 @@ def get_summary(company: str, product: str,
                 s = compute_aajil_summary(df, mult=mult, ref_date=ref_date, aux=aux)
                 return {'company': company, 'product': product, 'display_currency': disp,
                         'total_deals': s.get('total_deals', 0),
-                        'total_purchase_value': s.get('total_bill_notional', 0),
+                        'total_purchase_value': s.get('total_principal', 0),
                         'face_value_label': 'GMV (Bill Notional)',
                         'deals_label': 'Credit Transactions',
                         'total_collected': s.get('total_realised', 0),
@@ -1962,7 +1962,7 @@ def _build_aajil_full_context(data_or_df, mult=1, ref_date=None, aux=None, confi
         s = compute_aajil_summary(df, mult=mult, ref_date=ref_date, aux=aux)
         sections.append("PORTFOLIO OVERVIEW (from loan tape):")
         sections.append(f"  Total Deals: {s['total_deals']}")
-        sections.append(f"  GMV (Bill Notional): {disp} {s['total_bill_notional']:,.0f}")
+        sections.append(f"  GMV (Bill Notional): {disp} {s['total_principal']:,.0f}")
         sections.append(f"  Outstanding (Receivable): {disp} {s['total_receivable']:,.0f}")
         sections.append(f"  Realised (Collected): {disp} {s['total_realised']:,.0f}")
         sections.append(f"  Written Off: {disp} {s['total_written_off']:,.0f} ({s['written_off_count']} deals, {s['write_off_rate']*100:.1f}%)")
