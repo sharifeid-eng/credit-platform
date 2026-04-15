@@ -19,11 +19,11 @@ Track active work here. Claude updates this as tasks progress.
 - [ ] **GrowthStats platform-wide** — apply to all company Overview tabs
 - [ ] **Global "Display by" segmentation** — Cascade-style cross-tab filter
 
-### Tamara Data Room + Memo
-- [ ] **Ingest Tamara data room** — user will provide path, ask before ingesting
-- [ ] **Sync Tamara to NotebookLM** — dual-engine for richer memo
-- [ ] **Generate Tamara Credit Memo (v2)** — with proper data room coverage
-- [ ] **Delete placeholder Tamara memo** (`reports/memos/Tamara_KSA/0ae5cbe3-095/`)
+### Tamara Data Room + Memo ✅ COMPLETE (session 21)
+- [x] **Ingest Tamara data room** — 134 files, 4,076 chunks, 1,744 pages
+- [x] **Sync Tamara to NotebookLM** — 63/64 PDFs synced to fresh notebook
+- [x] **Generate Tamara Credit Memo (v2)** — `f3af2d4e-b88`, 12 AI sections, 45 citations
+- [x] **Delete placeholder Tamara memo** — removed `0ae5cbe3-095`
 
 ### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
@@ -46,6 +46,19 @@ Track active work here. Claude updates this as tasks progress.
 
 ### Other Remaining
 - [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
+
+---
+
+## Completed — 2026-04-15 (session 21: Tamara Data Room + Credit Memo)
+
+- [x] **Tamara data room ingested** — 134 files from `data/Tamara/dataroom/`, 4,076 chunks, 1,744 pages, 9 document types classified
+- [x] **Document classification** — vintage matrices (51 files) confirmed as whole-book data, not facility-specific; HSBC reports + legal DD identified as facility-specific
+- [x] **NLM authenticated and synced** — 63/64 PDFs uploaded to fresh NLM notebook (1 processing failure)
+- [x] **Placeholder Tamara memo deleted** — removed `reports/memos/Tamara_KSA/0ae5cbe3-095/`
+- [x] **Tamara Credit Memo v2 generated** — `f3af2d4e-b88`, 12 AI sections (~55K chars), 45 data room citations, covers both KSA + UAE
+- [x] **EOD process improved** — Step 1b added to check for untracked data artifacts (registry.json, NLM state, mind entries, memos)
+- [x] **Recovered lost session 19 work** — found registry.json in `nifty-chebyshev` worktree, confirmed all code changes were already merged (0 unique commits)
+- [x] **All data artifacts committed** — registry.json, notebooklm_state.json, memo files committed to main (prevents worktree cleanup loss)
 
 ---
 

@@ -8,6 +8,14 @@ Perform a thorough end-of-session close. Work through every step below in order.
 
 Run `git status` and `git diff --stat`. List every modified, untracked, or deleted file. For each file, state whether it needs to be committed.
 
+## Step 1b — Check for untracked data artifacts that should be committed
+
+These files are generated at runtime but ARE tracked (not gitignored). Check if any exist and are untracked:
+```
+git ls-files --others --exclude-standard -- "data/*/dataroom/registry.json" "data/*/dataroom/notebooklm_state.json" "data/*/mind/*.jsonl" "data/*/mind/relations.json" "data/*/legal/*_extracted.json" "reports/memos/"
+```
+If any results appear, stage them — they represent work product that won't survive worktree cleanup.
+
 ## Step 2 — Run tests
 
 Run `pytest tests/ -q` from the project root. Report pass/fail counts. If any tests fail, fix them before proceeding — do not commit broken code.

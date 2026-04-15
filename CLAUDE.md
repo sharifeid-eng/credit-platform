@@ -1320,7 +1320,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Rules-based insight extraction at ingest time
   - Analytics snapshots as searchable research sources
   - Frontend: DocumentLibrary, ResearchChat (engine badges, NLM status indicator, sync button, synthesis notes)
-  - **Tamara data room ingested** (session 19): 226 files, 5,504 chunks, 2,388 pages, 10 document types classified, Claude RAG synthesis working
+  - **Tamara data room ingested** (session 21, fresh re-ingest): 134 files, 4,076 chunks, 1,744 pages, 9 document types, 63 PDFs synced to NLM. Document classification: vintage cohort matrices (51) are whole-book data, HSBC investor reports (20) + legal DD are facility-specific.
   - **Klaim data room ingested** (session 17): 28 docs, 492 chunks, 320 pages
 - ✅ **Living Mind (institutional memory):**
   - Master Mind: fund-level preferences, IC norms, cross-company patterns
@@ -1379,7 +1379,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **Consecutive breach history** — `annotate_covenant_eod()` + `covenant_history.json` verified working per MMA 18.3
   - **Klaim data room ingested** — 87 files from `data/klaim/dataroom/`, 1,720 chunks, 1,334 pages. Intelligence System events fired (entity extraction + compilation).
   - **Klaim Credit Memo** — 12 AI sections with dual-engine research (Claude RAG + NotebookLM). Full 5-layer context pipeline. Renders in MemoEditor.
-  - **Tamara Credit Memo** — 11/12 AI sections (covenant list-vs-dict bug fixed in analytics_bridge.py)
+  - **Tamara Credit Memo v2** (session 21) — `f3af2d4e-b88`, 12 AI sections (~55K chars), 45 data room citations, covers both KSA + UAE. Old placeholder `0ae5cbe3-095` deleted.
 - ✅ **Data room engine moved to company level:**
   - Path: `data/{company}/dataroom/` (was `data/{company}/{product}/dataroom/`)
   - `_dataroom_dir()` updated in engine.py, analytics_snapshot.py, notebooklm_bridge.py
