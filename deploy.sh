@@ -20,6 +20,28 @@ docker compose up -d
 echo "Running migrations..."
 docker compose exec backend alembic upgrade head
 
+# Rebuild dataroom search indexes if needed
+echo "Checking dataroom indexes..."
+for registry in data/*/dataroom/registry.json; do
+    if [ -f "$registry" ]; then
+        company_dir=$(dirname $(dirname "$registry"))
+        company=$(basename "$company_dir")
+        chunks_dir="$(dirname "$registry")/chunks"
+        if [ ! -d "$chunks_dir" ] || [ -z "$(ls -A "$chunks_dir" 2>/dev/null)" ]; then
+            # Find product from config.json
+            for config in data/$company/*/config.json; do
+                product=$(basename $(dirname "$config"))
+                if [ "$product" != "dataroom" ]; then
+                    echo "  Ingesting dataroom for $company/$product..."
+                    docker compose exec -T backend curl -s -X POST "http://localhost:8000/companies/$company/products/$product/dataroom/ingest" > /dev/null 2>&1 && echo "    Done" || echo "    Skipped (endpoint not available)"
+                fi
+            done
+        else
+            echo "  $company: chunks exist, skipping ingest"
+        fi
+    fi
+done
+
 # Verify
 echo ""
 echo "=== Deploy complete ==="

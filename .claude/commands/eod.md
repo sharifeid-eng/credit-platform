@@ -102,10 +102,12 @@ If this session changed any backend, frontend, core/, or data/ files (not just d
 
 If dataroom ingestion was performed this session, also remind:
 
-> **Dataroom ingest needed on production.** Chunks and index.pkl are gitignored — the production server must run its own ingest after deploy to rebuild the search index. Run from the server after SSH:
+> **Sync dataroom files to production.** Raw dataroom files (PDFs, xlsx, docx) are not in git. Run from your laptop PowerShell:
+> ```powershell
+> .\scripts\sync-data.ps1                    # all companies
+> .\scripts\sync-data.ps1 -Company Tamara    # one company
 > ```
-> docker compose exec backend curl -X POST http://localhost:8000/companies/{company}/products/{product}/dataroom/ingest
-> ```
+> Then redeploy — `deploy.sh` will auto-ingest any datarooms with missing chunks.
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
