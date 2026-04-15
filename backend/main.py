@@ -1173,12 +1173,20 @@ _aajil_cache = _BoundedCache()
 
 @app.get("/companies/{company}/products/{product}/aajil-summary")
 def get_aajil_summary_endpoint(company: str, product: str, snapshot: Optional[str] = None):
-    """Return parsed Aajil SME trade credit data as structured JSON."""
+    """Return Aajil data — tape-computed if xlsx, JSON-parsed if json."""
     sel = _resolve_snapshot(company, product, snapshot)
     filepath = sel['filepath']
-    if filepath not in _aajil_cache:
-        _aajil_cache[filepath] = parse_aajil_data(filepath)
-    return _aajil_cache[filepath]
+    if filepath.endswith('.json'):
+        if filepath not in _aajil_cache:
+            _aajil_cache[filepath] = parse_aajil_data(filepath)
+        return _aajil_cache[filepath]
+    # Tape mode: return computed summary + static qualitative data
+    if filepath not in _aajil_tape_cache:
+        _aajil_tape_cache[filepath] = load_aajil_snapshot(filepath)
+    df, aux = _aajil_tape_cache[filepath]
+    from core.analysis_aajil import compute_aajil_summary as _cs, AAJIL_QUALITATIVE_DATA
+    summary = _cs(df, mult=1, aux=aux)
+    return {**summary, **AAJIL_QUALITATIVE_DATA}
 
 # ── Research Report endpoint (platform-level) ───────────────────────────────
 

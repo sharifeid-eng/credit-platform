@@ -665,6 +665,105 @@ def compute_aajil_seasonality(df, mult=1, ref_date=None, aux=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# STATIC QUALITATIVE DATA (from investor deck — not in tape)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+AAJIL_QUALITATIVE_DATA = {
+    "company_overview": {
+        "name": "Aajil", "parent": "Buildnow", "founded": 2022,
+        "sector": "SME lending — industrial raw materials trade credit",
+        "country": "Saudi Arabia", "currency": "SAR", "employees": 64,
+        "credit_as_pct_revenue": "2.5% - 5.0%", "pn_coverage": 1.0,
+        "avg_tenor_months": 4.5, "max_tenor_months": 6,
+        "repayment_structure": "Instalments",
+        "credit_deployment_hours": 24,
+        "investors": ["SIC", "Khawrizmi Ventures", "RAED", "Arbah Capital", "STV", "Al-Raedah Finance", "JOA Capital"],
+    },
+    "customer_types": [
+        {"type": "Manufacturer", "description": "Industrial manufacturers purchasing raw materials", "color": "#5B8DEF",
+         "min_gross_margin": 0.06, "min_net_margin": 0.01, "min_current_ratio": 0.8},
+        {"type": "Contractor", "description": "Construction and project-based contractors", "color": "#C9A84C",
+         "min_gross_margin": 0.07, "min_net_margin": 0.01, "min_current_ratio": 0.8},
+        {"type": "Wholesale Trader", "description": "Wholesale trading companies", "color": "#2DD4BF",
+         "min_gross_margin": 0.07, "min_net_margin": 0.01, "min_current_ratio": 0.8},
+    ],
+    "sales_channels": [
+        {"channel": "Performance Marketing", "pct": 34, "color": "#5B8DEF"},
+        {"channel": "Outbound Prospecting", "pct": 33, "color": "#C9A84C"},
+        {"channel": "Referral Networks", "pct": 25, "color": "#2DD4BF"},
+        {"channel": "Field Sales", "pct": 8, "color": "#F06060"},
+    ],
+    "trust_score_system": {
+        "scores": [
+            {"score": 5, "label": "Green", "description": "Good history, enablement-first approach", "color": "#2DD4BF"},
+            {"score": 4, "label": "Amber", "description": "Minor delays, tighter timelines", "color": "#C9A84C"},
+            {"score": 3, "label": "Red", "description": "Repeated issues, bank statement required", "color": "#F06060"},
+            {"score": 2, "label": "Critical", "description": "Severe default risk, 48h payment deadline", "color": "#D32F2F"},
+            {"score": 1, "label": "Critical", "description": "Extreme risk, immediate escalation", "color": "#B71C1C"},
+        ],
+        "collections_phases": [
+            {"phase": "Preventive", "dpd_range": "-15 to 0", "description": "Proactive reminders, payment facilitation", "color": "#2DD4BF"},
+            {"phase": "Active", "dpd_range": "1 to 60", "description": "Personal calls, site visits, escalation", "color": "#C9A84C"},
+            {"phase": "Legal", "dpd_range": "60+", "description": "PN enforcement, SIMAH classification, asset recovery", "color": "#F06060"},
+        ],
+    },
+    "underwriting": {
+        "stages": ["Sales Screening", "Risk Assessment", "Credit Report", "Credit Decision Committee"],
+        "stages_enriched": [
+            {"name": "Sales Screening", "number": 1, "color": "#5B8DEF"},
+            {"name": "Risk Assessment", "number": 2, "color": "#2DD4BF"},
+            {"name": "Credit Report", "number": 3, "color": "#C9A84C"},
+            {"name": "Credit Decision Committee", "number": 4, "color": "#F06060"},
+        ],
+        "min_revenue_sar": 5000000, "max_leverage": 0.50,
+        "non_cdc_approval_limit_sar": 400000,
+        "disqualification_rules": [
+            "Revenue below SAR 5M in last 12 months",
+            "Revenue variance >10% between bank/VAT sources",
+            "Continuous revenue decline >20%/year for 3 consecutive years",
+            "Leverage >50% with current ratio <1.0",
+            "Funded exposure >30% of revenue",
+            "Active legal cases (company or personal)",
+            "Past due obligations without proof of payment",
+        ],
+    },
+    "risk_mitigation": [
+        {"factor": "Minimal Exposure", "detail": "Credit at 2.5-5.0% of client revenue"},
+        {"factor": "Diversification", "detail": "Multiple sectors: manufacturer, contractor, trader"},
+        {"factor": "Asset-Based", "detail": "Purchasing raw materials directly, not disbursing cash"},
+        {"factor": "Short Duration", "detail": "4-5 month avg tenor, max 6 months"},
+        {"factor": "Robust Collections", "detail": "Automated messages, site visits, calls, legal"},
+        {"factor": "Promissory Notes", "detail": "100% PN coverage for each issuance"},
+        {"factor": "Credit Assessment", "detail": "Technical, financial, and legal assessment"},
+        {"factor": "Instalments", "detail": "Instalment repayment, not bullet at maturity"},
+    ],
+    "dpd_reassessment": [
+        {"dpd_range": "1-10", "policy": "Eligible for standard reassessment"},
+        {"dpd_range": "11-29 (compliant)", "policy": "New facility if trust score >= 80 AND bank confirms liquidity shortfall"},
+        {"dpd_range": "11-29 (non-compliant)", "policy": "Trust score < 80: disqualified"},
+        {"dpd_range": "30+ (first facility)", "policy": "Suspended min 2 quarters, full reassessment required"},
+        {"dpd_range": "30+ (wilful)", "policy": "Permanently disqualified if cash >= 150% of past due"},
+    ],
+    "technology": {
+        "platforms": ["R-Square (deal orchestration)", "C-Square (credit intelligence)", "Basirah (AI document intelligence)"],
+        "stack": ["FastAPI", "Django", "PostgreSQL", "BigQuery", "Docker", "Kubernetes", "Redis", "Celery", "Sentry"],
+        "ai_tools": ["Claude", "OpenAI", "Gemini", "Google AI Studio", "Neo4j"],
+    },
+    "data_notes": [
+        "Loan tape from Cascade Debt (Apr 13, 2026) — 1,245 deals across 7 sheets",
+        "Company overview/underwriting/trust scores from investor deck (Mar 2026)",
+        "Customer Industry missing for 39% of deals — bucketed into top-10 + Other + Unknown",
+        "Deal Types: EMI (instalment, 51%) and Bullet (single payment, 49%)",
+        "Trust score system (1-5) is Aajil's proprietary collections prioritization model",
+        "Buildnow is the parent company; Aajil is the product/brand name",
+        "DPD calculated from overdue instalment counts (not explicit days past due)",
+        "Written Off: 19 deals (1.5%), all from Sep 2025 - Feb 2026",
+    ],
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # LEGACY JSON SUPPORT (backward compat)
 # ═══════════════════════════════════════════════════════════════════════════════
 
