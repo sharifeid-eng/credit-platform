@@ -789,7 +789,7 @@ Each company/product has its own configured dashboard. The platform shares a com
 
 ### Methodology Onboarding Checklist
 When onboarding a new company, follow these steps to build its methodology page. Full guide in `core/ANALYSIS_FRAMEWORK.md` Section 7.
-1. **Define `analysis_type`** in `config.json` — reuse existing type if same asset class, or create new one
+1. **Define `analysis_type`** in `config.json` — reuse existing type if same asset class, or create new one. Also set `face_value_column` to the tape column that represents originated/funded value (e.g. `"Purchase value"`, `"Principal Amount"`, `"Disbursed_Amount (SAR)"`). This drives the landing page aggregate stats.
 2. **Build methodology sections covering all 5 hierarchy levels:**
    - L1 Size & Composition — what constitutes "a deal", volume metrics, product types
    - L2 Cash Conversion — collection rate formula, DSO variant, timing distribution
