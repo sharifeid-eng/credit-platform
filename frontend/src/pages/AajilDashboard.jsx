@@ -190,8 +190,13 @@ export default function AajilDashboard() {
                       { name: 'Realised', value: data.realised_count || 0 },
                       { name: 'Accrued', value: data.accrued_count || 0 },
                       { name: 'Written Off', value: data.written_off_count || 0 },
-                    ].filter(d => d.value > 0)} dataKey="value" cx="50%" cy="50%" outerRadius={70}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    ].filter(d => d.value > 0)} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={65}
+                      label={({ cx, cy, midAngle, outerRadius: or2, name, percent }) => {
+                        const rad = Math.PI / 180
+                        const x = cx + (or2 + 25) * Math.cos(-midAngle * rad)
+                        const y = cy + (or2 + 25) * Math.sin(-midAngle * rad)
+                        return <text x={x} y={y} fill="#E8EAF0" fontSize={11} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">{`${name} ${(percent * 100).toFixed(0)}%`}</text>
+                      }}>
                       <Cell fill={TEAL} />
                       <Cell fill={GOLD} />
                       <Cell fill={RED} />
@@ -207,8 +212,13 @@ export default function AajilDashboard() {
                     <Pie data={[
                       { name: 'EMI (Instalment)', value: data.emi_count || 0 },
                       { name: 'Bullet (Single)', value: data.bullet_count || 0 },
-                    ].filter(d => d.value > 0)} dataKey="value" cx="50%" cy="50%" outerRadius={70}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    ].filter(d => d.value > 0)} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={65}
+                      label={({ cx, cy, midAngle, outerRadius: or2, name, percent }) => {
+                        const rad = Math.PI / 180
+                        const x = cx + (or2 + 25) * Math.cos(-midAngle * rad)
+                        const y = cy + (or2 + 25) * Math.sin(-midAngle * rad)
+                        return <text x={x} y={y} fill="#E8EAF0" fontSize={11} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">{`${name} ${(percent * 100).toFixed(0)}%`}</text>
+                      }}>
                       <Cell fill={BLUE} />
                       <Cell fill={GOLD} />
                     </Pie>
