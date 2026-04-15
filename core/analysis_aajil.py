@@ -198,12 +198,24 @@ def compute_aajil_traction(df, mult=1, ref_date=None, aux=None):
         if y_prev > 0:
             growth['yoy_pct'] = _safe((y_now - y_prev) / y_prev * 100)
 
-    # Balance: cumulative receivable at each month-end (approximate from current snapshot)
-    # Since we have a single snapshot, balance = sum of Receivable for all active deals
+    # Balance: current outstanding per origination month (from single snapshot).
+    # Shows how much of each vintage is still outstanding today.
     total_outstanding = df[df[C_STATUS] == 'Accrued'][C_RECEIVABLE].fillna(0).sum() * mult
+    bal_by_month = df_c.groupby('month')[C_RECEIVABLE].apply(lambda x: x.fillna(0).sum()).reset_index()
+    bal_by_month.columns = ['month', 'receivable']
+    # Build cumulative balance: sum of receivable from all months up to each point
+    balance_monthly = []
+    cum_bal = 0
+    for _, r in vol.iterrows():
+        m = r['month']
+        month_recv = bal_by_month.loc[bal_by_month['month'] == m, 'receivable']
+        recv = float(month_recv.iloc[0]) * mult if len(month_recv) > 0 else 0
+        cum_bal += recv
+        balance_monthly.append({'date': r['month_str'], 'balance_sar': _safe(cum_bal)})
 
     return {
         'volume_monthly': volume,
+        'balance_monthly': balance_monthly,
         'volume_by_deal_type': by_type,
         'total_disbursed': _safe(df[C_BILL].sum() * mult),
         'latest_balance': _safe(total_outstanding),
