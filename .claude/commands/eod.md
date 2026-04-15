@@ -52,13 +52,22 @@ Review the full conversation for any: mistakes made and corrected, patterns to a
 
 ## Step 8 — Commit all changes
 
-Stage and commit `CLAUDE.md`, `tasks/todo.md`, `tasks/lessons.md`, and any other modified source files that haven't been committed yet. Use a clear, descriptive commit message. Do **not** commit `.env`.
+Stage and commit `CLAUDE.md`, `tasks/todo.md`, `tasks/lessons.md`, any data artifacts flagged in Step 1b, and any other modified files that haven't been committed yet. Use a clear, descriptive commit message. Do **not** commit `.env`.
 
 ## Step 9 — Merge to main and push
 
 **This step is NON-NEGOTIABLE. The deploy script pulls `main`. If work stays on a feature branch, it doesn't deploy.**
 
-If you are on a feature branch:
+If you are in a worktree, commit on the worktree branch first, then merge from the main working directory:
+```
+cd C:\Users\SharifEid\credit-platform
+git checkout main
+git pull origin main
+git merge <feature-branch> --no-edit
+git push origin main
+```
+
+If you are on a feature branch (not in a worktree):
 ```
 git checkout main
 git pull origin main
@@ -93,7 +102,10 @@ If this session changed any backend, frontend, core/, or data/ files (not just d
 
 If dataroom ingestion was performed this session, also remind:
 
-> **Dataroom ingest needed on production.** Chunks and index.pkl are gitignored — the production server must run its own ingest after deploy to rebuild the search index.
+> **Dataroom ingest needed on production.** Chunks and index.pkl are gitignored — the production server must run its own ingest after deploy to rebuild the search index:
+> ```
+> curl -X POST http://localhost:8000/companies/{company}/products/{product}/dataroom/ingest
+> ```
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
