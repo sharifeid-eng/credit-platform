@@ -265,8 +265,8 @@ def _read_all_mind_entries() -> List[Dict[str, Any]]:
                         entry["_product"] = ""
                         entry["_file"] = jf.stem
                         entries.append(entry)
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
     # Sort newest first
     entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
