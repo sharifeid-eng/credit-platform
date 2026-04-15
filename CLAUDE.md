@@ -78,6 +78,14 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 - Explain changes with high-level summaries at each step.
 - After completing a major task, add a review section to `tasks/todo.md` and capture lessons.
 
+### NotebookLM Connectivity
+**NotebookLM is a first-class research engine.** Before any task involving data room research, memo generation, or company analysis:
+1. Check NLM status: `GET /notebooklm/status` — verify `authenticated: true`
+2. If `authenticated: false`: remind the user to run `notebooklm login` in the venv, then restart the backend
+3. For new companies: create an NLM notebook and sync dataroom PDFs after ingestion
+4. The NLM bridge auto-recovers: if auth file appears (user runs `notebooklm login`), the next NLM call within 5 minutes will detect it and re-enable dual-engine research
+5. **Never silently skip NLM** — if it's unavailable, warn the user with the fix instructions
+
 ### Analysis Framework Authority
 **The Analysis Framework (`core/ANALYSIS_FRAMEWORK.md`) is the authoritative source for ALL analytical decisions.** It is the "brain" of the platform — not just documentation, but the specification that drives every metric, dashboard, and AI prompt.
 
