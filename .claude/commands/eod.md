@@ -83,13 +83,17 @@ git checkout main
 
 ## Step 11 — Production redeploy reminder
 
-If this session changed any backend, frontend, or core/ code (not just docs/CLAUDE.md/todo.md), remind the user:
+If this session changed any backend, frontend, core/, or data/ files (not just docs/CLAUDE.md/todo.md), remind the user:
 
-> **Code was pushed that affects the running app.** To update production, SSH into the server and redeploy:
+> **Changes were pushed that affect the running app.** To update production, SSH into the server and redeploy:
 > ```
 > ssh root@204.168.252.26
 > cd /opt/credit-platform && ./deploy.sh
 > ```
+
+If dataroom ingestion was performed this session, also remind:
+
+> **Dataroom ingest needed on production.** Chunks and index.pkl are gitignored — the production server must run its own ingest after deploy to rebuild the search index.
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
