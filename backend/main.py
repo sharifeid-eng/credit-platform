@@ -34,7 +34,16 @@ from core.consistency import run_consistency_check
 from core.reporter import generate_ai_analysis, save_pdf_report
 from core.analysis_ejari import parse_ejari_workbook
 from core.analysis_tamara import parse_tamara_data, get_tamara_summary_kpis
-from core.analysis_aajil import parse_aajil_data, get_aajil_summary
+from core.analysis_aajil import (
+    parse_aajil_data, get_aajil_summary,
+    compute_aajil_summary, compute_aajil_traction, compute_aajil_delinquency,
+    compute_aajil_collections, compute_aajil_cohorts, compute_aajil_concentration,
+    compute_aajil_underwriting, compute_aajil_yield, compute_aajil_loss_waterfall,
+    compute_aajil_customer_segments, compute_aajil_seasonality,
+    filter_aajil_by_date,
+)
+from core.loader import load_aajil_snapshot
+from core.validation_aajil import validate_aajil_tape
 from core.analysis_silq import (
     compute_silq_summary, compute_silq_delinquency, compute_silq_collections,
     compute_silq_concentration, compute_silq_cohorts, compute_silq_yield,
@@ -612,26 +621,53 @@ def get_summary(company: str, product: str,
                 'deals_label': kpis.get('deals_label', 'Deals')}
     if at == 'aajil':
         try:
-            snaps = get_snapshots(company, product)
-            if snaps:
-                filepath = snaps[-1]['filepath']
-                if filepath not in _aajil_cache:
-                    _aajil_cache[filepath] = parse_aajil_data(filepath)
-                kpis = get_aajil_summary(_aajil_cache[filepath])
+            df, aux, sel, config, disp, mult, ref_date = _aajil_tape_load(company, product, snapshot, as_of_date, currency)
+            if df is not None:
+                # Live tape computation
+                s = compute_aajil_summary(df, mult=mult, ref_date=ref_date, aux=aux)
+                return {'company': company, 'product': product, 'display_currency': disp,
+                        'total_deals': s.get('total_deals', 0),
+                        'total_purchase_value': s.get('total_bill_notional', 0),
+                        'face_value_label': 'GMV (Bill Notional)',
+                        'deals_label': 'Credit Transactions',
+                        'total_collected': s.get('total_realised', 0),
+                        'total_denied': 0, 'total_pending': s.get('total_receivable', 0),
+                        'total_expected': 0,
+                        'collection_rate': s.get('collection_rate', 0),
+                        'denial_rate': 0, 'pending_rate': 0,
+                        'active_deals': s.get('accrued_count', 0),
+                        'completed_deals': s.get('realised_count', 0),
+                        'avg_discount': 0, 'dso_available': False,
+                        'hhi_group': s.get('hhi_customer', 0),
+                        'top_1_group_pct': 0,
+                        'analysis_type': 'aajil',
+                        'total_customers': s.get('total_customers', 0),
+                        'total_written_off': s.get('total_written_off', 0),
+                        'written_off_count': s.get('written_off_count', 0),
+                        'emi_count': s.get('emi_count', 0),
+                        'bullet_count': s.get('bullet_count', 0),
+                        'avg_tenure': s.get('avg_tenure', 0),
+                        'avg_yield': s.get('avg_total_yield', 0)}
             else:
-                kpis = {'total_purchase_value': 0, 'total_deals': 0}
-        except Exception:
-            kpis = {'total_purchase_value': 0, 'total_deals': 0}
-        return {'company': company, 'product': product, 'display_currency': 'SAR',
-                'total_deals': kpis.get('total_deals', 0), 'total_purchase_value': kpis.get('total_purchase_value', 0),
-                'total_collected': kpis.get('total_collected', 0), 'total_denied': 0, 'total_pending': 0,
-                'total_expected': 0, 'collection_rate': kpis.get('collection_rate', 0), 'denial_rate': 0,
-                'pending_rate': 0, 'active_deals': 0, 'completed_deals': 0,
-                'avg_discount': 0, 'dso_available': False, 'hhi_group': 0,
-                'top_1_group_pct': 0, 'analysis_type': 'aajil',
-                'face_value_label': kpis.get('face_value_label', 'Face Value'),
-                'deals_label': kpis.get('deals_label', 'Deals'),
-                'total_customers': kpis.get('total_customers', 0)}
+                # Fall back to JSON
+                snaps = get_snapshots(company, product)
+                filepath = snaps[-1]['filepath'] if snaps else None
+                if filepath and filepath not in _aajil_cache:
+                    _aajil_cache[filepath] = parse_aajil_data(filepath)
+                kpis = get_aajil_summary(_aajil_cache[filepath]) if filepath else {}
+                return {'company': company, 'product': product, 'display_currency': 'SAR',
+                        'total_deals': kpis.get('total_deals', 0), 'total_purchase_value': kpis.get('total_purchase_value', 0),
+                        'total_collected': kpis.get('total_collected', 0), 'total_denied': 0, 'total_pending': 0,
+                        'total_expected': 0, 'collection_rate': kpis.get('collection_rate', 0), 'denial_rate': 0,
+                        'pending_rate': 0, 'active_deals': 0, 'completed_deals': 0,
+                        'avg_discount': 0, 'dso_available': False, 'hhi_group': 0,
+                        'top_1_group_pct': 0, 'analysis_type': 'aajil',
+                        'face_value_label': 'AUM (Outstanding)', 'deals_label': 'Credit Transactions',
+                        'total_customers': kpis.get('total_customers', 0)}
+        except Exception as e:
+            return {'company': company, 'product': product, 'display_currency': 'SAR',
+                    'total_deals': 0, 'total_purchase_value': 0, 'analysis_type': 'aajil',
+                    'error': str(e)}
     if at == 'silq':
         df, sel, config, disp, mult, commentary_text, ref_date = _silq_load(company, product, snapshot, as_of_date, currency)
         if not len(df):
@@ -1219,17 +1255,77 @@ def get_silq_chart(company: str, product: str, chart_name: str,
         result = fn(df, mult)
     return {**result, 'currency': disp}
 
+
+# ── Aajil chart endpoints ────────────────────────────────────────────────────
+
+_aajil_tape_cache = _BoundedCache()
+
+AAJIL_CHART_MAP = {
+    'traction':          compute_aajil_traction,
+    'delinquency':       compute_aajil_delinquency,
+    'collections':       compute_aajil_collections,
+    'cohort':            compute_aajil_cohorts,
+    'concentration':     compute_aajil_concentration,
+    'underwriting':      compute_aajil_underwriting,
+    'yield-margins':     compute_aajil_yield,
+    'loss-waterfall':    compute_aajil_loss_waterfall,
+    'customer-segments': compute_aajil_customer_segments,
+    'seasonality':       compute_aajil_seasonality,
+}
+
+
+def _aajil_tape_load(company, product, snapshot, as_of_date, currency):
+    """Load Aajil multi-sheet tape. Returns (df, aux, sel, config, disp, mult, ref_date) or None tuple if JSON."""
+    sel = _resolve_snapshot(company, product, snapshot)
+    filepath = sel['filepath']
+
+    if filepath.endswith('.json'):
+        return None, None, sel, {}, 'SAR', 1, None
+
+    if filepath not in _aajil_tape_cache:
+        _aajil_tape_cache[filepath] = load_aajil_snapshot(filepath)
+    df, aux = _aajil_tape_cache[filepath]
+    df = filter_aajil_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    ref_date = pd.to_datetime(as_of_date) if as_of_date else pd.to_datetime(sel['date'])
+    return df, aux, sel, config, disp, mult, ref_date
+
+
+@app.get("/companies/{company}/products/{product}/charts/aajil/{chart_name}")
+def get_aajil_chart(company: str, product: str, chart_name: str,
+                    snapshot: Optional[str] = None,
+                    as_of_date: Optional[str] = None,
+                    currency: Optional[str] = None):
+    """Generic Aajil chart endpoint — dispatches to the right compute function."""
+    fn = AAJIL_CHART_MAP.get(chart_name)
+    if not fn:
+        raise HTTPException(status_code=404, detail=f"Unknown Aajil chart: {chart_name}")
+    df, aux, sel, config, disp, mult, ref_date = _aajil_tape_load(company, product, snapshot, as_of_date, currency)
+    if df is None:
+        raise HTTPException(status_code=400, detail="Tape file (.xlsx) required for chart computation")
+    result = fn(df, mult=mult, ref_date=ref_date, aux=aux)
+    return {**result, 'currency': disp}
+
+
 @app.get("/companies/{company}/products/{product}/validate")
 def validate_snapshot(company: str, product: str,
                       snapshot: Optional[str] = None):
     """Run data quality checks on a single tape."""
     at = _get_analysis_type(company, product)
-    if at == 'silq':
+    if at == 'aajil':
+        sel = _resolve_snapshot(company, product, snapshot)
+        if sel['filepath'].endswith('.json'):
+            return {'critical': [], 'warnings': [], 'info': ['JSON snapshot — no tape validation'], 'passed': True, 'total_rows': 0}
+        df, _ = load_aajil_snapshot(sel['filepath'])
+        result = validate_aajil_tape(df)
+    elif at == 'silq':
         sel = _resolve_snapshot(company, product, snapshot)
         df, _ = load_silq_snapshot(sel['filepath'])
+        result = validate_silq_tape(df)
     else:
         df, sel = _load(company, product, snapshot)
-    result = validate_silq_tape(df) if at == 'silq' else validate_tape(df)
+        result = validate_tape(df)
     result['snapshot'] = sel['date']
     result['filename'] = sel['filename']
     return result
@@ -1379,8 +1475,11 @@ def get_ai_cache_status(company: str, product: str,
     at = _get_analysis_type(company, product)
     if at == 'silq':
         tabs = ['delinquency', 'collections', 'concentration', 'cohort', 'yield-margins', 'tenure']
-    elif at in ('ejari_summary', 'tamara_summary', 'aajil'):
+    elif at in ('ejari_summary', 'tamara_summary'):
         tabs = []
+    elif at == 'aajil':
+        tabs = ['traction', 'delinquency', 'collections', 'cohort', 'concentration',
+                'yield-margins', 'loss-waterfall', 'customer-segments']
     else:
         tabs = ['deployment', 'collection', 'denial-trend', 'ageing', 'revenue',
                 'concentration', 'cohort', 'actual-vs-expected', 'returns', 'risk-migration']
@@ -1845,66 +1944,77 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
     return '\n'.join(sections)
 
 
-def _build_aajil_full_context(data):
-    """Build analytics context from parsed Aajil SME trade credit JSON snapshot."""
+def _build_aajil_full_context(data_or_df, mult=1, ref_date=None, aux=None, config=None, disp='SAR'):
+    """Build analytics context from Aajil data — supports both tape (DataFrame) and JSON."""
     sections = []
-    co = data.get('company_overview', {})
-    ov = data.get('overview', {})
 
-    sections.append("COMPANY OVERVIEW:")
-    sections.append(f"  Company: Aajil (Buildnow) — SME raw materials trade credit, KSA")
-    sections.append(f"  AUM (Outstanding): SAR {co.get('aum_sar', 0):,.0f} (${co.get('aum_usd', 0):,.0f})")
-    sections.append(f"  GMV Disbursed: >SAR {co.get('gmv_sar', 0):,.0f} (>${co.get('gmv_usd', 0):,.0f})")
-    sections.append(f"  Total Customers: {co.get('total_customers', 0)}")
-    sections.append(f"  Total Transactions: {co.get('total_transactions', 0)}")
-    sections.append(f"  Avg Deals/Customer: {co.get('avg_deals_per_customer', 0)}")
-    sections.append(f"  Avg Tenor: {co.get('avg_tenor_months', 0)} months (max {co.get('max_tenor_months', 0)})")
-    sections.append(f"  DPD60+: <{co.get('dpd60_plus_rate', 0)*100:.0f}% (trailing 12 months, Dec 2025)")
-    sections.append(f"  PN Coverage: {co.get('pn_coverage', 0)*100:.0f}%")
-    sections.append(f"  Credit/Revenue: {co.get('credit_as_pct_revenue', 'N/A')}")
-    sections.append(f"  Employees: {co.get('employees', 0)}")
+    if isinstance(data_or_df, pd.DataFrame):
+        # Live tape mode
+        df = data_or_df
+        s = compute_aajil_summary(df, mult=mult, ref_date=ref_date, aux=aux)
+        sections.append("PORTFOLIO OVERVIEW (from loan tape):")
+        sections.append(f"  Total Deals: {s['total_deals']}")
+        sections.append(f"  GMV (Bill Notional): {disp} {s['total_bill_notional']:,.0f}")
+        sections.append(f"  Outstanding (Receivable): {disp} {s['total_receivable']:,.0f}")
+        sections.append(f"  Realised (Collected): {disp} {s['total_realised']:,.0f}")
+        sections.append(f"  Written Off: {disp} {s['total_written_off']:,.0f} ({s['written_off_count']} deals, {s['write_off_rate']*100:.1f}%)")
+        sections.append(f"  Collection Rate: {s['collection_rate']*100:.1f}%")
+        sections.append(f"  Total Customers: {s['total_customers']}")
+        sections.append(f"  Avg Deals/Customer: {s['avg_deals_per_customer']:.1f}")
+        sections.append(f"  Deal Type: EMI {s['emi_count']} ({s['emi_pct']*100:.0f}%), Bullet {s['bullet_count']} ({s['bullet_pct']*100:.0f}%)")
+        sections.append(f"  Avg Tenure: {s['avg_tenure']:.1f} months")
+        sections.append(f"  Avg Yield: {s['avg_total_yield']*100:.2f}%")
+        sections.append(f"  HHI (Customer): {s['hhi_customer']:.4f}")
 
-    milestones = data.get('gmv_milestones', [])
-    if milestones:
+        t = compute_aajil_traction(df, mult=mult, aux=aux)
         sections.append("")
-        sections.append("GMV GROWTH (CUMULATIVE):")
-        for m in milestones:
-            sections.append(f"  {m['year']}: SAR {m['gmv_sar']:,.0f}")
-        if ov.get('gmv_yoy_growth'):
-            sections.append(f"  YoY Growth: {ov['gmv_yoy_growth']}%")
+        sections.append(f"TRACTION: {len(t['volume_monthly'])} months of origination data")
+        sections.append(f"  Total Disbursed: {disp} {t['total_disbursed']:,.0f}")
+        gs = t.get('volume_summary_stats', {})
+        if gs.get('mom_pct') is not None:
+            sections.append(f"  MoM: {gs['mom_pct']:+.1f}%, QoQ: {gs.get('qoq_pct', 'N/A')}%, YoY: {gs.get('yoy_pct', 'N/A')}%")
 
-    cg = data.get('customer_growth', [])
-    if cg:
+        d = compute_aajil_delinquency(df, mult=mult, aux=aux)
         sections.append("")
-        sections.append("CUSTOMER GROWTH:")
-        for c in cg:
-            sections.append(f"  {c['date']}: {c['total_customers']} customers")
+        sections.append("DELINQUENCY:")
+        sections.append(f"  Active Balance: {disp} {d['total_active_balance']:,.0f}")
+        sections.append(f"  Overdue Balance: {disp} {d['total_overdue_balance']:,.0f}")
+        sections.append(f"  PAR 1+ inst: {d['par_1_inst']*100:.1f}%, PAR 2+: {d['par_2_inst']*100:.1f}%, PAR 3+: {d['par_3_inst']*100:.1f}%")
+        for bt in d.get('by_deal_type', []):
+            sections.append(f"  {bt['deal_type']}: {bt['overdue_count']}/{bt['active_count']} overdue ({bt['overdue_pct']*100:.1f}%)")
 
-    sections.append("")
-    sections.append("CUSTOMER TYPES: Manufacturer, Contractor, Wholesale Trader")
-    sections.append("RISK MITIGATION: Asset-based (raw materials, not cash), promissory notes (100%), short tenor (4-5mo), instalment repayment, diversified sectors")
-
-    ts = data.get('trust_score_system', {})
-    if ts:
+        y = compute_aajil_yield(df, mult=mult, aux=aux)
         sections.append("")
-        sections.append("TRUST SCORE SYSTEM: 5=Green, 4=Amber, 3=Red, 2-1=Critical")
-        sections.append("COLLECTIONS PHASES: Preventive (-15 to 0 DPD), Active (1-60 DPD), Legal (60+ DPD)")
+        sections.append("YIELD & REVENUE:")
+        sections.append(f"  Total Margin: {disp} {y['total_margin']:,.0f}")
+        sections.append(f"  Total Fees: {disp} {y['total_fees']:,.0f}")
+        sections.append(f"  Revenue/GMV: {y['revenue_over_gmv']*100:.2f}%")
+        sections.append(f"  Avg Total Yield: {y['avg_total_yield']*100:.2f}%")
 
-    uw = data.get('underwriting', {})
-    if uw:
+        lw = compute_aajil_loss_waterfall(df, mult=mult, aux=aux)
         sections.append("")
-        sections.append("UNDERWRITING: 4-stage (Sales Screening → Risk Assessment → Credit Report → CDC)")
-        sections.append(f"  Min Revenue: SAR {uw.get('min_revenue_sar', 0):,.0f}")
-        sections.append(f"  Max Leverage: {uw.get('max_leverage', 0)*100:.0f}%")
-        sections.append(f"  Non-CDC Limit: SAR {uw.get('non_cdc_approval_limit_sar', 0):,.0f}")
+        sections.append("LOSS WATERFALL:")
+        sections.append(f"  Gross Loss Rate: {lw['gross_loss_rate']*100:.2f}%")
+        sections.append(f"  Written Off Amount: {disp} {lw['written_off_amount']:,.0f}")
+        sections.append(f"  Net Loss: {disp} {lw['net_loss']:,.0f}")
 
-    sections.append("")
-    sections.append("DATA CAVEAT: All data from investor deck (Mar 2026). Loan tape from Cascade Debt platform pending.")
+        c = compute_aajil_concentration(df, mult=mult, aux=aux)
+        sections.append("")
+        sections.append(f"CONCENTRATION: HHI={c['hhi_customer']:.4f}, Top5={c['top5_share']*100:.1f}%, Top10={c['top10_share']*100:.1f}%")
+        sections.append(f"  Industry unknown: {c['industry_unknown_pct']*100:.0f}%")
+
+    else:
+        # JSON fallback (legacy)
+        data = data_or_df
+        co = data.get('company_overview', {})
+        sections.append("COMPANY OVERVIEW (from investor deck):")
+        sections.append(f"  Company: Aajil (Buildnow) — SME raw materials trade credit, KSA")
+        sections.append(f"  AUM: SAR {co.get('aum_sar', 0):,.0f}")
+        sections.append(f"  GMV: SAR {co.get('gmv_sar', 0):,.0f}")
+        sections.append(f"  Customers: {co.get('total_customers', 0)}, Transactions: {co.get('total_transactions', 0)}")
 
     # Inject Living Mind context
     try:
-        from core.mind.master_mind import MasterMind
-        from core.mind.company_mind import CompanyMind
         mind_ctx = build_mind_context('Aajil', 'KSA',
                                        'executive_summary', analysis_type='aajil')
         if not mind_ctx.is_empty:
@@ -2191,14 +2301,16 @@ def get_executive_summary(company: str, product: str,
         disp = 'SAR' if product == 'KSA' else 'AED'
         n_metrics = len([l for l in context.split('\n') if l.strip()])
     elif at == 'aajil':
-        sel = _resolve_snapshot(company, product, snapshot)
-        filepath = sel['filepath']
-        if filepath not in _aajil_cache:
-            _aajil_cache[filepath] = parse_aajil_data(filepath)
-        aajil_data = _aajil_cache[filepath]
-        context = _build_aajil_full_context(aajil_data)
+        df, aux, sel, config, disp, mult, ref_date = _aajil_tape_load(company, product, snapshot, as_of_date, currency)
+        if df is not None:
+            context = _build_aajil_full_context(df, mult=mult, ref_date=ref_date, aux=aux, config=config, disp=disp)
+        else:
+            filepath = sel['filepath']
+            if filepath not in _aajil_cache:
+                _aajil_cache[filepath] = parse_aajil_data(filepath)
+            context = _build_aajil_full_context(_aajil_cache[filepath])
+            disp = 'SAR'
         company_desc = "Aajil SME raw materials trade credit portfolio in KSA"
-        disp = 'SAR'
         n_metrics = len([l for l in context.split('\n') if l.strip()])
     elif at == 'ejari_summary':
         sel = _resolve_snapshot(company, product, snapshot)

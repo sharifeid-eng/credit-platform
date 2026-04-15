@@ -215,6 +215,58 @@ def load_silq_snapshot(filepath):
     return combined, commentary_text
 
 
+def load_aajil_snapshot(filepath):
+    """Load an Aajil multi-sheet tape.
+
+    Returns (deals_df, aux_data) where aux_data is a dict with:
+        'dpd_cohorts': DataFrame from 'Current_DPD_New Cohorts' sheet
+        'collections': DataFrame from 'Collections' sheet
+        'payments': DataFrame from 'Payments' sheet (if needed)
+    """
+    import warnings
+    warnings.filterwarnings('ignore', category=UserWarning)
+
+    xls = pd.ExcelFile(filepath)
+
+    # ── Deals sheet (primary) ────────────────────────────────────────
+    deals = pd.read_excel(xls, sheet_name='Deals')
+    deals.columns = deals.columns.str.strip()
+    # Drop empty unnamed columns
+    deals = deals[[c for c in deals.columns if not c.startswith('Unnamed')]]
+    # Parse dates
+    for col in ('Invoice Date', 'Expected Completion', 'Write Off Date'):
+        if col in deals.columns:
+            deals[col] = pd.to_datetime(deals[col], errors='coerce')
+    # Drop fully-null rows (last 2 rows may be empty)
+    deals = deals.dropna(subset=['Transaction ID'])
+
+    aux = {}
+
+    # ── Current_DPD_New Cohorts sheet ────────────────────────────────
+    try:
+        dpd = pd.read_excel(xls, sheet_name='Current_DPD_New Cohorts', header=None)
+        aux['dpd_cohorts'] = dpd
+    except Exception:
+        aux['dpd_cohorts'] = None
+
+    # ── Collections sheet ────────────────────────────────────────────
+    try:
+        coll = pd.read_excel(xls, sheet_name='Collections', header=None)
+        aux['collections'] = coll
+    except Exception:
+        aux['collections'] = None
+
+    # ── Payments sheet (instalment-level) ────────────────────────────
+    try:
+        pay = pd.read_excel(xls, sheet_name='Payments')
+        pay.columns = pay.columns.str.strip()
+        aux['payments'] = pay
+    except Exception:
+        aux['payments'] = None
+
+    return deals, aux
+
+
 def select_company():
     """Interactive prompt to select a company"""
     companies = get_companies()

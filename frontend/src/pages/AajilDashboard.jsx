@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
 import useBreakpoint from '../hooks/useBreakpoint'
-import { getAajilSummary } from '../services/api'
+import { getAajilSummary, getAajilChart } from '../services/api'
 import KpiCard from '../components/KpiCard'
 import ChartPanel from '../components/ChartPanel'
 import {
@@ -84,28 +84,58 @@ export default function AajilDashboard() {
   const { isMobile } = useBreakpoint()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [chartData, setChartData] = useState({})
+  const [chartLoading, setChartLoading] = useState(false)
   const [dpdThreshold, setDpdThreshold] = useState('dpd_7')
   const [tractionView, setTractionView] = useState('volume')
 
+  const activeTab = tab || 'overview'
+  const snap = snapshots?.[snapshots.length - 1]?.filename
+
+  // Load JSON data for qualitative tabs (trust scores, underwriting, notes)
   useEffect(() => {
     if (!company || !product) return
     setLoading(true)
-    const snap = snapshots?.[snapshots.length - 1]?.filename
     getAajilSummary(company, product, snap)
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [company, product, snapshots])
 
+  // Load chart data from live tape endpoints
+  const CHART_TABS = ['traction', 'delinquency', 'collections', 'cohort-analysis',
+    'concentration', 'underwriting', 'yield-margins', 'loss-waterfall',
+    'customer-segments', 'seasonality']
+  const chartSlugMap = {
+    'cohort-analysis': 'cohort', 'yield-margins': 'yield-margins',
+    'loss-waterfall': 'loss-waterfall', 'customer-segments': 'customer-segments',
+  }
+
+  useEffect(() => {
+    if (!company || !product || !CHART_TABS.includes(activeTab)) return
+    if (chartData[activeTab]) return  // Already loaded
+    setChartLoading(true)
+    const slug = chartSlugMap[activeTab] || activeTab
+    getAajilChart(company, product, slug, snap)
+      .then(d => { setChartData(prev => ({ ...prev, [activeTab]: d })); setChartLoading(false) })
+      .catch(() => setChartLoading(false))
+  }, [activeTab, company, product])
+
   if (loading) return <div style={{ color: MUTED, padding: 40 }}>Loading Aajil dashboard...</div>
   if (!data) return <div style={{ color: RED, padding: 40 }}>Failed to load Aajil data</div>
 
-  const activeTab = tab || 'overview'
   const co = data.company_overview || {}
   const ov = data.overview || {}
-  const traction = data.traction || {}
-  const delinquency = data.delinquency || {}
-  const collectionsData = data.collections || {}
-  const vintageData = data.vintage_cohorts || {}
+
+  // Chart data from live endpoints (preferred) or fallback to JSON
+  const traction = chartData['traction'] || data.traction || {}
+  const delinquency = chartData['delinquency'] || data.delinquency || {}
+  const collectionsData = chartData['collections'] || data.collections || {}
+  const vintageData = chartData['cohort-analysis'] || data.vintage_cohorts || {}
+  const concentrationData = chartData['concentration'] || {}
+  const yieldData = chartData['yield-margins'] || {}
+  const lossData = chartData['loss-waterfall'] || {}
+  const segmentData = chartData['customer-segments'] || {}
+  const seasonalityData = chartData['seasonality'] || {}
 
   // Prepare monthly volume data with short labels
   const volumeMonthly = (traction.volume_monthly || []).map(v => ({
@@ -380,32 +410,85 @@ export default function AajilDashboard() {
         })()}
 
         {/* ── CONCENTRATION TAB ────────────────────────────────────────── */}
-        {activeTab === 'concentration' && (
+        {activeTab === 'concentration' && (() => {
+          const cd = concentrationData
+          if (chartLoading && !cd.available) return <div style={{ color: MUTED, padding: 40 }}>Loading concentration data...</div>
+          return (
           <div>
-            <ChartPanel title="Customer Type Breakdown">
-              <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row', padding: 16 }}>
-                <div style={{ width: isMobile ? '100%' : 300, height: 250 }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie data={[{ name: 'Manufacturer', value: 33 }, { name: 'Contractor', value: 34 }, { name: 'Wholesale Trader', value: 33 }]}
-                        dataKey="value" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                        {[BLUE, GOLD, TEAL].map((c, i) => <Cell key={i} fill={c} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={{ flex: 1, color: MUTED, fontSize: 12 }}>
-                  <div style={{ marginBottom: 8, color: '#E8EAF0', fontWeight: 600 }}>Segmentation Dimensions (from Cascade)</div>
-                  {['Customer Type', 'Loan Grade', 'Product Type', 'Term Group', 'VAT / Non-VAT Loan', 'Loan Status', 'Loan Counts'].map(d => (
-                    <div key={d} style={{ padding: '4px 0', borderBottom: `1px solid ${BORDER}` }}>{d}</div>
-                  ))}
-                  <div style={{ marginTop: 12, color: GOLD, fontSize: 11 }}>Exact distribution requires tape data.</div>
-                </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <KpiCard label="HHI (Customer)" value={cd.hhi_customer?.toFixed(4) || '--'} subtitle={cd.hhi_customer < 0.05 ? 'Well diversified' : 'Moderate'} index={0} />
+              <KpiCard label="Top 5 Share" value={cd.top5_share ? `${(cd.top5_share * 100).toFixed(1)}%` : '--'} index={1} />
+              <KpiCard label="Top 10 Share" value={cd.top10_share ? `${(cd.top10_share * 100).toFixed(1)}%` : '--'} index={2} />
+              <KpiCard label="Total Customers" value={cd.total_customers || '--'} index={3} />
+            </div>
+
+            {/* Deal Type Mix */}
+            <ChartPanel title="Deal Type Mix">
+              <div style={{ height: 200, padding: '0 16px' }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie data={cd.deal_type_mix || []} dataKey="volume" nameKey="deal_type"
+                      cx="50%" cy="50%" outerRadius={70} label={({ deal_type, share }) => `${deal_type} ${share ? (share * 100).toFixed(0) : 0}%`}>
+                      {(cd.deal_type_mix || []).map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </ChartPanel>
+
+            {/* Top Customers */}
+            <ChartPanel title="Top 15 Customers" style={{ marginTop: 16 }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      <th style={{ padding: '6px 8px', textAlign: 'left', color: MUTED }}>#</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'left', color: MUTED }}>Customer</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right', color: MUTED }}>Volume</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right', color: MUTED }}>Deals</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right', color: MUTED }}>Share</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right', color: MUTED }}>Cumulative</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(cd.top_customers || []).map((c, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${BORDER}22` }}>
+                        <td style={{ padding: '4px 8px', color: MUTED }}>{i + 1}</td>
+                        <td style={{ padding: '4px 8px', color: '#E8EAF0' }}>{c.customer_id}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#E8EAF0', fontFamily: 'var(--font-mono)' }}>{fmt(c.volume, 'SAR ')}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: MUTED }}>{c.count}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: GOLD }}>{c.share ? `${(c.share * 100).toFixed(1)}%` : '--'}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: MUTED }}>{c.cumulative ? `${(c.cumulative * 100).toFixed(1)}%` : '--'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ChartPanel>
+
+            {/* Industry Breakdown */}
+            <ChartPanel title="Industry Concentration" style={{ marginTop: 16 }}>
+              <div style={{ height: 300, padding: '0 16px' }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={(cd.industries || []).slice(0, 12)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                    <XAxis type="number" stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v)} />
+                    <YAxis type="category" dataKey="industry" stroke={MUTED} fontSize={10} width={120} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="volume" fill={TEAL} radius={[0, 4, 4, 0]} name="Volume (SAR)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {cd.industry_unknown_pct > 0 && (
+                <div style={{ padding: '8px 16px', color: MUTED, fontSize: 11 }}>
+                  Note: {(cd.industry_unknown_pct * 100).toFixed(0)}% of deals have no industry classification
+                </div>
+              )}
+            </ChartPanel>
           </div>
-        )}
+          )
+        })()}
 
         {/* ── UNDERWRITING TAB ─────────────────────────────────────────── */}
         {activeTab === 'underwriting' && (
@@ -556,30 +639,104 @@ export default function AajilDashboard() {
           </div>
         )}
 
-        {/* ── YIELD & MARGINS TAB ──────────────────────────────────────── */}
-        {activeTab === 'yield-margins' && (
+        {/* ── YIELD & MARGINS TAB (live tape data) ─────────────────────── */}
+        {activeTab === 'yield-margins' && (() => {
+          const yd = yieldData
+          if (chartLoading && !yd.available) return <div style={{ color: MUTED, padding: 40 }}>Loading yield data...</div>
+          return (
           <div>
-            <ChartPanel title="Yield & Margin Analysis">
-              <div style={{ padding: 40, textAlign: 'center', color: MUTED }}>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>Revenue structure: Margin + Admin Fee (locked at origination)</div>
-                <div style={{ fontSize: 12 }}>Yield and margin analysis requires loan tape with revenue columns.</div>
-              </div>
-            </ChartPanel>
-          </div>
-        )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <KpiCard label="Total Margin" value={fmt(yd.total_margin, 'SAR ')} index={0} />
+              <KpiCard label="Total Fees" value={fmt(yd.total_fees, 'SAR ')} index={1} />
+              <KpiCard label="Total Revenue" value={fmt(yd.total_revenue, 'SAR ')} index={2} />
+              <KpiCard label="Revenue/GMV" value={yd.revenue_over_gmv ? `${(yd.revenue_over_gmv * 100).toFixed(2)}%` : '--'} index={3} />
+              <KpiCard label="Avg Total Yield" value={yd.avg_total_yield ? `${(yd.avg_total_yield * 100).toFixed(2)}%` : '--'} index={4} />
+            </div>
 
-        {/* ── LOSS WATERFALL TAB ───────────────────────────────────────── */}
-        {activeTab === 'loss-waterfall' && (
-          <div>
-            <ChartPanel title="Loss Waterfall by Vintage">
-              <div style={{ padding: 40, textAlign: 'center', color: MUTED }}>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>Originated → Gross Default (DPD60+) → Recovery → Net Loss</div>
-                <div style={{ fontSize: 12 }}>Per-vintage loss waterfall requires loan tape data.</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>Recovery enhanced by 100% promissory note coverage.</div>
+            {/* By Deal Type */}
+            <ChartPanel title="Yield by Deal Type">
+              <div style={{ display: 'flex', gap: 12, padding: 16, flexWrap: 'wrap' }}>
+                {(yd.by_deal_type || []).map((dt, i) => (
+                  <div key={i} style={{ flex: 1, minWidth: 200, padding: 16, background: DEEP, borderRadius: 8, border: `1px solid ${BORDER}` }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: i === 0 ? GOLD : TEAL, marginBottom: 8 }}>{dt.deal_type}</div>
+                    <div style={{ fontSize: 12, color: MUTED }}>Avg Yield: {dt.avg_total_yield ? `${(dt.avg_total_yield * 100).toFixed(2)}%` : '--'}</div>
+                    <div style={{ fontSize: 12, color: MUTED }}>Margin: {fmt(dt.total_margin, 'SAR ')}</div>
+                    <div style={{ fontSize: 12, color: MUTED }}>Fees: {fmt(dt.total_fees, 'SAR ')}</div>
+                    <div style={{ fontSize: 12, color: MUTED }}>Deals: {dt.count}</div>
+                  </div>
+                ))}
               </div>
             </ChartPanel>
+
+            {/* Yield by Vintage */}
+            <ChartPanel title="Yield Trend by Vintage" style={{ marginTop: 16 }} height={300}>
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={yd.by_vintage || []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="vintage" stroke={MUTED} fontSize={10} angle={-45} textAnchor="end" height={50} />
+                  <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => `${(v * 100).toFixed(1)}%`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="margin_rate" fill={GOLD} radius={[2, 2, 0, 0]} name="Margin Rate" />
+                  <Line type="monotone" dataKey="avg_yield" stroke={TEAL} strokeWidth={2} dot={{ r: 3 }} name="Avg Yield" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartPanel>
           </div>
-        )}
+          )
+        })()}
+
+        {/* ── LOSS WATERFALL TAB (live tape data) ──────────────────────── */}
+        {activeTab === 'loss-waterfall' && (() => {
+          const ld = lossData
+          if (chartLoading && !ld.available) return <div style={{ color: MUTED, padding: 40 }}>Loading loss data...</div>
+          return (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <KpiCard label="Gross Loss Rate" value={ld.gross_loss_rate ? `${(ld.gross_loss_rate * 100).toFixed(2)}%` : '--'} index={0} />
+              <KpiCard label="Written Off" value={fmt(ld.written_off_amount, 'SAR ')} subtitle={`${(ld.waterfall || []).find(s => s.stage === 'Written Off')?.count || 0} deals`} index={1} />
+              <KpiCard label="Net Loss" value={fmt(ld.net_loss, 'SAR ')} index={2} />
+              <KpiCard label="VAT Recovered" value={fmt(ld.vat_recovered, 'SAR ')} index={3} />
+            </div>
+
+            {/* Waterfall table */}
+            <ChartPanel title="Portfolio Waterfall">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', color: MUTED }}>Stage</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>Amount (SAR)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>Deals</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(ld.waterfall || []).map((s, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${BORDER}22` }}>
+                        <td style={{ padding: '8px 12px', color: '#E8EAF0', fontWeight: 600 }}>{s.stage}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: s.stage === 'Written Off' ? RED : '#E8EAF0', fontFamily: 'var(--font-mono)' }}>{fmt(s.amount, 'SAR ')}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>{s.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ChartPanel>
+
+            {/* Loss by Vintage */}
+            <ChartPanel title="Loss Rate by Vintage" style={{ marginTop: 16 }} height={300}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={(ld.by_vintage || []).filter(v => v.wo_count > 0)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="vintage" stroke={MUTED} fontSize={10} angle={-45} textAnchor="end" height={50} />
+                  <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => `${(v * 100).toFixed(1)}%`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="loss_rate" fill={RED} radius={[4, 4, 0, 0]} name="Loss Rate" />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          </div>
+          )
+        })()}
 
         {/* ── COVENANTS TAB ────────────────────────────────────────────── */}
         {activeTab === 'covenants' && (

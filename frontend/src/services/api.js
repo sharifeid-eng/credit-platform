@@ -64,9 +64,11 @@ export const getEjariSummary          = (co, prod, snap) =>
 export const getTamaraSummary         = (co, prod, snap) =>
   api.get(`/companies/${co}/products/${prod}/tamara-summary`, { params: { snapshot: snap } }).then(r => r.data);
 
-// ── Aajil summary ──────────────────────────────────────────────────────────
+// ── Aajil summary + charts ─────────────────────────────────────────────────
 export const getAajilSummary          = (co, prod, snap) =>
   api.get(`/companies/${co}/products/${prod}/aajil-summary`, { params: { snapshot: snap } }).then(r => r.data);
+export const getAajilChart            = (co, prod, chartName, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/aajil/${chartName}`, { params: p(snap, cur, asOf) }).then(r => r.data);
 
 // ── New analytical endpoints ────────────────────────────────────────────────
 export const getCohortLossWaterfall   = (co, prod, snap, cur, asOf) =>
