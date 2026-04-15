@@ -49,6 +49,15 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-15 (session 20: Directory restructure — legal/ and mind/ to company level)
+
+- [x] **Move legal/ to company level** — `data/{company}/legal/` (was `data/{company}/{product}/legal/`). `get_legal_dir()` updated, `'legal'` added to `_NON_PRODUCT_DIRS`.
+- [x] **Move mind/ to company level** — `data/{company}/mind/` (was `data/{company}/{product}/mind/`). Updated 13 source files + 1 test: CompanyMind, ThesisTracker, listeners, intelligence, kb_query, master_mind, briefing, graph, compiler, operator, backend/intelligence.
+- [x] **Klaim files moved** — `data/klaim/UAE_healthcare/legal/` → `data/klaim/legal/`, `data/klaim/UAE_healthcare/mind/` → `data/klaim/mind/`
+- [x] **306 tests passing** — all green after changes
+
+---
+
 ## Completed — 2026-04-15 (session 19 continued: Aajil Phase B — Live Tape Analytics)
 
 **Phase B — Live tape analytics from real xlsx (1,245 deals):**

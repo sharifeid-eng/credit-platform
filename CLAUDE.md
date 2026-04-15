@@ -284,17 +284,17 @@ credit-platform/
 ├── data/
 │   ├── _master_mind/          # Fund-level Living Mind (JSONL files)
 │   └── {company}/
+│       ├── mind/              # Company-level Living Mind (JSONL files)
+│       ├── legal/             # Legal documents and extraction cache
+│       ├── dataroom/          # Ingested documents, chunks, search index
+│       │   ├── registry.json
+│       │   ├── notebooklm_state.json  # NLM notebook ID + synced source tracking
+│       │   ├── chunks/
+│       │   ├── analytics/
+│       │   └── index.pkl
 │       └── {product}/
 │           ├── config.json
-│           ├── YYYY-MM-DD_{name}.csv
-│           ├── mind/              # Company-level Living Mind (JSONL files)
-│           ├── dataroom/          # Ingested documents, chunks, search index
-│           │   ├── registry.json
-│           │   ├── notebooklm_state.json  # NLM notebook ID + synced source tracking
-│           │   ├── chunks/
-│           │   ├── analytics/
-│           │   └── index.pkl
-│           └── legal/             # Legal documents and extraction cache
+│           └── YYYY-MM-DD_{name}.csv
 ├── frontend/
 │   ├── public/
 │   │   └── logo.svg        # Original logo (white bg — not used in dark theme)
@@ -670,7 +670,7 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 |Risk Assessment    |AI-generated risk flags (missing provisions, below-market terms), severity badges, recommendations|
 |Amendment History  |Document version picker, material changes diff table (old value → new value)|
 
-**Data source:** PDF facility agreements uploaded to `data/{company}/{product}/legal/`. AI extraction via Claude (~$1.25/doc, cached forever). Extracted terms auto-populate `facility_params` via 3-tier priority: document → manual override → hardcoded default.
+**Data source:** PDF facility agreements uploaded to `data/{company}/legal/` (company-level, not product-level). AI extraction via Claude (~$1.25/doc, cached forever). Extracted terms auto-populate `facility_params` via 3-tier priority: document → manual override → hardcoded default.
 
 **Legal Analysis endpoints (under `/companies/{co}/products/{p}/legal/`):**
 |Endpoint                     |Method|Description                              |
@@ -752,7 +752,7 @@ Two-tier knowledge system that makes every AI output smarter over time.
 - Seeded from ANALYSIS_FRAMEWORK.md principles and existing CLAUDE.md lessons
 - Feeds into ALL AI prompts as Layer 2 (between Framework and Methodology)
 
-**Company Mind** (`data/{co}/{prod}/mind/`):
+**Company Mind** (`data/{co}/mind/`):
 - Per-company: corrections, memo edits, research findings, IC feedback, data quality notes
 - Auto-populated: legal findings, data quality discoveries, analyst corrections
 - Feeds into AI prompts as Layer 4 (most specific context)
@@ -868,7 +868,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Legal extraction caching** — Extract once per PDF, cache forever. 5-pass Claude pipeline (~$1.25/doc). 3-tier merge: document > manual > hardcoded.
 - **Multi-document extraction merge** — `load_latest_extraction()` merges all `*_extracted.json` files in the legal directory. Lists (covenants, EODs, reporting) concatenated and deduped by name. Dicts (facility_terms) merged with primary credit_agreement winning on conflict. Tracks `source_documents` array for provenance.
 - **Consecutive breach EoD tracking** — `annotate_covenant_eod()` in `core/portfolio.py` (pure function) + `covenant_history.json` (I/O in `main.py`). Per MMA 18.3: `single_breach_not_eod` (PAR30), `single_breach_is_eod` (PAR60, Parent Cash), `two_consecutive_breaches` (Collection Ratio, Paid vs Due). History persists max 24 periods, dedupes by date.
-- **Payment schedule as static data** — Stored in `data/{co}/{prod}/legal/payment_schedule.json` (not extracted by AI). Backend reporting endpoint loads and serves it alongside extracted reporting requirements. Frontend renders with PAID/NEXT badges relative to today's date.
+- **Payment schedule as static data** — Stored in `data/{co}/legal/payment_schedule.json` (not extracted by AI). Backend reporting endpoint loads and serves it alongside extracted reporting requirements. Frontend renders with PAID/NEXT badges relative to today's date.
 - **Registry format** — Both DataRoomEngine and AnalyticsSnapshotEngine use dict[str, dict] registry format (keyed by doc_id). Auto-migrates old list format on read.
 - **Intelligence System — Knowledge Graph architecture** — KnowledgeNode extends MindEntry via composition (not inheritance). New fields stored in `metadata["_graph"]` subkey for backward-compatible JSONL storage. Lazy upgrade on read via `upgrade_entry()` — no batch migration needed. RelationIndex is a separate JSON file (`relations.json`) per scope — bidirectional adjacency list. Event bus is synchronous, in-process, with `disable()` for test isolation.
 - **Intelligence System — Incremental compilation** — Entity extraction (regex-based, 7 types) feeds into a KnowledgeCompiler that creates/supersedes/reinforces/contradicts existing nodes. One document → 10-15 knowledge updates. Compilation reports logged to `compilation_log.jsonl`. Entities stored in dedicated `entities.jsonl` per company.
@@ -1374,6 +1374,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `dataroom` excluded from product discovery in `get_products()`
   - Default ingest source: `data/{company}/dataroom/` (removed OneDrive fallback)
   - `_EXCLUDE_DIRS` now blocks `chunks`/`analytics` subdirs instead of "dataroom" itself
+- ✅ **Legal and Mind dirs moved to company level:**
+  - `legal/`: `data/{company}/legal/` (was `data/{company}/{product}/legal/`). `get_legal_dir()` updated, `'legal'` added to `_NON_PRODUCT_DIRS`
+  - `mind/`: `data/{company}/mind/` (was `data/{company}/{product}/mind/`). CompanyMind, ThesisTracker, listeners, and all discovery loops (operator, intelligence, briefing, kb_query, master_mind) updated
+  - Matches existing pattern for `dataroom/` at company level
+  - Klaim files moved: `data/klaim/UAE_healthcare/{legal,mind}/` → `data/klaim/{legal,mind}/`
 - ✅ **NLM unavailability warning system (replaces silent degradation):**
   - `NotebookLMEngine.get_warning()` — structured warning with code, message, fix instructions
   - `DualResearchEngine.query()` includes `nlm_warning` in response when NLM unavailable
