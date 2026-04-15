@@ -5,6 +5,7 @@
   "product": "KSA",
   "description": "SME raw materials trade credit — KSA industrial sector",
   "analysis_type": "aajil",
+  "face_value_column": "Principal Amount",
   "hide_portfolio_tabs": true,
   "dpd_thresholds": [7, 30, 60, 90],
   "tabs": [

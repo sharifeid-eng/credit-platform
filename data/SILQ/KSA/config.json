@@ -5,6 +5,7 @@
   "product": "KSA",
   "usd_rate": 0.2667,
   "analysis_type": "silq",
+  "face_value_column": "Disbursed_Amount (SAR)",
   "tabs": [
     { "slug": "overview",        "label": "Overview" },
     { "slug": "delinquency",     "label": "Delinquency" },

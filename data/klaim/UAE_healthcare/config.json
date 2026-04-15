@@ -5,6 +5,7 @@
   "product": "UAE_healthcare",
   "usd_rate": 0.2723,
   "analysis_type": "klaim",
+  "face_value_column": "Purchase value",
   "tabs": [
     { "slug": "overview",           "label": "Overview" },
     { "slug": "actual-vs-expected", "label": "Actual vs Expected" },
