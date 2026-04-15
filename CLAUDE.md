@@ -135,7 +135,7 @@ The platform allows analysts and investment committee members to:
 - **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (4 tapes: Nov 2025, Jan 2026, Feb 2026, Mar 2026). Three product types: BNPL, RBF, RCL (Revolving Credit Line). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
 - **Ejari** — Rent Now Pay Later (RNPL), KSA. Data in USD. **Read-only summary** — no raw loan tape, only a pre-computed ODS workbook with 13 sheets of analysis. Rendered as a dedicated dashboard (`EjariDashboard.jsx`) without live computation. Parser: `core/analysis_ejari.py`. Config: `analysis_type: "ejari_summary"`. Live dataset: `data/Ejari/RNPL/`
 - **Tamara** — Buy Now Pay Later (BNPL + BNPL+), KSA & UAE. Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants). **Data room ingestion** — ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models) parsed by `scripts/prepare_tamara_data.py` into structured JSON snapshots. Two products: KSA (SAR, 14 tabs) and UAE (AED, 10 tabs). Dashboard: `TamaraDashboard.jsx`. Parser: `core/analysis_tamara.py`. Config: `analysis_type: "tamara_summary"`. Securitisation: KSA $2.375B (Goldman, Citi, Apollo), UAE $131M (Goldman). Live dataset: `data/Tamara/{KSA,UAE}/`
-- **Aajil** — SME raw materials trade credit, KSA. Data in SAR. **Investor deck data** — no loan tape yet (pending from Cascade Debt platform). 47-page investor deck parsed into structured JSON snapshot. 206 customers, 1,136 transactions, SAR 120M AUM, >SAR 340M GMV, DPD60+ <5%. 3 customer types: Manufacturer, Contractor, Wholesale Trader. Dashboard: `AajilDashboard.jsx` (13 tabs). Parser: `core/analysis_aajil.py`. Config: `analysis_type: "aajil"`. Extraction: `scripts/prepare_aajil_data.py`. Live dataset: `data/Aajil/KSA/`. Uses Cascade Debt (app.cascadedebt.com) as external reporting platform.
+- **Aajil** — SME raw materials trade credit, KSA. Data in SAR. **Live tape analytics** — multi-sheet xlsx (1,245 deals, 7 sheets: Deals, Payments, DPD Cohorts, Collections). 227 customers, SAR 381M GMV (Principal Amount), SAR 80M outstanding, 87.3% collection rate, 1.5% write-off (19 deals, all Bullet). 3 customer types: Manufacturer, Contractor, Wholesale Trader. Deal types: EMI (51%) and Bullet (49%). Has dedicated analysis module (`core/analysis_aajil.py`, 11 compute functions), validation (`core/validation_aajil.py`), dynamic chart endpoint, and 38 tests. Dashboard: `AajilDashboard.jsx` (13 tabs). Config: `analysis_type: "aajil"`. Live dataset: `data/Aajil/KSA/`. Uses Cascade Debt (app.cascadedebt.com) as external reporting platform. Dataroom: 14 files (investor deck, audited financials, tax returns, budget). NLM notebook with 6 PDFs.
 **Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, rent payment financing (RNPL), BNPL consumer instalment lending, and SME trade credit (raw materials).
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook) and JSON files (Tamara data room ingestion).
 **Data notes:**
@@ -279,6 +279,7 @@ credit-platform/
 │   ├── portfolio.py        # Portfolio analytics computation (borrowing base, concentration, covenants)
 │   ├── validation.py       # Single-tape data quality checks (Klaim)
 │   ├── validation_silq.py  # SILQ-specific data quality checks
+│   ├── validation_aajil.py # Aajil-specific data quality checks (13 checks)
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── data/
 │   ├── _master_mind/          # Fund-level Living Mind (JSONL files)
@@ -399,6 +400,7 @@ credit-platform/
 ├── tests/
 │   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
 │   ├── test_analysis_silq.py   # Integration tests for SILQ analytics
+│   ├── test_analysis_aajil.py  # Integration tests for Aajil analytics (38 tests)
 │   └── test_notebooklm_bridge.py  # NotebookLM bridge, dual engine, synthesizer, NLM warning tests (19 tests)
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
@@ -1267,15 +1269,18 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **Pre-computed Summary** (Ejari): Single ODS workbook → parse once, render
   - **Data Room Ingestion** (Tamara): ~100 multi-format files → ETL script → JSON snapshot → parser → dashboard
   - **Investor Deck Extraction** (Aajil): Single PDF → manual data extraction script → JSON snapshot → parser → dashboard
-- ✅ **Aajil SME Trade Credit onboarded (session 19):**
+- ✅ **Aajil SME Trade Credit — full live tape analytics (session 19):**
   - New asset class: SME raw materials trade credit (KSA, SAR) — 5th portfolio company
-  - `analysis_type: "aajil"` — investor deck JSON parser + 13-tab dashboard
-  - Cascade Debt platform (app.cascadedebt.com) researched as competitive intelligence
-  - Cascade-inspired features: configurable DPD thresholds (7/30/60/90 in config.json), Traction dual view (Volume + Balance), GrowthStats component (MoM/QoQ/YoY)
-  - 13 tabs: Overview, Traction, Delinquency, Collections, Cohort Analysis, Concentration, Underwriting, Trust & Collections, Customer Segments, Yield & Margins, Loss Waterfall, Covenants, Data Notes
-  - Trust score system visualization (5=Green to 1=Critical), collections phase timeline, underwriting funnel, financial ratio thresholds by customer type
-  - AI executive summary context builder, DataChat + ResearchChat suggested questions
-  - Pending: loan tape from Cascade Debt → Phase B conversion to DataFrame compute functions
+  - `analysis_type: "aajil"` — live tape analytics from multi-sheet xlsx (1,245 deals, 7 sheets)
+  - 11 compute functions: summary, traction, delinquency, collections, cohorts, concentration, underwriting, yield, loss_waterfall, customer_segments, seasonality
+  - `core/validation_aajil.py` — 13 tape quality checks
+  - 38 tests (306 total passing)
+  - `AAJIL_CHART_MAP` + generic `/charts/aajil/{chart_name}` endpoint
+  - 13-tab dashboard: Overview, Traction (Volume/Balance toggle), Delinquency (overdue buckets + by Deal Type), Collections, Cohort Analysis (DPD time series + vintage table), Concentration (HHI + top-15 + industry), Underwriting (drift by vintage), Trust & Collections (trust score system), Customer Segments (EMI/Bullet + industry + size), Yield & Margins (revenue decomposition), Loss Waterfall (per-vintage), Covenants, Data Notes
+  - Cascade Debt alignment: Volume = Principal Amount (99.9% match), MoM = +32.36% (exact), Collection rate = Realised/Principal (87.3%)
+  - Dataroom: 14 files ingested (investor deck, 3 audited financials, 2 tax returns, monthly statements, budget, debt overview)
+  - NLM notebook with 6 PDFs uploaded, auto-recovery auth fix
+  - Key finding: ALL 19 write-offs are Bullet deals (0 EMI) — structural shift to EMI reducing default risk
 - ✅ **Tamara P0 fixes — data extraction, AI context, dashboard charts:**
   - Fixed column-offset bug (labels in col 1 not col 0) across investor reporting, business plan, financial master parsers
   - Fixed demographics pivot (AE+SA side-by-side → per-country dimension extraction)
