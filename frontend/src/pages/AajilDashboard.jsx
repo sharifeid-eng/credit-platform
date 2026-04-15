@@ -163,55 +163,69 @@ export default function AajilDashboard() {
         {/* ── OVERVIEW TAB ─────────────────────────────────────────────── */}
         {activeTab === 'overview' && (
           <div>
-            {/* Read-only badge */}
-            <div style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 6, background: 'rgba(201,168,76,0.15)', border: `1px solid ${GOLD}33`, color: GOLD, fontSize: 11, fontWeight: 600, marginBottom: 16 }}>
-              INVESTOR DECK DATA — Tape from Cascade Debt pending
-            </div>
-
-            {/* KPI Grid */}
+            {/* KPI Grid — tape-computed metrics */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
-              <KpiCard label="AUM (Outstanding)" value={fmt(co.aum_sar, 'SAR ')} subtitle={fmt(co.aum_usd, '$')} index={0} />
-              <KpiCard label="GMV Disbursed" value={fmt(co.gmv_sar, '>SAR ')} subtitle={fmt(co.gmv_usd, '>$')} index={1} />
-              <KpiCard label="Transactions" value={co.total_transactions?.toLocaleString()} subtitle={`${co.avg_deals_per_customer}x per customer`} index={2} />
-              <KpiCard label="Customers" value={co.total_customers?.toLocaleString()} subtitle={ov.customer_growth_pct ? `+${ov.customer_growth_pct}% growth` : ''} index={3} />
-              <KpiCard label="DPD 60+" value={`<${(co.dpd60_plus_rate * 100).toFixed(0)}%`} subtitle="Last 12 months" index={4} />
+              <KpiCard label="Outstanding (Receivable)" value={fmt(data.total_receivable, 'SAR ')} index={0} />
+              <KpiCard label="GMV (Bill Notional)" value={fmt(data.total_bill_notional, 'SAR ')} index={1} />
+              <KpiCard label="Transactions" value={data.total_deals?.toLocaleString()} subtitle={`${data.avg_deals_per_customer || co.avg_deals_per_customer || ''}x per customer`} index={2} />
+              <KpiCard label="Customers" value={(data.total_customers || co.total_customers)?.toLocaleString()} index={3} />
+              <KpiCard label="Write-Off Rate" value={data.write_off_rate != null ? `${(data.write_off_rate * 100).toFixed(1)}%` : '--'} subtitle={`${data.written_off_count || 0} deals`} index={4} />
             </div>
 
             {/* Second row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
-              <KpiCard label="Avg Tenor" value={`${co.avg_tenor_months} months`} subtitle={`Max ${co.max_tenor_months} months`} index={5} />
+              <KpiCard label="Avg Tenor" value={data.avg_tenure ? `${data.avg_tenure.toFixed(1)} months` : `${co.avg_tenor_months} months`} subtitle={`Max ${co.max_tenor_months || 12} months`} index={5} />
               <KpiCard label="PN Coverage" value={`${(co.pn_coverage * 100).toFixed(0)}%`} subtitle="Promissory notes" index={6} />
               <KpiCard label="Credit/Revenue" value={co.credit_as_pct_revenue} subtitle="Per customer" index={7} />
               <KpiCard label="Deployment Speed" value={`<${co.credit_deployment_hours}h`} subtitle="KYB: instantaneous" index={8} />
               <KpiCard label="Employees" value={co.employees} subtitle="64+ staff" index={9} />
             </div>
 
-            {/* GMV Growth */}
-            <ChartPanel title="GMV Growth by Year" height={280}>
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={data.gmv_milestones || []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                  <XAxis dataKey="year" stroke={MUTED} fontSize={12} />
-                  <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v, 'SAR ')} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="gmv_sar" fill={GOLD} radius={[4, 4, 0, 0]} name="Cumulative GMV (SAR)" />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </ChartPanel>
+            {/* Portfolio Composition */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <ChartPanel title="Deal Status" height={250}>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={[
+                      { name: 'Realised', value: data.realised_count || 0 },
+                      { name: 'Accrued', value: data.accrued_count || 0 },
+                      { name: 'Written Off', value: data.written_off_count || 0 },
+                    ].filter(d => d.value > 0)} dataKey="value" cx="50%" cy="50%" outerRadius={70}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                      <Cell fill={TEAL} />
+                      <Cell fill={GOLD} />
+                      <Cell fill={RED} />
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartPanel>
 
-            {/* Customer Growth */}
-            <ChartPanel title="Customer Growth" height={250} style={{ marginTop: 16 }}>
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={data.customer_growth || []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                  <XAxis dataKey="date" stroke={MUTED} fontSize={11} tickFormatter={d => d?.slice(0, 7)} />
-                  <YAxis stroke={MUTED} fontSize={11} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="total_customers" fill={TEAL} radius={[4, 4, 0, 0]} name="Total Customers" />
-                  <Line type="monotone" dataKey="total_customers" stroke={GOLD} dot={false} strokeWidth={2} name="Trend" />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </ChartPanel>
+              <ChartPanel title="Deal Type Mix" height={250}>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={[
+                      { name: 'EMI (Instalment)', value: data.emi_count || 0 },
+                      { name: 'Bullet (Single)', value: data.bullet_count || 0 },
+                    ].filter(d => d.value > 0)} dataKey="value" cx="50%" cy="50%" outerRadius={70}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                      <Cell fill={BLUE} />
+                      <Cell fill={GOLD} />
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            </div>
+
+            {/* Collection & Yield KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <KpiCard label="Collection Rate" value={data.collection_rate ? `${(data.collection_rate * 100).toFixed(1)}%` : '--'} index={10} />
+              <KpiCard label="Total Realised" value={fmt(data.total_realised, 'SAR ')} index={11} />
+              <KpiCard label="Total Overdue" value={fmt(data.total_overdue, 'SAR ')} index={12} />
+              <KpiCard label="Avg Yield" value={data.avg_total_yield ? `${(data.avg_total_yield * 100).toFixed(2)}%` : '--'} index={13} />
+              <KpiCard label="HHI (Customer)" value={data.hhi_customer?.toFixed(4) || '--'} subtitle={data.hhi_customer < 0.05 ? 'Well diversified' : ''} index={14} />
+            </div>
 
             {/* Investors */}
             <ChartPanel title="Investors" style={{ marginTop: 16 }}>
