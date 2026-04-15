@@ -166,44 +166,41 @@ def get_learning_summary():
         for company_dir in data_dir.iterdir():
             if not company_dir.is_dir() or company_dir.name.startswith(("_", ".")):
                 continue
-            for product_dir in company_dir.iterdir():
-                if not product_dir.is_dir():
-                    continue
-                mind_dir = product_dir / "mind"
-                if not mind_dir.exists():
-                    continue
+            mind_dir = company_dir / "mind"
+            if not mind_dir.exists():
+                continue
 
-                # Load corrections
-                corrections_file = mind_dir / "corrections.jsonl"
-                if corrections_file.exists():
-                    try:
-                        import json
-                        with open(corrections_file, "r", encoding="utf-8") as f:
-                            for line in f:
-                                line = line.strip()
-                                if line:
-                                    entry = json.loads(line)
+            # Load corrections
+            corrections_file = mind_dir / "corrections.jsonl"
+            if corrections_file.exists():
+                try:
+                    import json
+                    with open(corrections_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                entry = json.loads(line)
+                                entry["_company"] = company_dir.name
+                                entry["_product"] = ""
+                                all_corrections.append(entry)
+                except Exception:
+                    pass
+
+            # Load rules (node_type="rule" in any JSONL)
+            for jsonl in mind_dir.glob("*.jsonl"):
+                try:
+                    import json
+                    with open(jsonl, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                entry = json.loads(line)
+                                if entry.get("metadata", {}).get("_graph", {}).get("node_type") == "rule":
                                     entry["_company"] = company_dir.name
-                                    entry["_product"] = product_dir.name
-                                    all_corrections.append(entry)
-                    except Exception:
-                        pass
-
-                # Load rules (node_type="rule" in any JSONL)
-                for jsonl in mind_dir.glob("*.jsonl"):
-                    try:
-                        import json
-                        with open(jsonl, "r", encoding="utf-8") as f:
-                            for line in f:
-                                line = line.strip()
-                                if line:
-                                    entry = json.loads(line)
-                                    if entry.get("metadata", {}).get("_graph", {}).get("node_type") == "rule":
-                                        entry["_company"] = company_dir.name
-                                        entry["_product"] = product_dir.name
-                                        all_rules.append(entry)
-                    except Exception:
-                        pass
+                                    entry["_product"] = ""
+                                    all_rules.append(entry)
+                except Exception:
+                    pass
 
     # Extract patterns
     patterns = engine.extract_patterns(all_corrections) if all_corrections else []
@@ -234,27 +231,24 @@ def get_learning_rules():
         for company_dir in data_dir.iterdir():
             if not company_dir.is_dir() or company_dir.name.startswith(("_", ".")):
                 continue
-            for product_dir in company_dir.iterdir():
-                if not product_dir.is_dir():
-                    continue
-                mind_dir = product_dir / "mind"
-                if not mind_dir.exists():
-                    continue
+            mind_dir = company_dir / "mind"
+            if not mind_dir.exists():
+                continue
 
-                for jsonl in mind_dir.glob("*.jsonl"):
-                    try:
-                        with open(jsonl, "r", encoding="utf-8") as f:
-                            for line in f:
-                                line = line.strip()
-                                if line:
-                                    entry = json.loads(line)
-                                    graph = entry.get("metadata", {}).get("_graph", {})
-                                    if graph.get("node_type") == "rule":
-                                        entry["_company"] = company_dir.name
-                                        entry["_product"] = product_dir.name
-                                        rules.append(entry)
-                    except Exception:
-                        pass
+            for jsonl in mind_dir.glob("*.jsonl"):
+                try:
+                    with open(jsonl, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                entry = json.loads(line)
+                                graph = entry.get("metadata", {}).get("_graph", {})
+                                if graph.get("node_type") == "rule":
+                                    entry["_company"] = company_dir.name
+                                    entry["_product"] = ""
+                                    rules.append(entry)
+                except Exception:
+                    pass
 
     rules.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return {"rules": rules[:50], "total": len(rules)}

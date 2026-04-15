@@ -279,7 +279,7 @@ def _build_thesis_alerts(
     """Check all theses for drift alerts."""
     alerts = []
     for co in companies:
-        thesis_path = Path(co["path"]) / "mind" / "thesis.json"
+        thesis_path = Path(co["path"]).parent / "mind" / "thesis.json"
         if not thesis_path.exists():
             continue
         try:
@@ -308,7 +308,7 @@ def _build_learning_summary(
     new_rules = 0
 
     for co in companies:
-        mind_dir = Path(co["path"]) / "mind"
+        mind_dir = Path(co["path"]).parent / "mind"
         for jsonl_file in mind_dir.glob("*.jsonl"):
             try:
                 with open(jsonl_file, "r", encoding="utf-8") as f:

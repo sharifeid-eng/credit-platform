@@ -481,7 +481,7 @@ class TestIntelligenceEngine:
         data_dir = tmp_path / "data"
 
         # Company A
-        mind_a = data_dir / "company_a" / "prod" / "mind"
+        mind_a = data_dir / "company_a" / "mind"
         mind_a.mkdir(parents=True)
         with open(mind_a / "entities.jsonl", "w") as f:
             node = make_node("metric", "PAR30: 3.6%", metadata={
@@ -490,7 +490,7 @@ class TestIntelligenceEngine:
             f.write(json.dumps(node.to_mind_entry_dict()) + "\n")
 
         # Company B
-        mind_b = data_dir / "company_b" / "prod" / "mind"
+        mind_b = data_dir / "company_b" / "mind"
         mind_b.mkdir(parents=True)
         with open(mind_b / "entities.jsonl", "w") as f:
             node = make_node("metric", "PAR30: 4.1%", metadata={

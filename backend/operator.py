@@ -90,8 +90,8 @@ def _compute_company_health(company: str, product: str, config: dict) -> dict:
         except ValueError:
             freshness_status = "unknown"
 
-    # Legal coverage
-    legal_dir = product_path / "legal"
+    # Legal coverage (company-level, not product-level)
+    legal_dir = Path(DATA_DIR) / company / "legal"
     legal_docs = []
     legal_extracted = False
     if legal_dir.is_dir():
@@ -109,8 +109,8 @@ def _compute_company_health(company: str, product: str, config: dict) -> dict:
         except Exception:
             pass
 
-    # Mind entries
-    mind_dir = product_path / "mind"
+    # Mind entries (company-level, not product-level)
+    mind_dir = Path(DATA_DIR) / company / "mind"
     mind_counts = {}
     mind_total = 0
     if mind_dir.is_dir():
@@ -249,23 +249,22 @@ def _read_all_mind_entries() -> List[Dict[str, Any]]:
     for co in get_companies():
         if co.startswith("_"):
             continue
-        for prod in get_products(co):
-            mind_dir = Path(DATA_DIR) / co / prod / "mind"
-            if not mind_dir.is_dir():
-                continue
-            for jf in mind_dir.glob("*.jsonl"):
-                try:
-                    with open(jf) as f:
-                        for line in f:
-                            line = line.strip()
-                            if not line:
-                                continue
-                            entry = json.loads(line)
-                            entry["_source"] = "company"
-                            entry["_company"] = co
-                            entry["_product"] = prod
-                            entry["_file"] = jf.stem
-                            entries.append(entry)
+        mind_dir = Path(DATA_DIR) / co / "mind"
+        if not mind_dir.is_dir():
+            continue
+        for jf in mind_dir.glob("*.jsonl"):
+            try:
+                with open(jf) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        entry = json.loads(line)
+                        entry["_source"] = "company"
+                        entry["_company"] = co
+                        entry["_product"] = ""
+                        entry["_file"] = jf.stem
+                        entries.append(entry)
                 except Exception:
                     pass
 
@@ -445,10 +444,9 @@ def update_mind_entry(entry_id: str, update: MindUpdate):
     for co in get_companies():
         if co.startswith("_"):
             continue
-        for prod in get_products(co):
-            mind_dir = Path(DATA_DIR) / co / prod / "mind"
-            if mind_dir.is_dir():
-                all_dirs.append(("company", co, prod, mind_dir))
+        mind_dir = Path(DATA_DIR) / co / "mind"
+        if mind_dir.is_dir():
+            all_dirs.append(("company", co, None, mind_dir))
 
     # Search for the entry
     for source, co, prod, mind_dir in all_dirs:

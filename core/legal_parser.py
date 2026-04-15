@@ -209,9 +209,9 @@ def _find_definitions(sections: dict, full_markdown: str) -> str:
 # ── Caching Helpers ───────────────────────────────────────────────────────
 
 def get_legal_dir(company: str, product: str) -> str:
-    """Return the legal document directory for a company/product."""
+    """Return the legal document directory for a company (company-level, not product-level)."""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    base = os.path.join(project_root, 'data', company, product, 'legal')
+    base = os.path.join(project_root, 'data', company, 'legal')
     os.makedirs(base, exist_ok=True)
     return base
 

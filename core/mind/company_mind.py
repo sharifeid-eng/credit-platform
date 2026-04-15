@@ -4,7 +4,7 @@ Company Mind — Per-company knowledge graph for the Laith credit platform.
 Captures corrections, memo edits, research findings, IC feedback,
 data quality notes, and session lessons for a specific company/product.
 
-Storage: data/{company}/{product}/mind/
+Storage: data/{company}/mind/
 Format: Append-only JSONL files (one JSON object per line)
 """
 
@@ -117,7 +117,7 @@ class CompanyMind:
     5. Data quality notes -- known issues with specific tapes or documents
     6. Session lessons -- errors and patterns from tasks/lessons.md
 
-    Storage: data/{company}/{product}/mind/
+    Storage: data/{company}/mind/
     Format: Append-only JSONL files (one JSON object per line)
     """
 
@@ -128,14 +128,14 @@ class CompanyMind:
             company: Company name (e.g., "klaim")
             product: Product name (e.g., "UAE_healthcare")
             base_dir: Override for the mind directory.
-                      Defaults to data/{company}/{product}/mind/
+                      Defaults to data/{company}/mind/
         """
         self.company = company
         self.product = product
         if base_dir:
             self.base_dir = Path(base_dir)
         else:
-            self.base_dir = _PROJECT_ROOT / "data" / company / product / "mind"
+            self.base_dir = _PROJECT_ROOT / "data" / company / "mind"
         self._ensure_dirs()
 
     def _ensure_dirs(self) -> None:

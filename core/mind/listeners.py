@@ -44,7 +44,7 @@ def register_all_listeners() -> None:
 
 
 def _get_mind_dir(company: str, product: str) -> Path:
-    return _PROJECT_ROOT / "data" / company / product / "mind"
+    return _PROJECT_ROOT / "data" / company / "mind"
 
 
 # --------------------------------------------------------------------------

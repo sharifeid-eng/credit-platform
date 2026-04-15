@@ -70,16 +70,13 @@ class IntelligenceEngine:
         for co_dir in self.data_dir.iterdir():
             if not co_dir.is_dir() or co_dir.name.startswith("_"):
                 continue
-            for prod_dir in co_dir.iterdir():
-                if not prod_dir.is_dir():
-                    continue
-                mind_dir = prod_dir / "mind"
-                if mind_dir.exists():
-                    companies.append({
-                        "company": co_dir.name,
-                        "product": prod_dir.name,
-                        "mind_dir": str(mind_dir),
-                    })
+            mind_dir = co_dir / "mind"
+            if mind_dir.exists():
+                companies.append({
+                    "company": co_dir.name,
+                    "product": "",
+                    "mind_dir": str(mind_dir),
+                })
         return companies
 
     def _load_entity_nodes(self, mind_dir: Path) -> List[KnowledgeNode]:

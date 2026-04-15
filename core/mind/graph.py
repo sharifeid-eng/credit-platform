@@ -40,7 +40,7 @@ class KnowledgeGraph:
         """Initialize from a mind directory containing JSONL files + relations.json.
 
         Args:
-            mind_dir: Path to mind/ directory (e.g., data/klaim/UAE_healthcare/mind/)
+            mind_dir: Path to mind/ directory (e.g., data/klaim/mind/)
         """
         self.mind_dir = Path(mind_dir)
         self.index = RelationIndex(self.mind_dir / "relations.json")

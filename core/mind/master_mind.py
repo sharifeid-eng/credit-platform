@@ -651,12 +651,8 @@ class MasterMind:
             for company_dir in data_dir.iterdir():
                 if not company_dir.is_dir() or company_dir.name.startswith("_"):
                     continue
-                for product_dir in company_dir.iterdir():
-                    if not product_dir.is_dir():
-                        continue
-                    mind_dir = product_dir / "mind"
-                    if not mind_dir.exists():
-                        continue
+                mind_dir = company_dir / "mind"
+                if mind_dir.exists():
                     # Read session lessons
                     lessons_path = mind_dir / "session_lessons.jsonl"
                     if lessons_path.exists():

@@ -131,18 +131,16 @@ class KnowledgeBaseQuery:
 
         # Company minds
         if company:
-            for prod_dir in (self.data_dir / company).iterdir() if (self.data_dir / company).exists() else []:
-                mind_dir = prod_dir / "mind"
-                if mind_dir.exists():
-                    search_dirs.append((f"{company}/{prod_dir.name}", mind_dir))
+            co_mind = self.data_dir / company / "mind"
+            if co_mind.exists():
+                search_dirs.append((company, co_mind))
         else:
             for co_dir in self.data_dir.iterdir():
                 if not co_dir.is_dir() or co_dir.name.startswith("_"):
                     continue
-                for prod_dir in co_dir.iterdir():
-                    mind_dir = prod_dir / "mind"
-                    if mind_dir.exists():
-                        search_dirs.append((f"{co_dir.name}/{prod_dir.name}", mind_dir))
+                mind_dir = co_dir / "mind"
+                if mind_dir.exists():
+                    search_dirs.append((co_dir.name, mind_dir))
 
         for source_label, mind_dir in search_dirs:
             for jsonl_file in mind_dir.glob("*.jsonl"):

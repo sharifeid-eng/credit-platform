@@ -6,8 +6,8 @@ automatically checked against live tape data. When a metric breaches a
 pillar threshold, the system generates a DriftAlert.
 
 Storage:
-    data/{company}/{product}/mind/thesis.json     — current thesis (mutable)
-    data/{company}/{product}/mind/thesis_log.jsonl — append-only change log
+    data/{company}/mind/thesis.json     — current thesis (mutable)
+    data/{company}/mind/thesis_log.jsonl — append-only change log
 
 Conviction Score: 0-100 per company, based on pillar evidence strength,
 recency, contradictions, and trend consistency.
@@ -190,7 +190,7 @@ class ThesisTracker:
         if base_dir:
             self.mind_dir = Path(base_dir)
         else:
-            self.mind_dir = _PROJECT_ROOT / "data" / company / product / "mind"
+            self.mind_dir = _PROJECT_ROOT / "data" / company / "mind"
         self.mind_dir.mkdir(parents=True, exist_ok=True)
 
     @property

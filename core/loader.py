@@ -18,7 +18,7 @@ def get_companies():
 def get_products(company):
     """Return list of products for a company, read dynamically from subfolders"""
     company_path = os.path.join(DATA_DIR, company)
-    _NON_PRODUCT_DIRS = {'dataroom', '_master_mind', 'mind', '__pycache__'}
+    _NON_PRODUCT_DIRS = {'dataroom', '_master_mind', 'mind', 'legal', '__pycache__'}
     return [d for d in os.listdir(company_path)
             if os.path.isdir(os.path.join(company_path, d)) and d not in _NON_PRODUCT_DIRS]
 

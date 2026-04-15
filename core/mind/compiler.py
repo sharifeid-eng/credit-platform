@@ -95,7 +95,7 @@ class KnowledgeCompiler:
         """Initialize compiler for a company/product mind directory.
 
         Args:
-            mind_dir: Path to mind/ directory (e.g., data/klaim/UAE_healthcare/mind/)
+            mind_dir: Path to mind/ directory (e.g., data/klaim/mind/)
         """
         self.mind_dir = Path(mind_dir)
         self.mind_dir.mkdir(parents=True, exist_ok=True)
