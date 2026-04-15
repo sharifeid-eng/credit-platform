@@ -84,6 +84,8 @@ export default function AajilDashboard() {
   const { isMobile } = useBreakpoint()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [dpdThreshold, setDpdThreshold] = useState('dpd_7')
+  const [tractionView, setTractionView] = useState('volume')
 
   useEffect(() => {
     if (!company || !product) return
@@ -96,9 +98,6 @@ export default function AajilDashboard() {
 
   if (loading) return <div style={{ color: MUTED, padding: 40 }}>Loading Aajil dashboard...</div>
   if (!data) return <div style={{ color: RED, padding: 40 }}>Failed to load Aajil data</div>
-
-  const [dpdThreshold, setDpdThreshold] = useState('dpd_7')
-  const [tractionView, setTractionView] = useState('volume')
 
   const activeTab = tab || 'overview'
   const co = data.company_overview || {}
