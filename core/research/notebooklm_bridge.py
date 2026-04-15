@@ -96,6 +96,8 @@ class NotebookLMEngine:
         Uses fast file-existence check first, falls back to full check only if needed."""
         import time
         now = time.time()
+        if not hasattr(self, '_auth_checked_at'):
+            self._auth_checked_at = 0
         if now - self._auth_checked_at < self._AUTH_RECHECK_INTERVAL:
             return  # Recent check, skip
         self._auth_checked_at = now
