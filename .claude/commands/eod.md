@@ -102,9 +102,9 @@ If this session changed any backend, frontend, core/, or data/ files (not just d
 
 If dataroom ingestion was performed this session, also remind:
 
-> **Dataroom ingest needed on production.** Chunks and index.pkl are gitignored — the production server must run its own ingest after deploy to rebuild the search index:
+> **Dataroom ingest needed on production.** Chunks and index.pkl are gitignored — the production server must run its own ingest after deploy to rebuild the search index. Run from the server after SSH:
 > ```
-> curl -X POST http://localhost:8000/companies/{company}/products/{product}/dataroom/ingest
+> docker compose exec backend curl -X POST http://localhost:8000/companies/{company}/products/{product}/dataroom/ingest
 > ```
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
