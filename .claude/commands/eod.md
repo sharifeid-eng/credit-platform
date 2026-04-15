@@ -100,12 +100,17 @@ If this session changed any backend, frontend, core/, or data/ files (not just d
 > cd /opt/credit-platform && ./deploy.sh
 > ```
 
-If dataroom ingestion was performed this session, also remind:
+**Dataroom sync check (mandatory — do not skip):** Run this command to detect if any dataroom registry was modified this session:
+```
+git diff HEAD~10 --name-only | grep "registry.json"
+```
+If ANY registry.json files appear in the output, remind the user:
 
 > **Sync dataroom files to production.** Raw dataroom files (PDFs, xlsx, docx) are not in git. Run from your laptop PowerShell:
 > ```powershell
+> cd C:\Users\SharifEid\credit-platform
 > .\scripts\sync-data.ps1                    # all companies
-> .\scripts\sync-data.ps1 -Company Tamara    # one company
+> .\scripts\sync-data.ps1 -Company Tamara    # one company only
 > ```
 > Then redeploy — `deploy.sh` will auto-ingest any datarooms with missing chunks.
 
