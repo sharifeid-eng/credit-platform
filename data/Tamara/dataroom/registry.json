@@ -1,0 +1,3431 @@
+{
+  "016227c2-728": {
+    "doc_id": "016227c2-728",
+    "filename": "Sharif Tamara Memo.docx",
+    "filepath": "data\\Tamara\\dataroom\\Sharif Tamara Memo.docx",
+    "document_type": "other",
+    "sha256": "c5af729edc81dea0ee7756c32c71f349c554004914d5103d0c491d351f47c8f8",
+    "page_count": 5,
+    "chunk_count": 34,
+    "text_length": 81232,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Sharif Tamara Memo.docx",
+      "author": "Sharif Eid",
+      "created": "2025-10-27",
+      "modified": "2025-10-27"
+    },
+    "ingested_at": "2026-04-15T21:37:55"
+  },
+  "9e70a171-918": {
+    "doc_id": "9e70a171-918",
+    "filename": "Details of Business Operations.docx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Details of Business Operations.docx",
+    "document_type": "other",
+    "sha256": "3ae92b608830ba6e818a118cb5caba9e1f564dd878be1619f9e93dea5719c047",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1724,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "Details of Business Operations.docx",
+      "created": "2026-02-06",
+      "modified": "2026-02-06"
+    },
+    "ingested_at": "2026-04-15T21:37:55"
+  },
+  "35d1ce2e-8a4": {
+    "doc_id": "35d1ce2e-8a4",
+    "filename": "Default - KSA Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\Default - KSA Portfolio.xlsx",
+    "document_type": "other",
+    "sha256": "792cb53691a5d93d6b525a234479a14da68c2507220157036d945b89689f0f76",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1959,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "ec6049ed-20b": {
+    "doc_id": "ec6049ed-20b",
+    "filename": "Default - UAE Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\Default - UAE Portfolio.xlsx",
+    "document_type": "other",
+    "sha256": "5f470d8c10bf7a55d9fec29068d152e67b14a446b6f5744c392271ffd09d5d23",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1890,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - UAE Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "ed30c3e0-1f2": {
+    "doc_id": "ed30c3e0-1f2",
+    "filename": "Delinquency - KSA Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\Delinquency - KSA Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "015b39cd546ec4c158d737f0680f35d65b47ba91f21af6fed0956d8d580c3d22",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1912,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "eff3224f-b52": {
+    "doc_id": "eff3224f-b52",
+    "filename": "Delinquency - UAE Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\Delinquency - UAE Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "337a190ae0c091eed8ffeb6f1c83436e92a8af4f96871a4ee19872153ce49081",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 11342,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - UAE Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 64,
+          "cols": 65
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "0bb2375f-6c2": {
+    "doc_id": "0bb2375f-6c2",
+    "filename": "Dilution - KSA Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\Dilution - KSA Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "a02dc294d62bb6745ff16767ad5b859125b156bd7e4a65178cd3508662dac28c",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 589,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "5915ce39-d5d": {
+    "doc_id": "5915ce39-d5d",
+    "filename": "Dilution - UAE Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\Dilution - UAE Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "6e1b55d8a7bf5699d10776180f43a1f5011d20494893e13005483bc1e0c88479",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 585,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - UAE Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "20da5e94-a2f": {
+    "doc_id": "20da5e94-a2f",
+    "filename": "DPD 7 as of Due Date.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\24-March\\DPD 7 as of Due Date.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "c69ada3c2bfc3054fbcc5f9b5455af3ea79afeb2043f35df62b3b84777d17fc4",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 9526,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "DPD 7 as of Due Date.xlsx",
+      "sheets": [
+        {
+          "name": "Ever DPD7 as per Due date",
+          "rows": 4,
+          "cols": 169
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:37:56"
+  },
+  "4c91072a-97a": {
+    "doc_id": "4c91072a-97a",
+    "filename": "Investor Monthly Reporting_Dec'25.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\New Requests\\Investor Monthly Reporting_Dec'25.xlsx",
+    "document_type": "investor_report",
+    "sha256": "b0dba75e192d3e8611341b4f16e58a84972d0a5b2a3f736e4fa92d420931dddc",
+    "page_count": 10,
+    "chunk_count": 16,
+    "text_length": 48630,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "Investor Monthly Reporting_Dec'25.xlsx",
+      "sheets": [
+        {
+          "name": "Investor Reporting Pack >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1. KPIs >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1.1 KPIs cons",
+          "rows": 78,
+          "cols": 38
+        },
+        {
+          "name": "1.2 KPIs KSA",
+          "rows": 132,
+          "cols": 38
+        },
+        {
+          "name": "1.3 KPIs UAE",
+          "rows": 131,
+          "cols": 38
+        },
+        {
+          "name": "2. Financials>>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "2.1 FS Cons",
+          "rows": 199,
+          "cols": 41
+        },
+        {
+          "name": "2.2 FS KSA",
+          "rows": 176,
+          "cols": 41
+        },
+        {
+          "name": "2.3 FS UAE",
+          "rows": 175,
+          "cols": 41
+        },
+        {
+          "name": "3. Performance v Budget",
+          "rows": 14,
+          "cols": 31
+        }
+      ],
+      "total_sheets": 10
+    },
+    "ingested_at": "2026-04-15T21:37:59"
+  },
+  "83942d29-dd9": {
+    "doc_id": "83942d29-dd9",
+    "filename": "Investor Monthly Reporting_Jan'26.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\New Requests\\Investor Monthly Reporting_Jan'26.xlsx",
+    "document_type": "investor_report",
+    "sha256": "a0273d8f9fee35bf14b98d903c4f5a8f925f196cb51e8150a03aa3547abb041f",
+    "page_count": 10,
+    "chunk_count": 16,
+    "text_length": 35219,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "Investor Monthly Reporting_Jan'26.xlsx",
+      "sheets": [
+        {
+          "name": "Investor Reporting Pack >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1. KPIs >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1.1 KPIs cons",
+          "rows": 82,
+          "cols": 27
+        },
+        {
+          "name": "1.2 KPIs KSA",
+          "rows": 115,
+          "cols": 27
+        },
+        {
+          "name": "1.3 KPIs UAE",
+          "rows": 114,
+          "cols": 27
+        },
+        {
+          "name": "2. Financials>>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "2.1 FS Cons",
+          "rows": 171,
+          "cols": 30
+        },
+        {
+          "name": "2.2 FS KSA",
+          "rows": 147,
+          "cols": 30
+        },
+        {
+          "name": "2.3 FS UAE",
+          "rows": 145,
+          "cols": 30
+        },
+        {
+          "name": "3. Performance v Budget",
+          "rows": 14,
+          "cols": 21
+        }
+      ],
+      "total_sheets": 10
+    },
+    "ingested_at": "2026-04-15T21:38:01"
+  },
+  "6798f0c5-cad": {
+    "doc_id": "6798f0c5-cad",
+    "filename": "Tamara Business Plan FY26-FY30.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\New Requests\\Tamara Business Plan FY26-FY30.xlsx",
+    "document_type": "business_plan",
+    "sha256": "169b5e357860dc2273af8ce9ee91e9db2d57ecf4bb7e503ebcb55430b95fd3b0",
+    "page_count": 46,
+    "chunk_count": 48,
+    "text_length": 583970,
+    "table_count": 46,
+    "parser_metadata": {
+      "filename": "Tamara Business Plan FY26-FY30.xlsx",
+      "sheets": [
+        {
+          "name": "Summary",
+          "rows": 132,
+          "cols": 107
+        },
+        {
+          "name": "Capital Planning",
+          "rows": 87,
+          "cols": 107
+        },
+        {
+          "name": "Tamara >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "Tamara Cons Financial statement",
+          "rows": 180,
+          "cols": 106
+        },
+        {
+          "name": "Tamara SA Financial statements ",
+          "rows": 184,
+          "cols": 106
+        },
+        {
+          "name": "Tamara AE Financial Statements",
+          "rows": 184,
+          "cols": 106
+        },
+        {
+          "name": "Embedded Finance >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "EF - Financial statements - Con",
+          "rows": 171,
+          "cols": 106
+        },
+        {
+          "name": "KSA >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "EF - Financial statements - SA",
+          "rows": 171,
+          "cols": 106
+        },
+        {
+          "name": "GMV Buildup -> KSA",
+          "rows": 225,
+          "cols": 106
+        },
+        {
+          "name": "P&L Assumptions -> KSA",
+          "rows": 142,
+          "cols": 97
+        },
+        {
+          "name": "Non-Profit B loans schedule - S",
+          "rows": 1004,
+          "cols": 88
+        },
+        {
+          "name": "Profit B loans schedule - SA",
+          "rows": 1006,
+          "cols": 88
+        },
+        {
+          "name": "Debt - SA",
+          "rows": 68,
+          "cols": 107
+        },
+        {
+          "name": "UAE >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "EF - Financial Statements - AE",
+          "rows": 171,
+          "cols": 106
+        },
+        {
+          "name": "GMV Buildup -> UAE",
+          "rows": 193,
+          "cols": 105
+        },
+        {
+          "name": "P&L Assumptions -> UAE",
+          "rows": 121,
+          "cols": 97
+        },
+        {
+          "name": "BNPL AR - AE",
+          "rows": 459,
+          "cols": 88
+        },
+        {
+          "name": "Smart AR - AE",
+          "rows": 459,
+          "cols": 88
+        },
+        {
+          "name": "BNPL+ loans schedule - AE",
+          "rows": 1007,
+          "cols": 88
+        },
+        {
+          "name": "Debt - AE & Others",
+          "rows": 61,
+          "cols": 98
+        },
+        {
+          "name": "OPEX >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "OPEX",
+          "rows": 73,
+          "cols": 106
+        },
+        {
+          "name": "Personal Banking >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "PB - FInancial Statements",
+          "rows": 848,
+          "cols": 106
+        },
+        {
+          "name": "Buildup - Credit Cards",
+          "rows": 424,
+          "cols": 62
+        },
+        {
+          "name": "Buildup - Current Accounts KSA",
+          "rows": 339,
+          "cols": 67
+        },
+        {
+          "name": "Buildup - Current Accounts UAE",
+          "rows": 337,
+          "cols": 67
+        },
+        {
+          "name": "Buildup - Personal Loans",
+          "rows": 193,
+          "cols": 69
+        },
+        {
+          "name": "CC loans schedule - SA",
+          "rows": 1006,
+          "cols": 88
+        },
+        {
+          "name": "CC loans schedule - AE",
+          "rows": 1007,
+          "cols": 88
+        },
+        {
+          "name": "Personal Loans schedule",
+          "rows": 912,
+          "cols": 88
+        },
+        {
+          "name": "Personal Loans repayment curves",
+          "rows": 755,
+          "cols": 102
+        },
+        {
+          "name": "Business Banking >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "BB - Financial Statements",
+          "rows": 422,
+          "cols": 106
+        },
+        {
+          "name": "Buildup - Business",
+          "rows": 301,
+          "cols": 98
+        },
+        {
+          "name": "Other sheets",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "IFRS calculator",
+          "rows": 784,
+          "cols": 106
+        },
+        {
+          "name": "Repayment curves - SA",
+          "rows": 848,
+          "cols": 123
+        },
+        {
+          "name": "Repayment curves - AE",
+          "rows": 848,
+          "cols": 123
+        },
+        {
+          "name": "Historical FS >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "2.1 FS Cons",
+          "rows": 205,
+          "cols": 37
+        },
+        {
+          "name": "2.2 FS KSA",
+          "rows": 192,
+          "cols": 37
+        },
+        {
+          "name": "2.3 FS UAE",
+          "rows": 180,
+          "cols": 37
+        }
+      ],
+      "total_sheets": 46
+    },
+    "ingested_at": "2026-04-15T21:38:25"
+  },
+  "8af74007-009": {
+    "doc_id": "8af74007-009",
+    "filename": "GASOLINE ANN25 (KSA) - FINAL.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 2\\GASOLINE ANN25 (KSA) - FINAL.pdf",
+    "document_type": "other",
+    "sha256": "96d7424489c1c27c850110ef2cbcc68dfed2fe02c55c5589f02b8b155905869f",
+    "page_count": 56,
+    "chunk_count": 152,
+    "text_length": 60318,
+    "table_count": 96,
+    "parser_metadata": {
+      "filename": "GASOLINE ANN25 (KSA) - FINAL.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:28"
+  },
+  "19629456-fb1": {
+    "doc_id": "19629456-fb1",
+    "filename": "GASOLINE ANN25 (UAE) - FINAL.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 2\\GASOLINE ANN25 (UAE) - FINAL.pdf",
+    "document_type": "other",
+    "sha256": "9230c0f9657e3e9aa902e3833ddf04d44664bf179e5d84bbd784ae1a3120413a",
+    "page_count": 56,
+    "chunk_count": 151,
+    "text_length": 58061,
+    "table_count": 95,
+    "parser_metadata": {
+      "filename": "GASOLINE ANN25 (UAE) - FINAL.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:31"
+  },
+  "7f727d9d-8a3": {
+    "doc_id": "7f727d9d-8a3",
+    "filename": "Project Gasoline - Tamara ReFi - W&C Due Diligence Report - 7 August 2025.docx.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 3\\Project Gasoline - Tamara ReFi - W&C Due Diligence Report - 7 August 2025.docx.pdf",
+    "document_type": "fdd_report",
+    "sha256": "8a8d530cfbedf0e571cc677b72ee118a62c180f18295b1c6c14920fab4df8d74",
+    "page_count": 65,
+    "chunk_count": 66,
+    "text_length": 122825,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Project Gasoline - Tamara ReFi - W&C Due Diligence Report - 7 August 2025.docx.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:48"
+  },
+  "e0dd6aa5-5d1": {
+    "doc_id": "e0dd6aa5-5d1",
+    "filename": "Tamara UAE - W&C Legal DD Review.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 3\\Tamara UAE - W&C Legal DD Review.pdf",
+    "document_type": "legal_document",
+    "sha256": "0cf53061797857902950ce66ff9abdca5efea8d382ae0fd9da7e929e200f5931",
+    "page_count": 15,
+    "chunk_count": 24,
+    "text_length": 51115,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "Tamara UAE - W&C Legal DD Review.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:54"
+  },
+  "e027c5ea-e04": {
+    "doc_id": "e027c5ea-e04",
+    "filename": "Investor Monthly Reporting_Dec'25.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 4\\Investor Monthly Reporting_Dec'25.xlsx",
+    "document_type": "investor_report",
+    "sha256": "b0dba75e192d3e8611341b4f16e58a84972d0a5b2a3f736e4fa92d420931dddc",
+    "page_count": 10,
+    "chunk_count": 16,
+    "text_length": 48630,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "Investor Monthly Reporting_Dec'25.xlsx",
+      "sheets": [
+        {
+          "name": "Investor Reporting Pack >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1. KPIs >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1.1 KPIs cons",
+          "rows": 78,
+          "cols": 38
+        },
+        {
+          "name": "1.2 KPIs KSA",
+          "rows": 132,
+          "cols": 38
+        },
+        {
+          "name": "1.3 KPIs UAE",
+          "rows": 131,
+          "cols": 38
+        },
+        {
+          "name": "2. Financials>>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "2.1 FS Cons",
+          "rows": 199,
+          "cols": 41
+        },
+        {
+          "name": "2.2 FS KSA",
+          "rows": 176,
+          "cols": 41
+        },
+        {
+          "name": "2.3 FS UAE",
+          "rows": 175,
+          "cols": 41
+        },
+        {
+          "name": "3. Performance v Budget",
+          "rows": 14,
+          "cols": 31
+        }
+      ],
+      "total_sheets": 10
+    },
+    "ingested_at": "2026-04-15T21:38:56"
+  },
+  "4a54709f-0f5": {
+    "doc_id": "4a54709f-0f5",
+    "filename": "KSA BNPL+ Default Ratio Eligible +120DPD at 30-November.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\KSA BNPL+ Default Ratio Eligible +120DPD at 30-November.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "efaf359a0fe16a9c13e5253124959466986b583b2d2d53a6c9568b85369fd705",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 342,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "KSA BNPL+ Default Ratio Eligible +120DPD at 30-November.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:56"
+  },
+  "10b640db-4b8": {
+    "doc_id": "10b640db-4b8",
+    "filename": "KSA BNPL+ Delinquency Ratio Eligible +7DPD at 30-November.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\KSA BNPL+ Delinquency Ratio Eligible +7DPD at 30-November.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "75dbb5fc3dc079a40976598e9b42baea94ebf11ed40d4a83a68659150a1d569e",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 342,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "KSA BNPL+ Delinquency Ratio Eligible +7DPD at 30-November.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:56"
+  },
+  "4f78c4af-2c8": {
+    "doc_id": "4f78c4af-2c8",
+    "filename": "KSA BNPL+ Dilution Ratio Eligible at 30-November.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\KSA BNPL+ Dilution Ratio Eligible at 30-November.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "0dbc5b7da9b5865720d1b48196d317e468ea03d214777ce90127d23df73fd252",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 286,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "KSA BNPL+ Dilution Ratio Eligible at 30-November.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:57"
+  },
+  "c7886414-f8a": {
+    "doc_id": "c7886414-f8a",
+    "filename": "KSA Default Ratio Eligible +120DPD at 30-November.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\KSA Default Ratio Eligible +120DPD at 30-November.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "88c6ade6cffa38f6756e3968f3cd0bfba0e5c4f54be0a34a7a680712fc0346ad",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2345,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "KSA Default Ratio Eligible +120DPD at 30-November.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:57"
+  },
+  "49eaad9e-073": {
+    "doc_id": "49eaad9e-073",
+    "filename": "KSA Delinquency Ratio Eligible +7DPD at 30-November.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\KSA Delinquency Ratio Eligible +7DPD at 30-November.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "949a41dee21b3956153b20abed156182bd3a1e0015607392923397aae0131951",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2345,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "KSA Delinquency Ratio Eligible +7DPD at 30-November.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:57"
+  },
+  "41b0bc3b-8ef": {
+    "doc_id": "41b0bc3b-8ef",
+    "filename": "KSA Dilution Ratio Eligible at 30-November.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\KSA Dilution Ratio Eligible at 30-November.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "209a717c1ddeceb2410e594c3ac7256b3ac11b9eb5c5770dc795f491d999caa2",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2318,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "KSA Dilution Ratio Eligible at 30-November.pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:58"
+  },
+  "af482829-23a": {
+    "doc_id": "af482829-23a",
+    "filename": "Tamara - KSA Debt Presentation 1Q2026 (MS Upsize - Closing 24-Feb-26) (1).pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\Tamara - KSA Debt Presentation 1Q2026 (MS Upsize - Closing 24-Feb-26) (1).pdf",
+    "document_type": "company_presentation",
+    "sha256": "3f79dc998e32341e3db96e2547ed834a69023e4001adff6c1eea7bad998f6582",
+    "page_count": 11,
+    "chunk_count": 14,
+    "text_length": 5815,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "Tamara - KSA Debt Presentation 1Q2026 (MS Upsize - Closing 24-Feb-26) (1).pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:58"
+  },
+  "c8f6c109-17c": {
+    "doc_id": "c8f6c109-17c",
+    "filename": "Tamara - UAE Debt Presentation 1Q2026 (1).pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\Tamara - UAE Debt Presentation 1Q2026 (1).pdf",
+    "document_type": "company_presentation",
+    "sha256": "09ba0912266fb408a6278ff7619bfbdaa0951fa770136fc08d925b0ac08102ab",
+    "page_count": 11,
+    "chunk_count": 14,
+    "text_length": 5127,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "Tamara - UAE Debt Presentation 1Q2026 (1).pdf"
+    },
+    "ingested_at": "2026-04-15T21:38:58"
+  },
+  "60f08b97-94d": {
+    "doc_id": "60f08b97-94d",
+    "filename": "Tamara 3 IR - Feb 26 v1 (1).pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\Tamara 3 IR - Feb 26 v1 (1).pdf",
+    "document_type": "investor_report",
+    "sha256": "cb0803ccce9de2463de0aace461fd1372ae767b2689c4c96814583474c015d5c",
+    "page_count": 32,
+    "chunk_count": 74,
+    "text_length": 36150,
+    "table_count": 42,
+    "parser_metadata": {
+      "filename": "Tamara 3 IR - Feb 26 v1 (1).pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:01"
+  },
+  "20864f8d-931": {
+    "doc_id": "20864f8d-931",
+    "filename": "Tamara Capital UAE DAC IR Feb 26 v2 (1).pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 5\\Tamara Capital UAE DAC IR Feb 26 v2 (1).pdf",
+    "document_type": "investor_report",
+    "sha256": "0d76f8798f14d5e3eff544d871cfbd1ab0dfa9c6d5ad2009f797f9170f88af42",
+    "page_count": 30,
+    "chunk_count": 99,
+    "text_length": 31387,
+    "table_count": 69,
+    "parser_metadata": {
+      "filename": "Tamara Capital UAE DAC IR Feb 26 v2 (1).pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:04"
+  },
+  "eea6c80a-44f": {
+    "doc_id": "eea6c80a-44f",
+    "filename": "IPO Timeline.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Additional DD\\Question 9\\IPO Timeline.pdf",
+    "document_type": "fdd_report",
+    "sha256": "3b2bbb3d7099d8668bb046ff6981f26952a79a7de9dbaf87a99daf6d7518a1a5",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 1121,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "IPO Timeline.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:04"
+  },
+  "a1685864-cd6": {
+    "doc_id": "a1685864-cd6",
+    "filename": "financial-statement-2nd-quarter-2025_20250807.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\financial-statement-2nd-quarter-2025_20250807.pdf",
+    "document_type": "other",
+    "sha256": "fb5530f1fec33a0de4a2fdb9f1e26bb0fd73071488303503714bdf0efc84ecfc",
+    "page_count": 28,
+    "chunk_count": 103,
+    "text_length": 65989,
+    "table_count": 74,
+    "parser_metadata": {
+      "filename": "financial-statement-2nd-quarter-2025_20250807.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:07"
+  },
+  "1be51c69-cb7": {
+    "doc_id": "1be51c69-cb7",
+    "filename": "54.2.1.1.1 Nakhla Audited FY2020.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.1 KSA\\54.2.1.1.1 Nakhla Audited FY2020.pdf",
+    "document_type": "other",
+    "sha256": "606f7553380ec7cfcc912706c837799d8a1eb5db580fa279c24465380b50bf95",
+    "page_count": 14,
+    "chunk_count": 0,
+    "text_length": 286,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "54.2.1.1.1 Nakhla Audited FY2020.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:07"
+  },
+  "dea4c6a1-246": {
+    "doc_id": "dea4c6a1-246",
+    "filename": "54.2.1.1.2 Nakhla Audited FY2021.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.1 KSA\\54.2.1.1.2 Nakhla Audited FY2021.pdf",
+    "document_type": "other",
+    "sha256": "b8e6c6f1c00f817d1ac5271f962363dc8468c7f0eb81c5dbcc9daec729707949",
+    "page_count": 21,
+    "chunk_count": 25,
+    "text_length": 50212,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "54.2.1.1.2 Nakhla Audited FY2021.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:10"
+  },
+  "ef3ef6b0-75a": {
+    "doc_id": "ef3ef6b0-75a",
+    "filename": "54.2.1.1.3 Nakhla Audited FY2022.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.1 KSA\\54.2.1.1.3 Nakhla Audited FY2022.pdf",
+    "document_type": "other",
+    "sha256": "85f26007032402a9c685c2199bc05905558ca9f7ae9f083fc03404ea7779106b",
+    "page_count": 21,
+    "chunk_count": 26,
+    "text_length": 61867,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "54.2.1.1.3 Nakhla Audited FY2022.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:12"
+  },
+  "1bb0d83a-4c3": {
+    "doc_id": "1bb0d83a-4c3",
+    "filename": "54.2.1.1.4 Nakhla Audited FY2023.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.1 KSA\\54.2.1.1.4 Nakhla Audited FY2023.pdf",
+    "document_type": "other",
+    "sha256": "05465723d984077509c3c81145f7d10d417143aa622ed2284bc96626acd3ec4a",
+    "page_count": 29,
+    "chunk_count": 37,
+    "text_length": 69018,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "54.2.1.1.4 Nakhla Audited FY2023.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:16"
+  },
+  "690197ac-26c": {
+    "doc_id": "690197ac-26c",
+    "filename": "54.2.1.1.5 Nakhla Audited FY2024.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.1 KSA\\54.2.1.1.5 Nakhla Audited FY2024.pdf",
+    "document_type": "other",
+    "sha256": "a8da44bf94261715490f1883cc34267d20626fa3cb09711db6ccb60aa5ace7c3",
+    "page_count": 41,
+    "chunk_count": 119,
+    "text_length": 115417,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.2.1.1.5 Nakhla Audited FY2024.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:27"
+  },
+  "ac2221ea-589": {
+    "doc_id": "ac2221ea-589",
+    "filename": "54.2.1.1.6 20250331 - Nakhla Q1 2025 - English FS - Signed.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.1 KSA\\54.2.1.1.6 20250331 - Nakhla Q1 2025 - English FS - Signed.pdf",
+    "document_type": "other",
+    "sha256": "ea636a5ce5190f17ef7b20b35a0464a1e8864de1d1f4d71625f80034901c36c4",
+    "page_count": 29,
+    "chunk_count": 113,
+    "text_length": 54474,
+    "table_count": 84,
+    "parser_metadata": {
+      "filename": "54.2.1.1.6 20250331 - Nakhla Q1 2025 - English FS - Signed.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:35"
+  },
+  "c5d0c2d4-f5c": {
+    "doc_id": "c5d0c2d4-f5c",
+    "filename": "54.2.1.2.1 Tamara Cayman FY2022.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.2 Consolidated\\54.2.1.2.1 Tamara Cayman FY2022.pdf",
+    "document_type": "other",
+    "sha256": "5bc6cb828b9587b3914513cc4d6fd8cddc134ef35d2c2967d1ced348a0c2dfc0",
+    "page_count": 24,
+    "chunk_count": 29,
+    "text_length": 46023,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "54.2.1.2.1 Tamara Cayman FY2022.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:39"
+  },
+  "12a58955-37c": {
+    "doc_id": "12a58955-37c",
+    "filename": "54.2.1.2.2 Tamara Cayman FY2023.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.2 Consolidated\\54.2.1.2.2 Tamara Cayman FY2023.pdf",
+    "document_type": "other",
+    "sha256": "437884a46dfa588c81e76215749d1153d3a7bf8687cb4634c53235eec51110dd",
+    "page_count": 27,
+    "chunk_count": 0,
+    "text_length": 572,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "54.2.1.2.2 Tamara Cayman FY2023.pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:39"
+  },
+  "ac784585-fc8": {
+    "doc_id": "ac784585-fc8",
+    "filename": "54.2.1.2.3 Tamara Cayman FY2024 (Unaudited - Awaiting Sign-Off).pdf",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.1 Audited Financials\\54.2.1.2 Consolidated\\54.2.1.2.3 Tamara Cayman FY2024 (Unaudited - Awaiting Sign-Off).pdf",
+    "document_type": "other",
+    "sha256": "30303c6c3267045553041d2f0ebd23e3529026cd1ae76ef87a4b80ddd98aab41",
+    "page_count": 38,
+    "chunk_count": 116,
+    "text_length": 94653,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.2.1.2.3 Tamara Cayman FY2024 (Unaudited - Awaiting Sign-Off).pdf"
+    },
+    "ingested_at": "2026-04-15T21:39:55"
+  },
+  "427e9958-23b": {
+    "doc_id": "427e9958-23b",
+    "filename": "54.2.2.1 Investor Monthly Reporting_Nov'25.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.2 Management Financials\\54.2.2.1 Investor Monthly Reporting_Nov'25.xlsx",
+    "document_type": "investor_report",
+    "sha256": "45da612b4d1f1d0123960c8efba2e223e22def4efd9a7b5cb3a88ffa76864321",
+    "page_count": 10,
+    "chunk_count": 16,
+    "text_length": 47203,
+    "table_count": 10,
+    "parser_metadata": {
+      "filename": "54.2.2.1 Investor Monthly Reporting_Nov'25.xlsx",
+      "sheets": [
+        {
+          "name": "Investor Reporting Pack >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1. KPIs >>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "1.1 KPIs cons",
+          "rows": 78,
+          "cols": 37
+        },
+        {
+          "name": "1.2 KPIs KSA",
+          "rows": 129,
+          "cols": 37
+        },
+        {
+          "name": "1.3 KPIs UAE",
+          "rows": 128,
+          "cols": 37
+        },
+        {
+          "name": "2. Financials>>",
+          "rows": 1,
+          "cols": 1
+        },
+        {
+          "name": "2.1 FS Cons",
+          "rows": 199,
+          "cols": 40
+        },
+        {
+          "name": "2.2 FS KSA",
+          "rows": 176,
+          "cols": 40
+        },
+        {
+          "name": "2.3 FS UAE",
+          "rows": 175,
+          "cols": 40
+        },
+        {
+          "name": "3. Performance v Budget",
+          "rows": 14,
+          "cols": 29
+        }
+      ],
+      "total_sheets": 10
+    },
+    "ingested_at": "2026-04-15T21:40:04"
+  },
+  "0fbeb0ed-8b2": {
+    "doc_id": "0fbeb0ed-8b2",
+    "filename": "54.2.2.2 2025-11-30_Financial Master (New Version) - VF.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.2 Management Financials\\54.2.2.2 2025-11-30_Financial Master (New Version) - VF.xlsx",
+    "document_type": "financial_model",
+    "sha256": "3d32aef62084cc6c21eb9a1be30cc36fbbe8a72c8e7f7e40d89453fdccbd004c",
+    "page_count": 71,
+    "chunk_count": 72,
+    "text_length": 403221,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.2.2.2 2025-11-30_Financial Master (New Version) - VF.xlsx",
+      "sheets": [
+        {
+          "name": "Executive Summary Oct 25",
+          "rows": 19,
+          "cols": 1
+        },
+        {
+          "name": "PL YTD - Group (BNPL View)",
+          "rows": 94,
+          "cols": 19
+        },
+        {
+          "name": "Opex (BNPL View)",
+          "rows": 67,
+          "cols": 104
+        },
+        {
+          "name": "PL YTD - Standalone (BNPL View)",
+          "rows": 94,
+          "cols": 19
+        },
+        {
+          "name": "Opex (BNPL View) - Standalone",
+          "rows": 67,
+          "cols": 104
+        },
+        {
+          "name": "P&L - Gross Margin Format Group",
+          "rows": 84,
+          "cols": 36
+        },
+        {
+          "name": "P&L-Gross Margin (Standaone)",
+          "rows": 84,
+          "cols": 36
+        },
+        {
+          "name": "PL Monthly MTD - Group",
+          "rows": 156,
+          "cols": 38
+        },
+        {
+          "name": "PL Monthly MTD - Standalone",
+          "rows": 157,
+          "cols": 42
+        },
+        {
+          "name": "BS Monthly YTD Standalone",
+          "rows": 104,
+          "cols": 25
+        },
+        {
+          "name": "Budget Comparision",
+          "rows": 55,
+          "cols": 25
+        },
+        {
+          "name": "BS Monthly YTD Group",
+          "rows": 108,
+          "cols": 25
+        },
+        {
+          "name": "Total WO and recoveries",
+          "rows": 38,
+          "cols": 35
+        },
+        {
+          "name": "PL YTD - Group (Div-1)",
+          "rows": 38,
+          "cols": 36
+        },
+        {
+          "name": "PL Monthly MTD - Group (Div-1) ",
+          "rows": 115,
+          "cols": 13
+        },
+        {
+          "name": "PL YTD - Group (Div-2)",
+          "rows": 37,
+          "cols": 23
+        },
+        {
+          "name": "PL Monthly MTD - Group (Div-2)",
+          "rows": 156,
+          "cols": 9
+        },
+        {
+          "name": "PL YTD - Group",
+          "rows": 56,
+          "cols": 14
+        },
+        {
+          "name": "PL YTD - Group ( BM V2)",
+          "rows": 25,
+          "cols": 5
+        },
+        {
+          "name": "Opex (BM V2)",
+          "rows": 56,
+          "cols": 14
+        },
+        {
+          "name": "BS YTD - Group",
+          "rows": 44,
+          "cols": 14
+        },
+        {
+          "name": "Cash flow Group Monthly",
+          "rows": 58,
+          "cols": 37
+        },
+        {
+          "name": "PL Monthly MTD- Standalone",
+          "rows": 177,
+          "cols": 37
+        },
+        {
+          "name": "TB-Jan 2024",
+          "rows": 747,
+          "cols": 27
+        },
+        {
+          "name": "Cash flow Standalone Monthly",
+          "rows": 58,
+          "cols": 37
+        },
+        {
+          "name": "PL YTD - Standalone",
+          "rows": 58,
+          "cols": 18
+        },
+        {
+          "name": "PL YTD - Standalone BNPL View",
+          "rows": 54,
+          "cols": 18
+        },
+        {
+          "name": "BS Monthly YTD - Standalone",
+          "rows": 93,
+          "cols": 25
+        },
+        {
+          "name": "BS YTD - Standalone",
+          "rows": 44,
+          "cols": 18
+        },
+        {
+          "name": "Statutory View - USD",
+          "rows": 67,
+          "cols": 28
+        },
+        {
+          "name": "Statutory View - LCY",
+          "rows": 67,
+          "cols": 28
+        },
+        {
+          "name": "Detailed P&L & BS - MoM Group",
+          "rows": 495,
+          "cols": 32
+        },
+        {
+          "name": "ECL Movement",
+          "rows": 32,
+          "cols": 27
+        },
+        {
+          "name": "Support working",
+          "rows": 142,
+          "cols": 60
+        },
+        {
+          "name": "SAMA",
+          "rows": 97,
+          "cols": 25
+        },
+        {
+          "name": "P&L New format B",
+          "rows": 28,
+          "cols": 13
+        },
+        {
+          "name": "Post Closing Adjustments",
+          "rows": 7,
+          "cols": 10
+        },
+        {
+          "name": "Rates",
+          "rows": 24,
+          "cols": 18
+        },
+        {
+          "name": "TB-Jan 2025",
+          "rows": 2019,
+          "cols": 37
+        },
+        {
+          "name": "TB-Feb 2025",
+          "rows": 2299,
+          "cols": 37
+        },
+        {
+          "name": "TB-Feb 2024",
+          "rows": 785,
+          "cols": 28
+        },
+        {
+          "name": "TB-Mar 2024",
+          "rows": 803,
+          "cols": 27
+        },
+        {
+          "name": "TB-Apr 2024",
+          "rows": 814,
+          "cols": 28
+        },
+        {
+          "name": "TB-May 2024",
+          "rows": 836,
+          "cols": 27
+        },
+        {
+          "name": "TB-Jun 2024",
+          "rows": 922,
+          "cols": 27
+        },
+        {
+          "name": "TB-Jul 2024",
+          "rows": 974,
+          "cols": 27
+        },
+        {
+          "name": "TB-Aug 2024",
+          "rows": 979,
+          "cols": 27
+        },
+        {
+          "name": "TB-Sep 2024",
+          "rows": 1098,
+          "cols": 27
+        },
+        {
+          "name": "TB-Oct 2024",
+          "rows": 1120,
+          "cols": 27
+        },
+        {
+          "name": "TB-Nov 2024",
+          "rows": 1136,
+          "cols": 27
+        },
+        {
+          "name": "TB-Dec 2024",
+          "rows": 1105,
+          "cols": 27
+        },
+        {
+          "name": "TB-Mar 2025",
+          "rows": 2458,
+          "cols": 37
+        },
+        {
+          "name": "TB-Apr 2025",
+          "rows": 2590,
+          "cols": 37
+        },
+        {
+          "name": "TB-May 2025",
+          "rows": 2702,
+          "cols": 37
+        },
+        {
+          "name": "TB-June 2025",
+          "rows": 2826,
+          "cols": 37
+        },
+        {
+          "name": "TB-Jul 2025",
+          "rows": 2982,
+          "cols": 37
+        },
+        {
+          "name": "TB-Aug 2025",
+          "rows": 3059,
+          "cols": 37
+        },
+        {
+          "name": "TB-Sep 2025",
+          "rows": 3158,
+          "cols": 37
+        },
+        {
+          "name": "TB-Oct 2025",
+          "rows": 3955,
+          "cols": 38
+        },
+        {
+          "name": "TB-Nov 2025",
+          "rows": 4110,
+          "cols": 38
+        },
+        {
+          "name": "Account mapping",
+          "rows": 490,
+          "cols": 19
+        },
+        {
+          "name": "2024TB",
+          "rows": 1089,
+          "cols": 26
+        },
+        {
+          "name": "2023TB",
+          "rows": 752,
+          "cols": 26
+        },
+        {
+          "name": "2022TB",
+          "rows": 528,
+          "cols": 26
+        },
+        {
+          "name": "RE",
+          "rows": 52,
+          "cols": 11
+        },
+        {
+          "name": "Avg Loan",
+          "rows": 221,
+          "cols": 5
+        },
+        {
+          "name": "Sheet17",
+          "rows": 10,
+          "cols": 2
+        },
+        {
+          "name": "Sheet3",
+          "rows": 128,
+          "cols": 9
+        },
+        {
+          "name": "Entity mapping",
+          "rows": 43,
+          "cols": 6
+        },
+        {
+          "name": "Dept & Division Mapping",
+          "rows": 166,
+          "cols": 15
+        },
+        {
+          "name": "Checklist to Update",
+          "rows": 25,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 71
+    },
+    "ingested_at": "2026-04-15T21:42:20"
+  },
+  "362332cf-6d1": {
+    "doc_id": "362332cf-6d1",
+    "filename": "54.2.6.1 Tamara - 5yr Business Plan (2025) - 11-9-25.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.6 Business Plan\\54.2.6.1 Tamara - 5yr Business Plan (2025) - 11-9-25.xlsx",
+    "document_type": "business_plan",
+    "sha256": "97dbcdb19f23c2889f3f98bac3e8092b3eb56ac0d7ec56ba7d280065d50ac824",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 41274,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "54.2.6.1 Tamara - 5yr Business Plan (2025) - 11-9-25.xlsx",
+      "sheets": [
+        {
+          "name": "Tamara SA Financial statements ",
+          "rows": 231,
+          "cols": 106
+        },
+        {
+          "name": "Tamara AE Financial Statements",
+          "rows": 216,
+          "cols": 106
+        }
+      ],
+      "total_sheets": 2
+    },
+    "ingested_at": "2026-04-15T21:42:25"
+  },
+  "263638b3-b8b": {
+    "doc_id": "263638b3-b8b",
+    "filename": "54.2.6.2 Tamara - 5yr Financial Model (2024).xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Financials\\54.2.6 Business Plan\\54.2.6.2 Tamara - 5yr Financial Model (2024).xlsx",
+    "document_type": "financial_model",
+    "sha256": "4c634c06d5e42777f2fd989cc4ab44c8d36a4356e92ca0d26220a5ee91152310",
+    "page_count": 21,
+    "chunk_count": 22,
+    "text_length": 409906,
+    "table_count": 21,
+    "parser_metadata": {
+      "filename": "54.2.6.2 Tamara - 5yr Financial Model (2024).xlsx",
+      "sheets": [
+        {
+          "name": "Cover",
+          "rows": 3,
+          "cols": 2
+        },
+        {
+          "name": "Glossary",
+          "rows": 20,
+          "cols": 3
+        },
+        {
+          "name": "Assumptions",
+          "rows": 168,
+          "cols": 139
+        },
+        {
+          "name": "Consolidated P&L",
+          "rows": 163,
+          "cols": 139
+        },
+        {
+          "name": "Consolidated BS & CFS",
+          "rows": 136,
+          "cols": 139
+        },
+        {
+          "name": "KSA P&L",
+          "rows": 161,
+          "cols": 139
+        },
+        {
+          "name": "KSA BS & CFS",
+          "rows": 128,
+          "cols": 139
+        },
+        {
+          "name": "UAE P&L",
+          "rows": 162,
+          "cols": 139
+        },
+        {
+          "name": "UAE BS & CFS",
+          "rows": 128,
+          "cols": 139
+        },
+        {
+          "name": "Net Transaction Margin",
+          "rows": 524,
+          "cols": 139
+        },
+        {
+          "name": "Revenue & GP Summary",
+          "rows": 1164,
+          "cols": 139
+        },
+        {
+          "name": "Customer Acquisition Build",
+          "rows": 108,
+          "cols": 139
+        },
+        {
+          "name": "BNPL",
+          "rows": 422,
+          "cols": 139
+        },
+        {
+          "name": "BNPL+",
+          "rows": 861,
+          "cols": 139
+        },
+        {
+          "name": "Smart",
+          "rows": 413,
+          "cols": 139
+        },
+        {
+          "name": "Genius",
+          "rows": 1211,
+          "cols": 139
+        },
+        {
+          "name": "PIF",
+          "rows": 118,
+          "cols": 140
+        },
+        {
+          "name": "Other Revenue",
+          "rows": 45,
+          "cols": 139
+        },
+        {
+          "name": "OpEx",
+          "rows": 119,
+          "cols": 139
+        },
+        {
+          "name": "Cost of Funding",
+          "rows": 284,
+          "cols": 140
+        },
+        {
+          "name": "Loan Book Summary",
+          "rows": 145,
+          "cols": 139
+        }
+      ],
+      "total_sheets": 21
+    },
+    "ingested_at": "2026-04-15T21:43:07"
+  },
+  "d7a50559-275": {
+    "doc_id": "d7a50559-275",
+    "filename": "54.4.1 Tamara - Corporate Structure 01-Jul-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\KYC\\54.4.1 Tamara - Corporate Structure 01-Jul-25.pdf",
+    "document_type": "other",
+    "sha256": "a13a720870fa15a4bdd007b3ed193ed01f6946b6f10bf8b9b35cbb706155c1a7",
+    "page_count": 2,
+    "chunk_count": 4,
+    "text_length": 1966,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "54.4.1 Tamara - Corporate Structure 01-Jul-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:08"
+  },
+  "9998f69c-5f2": {
+    "doc_id": "9998f69c-5f2",
+    "filename": "54.4.2 Tamara - Capitalization Table.pdf",
+    "filepath": "data\\Tamara\\dataroom\\KYC\\54.4.2 Tamara - Capitalization Table.pdf",
+    "document_type": "other",
+    "sha256": "7ec55566713ce7e3a48879cbeea0871f2400bb118675e52115dc09e040af0ba5",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 1041,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.4.2 Tamara - Capitalization Table.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:08"
+  },
+  "c397591a-66f": {
+    "doc_id": "c397591a-66f",
+    "filename": "54.4.3 Tamara - Certificate of Incorporation.pdf",
+    "filepath": "data\\Tamara\\dataroom\\KYC\\54.4.3 Tamara - Certificate of Incorporation.pdf",
+    "document_type": "other",
+    "sha256": "b6f313da50083b2267876e11003279ac044bce25b2798578e37f2b5e7ccb7f65",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 643,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "54.4.3 Tamara - Certificate of Incorporation.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:08"
+  },
+  "b309b545-a7c": {
+    "doc_id": "b309b545-a7c",
+    "filename": "54.4.4 Cap Table - Transaction History - EV.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\KYC\\54.4.4 Cap Table - Transaction History - EV.xlsx",
+    "document_type": "other",
+    "sha256": "a3c3b0d4680ab6f8ecb90dbfaec54369609d7ce00fa32f5aba87ed89995ab5fd",
+    "page_count": 3,
+    "chunk_count": 4,
+    "text_length": 7893,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "54.4.4 Cap Table - Transaction History - EV.xlsx",
+      "sheets": [
+        {
+          "name": "Capitalization Table",
+          "rows": 40,
+          "cols": 11
+        },
+        {
+          "name": "Transaction History",
+          "rows": 23,
+          "cols": 8
+        },
+        {
+          "name": "EV competitors multiples",
+          "rows": 17,
+          "cols": 30
+        }
+      ],
+      "total_sheets": 3
+    },
+    "ingested_at": "2026-04-15T21:43:08"
+  },
+  "1fac5c54-08c": {
+    "doc_id": "1fac5c54-08c",
+    "filename": "54.6.3.1 Tamara - Memo - 27 October 2025.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Legal DD & Tax Analysis (ABF)\\54.6.3 Tax Analysis (Non-Reliance)\\54.6.3.1 Tamara - Memo - 27 October 2025.pdf",
+    "document_type": "legal_document",
+    "sha256": "a7509bb681accf5c8a335f4eea0a1147172e3568098fe25d60aaf3a65a095b50",
+    "page_count": 44,
+    "chunk_count": 63,
+    "text_length": 144833,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "54.6.3.1 Tamara - Memo - 27 October 2025.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:17"
+  },
+  "9d2384e5-1bc": {
+    "doc_id": "9d2384e5-1bc",
+    "filename": "54.6.3.2 19 August 2025 - Tamara Tax Advisory  - Final.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Legal DD & Tax Analysis (ABF)\\54.6.3 Tax Analysis (Non-Reliance)\\54.6.3.2 19 August 2025 - Tamara Tax Advisory  - Final.pdf",
+    "document_type": "legal_document",
+    "sha256": "30045f99024f813186651ea2d5c320611a1a364642cfad205fba318729e0a516",
+    "page_count": 50,
+    "chunk_count": 65,
+    "text_length": 158543,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "54.6.3.2 19 August 2025 - Tamara Tax Advisory  - Final.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:26"
+  },
+  "31523658-cb0": {
+    "doc_id": "31523658-cb0",
+    "filename": "54.6.4.1 Tamara UAE - W&C Legal DD Review.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Legal DD & Tax Analysis (ABF)\\54.6.4 Legal DD (Non-Reliance)\\54.6.4.1 Tamara UAE - W&C Legal DD Review.pdf",
+    "document_type": "legal_document",
+    "sha256": "0cf53061797857902950ce66ff9abdca5efea8d382ae0fd9da7e929e200f5931",
+    "page_count": 15,
+    "chunk_count": 24,
+    "text_length": 51115,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "54.6.4.1 Tamara UAE - W&C Legal DD Review.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:32"
+  },
+  "36075f0b-700": {
+    "doc_id": "36075f0b-700",
+    "filename": "54.3.10.1 7. HSBC Investor Report 17-July-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.1 7. HSBC Investor Report 17-July-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "6b2851d656a106957c6e125efbb96cb882600157b8dd30517f1d4d3c9f1d1401",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 35100,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.1 7. HSBC Investor Report 17-July-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:34"
+  },
+  "11e69059-983": {
+    "doc_id": "11e69059-983",
+    "filename": "54.3.10.10 10. HSBC Investor Report 20-October-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.10 10. HSBC Investor Report 20-October-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "9118efd3b3f77d26188bb84472ad9b22ecd6c61370b6af538488f6e30d3a4ba0",
+    "page_count": 32,
+    "chunk_count": 74,
+    "text_length": 35338,
+    "table_count": 42,
+    "parser_metadata": {
+      "filename": "54.3.10.10 10. HSBC Investor Report 20-October-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:38"
+  },
+  "677e2462-42e": {
+    "doc_id": "677e2462-42e",
+    "filename": "54.3.10.2 8. HSBC Investor Report 18-August-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.2 8. HSBC Investor Report 18-August-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "95d6ca974a4ae48908a2eb041b3dc496c9ef0bcf256e7fe958692d9aa6bfdb31",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 35140,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.2 8. HSBC Investor Report 18-August-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:41"
+  },
+  "d5156604-115": {
+    "doc_id": "d5156604-115",
+    "filename": "54.3.10.3 9. HSBC Investor Report 17-September-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.3 9. HSBC Investor Report 17-September-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "4cb1f4d820f483c948cb57ba64a881a6ebb0912f24d1716293048f8791df10c9",
+    "page_count": 32,
+    "chunk_count": 74,
+    "text_length": 35233,
+    "table_count": 42,
+    "parser_metadata": {
+      "filename": "54.3.10.3 9. HSBC Investor Report 17-September-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:43"
+  },
+  "1278cd50-419": {
+    "doc_id": "1278cd50-419",
+    "filename": "54.3.10.4 4. HSBC Investor Report 17-Apr-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.4 4. HSBC Investor Report 17-Apr-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "96766c64c0fc8124c26077844331a51f34e4b620ca5abc1b45ce654088a89294",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 35093,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.4 4. HSBC Investor Report 17-Apr-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:46"
+  },
+  "9e3ca3ab-ea3": {
+    "doc_id": "9e3ca3ab-ea3",
+    "filename": "54.3.10.5 5. HSBC Investor Report 19-May-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.5 5. HSBC Investor Report 19-May-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "cb82697340e0adfda2bbedf6b4fd4e0636011d83b242e4d06ed4739eaf381347",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 35323,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.5 5. HSBC Investor Report 19-May-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:50"
+  },
+  "a0005f80-4da": {
+    "doc_id": "a0005f80-4da",
+    "filename": "54.3.10.6 6. HSBC Investor Report 17-Jun-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.6 6. HSBC Investor Report 17-Jun-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "5d588f8a15a65d22da573f795d3968fe0198cd7c8b154419e444e3f52acc2d82",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 34987,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.6 6. HSBC Investor Report 17-Jun-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:53"
+  },
+  "0a21b3b7-23a": {
+    "doc_id": "0a21b3b7-23a",
+    "filename": "54.3.10.7 3. HSBC Investor Report 18-Mar-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.7 3. HSBC Investor Report 18-Mar-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "c43d2d0682bda10ced1b73ada1ebbd3d68841ce8ec5aac9f10319445b99b4636",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 35077,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.7 3. HSBC Investor Report 18-Mar-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:55"
+  },
+  "29e8e0a0-5c7": {
+    "doc_id": "29e8e0a0-5c7",
+    "filename": "54.3.10.8 2. HSBC Investor Report 18-Feb-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.8 2. HSBC Investor Report 18-Feb-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "28c9b2bfa793b8fdb26a404cf3950385e0edc6212de3cdefda8508643db700c1",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 34792,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.8 2. HSBC Investor Report 18-Feb-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:43:58"
+  },
+  "e42dee72-3fa": {
+    "doc_id": "e42dee72-3fa",
+    "filename": "54.3.10.9 1. HSBC Investor Report 21-Jan-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.10 KSA\\54.3.10.9 1. HSBC Investor Report 21-Jan-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "b2fa2c34073b92c6f74a77d7623afae7d1f2f358b7ef7ff37b9d02a511ab61ab",
+    "page_count": 31,
+    "chunk_count": 102,
+    "text_length": 34683,
+    "table_count": 71,
+    "parser_metadata": {
+      "filename": "54.3.10.9 1. HSBC Investor Report 21-Jan-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:00"
+  },
+  "9a4ab5ea-5db": {
+    "doc_id": "9a4ab5ea-5db",
+    "filename": "54.3.11.1 1. HSBC UAE Investor Report 21-Jan-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.1 1. HSBC UAE Investor Report 21-Jan-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "98d3495546803dbea17ae26edae6319b5bac80e133245f04e143d3016b869014",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30183,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.1 1. HSBC UAE Investor Report 21-Jan-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:02"
+  },
+  "357da664-f97": {
+    "doc_id": "357da664-f97",
+    "filename": "54.3.11.10 10. HSBC UAE Investor Report 20-Oct-2025.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.10 10. HSBC UAE Investor Report 20-Oct-2025.pdf",
+    "document_type": "investor_report",
+    "sha256": "8962d76b71cf48f8fe706a2db905a542b12033b11ac2c32f1bc86cf70f1aa348",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30703,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.10 10. HSBC UAE Investor Report 20-Oct-2025.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:04"
+  },
+  "a7d75a00-7ed": {
+    "doc_id": "a7d75a00-7ed",
+    "filename": "54.3.11.2 2. HSBC UAE Investor Report 18-Feb-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.2 2. HSBC UAE Investor Report 18-Feb-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "1ea4e3e47091ebbd09bc71624a4887c2433eee1e56869ab6b883c3aa2b94359d",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30213,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.2 2. HSBC UAE Investor Report 18-Feb-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:07"
+  },
+  "f5fb64d5-84a": {
+    "doc_id": "f5fb64d5-84a",
+    "filename": "54.3.11.3 3. HSBC UAE Investor Report 18-Mar-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.3 3. HSBC UAE Investor Report 18-Mar-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "43508da961bfa2c2b30e27f2e0ac8fb077b6922696f85c9abbad61dc036e3357",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30039,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.3 3. HSBC UAE Investor Report 18-Mar-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:09"
+  },
+  "7b44f930-bff": {
+    "doc_id": "7b44f930-bff",
+    "filename": "54.3.11.4 4. HSBC UAE Investor Report 17-Apr-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.4 4. HSBC UAE Investor Report 17-Apr-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "06e0742a9819772f464412bb676df9aca2688568b8657375928907aac2654470",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30060,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.4 4. HSBC UAE Investor Report 17-Apr-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:11"
+  },
+  "6d38c613-7ce": {
+    "doc_id": "6d38c613-7ce",
+    "filename": "54.3.11.5 5. HSBC UAE Investor Report 19-May-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.5 5. HSBC UAE Investor Report 19-May-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "cd72ddacbfec43022fc82ed7e074e1801950ccdb4e0dd42ea6d06c3c268a31d6",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30162,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.5 5. HSBC UAE Investor Report 19-May-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:14"
+  },
+  "ddf2dae0-c8d": {
+    "doc_id": "ddf2dae0-c8d",
+    "filename": "54.3.11.6 6. HSBC UAE Investor Report 17-Jun-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.6 6. HSBC UAE Investor Report 17-Jun-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "62996de5d97d709616c3d44159d7059d301eee2e9958b5ec193f5377efa7924c",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30355,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.6 6. HSBC UAE Investor Report 17-Jun-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:16"
+  },
+  "6e87e096-413": {
+    "doc_id": "6e87e096-413",
+    "filename": "54.3.11.7 7. HSBC UAE Investor Report 17-July-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.7 7. HSBC UAE Investor Report 17-July-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "5c5820f982061732d1273814f7cc87087b84f1e8e97af71a6c8b6204eb82075a",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30404,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.7 7. HSBC UAE Investor Report 17-July-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:18"
+  },
+  "d243cafd-f62": {
+    "doc_id": "d243cafd-f62",
+    "filename": "54.3.11.8 8. HSBC UAE Investor Report 18-August-25.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.8 8. HSBC UAE Investor Report 18-August-25.pdf",
+    "document_type": "investor_report",
+    "sha256": "52e1cb678c048ef5eb060c422e5c61c4e5771401c74b14a710847ac4a8daad51",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30474,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.8 8. HSBC UAE Investor Report 18-August-25.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:20"
+  },
+  "a901f01b-6bb": {
+    "doc_id": "a901f01b-6bb",
+    "filename": "54.3.11.9 9. HSBC UAE Investor Report 17-Sep-2025.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Investor Reporting\\54.3.11 UAE\\54.3.11.9 9. HSBC UAE Investor Report 17-Sep-2025.pdf",
+    "document_type": "investor_report",
+    "sha256": "837132beded425b49fd99f75caf1ec9e1f04a4df5b4e6120e06c9587750d8a3e",
+    "page_count": 30,
+    "chunk_count": 98,
+    "text_length": 30486,
+    "table_count": 68,
+    "parser_metadata": {
+      "filename": "54.3.11.9 9. HSBC UAE Investor Report 17-Sep-2025.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:22"
+  },
+  "a8e8aec3-7ca": {
+    "doc_id": "a8e8aec3-7ca",
+    "filename": "54.5.1 UAE Default Ratio Eligible +120DPD at 30-September.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance\\54.5.1 UAE Default Ratio Eligible +120DPD at 30-September.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "c8eed6be952ac27b14e6dc7abf92a44e82c9f77782e60b5b4370bf567ba5d1e7",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2021,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.5.1 UAE Default Ratio Eligible +120DPD at 30-September.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:22"
+  },
+  "2e89fe0e-3ed": {
+    "doc_id": "2e89fe0e-3ed",
+    "filename": "54.5.2 UAE Delinquency Ratio Eligible +7DPD at 30-September.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance\\54.5.2 UAE Delinquency Ratio Eligible +7DPD at 30-September.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "06f6944ab06a40283f2a0e7940393d002783386ea80e4ba1e0ba91baf6f02bf8",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2021,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.5.2 UAE Delinquency Ratio Eligible +7DPD at 30-September.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:23"
+  },
+  "c3ce3cfe-aa4": {
+    "doc_id": "c3ce3cfe-aa4",
+    "filename": "54.5.3 UAE Dilution Ratio Eligible at 30-September.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance\\54.5.3 UAE Dilution Ratio Eligible at 30-September.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "346bac0b32818ef483cf996fafabcfc6fb167cfb75fe122d04d7570d2625eb33",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 1991,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.5.3 UAE Dilution Ratio Eligible at 30-September.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:23"
+  },
+  "091fdf69-ced": {
+    "doc_id": "091fdf69-ced",
+    "filename": "54.5.4 KSA Default Ratio Eligible +120DPD at 30-September.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance\\54.5.4 KSA Default Ratio Eligible +120DPD at 30-September.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "40f791e55fb6bcfdf4b528c2b931f4cf1d0ef17f0d49645d718f00c755bf8d68",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2021,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.5.4 KSA Default Ratio Eligible +120DPD at 30-September.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:23"
+  },
+  "6da87b3b-3c5": {
+    "doc_id": "6da87b3b-3c5",
+    "filename": "54.5.5 KSA Delinquency Ratio Eligible +7DPD at 30-September.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance\\54.5.5 KSA Delinquency Ratio Eligible +7DPD at 30-September.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "aabc85ab731b714064de50104c99b4ba78d38f01417c592f2901085f2ee6a0d7",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2021,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.5.5 KSA Delinquency Ratio Eligible +7DPD at 30-September.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "781991cf-757": {
+    "doc_id": "781991cf-757",
+    "filename": "54.5.6 KSA Dilution Ratio Eligible at 30-September.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance\\54.5.6 KSA Dilution Ratio Eligible at 30-September.pdf",
+    "document_type": "vintage_cohort",
+    "sha256": "aedd81a3ea7d51dd1a8476690e0c7d587fcc535add4702e7d25f28082259b843",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 1991,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "54.5.6 KSA Dilution Ratio Eligible at 30-September.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "0d1ca5ab-5fe": {
+    "doc_id": "0d1ca5ab-5fe",
+    "filename": "Default - KSA BNPL Pi2.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL Pi2.xlsx",
+    "document_type": "demographics",
+    "sha256": "0523fd745e1bef4434b2e75a8b76da0a1976ac7d8b5edb40a7808921ffd906d8",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1995,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL Pi2.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "83868147-075": {
+    "doc_id": "83868147-075",
+    "filename": "Default - KSA BNPL Pi3.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL Pi3.xlsx",
+    "document_type": "demographics",
+    "sha256": "38324a78f8e69c4e7fab3bedabe9f5a2018767a604b2f1e1594aa7b321f3cba2",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1998,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL Pi3.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "ea56d142-d53": {
+    "doc_id": "ea56d142-d53",
+    "filename": "Default - KSA BNPL Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL Pi4.xlsx",
+    "document_type": "demographics",
+    "sha256": "ed03889d4c9474bea47c5ed76c00b0e7136361edae0d90aec54f2e8c240aa86e",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1954,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "5e6eef3f-6c5": {
+    "doc_id": "5e6eef3f-6c5",
+    "filename": "Default - KSA BNPL Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL Pi6.xlsx",
+    "document_type": "demographics",
+    "sha256": "44f1ea31e4cd6e7b0db989f96ebc3114be9e7056c4bc3a731dfc3b4a1fc44d20",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1952,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "63d17301-558": {
+    "doc_id": "63d17301-558",
+    "filename": "Default - KSA BNPL Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL Portfolio.xlsx",
+    "document_type": "demographics",
+    "sha256": "4bdd2581acb00b31744849c4e2fd0aa6392216a7bd9e9e81d039cf8010ee0d5a",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1956,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "0cddfaa4-632": {
+    "doc_id": "0cddfaa4-632",
+    "filename": "Default - KSA BNPL+ Pi12.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL+ Pi12.xlsx",
+    "document_type": "demographics",
+    "sha256": "f66d2c3351891f602c7c0d2c5b05c4142c14fc896235848502899ad0bd2ea5a5",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 343,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL+ Pi12.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 6,
+          "cols": 5
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "53283e41-383": {
+    "doc_id": "53283e41-383",
+    "filename": "Default - KSA BNPL+ Pi24.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL+ Pi24.xlsx",
+    "document_type": "demographics",
+    "sha256": "47366b0143342e12fb2a767c99c4983a8d8385296e5474306e80b24c0ede73d0",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 182,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL+ Pi24.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 4,
+          "cols": 3
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "df79fc18-7cb": {
+    "doc_id": "df79fc18-7cb",
+    "filename": "Default - KSA BNPL+ Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL+ Pi4.xlsx",
+    "document_type": "demographics",
+    "sha256": "412a16b2dc102673b2fc3bd0f871fb3d8cce07b72c33a63b02ab10887d1ab3b9",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 355,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL+ Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 6,
+          "cols": 5
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "7b71cbc6-e42": {
+    "doc_id": "7b71cbc6-e42",
+    "filename": "Default - KSA BNPL+ Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL+ Pi6.xlsx",
+    "document_type": "demographics",
+    "sha256": "68e673a73b249fa21fb5c4521aa63815c92cb9a8c859fc444848210b03878764",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 352,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL+ Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 6,
+          "cols": 5
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "b91902c9-88a": {
+    "doc_id": "b91902c9-88a",
+    "filename": "Default - KSA BNPL+ Pi9.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL+ Pi9.xlsx",
+    "document_type": "demographics",
+    "sha256": "a19c49260963a0c19e9c0a0a798bafb2531362188b6c9c27dd1ac54816a33035",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 345,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL+ Pi9.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 6,
+          "cols": 5
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "2942d9e1-a9c": {
+    "doc_id": "2942d9e1-a9c",
+    "filename": "Default - KSA BNPL+ Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA BNPL+ Portfolio.xlsx",
+    "document_type": "demographics",
+    "sha256": "945289d340aa7ea24ed2f380c01856c22fa5d867c747c98fbb362d56d62c90b0",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 445,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA BNPL+ Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 7,
+          "cols": 6
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "eba98486-615": {
+    "doc_id": "eba98486-615",
+    "filename": "Default - KSA Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - KSA Portfolio.xlsx",
+    "document_type": "demographics",
+    "sha256": "792cb53691a5d93d6b525a234479a14da68c2507220157036d945b89689f0f76",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1959,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - KSA Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "b8c0678c-02a": {
+    "doc_id": "b8c0678c-02a",
+    "filename": "Default - UAE Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default - UAE Portfolio.xlsx",
+    "document_type": "demographics",
+    "sha256": "5f470d8c10bf7a55d9fec29068d152e67b14a446b6f5744c392271ffd09d5d23",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1890,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default - UAE Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "bcc594a9-32b": {
+    "doc_id": "bcc594a9-32b",
+    "filename": "Default -UAE Pi2.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default -UAE Pi2.xlsx",
+    "document_type": "demographics",
+    "sha256": "71c886cd99f1bf8714c31a047c2f919b3e8a309b167b40cc7e6452cecc0bb5af",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1966,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default -UAE Pi2.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "05f0d0a2-7ea": {
+    "doc_id": "05f0d0a2-7ea",
+    "filename": "Default -UAE Pi3.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default -UAE Pi3.xlsx",
+    "document_type": "demographics",
+    "sha256": "38328ce50d51fb0209eda1b64ec07626916ed15839619227758fa3f980c4f5e4",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1979,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default -UAE Pi3.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "028eab7f-69a": {
+    "doc_id": "028eab7f-69a",
+    "filename": "Default -UAE Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default -UAE Pi4.xlsx",
+    "document_type": "demographics",
+    "sha256": "0336458b34fdc91e3e0d1ec3aa1d5a896e4d4e40da6676560f7470b5a8716ddb",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1900,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default -UAE Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "d548e05f-eed": {
+    "doc_id": "d548e05f-eed",
+    "filename": "Default -UAE Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Default -UAE Pi6.xlsx",
+    "document_type": "demographics",
+    "sha256": "b0db44a037d2bb7bced33daaf245ad6f49669bdcb55704e70b2772373b5dc981",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 957,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Default -UAE Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 11,
+          "cols": 10
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "0f472d35-236": {
+    "doc_id": "0f472d35-236",
+    "filename": "Delinquency - KSA BNPL Pi2.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL Pi2.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "ede069e24ff00b0f7fc1c55bc5f6c46e359e439f4c7c35aab7da7388cb0abcf3",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1966,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL Pi2.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "79351018-5db": {
+    "doc_id": "79351018-5db",
+    "filename": "Delinquency - KSA BNPL Pi3.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL Pi3.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "62b5f04166d6cc30a547368df018587d8efdc076483abb63bc232022b8153f50",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 2019,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL Pi3.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 17,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "a7a17e84-6ab": {
+    "doc_id": "a7a17e84-6ab",
+    "filename": "Delinquency - KSA BNPL Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL Pi4.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "219f608a9cb8ad15fb0894c7aa3dcde042b27d4109f776736b6950bbb2942c54",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1915,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "30079385-faa": {
+    "doc_id": "30079385-faa",
+    "filename": "Delinquency - KSA BNPL Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL Pi6.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "fe50a5a0c0f72763571cc3693c2760a6eecdaea50c0e9d084ba560533de4d0a3",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1906,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "8786929e-595": {
+    "doc_id": "8786929e-595",
+    "filename": "Delinquency - KSA BNPL Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "4fbbfa290e36fd35c87e7246839f945c11fa9071617e0b2741f04c1250483a0f",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1914,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "85615608-9d3": {
+    "doc_id": "85615608-9d3",
+    "filename": "Delinquency - KSA BNPL+ Pi12.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL+ Pi12.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "768a7c514a6ce46a2e8dc89ec5b35801a3fff25121d773a4bdc28762c2b8d502",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 681,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL+ Pi12.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 9,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "60c485f4-422": {
+    "doc_id": "60c485f4-422",
+    "filename": "Delinquency - KSA BNPL+ Pi24.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL+ Pi24.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "df31961e5b30b78b87ed72e9596581c7057d4238174374ef9c081a5e762d9b74",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 472,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL+ Pi24.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 8,
+          "cols": 6
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "028d30cc-518": {
+    "doc_id": "028d30cc-518",
+    "filename": "Delinquency - KSA BNPL+ Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL+ Pi4.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "9f0b018d72ce3ba4daa6b13edf789843a11c382d767b48d2752605d590cf951d",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 688,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL+ Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 9,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "c9c84b14-e79": {
+    "doc_id": "c9c84b14-e79",
+    "filename": "Delinquency - KSA BNPL+ Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL+ Pi6.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "00b659540048a7c13e328aca7e8f99d4e40aea24f44aee5f36f9aca815473c6b",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 680,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL+ Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 9,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "dae06c91-036": {
+    "doc_id": "dae06c91-036",
+    "filename": "Delinquency - KSA BNPL+ Pi9.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL+ Pi9.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "a7dfb591c2e607e2f8449160f69f2bbeba7bc15179c72dffbd1d18263b67c62b",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 682,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL+ Pi9.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 9,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "35df2bc6-71b": {
+    "doc_id": "35df2bc6-71b",
+    "filename": "Delinquency - KSA BNPL+ Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA BNPL+ Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "117ebcd6624c087186898e4399afac6b8a6e9677349271ab093ea8233c8f4048",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 764,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA BNPL+ Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 10,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "f35f274e-e69": {
+    "doc_id": "f35f274e-e69",
+    "filename": "Delinquency - KSA Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - KSA Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "015b39cd546ec4c158d737f0680f35d65b47ba91f21af6fed0956d8d580c3d22",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1912,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - KSA Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "0fd1fe07-d88": {
+    "doc_id": "0fd1fe07-d88",
+    "filename": "Delinquency - UAE Pi2.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - UAE Pi2.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "0dd6e5e93cf15ffe3333aa93d0fee512a4518581f93e7068cbedabddf89b2338",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1986,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - UAE Pi2.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 17,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "ad496003-88e": {
+    "doc_id": "ad496003-88e",
+    "filename": "Delinquency - UAE Pi3.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - UAE Pi3.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "16f8eee694d481d326477ca91d0d4b3b46fbfe4ddbf4f94007eb41473ed84d37",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 2000,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - UAE Pi3.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 17,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "32727a8d-63f": {
+    "doc_id": "32727a8d-63f",
+    "filename": "Delinquency - UAE Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - UAE Pi4.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "4e4d4484f081531e327d140f43bade02742005b1e14a65a2843896611628efa2",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1896,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - UAE Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 16,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "f6a43669-5dd": {
+    "doc_id": "f6a43669-5dd",
+    "filename": "Delinquency - UAE Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - UAE Pi6.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "a73aa5fa4693f3b9ceeed9977aa74493b51a10085a5930fbfefab4c1b6f15303",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1687,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - UAE Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 15,
+          "cols": 14
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:24"
+  },
+  "40991f3c-a5b": {
+    "doc_id": "40991f3c-a5b",
+    "filename": "Delinquency - UAE Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Delinquency - UAE Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "337a190ae0c091eed8ffeb6f1c83436e92a8af4f96871a4ee19872153ce49081",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 11342,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Delinquency - UAE Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 64,
+          "cols": 65
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "0a33a362-e25": {
+    "doc_id": "0a33a362-e25",
+    "filename": "Dilution - KSA BNPL Pi2.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL Pi2.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "0080298f51d39e25ca7e9cb437bd3221ae3fb5d18c734ef7d822f875b1263e16",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 633,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL Pi2.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "f5835f39-c2c": {
+    "doc_id": "f5835f39-c2c",
+    "filename": "Dilution - KSA BNPL Pi3.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL Pi3.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "67f381f5ff3320a6b5fd801a4039f0ec80eef25cc7b3ce242dfb5995ae1fe316",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 633,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL Pi3.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "30f1c41f-4d5": {
+    "doc_id": "30f1c41f-4d5",
+    "filename": "Dilution - KSA BNPL Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL Pi4.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "ed2252ae9af6e1170d7ace08eadbe9b9e057fe2d791c381c57b138f5cf81f87b",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 635,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "c5f2ad55-16e": {
+    "doc_id": "c5f2ad55-16e",
+    "filename": "Dilution - KSA BNPL Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL Pi6.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "60812f1f4ab6847af57fca02ba5c16f9810d994bfd05d03e8390012d6da9c3bd",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 644,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "3d510be9-17a": {
+    "doc_id": "3d510be9-17a",
+    "filename": "Dilution - KSA BNPL Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "f047858954fb6ca6f98d377c58134952e363baec09dd25ba3649dacd4daadc16",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 635,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "e294c694-011": {
+    "doc_id": "e294c694-011",
+    "filename": "Dilution - KSA BNPL+ Pi12.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL+ Pi12.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "bc0757f943c37c61db481239095ea009c7a20c040336bca900791e64a652b519",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 468,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL+ Pi12.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 11
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "0f94ba61-fc2": {
+    "doc_id": "0f94ba61-fc2",
+    "filename": "Dilution - KSA BNPL+ Pi24.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL+ Pi24.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "8b38ef45c2fe5463c1cf974cf6de2808aada0903e77f2f79e8629780f3f34acc",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 369,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL+ Pi24.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "636064e7-3d6": {
+    "doc_id": "636064e7-3d6",
+    "filename": "Dilution - KSA BNPL+ Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL+ Pi4.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "59d14eb63dfe09ae5d5f19485d9de1549134e87cf1a0431103a59825f733dd83",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 467,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL+ Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 11
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "9dc439e8-1fd": {
+    "doc_id": "9dc439e8-1fd",
+    "filename": "Dilution - KSA BNPL+ Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL+ Pi6.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "b4dc3fb5d09d217d4bdca8133f6f5db7fda53373d760aca671fdfb84f9cd345a",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 467,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL+ Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 11
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "453acad7-014": {
+    "doc_id": "453acad7-014",
+    "filename": "Dilution - KSA BNPL+ Pi9.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL+ Pi9.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "4a3bbc4f010ad396d34afe51b9a8348173cd48a82731f7597055b7cc94751e46",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 467,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL+ Pi9.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 11
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "3d01eedd-453": {
+    "doc_id": "3d01eedd-453",
+    "filename": "Dilution - KSA BNPL+ Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA BNPL+ Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "6023d5191e5864547951b547959545adf3056fde137d631a4aaa1b5c9ddd1b22",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 468,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA BNPL+ Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 11
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "cd1d5e66-4ab": {
+    "doc_id": "cd1d5e66-4ab",
+    "filename": "Dilution - KSA Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - KSA Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "a02dc294d62bb6745ff16767ad5b859125b156bd7e4a65178cd3508662dac28c",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 589,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - KSA Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "660c8b2b-cd5": {
+    "doc_id": "660c8b2b-cd5",
+    "filename": "Dilution - UAE Pi2.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - UAE Pi2.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "cb866f04cd06cafd9fa059fd1837f0a2f5c4238ea113816b7b62dd6df079757b",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 632,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - UAE Pi2.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "ef61b3ff-77e": {
+    "doc_id": "ef61b3ff-77e",
+    "filename": "Dilution - UAE Pi3.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - UAE Pi3.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "decc886b8a06761cf4fb1c028707dd1c654d37b32bae20caa87c625865a60c9d",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 620,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - UAE Pi3.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "848e1810-b22": {
+    "doc_id": "848e1810-b22",
+    "filename": "Dilution - UAE Pi4.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - UAE Pi4.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "5fff52e289029e743d49c710b39844a7d5c85f3ed0bac27e9e0c14a8c056891c",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 633,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - UAE Pi4.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 16
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "f04054a2-b49": {
+    "doc_id": "f04054a2-b49",
+    "filename": "Dilution - UAE Pi6.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - UAE Pi6.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "dcc755c3d0ff89f6b9b933a2ad857b1ec56e1415b03f1293e61c099a86a097d3",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 599,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - UAE Pi6.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "c0af3229-6d5": {
+    "doc_id": "c0af3229-6d5",
+    "filename": "Dilution - UAE Portfolio.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Dilution - UAE Portfolio.xlsx",
+    "document_type": "vintage_cohort",
+    "sha256": "6e1b55d8a7bf5699d10776180f43a1f5011d20494893e13005483bc1e0c88479",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 585,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Dilution - UAE Portfolio.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet 1",
+          "rows": 3,
+          "cols": 15
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "943f3623-0a8": {
+    "doc_id": "943f3623-0a8",
+    "filename": "Portfolio Breakdowns.xlsx",
+    "filepath": "data\\Tamara\\dataroom\\Portfolio Performance Breakdowns\\Portfolio Breakdowns.xlsx",
+    "document_type": "demographics",
+    "sha256": "6aa6e2b0cbc062f6a32ddc42b4c3e28bbf2c5fa43d92035a44cbadffc0df365c",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1161,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Portfolio Breakdowns.xlsx",
+      "sheets": [
+        {
+          "name": "Portfolio Demographics",
+          "rows": 45,
+          "cols": 5
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-15T21:44:25"
+  },
+  "dabd9327-6f0": {
+    "doc_id": "dabd9327-6f0",
+    "filename": "54.1.1 2. Tamara - Credit Performance Overview.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Tamara Business - Diligence Pack\\54.1.1 2. Tamara - Credit Performance Overview.pdf",
+    "document_type": "other",
+    "sha256": "6ca0a58909816faa31ab9155c76d147293988de371783c3d2af9390209f053a8",
+    "page_count": 43,
+    "chunk_count": 108,
+    "text_length": 50947,
+    "table_count": 64,
+    "parser_metadata": {
+      "filename": "54.1.1 2. Tamara - Credit Performance Overview.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:29"
+  },
+  "157e0546-a7a": {
+    "doc_id": "157e0546-a7a",
+    "filename": "54.1.2 6. Tamara - Business Plan Presentation.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Tamara Business - Diligence Pack\\54.1.2 6. Tamara - Business Plan Presentation.pdf",
+    "document_type": "company_presentation",
+    "sha256": "0113b7b6cfb9f4222a273a6650c18d0212635888aa7e6398dcc5690b3224243a",
+    "page_count": 21,
+    "chunk_count": 88,
+    "text_length": 15818,
+    "table_count": 67,
+    "parser_metadata": {
+      "filename": "54.1.2 6. Tamara - Business Plan Presentation.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:30"
+  },
+  "86850187-a17": {
+    "doc_id": "86850187-a17",
+    "filename": "54.1.3 1. Tamara - Company Snapshot.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Tamara Business - Diligence Pack\\54.1.3 1. Tamara - Company Snapshot.pdf",
+    "document_type": "other",
+    "sha256": "25df5c36a32166af17c80b0a025af9d2ff5848647b00dcab6d3720b2676e360f",
+    "page_count": 19,
+    "chunk_count": 34,
+    "text_length": 17404,
+    "table_count": 14,
+    "parser_metadata": {
+      "filename": "54.1.3 1. Tamara - Company Snapshot.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:31"
+  },
+  "517c1cbb-ac5": {
+    "doc_id": "517c1cbb-ac5",
+    "filename": "54.1.4 5. Tamara - Tech Overview.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Tamara Business - Diligence Pack\\54.1.4 5. Tamara - Tech Overview.pdf",
+    "document_type": "other",
+    "sha256": "c7e72d607160f980d8f003c42b0b17d7e0240e6c2a513e70903e76379bcce2e6",
+    "page_count": 16,
+    "chunk_count": 28,
+    "text_length": 8893,
+    "table_count": 11,
+    "parser_metadata": {
+      "filename": "54.1.4 5. Tamara - Tech Overview.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:32"
+  },
+  "a5b46a1e-60f": {
+    "doc_id": "a5b46a1e-60f",
+    "filename": "54.1.5 4. Tamara - Product and Regulation.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Tamara Business - Diligence Pack\\54.1.5 4. Tamara - Product and Regulation.pdf",
+    "document_type": "other",
+    "sha256": "c2bd1c20d6d425c87a38955b69259de7b4fcd23dcb547432a1957f7bd2125cf2",
+    "page_count": 25,
+    "chunk_count": 28,
+    "text_length": 16805,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "54.1.5 4. Tamara - Product and Regulation.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:34"
+  },
+  "5fc1d425-f24": {
+    "doc_id": "5fc1d425-f24",
+    "filename": "54.1.6 3. Tamara - Revenue and Marketing.pdf",
+    "filepath": "data\\Tamara\\dataroom\\Tamara Business - Diligence Pack\\54.1.6 3. Tamara - Revenue and Marketing.pdf",
+    "document_type": "other",
+    "sha256": "f3f55c3e62ed7c7f44896c3f6f505b8829880dbaa597e1d17f3e5aedc799d54b",
+    "page_count": 47,
+    "chunk_count": 103,
+    "text_length": 46799,
+    "table_count": 53,
+    "parser_metadata": {
+      "filename": "54.1.6 3. Tamara - Revenue and Marketing.pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:39"
+  },
+  "0a1eb168-f48": {
+    "doc_id": "0a1eb168-f48",
+    "filename": "Tamara valuation 2025 Draft Report_v3 (1).pdf",
+    "filepath": "data\\Tamara\\dataroom\\Valuation Report\\Tamara valuation 2025 Draft Report_v3 (1).pdf",
+    "document_type": "other",
+    "sha256": "f7afb1133de5b5bac7fe1fe609e5c06095c479083745221301ee5245a960bf48",
+    "page_count": 38,
+    "chunk_count": 90,
+    "text_length": 90984,
+    "table_count": 44,
+    "parser_metadata": {
+      "filename": "Tamara valuation 2025 Draft Report_v3 (1).pdf"
+    },
+    "ingested_at": "2026-04-15T21:44:50"
+  }
+}
