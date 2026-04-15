@@ -166,7 +166,7 @@ export default function AajilDashboard() {
             {/* KPI Grid — tape-computed metrics */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
               <KpiCard label="Outstanding (Receivable)" value={fmt(data.total_receivable, 'SAR ')} index={0} />
-              <KpiCard label="GMV (Bill Notional)" value={fmt(data.total_bill_notional, 'SAR ')} index={1} />
+              <KpiCard label="GMV (Principal)" value={fmt(data.total_principal, 'SAR ')} index={1} />
               <KpiCard label="Transactions" value={data.total_deals?.toLocaleString()} subtitle={`${data.avg_deals_per_customer || co.avg_deals_per_customer || ''}x per customer`} index={2} />
               <KpiCard label="Customers" value={(data.total_customers || co.total_customers)?.toLocaleString()} index={3} />
               <KpiCard label="Write-Off Rate" value={data.write_off_rate != null ? `${(data.write_off_rate * 100).toFixed(1)}%` : '--'} subtitle={`${data.written_off_count || 0} deals`} index={4} />
