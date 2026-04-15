@@ -37,16 +37,21 @@ class NotebookLMEngine:
     gracefully degraded results.
     """
 
+    # Re-check auth every 5 minutes instead of caching forever
+    _AUTH_RECHECK_INTERVAL = 300  # seconds
+
     def __init__(self):
         """Initialise the engine, probing for available integration paths."""
         self._python_module = None
         self._use_python = self._try_python_import()
         self._use_cli = self._check_cli_available() if not self._use_python else False
         self._authenticated = False
+        self._auth_checked_at = 0  # epoch timestamp of last auth check
 
-        # Check authentication if we have a library
+        # Lazy auth: don't block startup with async calls.
+        # Just check if the auth file exists (fast, no async).
         if self._use_python or self._use_cli:
-            self._authenticated = self._check_auth()
+            self._authenticated = self._check_auth_file_exists()
 
         self.available = (self._use_python or self._use_cli) and self._authenticated
 
@@ -58,7 +63,7 @@ class NotebookLMEngine:
 
         if self.available:
             method = "python" if self._use_python else "cli"
-            logger.info("NotebookLMEngine: available via %s (authenticated)", method)
+            logger.info("NotebookLMEngine: available via %s (auth file found)", method)
         elif self._use_python or self._use_cli:
             logger.warning(
                 "NotebookLMEngine: library found but NOT authenticated. "
@@ -75,7 +80,9 @@ class NotebookLMEngine:
     # ------------------------------------------------------------------
 
     def get_status(self) -> dict:
-        """Return a diagnostic status dict for operator dashboards."""
+        """Return a diagnostic status dict for operator dashboards.
+        Re-checks auth if the cached check is stale (>5 min old)."""
+        self._refresh_auth_if_stale()
         return {
             "library_installed": self._use_python or self._use_cli,
             "integration_method": "python" if self._use_python else ("cli" if self._use_cli else None),
@@ -83,6 +90,20 @@ class NotebookLMEngine:
             "available": self.available,
             "notebooks_cached": len(self._notebook_ids),
         }
+
+    def _refresh_auth_if_stale(self):
+        """Re-check auth if the last check was more than _AUTH_RECHECK_INTERVAL ago.
+        Uses fast file-existence check first, falls back to full check only if needed."""
+        import time
+        now = time.time()
+        if now - self._auth_checked_at < self._AUTH_RECHECK_INTERVAL:
+            return  # Recent check, skip
+        self._auth_checked_at = now
+        was_available = self.available
+        self._authenticated = self._check_auth_file_exists()
+        self.available = (self._use_python or self._use_cli) and self._authenticated
+        if self.available and not was_available:
+            logger.info("NotebookLMEngine: auth restored (file found on re-check)")
 
     def get_warning(self):
         """Return a structured warning if NLM is not available, or None if OK."""
@@ -146,17 +167,36 @@ class NotebookLMEngine:
             logger.debug("NotebookLMEngine: CLI check error: %s", exc)
             return False
 
-    def _check_auth(self) -> bool:
-        """Verify that NLM authentication is configured.
+    def _check_auth_file_exists(self) -> bool:
+        """Fast auth check — just verify the auth file or env var exists.
+        No async calls, no API calls. Safe to call at startup or anytime."""
+        import time
+        self._auth_checked_at = time.time()
 
-        Checks: NOTEBOOKLM_AUTH_JSON env var, or storage_state.json on disk.
-        For the Python path, attempts a lightweight API call (list notebooks).
-        For CLI, runs ``notebooklm auth check``.
-        """
         # Env-var auth takes priority
         if os.environ.get("NOTEBOOKLM_AUTH_JSON"):
             logger.debug("NotebookLMEngine: NOTEBOOKLM_AUTH_JSON env var detected")
             return True
+
+        # Check storage_state.json on disk (created by 'notebooklm login')
+        storage_paths = [
+            Path.home() / ".notebooklm" / "storage_state.json",
+            Path.home() / ".notebooklm" / "auth.json",
+        ]
+        for p in storage_paths:
+            if p.exists() and p.stat().st_size > 100:
+                logger.debug("NotebookLMEngine: auth file found at %s", p)
+                return True
+
+        return False
+
+    def _check_auth(self) -> bool:
+        """Full auth check — verifies the auth actually works via API call.
+        Slower but definitive. Used as fallback when file check passes but
+        API calls fail (expired token)."""
+        # Fast path first
+        if not self._check_auth_file_exists():
+            return False
 
         if self._use_cli:
             try:
@@ -168,7 +208,6 @@ class NotebookLMEngine:
                 )
                 if result.returncode == 0:
                     return True
-                # auth check may not exist in all versions; try list as fallback
                 result = subprocess.run(
                     ["notebooklm", "list"],
                     capture_output=True,
@@ -196,6 +235,12 @@ class NotebookLMEngine:
                 return False
 
         return False
+
+    def ensure_available(self) -> bool:
+        """Call before any NLM operation. Re-checks auth if stale, returns availability.
+        This is the single entry point all NLM operations should use."""
+        self._refresh_auth_if_stale()
+        return self.available
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -243,7 +288,7 @@ class NotebookLMEngine:
         if cache_key in self._notebook_ids:
             return self._notebook_ids[cache_key]
 
-        if not self.available:
+        if not self.ensure_available():
             return None
 
         # 2. Disk sidecar
@@ -491,7 +536,7 @@ class NotebookLMEngine:
 
         Returns list of dicts with id, title, kind, status.
         """
-        if not self.available or not notebook_id:
+        if not self.ensure_available() or not notebook_id:
             return []
 
         try:
@@ -551,7 +596,7 @@ class NotebookLMEngine:
             Dict with ``answer``, ``references``, ``conversation_id``,
             ``turn_number``, ``engine``, ``available``.
         """
-        if not self.available or not notebook_id:
+        if not self.ensure_available() or not notebook_id:
             return {
                 "answer": "",
                 "references": [],
@@ -706,7 +751,7 @@ class NotebookLMEngine:
         Returns:
             Research task info dict, or None on failure.
         """
-        if not self.available or not notebook_id:
+        if not self.ensure_available() or not notebook_id:
             return None
 
         try:
@@ -755,7 +800,7 @@ class NotebookLMEngine:
         Sets a custom system prompt so NLM answers in the style of a
         senior credit analyst aligned with the Laith platform conventions.
         """
-        if not self.available or not notebook_id:
+        if not self.ensure_available() or not notebook_id:
             return False
 
         prompt = custom_prompt or (
