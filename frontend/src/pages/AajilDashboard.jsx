@@ -158,7 +158,7 @@ export default function AajilDashboard() {
 
             {/* GMV Growth */}
             <ChartPanel title="GMV Growth by Year" height={280}>
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={data.gmv_milestones || []}>
                   <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                   <XAxis dataKey="year" stroke={MUTED} fontSize={12} />
@@ -171,7 +171,7 @@ export default function AajilDashboard() {
 
             {/* Customer Growth */}
             <ChartPanel title="Customer Growth" height={250} style={{ marginTop: 16 }}>
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={data.customer_growth || []}>
                   <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                   <XAxis dataKey="date" stroke={MUTED} fontSize={11} tickFormatter={d => d?.slice(0, 7)} />
@@ -212,7 +212,7 @@ export default function AajilDashboard() {
             <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{ flex: 1 }}>
                 <ChartPanel title={tractionView === 'volume' ? 'Monthly Disbursement Volume' : 'Outstanding Balance'} height={350}>
-                  <ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height={300}>
                     {tractionView === 'volume' ? (
                       <BarChart data={volumeMonthly}>
                         <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
@@ -277,7 +277,7 @@ export default function AajilDashboard() {
             <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{ flex: 1 }}>
                 <ChartPanel title={`Rolling Default Rate — ${dpdLabel}`} height={300}>
-                  <ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height={300}>
                     <ComposedChart data={recent}>
                       <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                       <XAxis dataKey="label" stroke={MUTED} fontSize={11} />
@@ -299,7 +299,7 @@ export default function AajilDashboard() {
         {activeTab === 'collections' && (
           <div>
             <ChartPanel title="Cash Collected by Cohort" height={350}>
-              <ResponsiveContainer>
+              <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={collectionsMonthly}>
                   <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                   <XAxis dataKey="label" stroke={MUTED} fontSize={10} interval={5} angle={-45} textAnchor="end" height={50} />
@@ -385,7 +385,7 @@ export default function AajilDashboard() {
             <ChartPanel title="Customer Type Breakdown">
               <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row', padding: 16 }}>
                 <div style={{ width: isMobile ? '100%' : 300, height: 250 }}>
-                  <ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie data={[{ name: 'Manufacturer', value: 33 }, { name: 'Contractor', value: 34 }, { name: 'Wholesale Trader', value: 33 }]}
                         dataKey="value" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -540,7 +540,7 @@ export default function AajilDashboard() {
 
             <ChartPanel title="Sales Channels" style={{ marginTop: 16 }}>
               <div style={{ height: 250, padding: '0 16px' }}>
-                <ResponsiveContainer>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={data.sales_channels || []} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                     <XAxis type="number" stroke={MUTED} fontSize={11} tickFormatter={v => `${v}%`} />
