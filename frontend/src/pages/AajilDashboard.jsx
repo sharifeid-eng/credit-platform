@@ -290,51 +290,76 @@ export default function AajilDashboard() {
 
         {/* ── DELINQUENCY TAB (real Cascade data) ──────────────────────── */}
         {activeTab === 'delinquency' && (() => {
-          const dpd = delinquency[dpdThreshold] || {}
-          const recent = (dpd.recent || []).map(r => ({
-            ...r,
-            label: r.date?.slice(0, 7),
-            balance_m: r.balance / 1e6
-          }))
-          const stats = dpd.summary_stats || {}
-          const dpdLabel = dpdThreshold.replace('dpd_', '') + ' DPD'
-          const latestBal = recent.length ? recent[recent.length - 1].balance : 0
+          const dd = delinquency
+          if (chartLoading && !dd.available) return <div style={{ color: MUTED, padding: 40 }}>Loading delinquency data...</div>
+          const buckets = dd.buckets || []
           return (
           <div>
-            {/* DPD toggle buttons */}
-            <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
-              {['dpd_7', 'dpd_30', 'dpd_60', 'dpd_90'].map(d => (
-                <button key={d} onClick={() => setDpdThreshold(d)}
-                  style={{ padding: '8px 18px', background: dpdThreshold === d ? GOLD : 'transparent', color: dpdThreshold === d ? '#0A1119' : MUTED, border: `1px solid ${BORDER}`, borderRadius: d === 'dpd_7' ? '6px 0 0 6px' : d === 'dpd_90' ? '0 6px 6px 0' : 0, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-                  {d.replace('dpd_', '')} DPD
-                </button>
-              ))}
-            </div>
-
+            {/* KPIs */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-              <KpiCard label={`${dpdLabel} Balance`} value={fmt(latestBal, 'SAR ')} subtitle="Latest month" index={0} />
-              <KpiCard label="MoM Change" value={stats.mom_pct != null ? `${stats.mom_pct > 0 ? '+' : ''}${stats.mom_pct}%` : '--'} subtitle="Month over Month" index={1} />
-              <KpiCard label="QoQ Change" value={stats.qoq_pct != null ? `${stats.qoq_pct > 0 ? '+' : ''}${stats.qoq_pct}%` : '--'} subtitle="Quarter over Quarter" index={2} />
-              <KpiCard label="YoY Change" value={stats.yoy_pct != null ? `${stats.yoy_pct > 0 ? '+' : ''}${stats.yoy_pct}%` : '--'} subtitle="Year over Year" index={3} />
+              <KpiCard label="Active Balance" value={fmt(dd.total_active_balance, 'SAR ')} index={0} />
+              <KpiCard label="Overdue Balance" value={fmt(dd.total_overdue_balance, 'SAR ')} subtitle={dd.total_active_balance ? `${(dd.total_overdue_balance / dd.total_active_balance * 100).toFixed(1)}% of active` : ''} index={1} />
+              <KpiCard label="PAR 1+ Inst" value={dd.par_1_inst != null ? `${(dd.par_1_inst * 100).toFixed(1)}%` : '--'} subtitle="Overdue amount / Active balance" index={2} />
+              <KpiCard label="PAR 2+ Inst" value={dd.par_2_inst != null ? `${(dd.par_2_inst * 100).toFixed(1)}%` : '--'} index={3} />
+              <KpiCard label="PAR 3+ Inst" value={dd.par_3_inst != null ? `${(dd.par_3_inst * 100).toFixed(1)}%` : '--'} index={4} />
             </div>
 
-            <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row' }}>
-              <div style={{ flex: 1 }}>
-                <ChartPanel title={`Rolling Default Rate — ${dpdLabel}`} height={300}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={recent}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                      <XAxis dataKey="label" stroke={MUTED} fontSize={11} />
-                      <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => `${v.toFixed(1)}M`} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area type="monotone" dataKey="balance_m" fill={`${RED}20`} stroke={RED} strokeWidth={2} name={`${dpdLabel} Balance (M SAR)`} />
-                      <Line type="monotone" dataKey="balance_m" stroke={RED} strokeWidth={2} dot={{ r: 3, fill: RED }} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </ChartPanel>
+            {/* Overdue Bucket Chart */}
+            <ChartPanel title="Overdue Distribution by Instalment Count" height={300}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={buckets}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="bucket" stroke={MUTED} fontSize={11} />
+                  <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v)} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="balance" name="Balance (SAR)" radius={[4, 4, 0, 0]}>
+                    {buckets.map((b, i) => <Cell key={i} fill={i === 0 ? TEAL : i === 1 ? GOLD : i === 2 ? '#F59E0B' : RED} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            {/* By Deal Type */}
+            <ChartPanel title="Delinquency by Deal Type" style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', gap: 12, padding: 16, flexWrap: 'wrap' }}>
+                {(dd.by_deal_type || []).map((bt, i) => (
+                  <div key={i} style={{ flex: 1, minWidth: 220, padding: 16, background: DEEP, borderRadius: 8, border: `1px solid ${BORDER}` }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: i === 0 ? GOLD : TEAL, marginBottom: 8 }}>{bt.deal_type}</div>
+                    <div style={{ fontSize: 13, color: '#E8EAF0' }}>Active: {bt.active_count} deals</div>
+                    <div style={{ fontSize: 13, color: bt.overdue_pct > 0.3 ? RED : bt.overdue_pct > 0.1 ? GOLD : TEAL }}>
+                      Overdue: {bt.overdue_count} ({bt.overdue_pct != null ? `${(bt.overdue_pct * 100).toFixed(1)}%` : '--'})
+                    </div>
+                    <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>Balance: {fmt(bt.overdue_balance, 'SAR ')}</div>
+                  </div>
+                ))}
               </div>
-              <GrowthStats stats={stats} label={dpdLabel} />
-            </div>
+            </ChartPanel>
+
+            {/* Bucket details table */}
+            <ChartPanel title="Overdue Bucket Detail" style={{ marginTop: 16 }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', color: MUTED }}>Bucket</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>Deals</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>Balance (SAR)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>% of Active</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {buckets.map((b, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${BORDER}22` }}>
+                        <td style={{ padding: '8px 12px', color: i === 0 ? TEAL : i >= 3 ? RED : '#E8EAF0', fontWeight: 600 }}>{b.bucket}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: '#E8EAF0' }}>{b.count}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: '#E8EAF0', fontFamily: 'var(--font-mono)' }}>{fmt(b.balance, 'SAR ')}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: MUTED }}>{dd.total_active_balance ? `${(b.balance / dd.total_active_balance * 100).toFixed(1)}%` : '--'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ChartPanel>
           </div>
           )
         })()}
