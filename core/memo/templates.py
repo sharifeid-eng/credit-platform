@@ -400,7 +400,6 @@ MEMO_TEMPLATES = {
             },
         ],
     },
-    },
 
     "amendment_memo": {
         "name": "Amendment Memo",
