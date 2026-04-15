@@ -5,19 +5,19 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Next Session Priorities
 
-### Aajil — Phase B (when tape arrives from Cascade Debt)
-- [ ] **Obtain Aajil loan tape** from Cascade Debt platform export
-- [ ] **Convert `analysis_aajil.py` from JSON parser to DataFrame compute functions** (SILQ pattern)
-- [ ] **Add `validation_aajil.py`** for tape quality checks
-- [ ] **Build chart components** in `frontend/src/components/charts/aajil/`
+### Aajil — Remaining
+- [ ] **Generate AI commentary** — executive summary, tab insights, data chat verification
 - [ ] **Implement Loan/Borrower cohort toggle** (Cascade feature)
-- [ ] **Implement With/Without Cure toggle** (Cascade feature)
-- [ ] **Write `tests/test_analysis_aajil.py`**
+- [ ] **Implement With/Without Cure toggle** (Cascade feature, needs multi-snapshot)
+- [ ] **Monthly vintage heatmap** (Cascade has 46 monthly, we have 17 quarterly)
+- [ ] **Weekly collection curves** (Cascade Analytics Pro feature)
 
 ### Cascade-Inspired Platform Improvements
-- [ ] **Configurable DPD thresholds** — read from config.json, apply across SILQ + Aajil analysis modules
-- [ ] **GrowthStats component** platform-wide — MoM/QoQ/YoY growth rates on all Overview tabs
-- [ ] **Traction dual view** — Volume + Balance as optional tab for all companies
+- [x] **Configurable DPD thresholds** — `dpd_thresholds` in config.json (Aajil: 7/30/60/90)
+- [x] **GrowthStats component** — MoM/QoQ/YoY with partial-month skip (Aajil Traction tab)
+- [x] **Traction dual view** — Volume + Balance toggle (Aajil Traction tab)
+- [ ] **GrowthStats platform-wide** — apply to all company Overview tabs
+- [ ] **Global "Display by" segmentation** — Cascade-style cross-tab filter
 
 ### Tamara Data Room + Memo
 - [ ] **Ingest Tamara data room** — user will provide path, ask before ingesting
@@ -46,6 +46,35 @@ Track active work here. Claude updates this as tasks progress.
 
 ### Other Remaining
 - [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
+
+---
+
+## Completed — 2026-04-15 (session 19 continued: Aajil Phase B — Live Tape Analytics)
+
+**Phase B — Live tape analytics from real xlsx (1,245 deals):**
+- [x] **Multi-sheet loader** — `load_aajil_snapshot()` reads Deals + Payments + DPD Cohorts + Collections
+- [x] **11 compute functions** — summary, traction, delinquency, collections, cohorts, concentration, underwriting, yield, loss_waterfall, customer_segments, seasonality
+- [x] **Validation module** — `validate_aajil_tape()` with 13 checks
+- [x] **38 new tests** (306 total) — all passing
+- [x] **Backend wiring** — `AAJIL_CHART_MAP`, generic chart endpoint, tape-aware /summary, AI context builder
+- [x] **Dashboard refactored** — all tabs fetch from chart endpoints, real charts for Traction/Delinquency/Collections/Cohort/Concentration/Yield/Loss Waterfall
+- [x] **Dataroom ingested** — 13 new files (financials, tax returns, budget, debt overview)
+- [x] **NLM notebook created** — 6 PDFs uploaded to NotebookLM, state saved
+- [x] **NLM auth fix** — lazy file check + 5-min periodic re-check + auto-recovery via `ensure_available()`
+
+**Cascade Debt alignment (metric mapping):**
+- [x] **Volume = Principal Amount** (not Bill Notional) — all 9 functions updated, now matches Cascade within 0.1%
+- [x] **Collection rate = Realised / Principal** (was Realised / (R+Recv)) — now 87.3% (was 80.6%)
+- [x] **MoM growth = +32.36%** — exact match with Cascade (was -74.8% due to partial month)
+- [x] **Balance = per-vintage outstanding** (was cumulative, incorrect)
+- [x] **Delinquency bucketing** — fixed fractional overdue values (round to nearest int)
+
+**Key tape findings:**
+- ALL 19 write-offs are Bullet deals (zero EMI write-offs)
+- EMI adoption ramp: 0% (2022) → 88% (2026) — structural shift reducing default risk
+- Yield stabilized at ~10% since 2024Q2
+- Loss concentrated in 5 vintages (2023Q3-2024Q3), gross loss rate 1.18%
+- Top customer = 9.5% of volume, HHI = 0.0205 (well diversified)
 
 ---
 

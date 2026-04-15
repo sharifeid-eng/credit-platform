@@ -3,6 +3,33 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-15 — Cascade Volume = Principal Amount, not Bill Notional
+
+**Discovery:** Compared Laith's computed volume (SAR 327M) vs Cascade Debt's displayed volume (SAR 381M). After testing all tape columns against Cascade's monthly figures, found that Cascade uses `Principal Amount` (bill + margin + origination fee, no VAT) — NOT `Bill Notional` (raw materials cost) and NOT `Sale Total` (includes VAT). The match was exact to within SAR 5-180 per month.
+**Rule:** When onboarding from an external platform, always cross-validate specific monthly figures (not just totals) against multiple tape columns to identify the exact mapping. Check: Bill, Sale Notional, Sale Total, Principal Amount. A 16% discrepancy should trigger immediate investigation.
+
+## 2026-04-15 — React useState must be before any early return
+
+**Discovery:** Added `useState` for `dpdThreshold` and `tractionView` after the loading early-return check. React's Rules of Hooks require all hooks to be called in the same order every render. The early return on first render (loading=true) meant those hooks didn't exist, causing "Rendered more hooks than during the previous render" crash.
+**Rule:** ALL useState/useEffect calls MUST be before any `if (loading) return` or `if (!data) return` statements in a component.
+
+## 2026-04-15 — Recharts ResponsiveContainer needs explicit width and height
+
+**Discovery:** Charts rendered as empty boxes (title visible, no bars/lines). The `<ResponsiveContainer>` had no width/height props. Unlike CSS containers, Recharts' ResponsiveContainer collapses to zero height without explicit dimensions.
+**Rule:** Always use `<ResponsiveContainer width="100%" height={300}>` — never bare `<ResponsiveContainer>`.
+
+## 2026-04-15 — Growth stats must skip partial months
+
+**Discovery:** MoM growth showed -74.8% (vs Cascade's +32.36%) because April had only 13 days of data. The last month in the tape is almost always partial.
+**Rule:** For MoM/QoQ/YoY growth calculations, detect partial months (last month has < 25 days) and use the second-to-last month as the reference. Add `as_of` to the growth stats to show which month was used.
+
+## 2026-04-15 — Overdue No of Installments can be fractional
+
+**Discovery:** Delinquency bucketing showed 320/342 deals (22 missing). The `Overdue No of Installments` column had fractional values (0.02, 0.5, 1.66) — not integer installment counts. These fell through `== 0`, `== 1`, `== 2` checks.
+**Rule:** Always `.round().astype(int)` before bucketing overdue installment counts. Tape columns that look like integers may contain fractional values from the source system's interpolation.
+
+---
+
 ## 2026-04-14 — load_dotenv() does not override existing env vars by default
 
 **Discovery:** `ANTHROPIC_API_KEY` was set as an empty string in the parent shell environment. `load_dotenv()` (python-dotenv) does NOT override existing env vars by default — it only sets vars that don't exist yet. So even though `.env` had the correct key, `os.environ.get("ANTHROPIC_API_KEY")` returned `""` (empty string, falsy), causing Claude RAG synthesis to silently fall back to retrieval-only mode.
