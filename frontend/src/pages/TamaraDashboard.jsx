@@ -326,6 +326,7 @@ export default function TamaraDashboard() {
         }).filter(Boolean)
 
         return (
+          <div>
           <ChartPanel title="Dilution (Refund) Rate by Product" subtitle="Latest vintage's cumulative dilution rate">
             {barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
