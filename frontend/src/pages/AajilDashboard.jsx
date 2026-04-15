@@ -392,54 +392,66 @@ export default function AajilDashboard() {
         {/* ── COHORT ANALYSIS TAB (real Cascade vintage heatmap) ─────── */}
         {activeTab === 'cohort-analysis' && (() => {
           const cohorts = vintageData.cohorts || []
-          const maxMob = 12
-          const getColor = (val) => {
-            if (val == null || val === 0) return 'transparent'
-            if (val < 3) return 'rgba(45, 212, 191, 0.25)'
-            if (val < 8) return 'rgba(45, 212, 191, 0.5)'
-            if (val < 15) return 'rgba(201, 168, 76, 0.4)'
-            if (val < 25) return 'rgba(240, 96, 96, 0.4)'
-            return 'rgba(240, 96, 96, 0.7)'
+          const dpdMonthly = vintageData.dpd_monthly || []
+          const getOvdColor = (pct) => {
+            if (pct == null || pct === 0) return 'transparent'
+            if (pct < 20) return 'rgba(45, 212, 191, 0.3)'
+            if (pct < 40) return 'rgba(201, 168, 76, 0.3)'
+            if (pct < 60) return 'rgba(240, 96, 96, 0.3)'
+            return 'rgba(240, 96, 96, 0.6)'
           }
+          if (chartLoading && !vintageData.available) return <div style={{ color: MUTED, padding: 40 }}>Loading cohort data...</div>
           return (
           <div>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ color: MUTED, fontSize: 12 }}>DPD {vintageData.dpd_threshold}+ | {vintageData.measurement} | {vintageData.cohort_type}-level | {vintageData.recoveries}</span>
-              <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-                {[{c:'rgba(45,212,191,0.25)',l:'<3%'},{c:'rgba(45,212,191,0.5)',l:'3-8%'},{c:'rgba(201,168,76,0.4)',l:'8-15%'},{c:'rgba(240,96,96,0.4)',l:'15-25%'},{c:'rgba(240,96,96,0.7)',l:'>25%'}].map(({c,l}) => (
-                  <span key={l} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10,color:MUTED }}>
-                    <span style={{ width:12,height:12,borderRadius:2,background:c,border:`1px solid ${BORDER}` }} />{l}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <ChartPanel title="Vintage Analysis — DPD 30+ by Month on Books">
-              <div style={{ overflowX: 'auto', padding: '0 4px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            {/* DPD Monthly Time Series (from pre-computed sheet) */}
+            {dpdMonthly.length > 0 && (
+              <ChartPanel title="Monthly DPD Rates (Portfolio-Level)" height={300}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={dpdMonthly.filter(d => d.deployed > 0)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                    <XAxis dataKey="date" stroke={MUTED} fontSize={10} interval={5} angle={-45} textAnchor="end" height={50} />
+                    <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => `${v.toFixed(1)}%`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="dpd30_pct" stroke={GOLD} strokeWidth={2} dot={false} name="DPD 30+ %" />
+                    <Line type="monotone" dataKey="dpd60_pct" stroke={RED} strokeWidth={2} dot={false} name="DPD 60+ %" />
+                    <Line type="monotone" dataKey="dpd90_pct" stroke="#B71C1C" strokeWidth={2} dot={false} name="DPD 90+ %" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            )}
+
+            {/* Vintage Cohort Table */}
+            <ChartPanel title="Quarterly Vintage Performance" style={{ marginTop: 16 }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr>
-                      <th style={{ padding: '6px 8px', textAlign: 'left', color: MUTED, position: 'sticky', left: 0, background: SURFACE, borderBottom: `1px solid ${BORDER}`, minWidth: 70 }}>Cohort</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right', color: MUTED, borderBottom: `1px solid ${BORDER}`, minWidth: 80 }}>Orig Bal</th>
-                      {Array.from({length: maxMob}, (_, i) => (
-                        <th key={i} style={{ padding: '6px 6px', textAlign: 'center', color: MUTED, borderBottom: `1px solid ${BORDER}`, minWidth: 48 }}>{i + 1}</th>
-                      ))}
+                    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', color: MUTED, position: 'sticky', left: 0, background: SURFACE }}>Cohort</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>Deals</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>Originated</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>Collection %</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>Active</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>Overdue</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>Overdue %</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', color: MUTED }}>WO</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {cohorts.map((c, idx) => (
-                      <tr key={idx}>
-                        <td style={{ padding: '4px 8px', color: '#E8EAF0', fontWeight: 600, position: 'sticky', left: 0, background: SURFACE, borderBottom: `1px solid ${BORDER}22`, whiteSpace: 'nowrap' }}>{c.cohort}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', color: MUTED, fontFamily: 'var(--font-mono)', borderBottom: `1px solid ${BORDER}22`, whiteSpace: 'nowrap' }}>{fmt(c.original_balance, 'SAR ')}</td>
-                        {Array.from({length: maxMob}, (_, i) => {
-                          const val = c.mob && i < c.mob.length ? c.mob[i] : null
-                          return (
-                            <td key={i} style={{ padding: '4px 6px', textAlign: 'center', background: getColor(val), color: val != null && val > 0 ? '#E8EAF0' : MUTED, fontFamily: 'var(--font-mono)', borderBottom: `1px solid ${BORDER}22`, fontSize: 10 }}>
-                              {val != null ? (val === 0 ? '0' : `${val.toFixed(1)}%`) : ''}
-                            </td>
-                          )
-                        })}
+                    {cohorts.map((c, idx) => {
+                      const ovdPct = c.overdue_pct ? c.overdue_pct * 100 : 0
+                      return (
+                      <tr key={idx} style={{ borderBottom: `1px solid ${BORDER}22` }}>
+                        <td style={{ padding: '4px 10px', color: '#E8EAF0', fontWeight: 600, position: 'sticky', left: 0, background: SURFACE }}>{c.cohort}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', color: MUTED }}>{c.count}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', color: '#E8EAF0', fontFamily: 'var(--font-mono)' }}>{fmt(c.original_balance)}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', color: c.collection_rate > 1 ? TEAL : c.collection_rate > 0.5 ? '#E8EAF0' : GOLD, fontFamily: 'var(--font-mono)' }}>{c.collection_rate != null ? `${(c.collection_rate * 100).toFixed(1)}%` : '--'}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', color: MUTED }}>{c.accrued_count}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', color: ovdPct > 50 ? RED : ovdPct > 20 ? GOLD : '#E8EAF0' }}>{c.overdue_count}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', background: getOvdColor(ovdPct), color: '#E8EAF0', fontFamily: 'var(--font-mono)' }}>{ovdPct > 0 ? `${ovdPct.toFixed(0)}%` : '--'}</td>
+                        <td style={{ padding: '4px 10px', textAlign: 'right', color: c.written_off_count > 0 ? RED : MUTED }}>{c.written_off_count || '--'}</td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

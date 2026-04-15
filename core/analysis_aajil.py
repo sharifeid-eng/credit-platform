@@ -354,38 +354,114 @@ def compute_aajil_collections(df, mult=1, ref_date=None, aux=None):
 
 
 def compute_aajil_cohorts(df, mult=1, ref_date=None, aux=None):
-    """Vintage cohort analysis — quarterly cohorts with DPD rates by MoB."""
+    """Vintage cohort analysis — quarterly cohorts with current DPD snapshot + monthly DPD time series."""
     df_c = df.copy()
     df_c['vintage_q'] = df_c[C_INVOICE_DATE].dt.to_period('Q')
 
     # Build cohort summary from Deals sheet
+    overdue_rounded = df_c[C_OVERDUE_INST].fillna(0).round().astype(int)
     cohorts = df_c.groupby('vintage_q').agg(
         originated=(C_BILL, 'sum'),
         count=(C_TXN_ID, 'count'),
         realised=(C_REALISED, lambda x: x.fillna(0).sum()),
+        receivable=(C_RECEIVABLE, lambda x: x.fillna(0).sum()),
+        overdue_amount=(C_SALE_OVERDUE, lambda x: x.fillna(0).sum()),
         written_off_count=(C_STATUS, lambda x: (x == 'Written Off').sum()),
-        overdue_count=(C_OVERDUE_INST, lambda x: (x.fillna(0) > 0).sum()),
+        accrued_count=(C_STATUS, lambda x: (x == 'Accrued').sum()),
     ).reset_index()
+
+    # Add overdue count using rounded values
+    overdue_by_q = df_c.assign(_ovd=overdue_rounded).groupby('vintage_q')['_ovd'].apply(lambda x: (x > 0).sum())
 
     cohort_list = []
     for _, r in cohorts.iterrows():
+        q = r['vintage_q']
+        ovd_cnt = int(overdue_by_q.get(q, 0))
+        accrued = int(r['accrued_count'])
+        overdue_pct = ovd_cnt / accrued if accrued > 0 else 0
         cohort_list.append({
-            'cohort': str(r['vintage_q']),
+            'cohort': str(q),
             'original_balance': _safe(r['originated'] * mult),
             'count': int(r['count']),
             'realised': _safe(r['realised'] * mult),
+            'outstanding': _safe(r['receivable'] * mult),
+            'overdue_amount': _safe(r['overdue_amount'] * mult),
             'written_off_count': int(r['written_off_count']),
-            'overdue_count': int(r['overdue_count']),
+            'accrued_count': accrued,
+            'overdue_count': ovd_cnt,
+            'overdue_pct': _safe(overdue_pct),
             'collection_rate': _safe(r['realised'] / r['originated'] if r['originated'] > 0 else 0),
         })
 
+    # Parse monthly DPD time series from aux sheet (if available)
+    dpd_monthly = _parse_dpd_monthly(aux) if aux else None
+
     return {
         'cohorts': cohort_list,
+        'dpd_monthly': dpd_monthly,
         'dpd_threshold': 30,
         'measurement': 'Original Balance',
         'cohort_type': 'quarterly',
         'available': True,
     }
+
+
+def _parse_dpd_monthly(aux):
+    """Parse the Current_DPD_New Cohorts sheet into monthly DPD time series.
+    Layout: Row 0=date headers (cols 8+), Row 2=Amount Deployed,
+    Row 4=DPD30+ amount, Row 5=DPD30+ %, Row 7=DPD60+, Row 8=DPD60+ %,
+    Row 10=DPD90+, Row 11=DPD90+ %, Row 13=DPD180+, Row 14=DPD180+ %."""
+    raw = aux.get('dpd_cohorts')
+    if raw is None or raw.shape[1] < 10:
+        return None
+
+    try:
+        # Date headers from row 0, starting at col 8
+        dates = []
+        for j in range(8, raw.shape[1]):
+            val = raw.iloc[0, j]
+            if pd.notna(val):
+                dt = pd.to_datetime(val, errors='coerce')
+                if pd.notna(dt):
+                    dates.append((j, dt.strftime('%Y-%m')))
+
+        if not dates:
+            return None
+
+        series = []
+        for col_idx, date_str in dates:
+            deployed = _to_float(raw.iloc[2, col_idx])
+            dpd30_amt = _to_float(raw.iloc[4, col_idx])
+            dpd30_pct = _to_float(raw.iloc[5, col_idx])
+            dpd60_amt = _to_float(raw.iloc[7, col_idx])
+            dpd60_pct = _to_float(raw.iloc[8, col_idx])
+            dpd90_amt = _to_float(raw.iloc[10, col_idx])
+            dpd90_pct = _to_float(raw.iloc[11, col_idx])
+
+            series.append({
+                'date': date_str,
+                'deployed': _safe(deployed),
+                'dpd30_amt': _safe(dpd30_amt),
+                'dpd30_pct': _safe(dpd30_pct * 100 if dpd30_pct and dpd30_pct < 1 else dpd30_pct),
+                'dpd60_amt': _safe(dpd60_amt),
+                'dpd60_pct': _safe(dpd60_pct * 100 if dpd60_pct and dpd60_pct < 1 else dpd60_pct),
+                'dpd90_amt': _safe(dpd90_amt),
+                'dpd90_pct': _safe(dpd90_pct * 100 if dpd90_pct and dpd90_pct < 1 else dpd90_pct),
+            })
+
+        return series
+    except Exception:
+        return None
+
+
+def _to_float(val):
+    """Safely convert a value to float."""
+    if pd.isna(val):
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
 
 
 def compute_aajil_concentration(df, mult=1, ref_date=None, aux=None):
