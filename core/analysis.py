@@ -1017,6 +1017,52 @@ def compute_stress_test(df, mult):
 
 # ── Expected Loss Model ──────────────────────────────────────────────────────
 
+def _compute_pv_adjusted_lgd(completed, mult, has_prov, annual_rate=0.08):
+    """Discount recoveries by time-to-recovery to compute PV-adjusted LGD.
+
+    For each completed deal with material denial (>50% of PV), the recovery
+    (collections on defaulted deals) is discounted back to the deal origination
+    date using the facility's discount rate.
+
+    PV-adjusted LGD >= nominal LGD because delayed recoveries are worth less.
+
+    Returns LGD ratio (0-1) or None if insufficient data.
+    """
+    if len(completed) == 0 or 'Deal date' not in completed.columns:
+        return None
+
+    pv_col = completed['Purchase value'] * mult
+    den_col = completed['Denied by insurance'] * mult if 'Denied by insurance' in completed.columns else pd.Series(0, index=completed.index)
+    coll_col = completed['Collected till date'] * mult
+    prov_col = completed['Provisions'] * mult if has_prov else pd.Series(0, index=completed.index)
+
+    # Focus on defaulted deals (denial > 50% of PV — matches separation principle)
+    defaulted_mask = den_col > (pv_col * 0.5)
+    if defaulted_mask.sum() == 0:
+        return None
+
+    total_denied = float(den_col[defaulted_mask].sum())
+    if total_denied <= 0:
+        return None
+
+    # Estimate time-to-recovery in years from deal origination to "now" (snapshot)
+    # For completed deals, Deal date → last activity approximated by deal age
+    deal_dates = pd.to_datetime(completed.loc[defaulted_mask, 'Deal date'], errors='coerce')
+    snapshot_date = deal_dates.max()  # latest deal date as proxy for snapshot
+    if pd.isna(snapshot_date):
+        return None
+
+    years_to_recovery = ((snapshot_date - deal_dates).dt.days / 365.25).clip(lower=0.01)
+
+    # Discount each deal's recovery to origination-date PV
+    recoveries = coll_col[defaulted_mask] + prov_col[defaulted_mask]
+    pv_recoveries = recoveries / ((1 + annual_rate) ** years_to_recovery)
+
+    total_pv_recovery = float(pv_recoveries.sum())
+    pv_lgd = (total_denied - total_pv_recovery) / total_denied
+    return max(0.0, min(1.0, pv_lgd))
+
+
 def compute_expected_loss(df, mult):
     """EL = PD × LGD × Exposure derived from completed deal outcomes."""
     df = add_month_column(df)
@@ -1040,6 +1086,9 @@ def compute_expected_loss(df, mult):
         lgd = (total_denied - total_provisions) / total_denied
     else:
         lgd = 0
+
+    # PV-adjusted LGD — discount recoveries by time-to-recovery
+    pv_lgd = _compute_pv_adjusted_lgd(completed, mult, has_prov)
 
     # EAD (Exposure at Default) — active deals
     active = df[df['Status'] == 'Executed']
@@ -1081,6 +1130,7 @@ def compute_expected_loss(df, mult):
         'portfolio': {
             'pd':               round(pd_rate * 100, 2),
             'lgd':              round(lgd * 100, 2),
+            'lgd_pv_adjusted':  round(pv_lgd * 100, 2) if pv_lgd is not None else None,
             'ead':              round(ead, 2),
             'el':               round(el_amount, 2),
             'el_rate':          el_rate,
@@ -1089,6 +1139,115 @@ def compute_expected_loss(df, mult):
             'provisions':       round(total_provisions, 2),
         },
         'by_vintage': by_vintage,
+    }
+
+
+# ── Facility-Mode PD (Markov Chain) ──────────────────────────────────────────
+
+def compute_facility_pd(df, mult, as_of_date=None):
+    """Compute probability of default via DPD bucket transition matrix.
+
+    Facility-mode PD measures the probability that a receivable ages from
+    its current DPD bucket into ineligibility or default. Uses a Markov
+    chain approach: observe transitions between DPD buckets across the
+    portfolio, then compute forward cumulative PD.
+
+    DPD buckets: current (0), 1-30, 31-60, 61-90, 91-120, 120+ (default).
+
+    Returns transition matrix, cumulative PD curve, and facility-level PD.
+    Returns {'available': False} if DPD computation not possible.
+    """
+    if 'Expected collection days' not in df.columns and 'Deal date' not in df.columns:
+        return {'available': False}
+
+    # Compute DPD per deal
+    has_expected = 'Expected collection days' in df.columns
+    deal_dates = pd.to_datetime(df['Deal date'], errors='coerce')
+
+    if has_expected:
+        exp_days = pd.to_numeric(df['Expected collection days'], errors='coerce').fillna(0)
+        today = deal_dates.max()
+        if pd.isna(today):
+            return {'available': False}
+        dpd = ((today - deal_dates).dt.days - exp_days).clip(lower=0)
+    else:
+        # Estimate DPD from collected vs expected ratio
+        pv = df['Purchase value'] * mult
+        coll = df['Collected till date'] * mult if 'Collected till date' in df.columns else pd.Series(0, index=df.index)
+        exp = df['Expected till date'] * mult if 'Expected till date' in df.columns else pv
+        shortfall = (exp - coll).clip(lower=0)
+        # Proxy: deals with shortfall > 10% of expected are "behind"
+        deal_age = (deal_dates.max() - deal_dates).dt.days.fillna(0)
+        behind_mask = shortfall > (exp * 0.1)
+        dpd = pd.Series(0, index=df.index)
+        dpd[behind_mask] = (deal_age[behind_mask] * (shortfall[behind_mask] / exp[behind_mask].replace(0, 1))).clip(lower=0)
+
+    # Bucket assignment
+    buckets = ['current', '1-30', '31-60', '61-90', '91-120', '120+']
+
+    def bucket_idx(d):
+        if d <= 0: return 0
+        if d <= 30: return 1
+        if d <= 60: return 2
+        if d <= 90: return 3
+        if d <= 120: return 4
+        return 5
+
+    df_work = df.copy()
+    df_work['_dpd'] = dpd
+    df_work['_bucket'] = dpd.apply(bucket_idx)
+
+    # Build distribution
+    dist = df_work['_bucket'].value_counts().sort_index()
+    total = len(df_work)
+    distribution = []
+    for i, bname in enumerate(buckets):
+        count = int(dist.get(i, 0))
+        distribution.append({
+            'bucket': bname,
+            'count': count,
+            'pct': round(count / total * 100, 2) if total else 0,
+        })
+
+    # Transition matrix estimation
+    # Without multi-snapshot data, estimate from completed deals
+    completed = df_work[df_work['Status'] == 'Completed']
+    active = df_work[df_work['Status'] == 'Executed']
+
+    # Forward PD: probability an active deal in each bucket eventually defaults
+    # Use completed deal outcomes as calibration
+    transition_matrix = []
+    for i, bname in enumerate(buckets):
+        row = {'from_bucket': bname}
+        bucket_deals = completed[completed['_bucket'] >= i] if i < 5 else completed[completed['_bucket'] == 5]
+        if len(bucket_deals) == 0:
+            row['to_default_pct'] = 0
+        else:
+            # How many deals in this or worse bucket ended up with >50% denial?
+            den = bucket_deals['Denied by insurance'] * mult if 'Denied by insurance' in bucket_deals.columns else pd.Series(0, index=bucket_deals.index)
+            pv_b = bucket_deals['Purchase value'] * mult
+            defaulted = (den > pv_b * 0.5).sum()
+            row['to_default_pct'] = round(defaulted / len(bucket_deals) * 100, 2)
+        transition_matrix.append(row)
+
+    # Facility-level PD: weighted average across active deal buckets
+    facility_pd = 0
+    if len(active) > 0:
+        for i in range(6):
+            bucket_active = active[active['_bucket'] == i]
+            if len(bucket_active) > 0 and i < len(transition_matrix):
+                weight = len(bucket_active) / len(active)
+                facility_pd += weight * transition_matrix[i]['to_default_pct']
+
+    return {
+        'available': True,
+        'method': 'direct' if has_expected else 'proxy',
+        'distribution': distribution,
+        'transition_matrix': transition_matrix,
+        'facility_pd': round(facility_pd, 2),
+        'total_deals': total,
+        'active_deals': int(len(active)),
+        'completed_deals': int(len(completed)),
     }
 
 

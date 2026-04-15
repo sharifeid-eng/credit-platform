@@ -62,14 +62,31 @@ class MindLayeredContext:
         return not any([self.framework, self.master_mind, self.methodology, self.company_mind, self.thesis])
 
 
+def _graph_query_to_formatted(mind_dir, query_text: str, header: str, categories=None, max_results: int = 15) -> tuple:
+    """Use KnowledgeGraph for graph-aware retrieval, return (formatted_str, entry_count)."""
+    from core.mind.graph import KnowledgeGraph
+    from pathlib import Path
+
+    graph = KnowledgeGraph(Path(mind_dir))
+    nodes = graph.query(text=query_text, categories=categories, max_results=max_results)
+    if not nodes:
+        return "", 0
+
+    lines = [f"--- {header} (graph-scored, {len(nodes)} entries) ---"]
+    for node in nodes:
+        lines.append(f"[{node.category}] {node.content}")
+    return "\n".join(lines), len(nodes)
+
+
 def build_mind_context(
     company: str,
     product: str,
     task_type: str,
     analysis_type: Optional[str] = None,
     section_key: Optional[str] = None,
+    query_text: str = "",
 ) -> MindLayeredContext:
-    """Build 4-layer knowledge context for any AI prompt.
+    """Build 5-layer knowledge context for any AI prompt.
 
     This is the primary integration point. Call this before any AI prompt to
     inject accumulated institutional knowledge.
@@ -86,6 +103,12 @@ def build_mind_context(
     Layer 4 -- Company Mind: per-company lessons (corrections, memo edits, findings,
                data quality notes). Filtered by task_type and optional section_key.
 
+    Layer 5 -- Investment Thesis: per-company thesis + drift alerts.
+
+    When query_text is provided, Layers 2 and 4 use graph-aware scoring
+    (KnowledgeGraph) instead of flat recency-based retrieval. This surfaces
+    entries connected via knowledge relations and penalises contradicted nodes.
+
     Args:
         company: Company name (e.g., "klaim")
         product: Product name (e.g., "UAE_healthcare")
@@ -96,9 +119,11 @@ def build_mind_context(
         analysis_type: Override for analysis type. If None, derived from company config.
         section_key: Optional section to boost relevance for (e.g., "collection",
                      "risk_migration"). Used by Layer 4 scoring.
+        query_text: Optional query text to enable graph-aware scoring for
+                    Layers 2 and 4. When empty, falls back to flat retrieval.
 
     Returns:
-        MindLayeredContext with all 4 layers assembled.
+        MindLayeredContext with all 5 layers assembled.
     """
     master = MasterMind()
     company_mind = CompanyMind(company, product)
@@ -114,9 +139,15 @@ def build_mind_context(
 
     # Layer 2: Master Mind (fund-level)
     try:
-        master_ctx = master.get_context_for_prompt(task_type, company=company)
-        master_formatted = master_ctx.formatted
-        total_entries += master_ctx.entry_count
+        if query_text and master.base_dir.exists():
+            master_formatted, master_count = _graph_query_to_formatted(
+                master.base_dir, query_text, "Fund-Level Knowledge"
+            )
+            total_entries += master_count
+        else:
+            master_ctx = master.get_context_for_prompt(task_type, company=company)
+            master_formatted = master_ctx.formatted
+            total_entries += master_ctx.entry_count
     except Exception as e:
         logger.warning("build_mind_context: Layer 2 (master mind) failed: %s", e)
         master_formatted = ""
@@ -130,9 +161,16 @@ def build_mind_context(
 
     # Layer 4: Company Mind (per-company lessons)
     try:
-        company_ctx = company_mind.get_context_for_prompt(task_type, section_key=section_key)
-        company_formatted = company_ctx.formatted
-        total_entries += company_ctx.entry_count
+        if query_text and company_mind.base_dir.exists():
+            company_formatted, company_count = _graph_query_to_formatted(
+                company_mind.base_dir, query_text,
+                f"Company Knowledge: {company}/{product}"
+            )
+            total_entries += company_count
+        else:
+            company_ctx = company_mind.get_context_for_prompt(task_type, section_key=section_key)
+            company_formatted = company_ctx.formatted
+            total_entries += company_ctx.entry_count
     except Exception as e:
         logger.warning("build_mind_context: Layer 4 (company mind) failed: %s", e)
         company_formatted = ""

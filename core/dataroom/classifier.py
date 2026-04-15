@@ -78,6 +78,8 @@ _TEXT_RULES = [
     (re.compile(r"(financial\s+model|dcf|wacc|irr\s+sensitivity|net\s+present\s+value)", re.IGNORECASE), DocumentType.FINANCIAL_MODEL),
     (re.compile(r"(vintage\s+cohort|cumulative\s+default|delinquency\s+rate|loss\s+development)", re.IGNORECASE), DocumentType.VINTAGE_COHORT),
     (re.compile(r"(business\s+plan|revenue\s+projection|5.year\s+plan|growth\s+strategy)", re.IGNORECASE), DocumentType.BUSINESS_PLAN),
+    # Portfolio / loan tapes (CSV/Excel with loan-related column headers)
+    (re.compile(r"(loan.?id|principal.?amount|disburs|days.?past.?due|collection.?rate|outstanding.?balance|maturity.?date|dpd|purchase.?value|collected.?till)", re.IGNORECASE), DocumentType.PORTFOLIO_TAPE),
 ]
 
 

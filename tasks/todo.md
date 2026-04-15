@@ -27,13 +27,13 @@ Track active work here. Claude updates this as tasks progress.
 
 ### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
-- [ ] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode
-- [ ] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration
-- [ ] **Copy slash commands to main repo .claude/commands/** — 6 new commands from worktree
+- [x] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode (session 20)
+- [x] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration (session 20)
+- [x] **Copy slash commands to main repo .claude/commands/** — 6 new commands: /morning, /thesis, /drift, /learn, /emerge, /know (session 20)
 
 ### Platform Improvements from Session 17
 - [ ] **NLM sync optimization** — cap at ~20 sources per sync for large data rooms
-- [ ] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape"
+- [x] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape" (session 20)
 
 ### Klaim Data Room + Memo Exercise ✅ COMPLETE (session 17)
 1. [x] **Validate Legal Analysis tabs render** — all 8 tabs render with rich data
@@ -46,6 +46,38 @@ Track active work here. Claude updates this as tasks progress.
 
 ### Other Remaining
 - [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
+
+---
+
+## Completed — 2026-04-15 (session 20: Platform-Wide Enhancement Sprint — 17 items across 4 phases)
+
+**Phase 1 — Quick Wins:**
+- [x] **CSV tape classifier fix** — added text-preview rule in `classifier.py` for loan column headers → PORTFOLIO_TAPE
+- [x] **Data room refresh default path** — `POST /dataroom/refresh` now defaults to `data/{company}/dataroom/`
+- [x] **Amendment memo template** — 9-section `amendment_memo` added to `templates.py`
+- [x] **PV-adjusted LGD** — `_compute_pv_adjusted_lgd()` discounts recoveries by time-to-recovery (8% annual), integrated into EL output
+- [x] **Shared components** — VintageHeatmap + CovenantTriggerCard extracted from TamaraDashboard to shared components
+
+**Phase 2 — Intelligence System:**
+- [x] **6 slash commands** — /morning, /thesis, /drift, /learn, /emerge, /know
+- [x] **Graph-aware mind context** — `build_mind_context()` accepts `query_text`, uses KnowledgeGraph for Layers 2+4
+- [x] **ThesisTracker frontend** — 8th tab in OperatorCenter (company selector, conviction gauge, pillar cards, drift alerts, change log)
+
+**Phase 3 — Tamara P1:**
+- [x] **Trigger trends heatmap** — new `trigger-trends` tab (CSS grid, x=months, y=triggers, color=status)
+- [x] **Payment waterfall** — new `facility-waterfall` tab (horizontal bar chart + detail table from HSBC data)
+- [x] **Dilution time-series** — enhanced dilution tab with vintage line chart
+- [x] **Seed Tamara Company Mind** — 6 findings + 4 data quality + 1 IC feedback + relations at company level
+
+**Phase 4 — Platform Capabilities:**
+- [x] **3 research report builders** — Klaim, SILQ, Ejari dedicated builders + dispatch + TOC in research_report.py
+- [x] **Report template customization** — `section_order` + `excluded_sections` params; tape data now loaded for reports
+- [x] **Self-service onboarding** — `backend/onboarding.py` (validate + create org/product/API key), `Onboarding.jsx` (4-step form), route `/onboard`
+- [x] **Facility-mode PD** — `compute_facility_pd()` Markov chain (DPD bucket transitions, forward PD), endpoint `/charts/facility-pd`
+
+**Path migration audit:**
+- [x] Tamara mind files moved from product-level to company-level (`data/Tamara/mind/`) per parallel branch structural change
+- [x] All code verified: no hardcoded product-level mind/legal paths in changes
 
 ---
 

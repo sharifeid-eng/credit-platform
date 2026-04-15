@@ -6,6 +6,7 @@ import {
   getOperatorStatus, getOperatorTodos, createOperatorTodo,
   updateOperatorTodo, deleteOperatorTodo, getOperatorMind,
   updateOperatorMindEntry, getOperatorBriefing, getOperatorLearning,
+  getThesis, saveThesis, getThesisDrift, getThesisLog,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -485,6 +486,11 @@ export default function OperatorCenter() {
   const [mindFilter, setMindFilter] = useState(null)
   const [briefing, setBriefing] = useState(null)
   const [learning, setLearning] = useState(null)
+  const [thesis, setThesis] = useState(null)
+  const [thesisDrift, setThesisDrift] = useState(null)
+  const [thesisLog, setThesisLog] = useState(null)
+  const [thesisCompany, setThesisCompany] = useState(null)
+  const [thesisEditing, setThesisEditing] = useState(false)
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -527,7 +533,27 @@ export default function OperatorCenter() {
     if (activeTab === 'learning' && !learning) {
       getOperatorLearning().then(setLearning).catch(e => console.error('Learning load failed:', e))
     }
-  }, [activeTab, mindFilter])
+    if (activeTab === 'thesis' && thesisCompany && !thesis) {
+      loadThesis(thesisCompany)
+    }
+  }, [activeTab, mindFilter, thesisCompany])
+
+  const loadThesis = async (companyInfo) => {
+    if (!companyInfo) return
+    const { company, product } = companyInfo
+    try {
+      const t = await getThesis(company, product)
+      setThesis(t)
+      const drift = await getThesisDrift(company, product).catch(() => null)
+      setThesisDrift(drift)
+      const log = await getThesisLog(company, product).catch(() => null)
+      setThesisLog(log)
+    } catch {
+      setThesis(null)
+      setThesisDrift(null)
+      setThesisLog(null)
+    }
+  }
 
   const handleAddTodo = async (item) => {
     try {
@@ -651,6 +677,7 @@ export default function OperatorCenter() {
           <TabButton label="Mind" active={activeTab === 'mind'} onClick={() => setActiveTab('mind')} />
           <TabButton label="Briefing" active={activeTab === 'briefing'} onClick={() => setActiveTab('briefing')} />
           <TabButton label="Learning" active={activeTab === 'learning'} onClick={() => setActiveTab('learning')} count={learning?.total_rules || null} />
+          <TabButton label="Thesis" active={activeTab === 'thesis'} onClick={() => setActiveTab('thesis')} />
         </div>
 
         {/* Tab content */}
@@ -1034,6 +1061,203 @@ export default function OperatorCenter() {
                     {!(learning.total_corrections || learning.total_rules) && (
                       <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
                         No learning data yet. Corrections from memo edits and chat feedback will appear here.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Thesis Tab ── */}
+            {activeTab === 'thesis' && (
+              <div style={{ maxWidth: 800 }}>
+                <SectionLabel text="Investment Thesis" accent="var(--gold)" />
+
+                {/* Company selector */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Select Company</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(status?.companies || []).map(co => {
+                      const products = co.products || [co.product || co.name]
+                      return products.map(prod => {
+                        const key = `${co.name}/${prod}`
+                        const isActive = thesisCompany?.company === co.name && thesisCompany?.product === prod
+                        return (
+                          <button key={key} onClick={() => {
+                            const info = { company: co.name, product: prod }
+                            setThesisCompany(info)
+                            setThesis(null)
+                            setThesisDrift(null)
+                            setThesisLog(null)
+                            loadThesis(info)
+                          }}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+                            border: `1px solid ${isActive ? 'var(--gold)' : 'var(--border)'}`,
+                            background: isActive ? 'rgba(201,168,76,0.15)' : 'transparent',
+                            color: isActive ? 'var(--gold)' : 'var(--text-muted)', fontSize: 12,
+                          }}>
+                            {co.name}/{prod}
+                          </button>
+                        )
+                      })
+                    })}
+                  </div>
+                </div>
+
+                {!thesisCompany && (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+                    Select a company above to view or create its investment thesis.
+                  </div>
+                )}
+
+                {thesisCompany && !thesis && (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+                    No thesis found for {thesisCompany.company}/{thesisCompany.product}.
+                    <br />Use <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-mono)' }}>/thesis {thesisCompany.company}</span> to create one.
+                  </div>
+                )}
+
+                {thesis && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Thesis header */}
+                    <div style={{
+                      padding: 16, background: 'var(--bg-surface)',
+                      border: '1px solid var(--border)', borderRadius: 8,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{thesis.title}</span>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                          background: thesis.status === 'active' ? 'rgba(45,212,191,0.15)' : 'rgba(132,148,167,0.15)',
+                          color: thesis.status === 'active' ? 'var(--teal)' : 'var(--text-muted)',
+                          textTransform: 'uppercase', letterSpacing: '0.08em',
+                        }}>
+                          {thesis.status || 'draft'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 20, fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span>Version {thesis.version || 1}</span>
+                        <span>Pillars: {(thesis.pillars || []).length}</span>
+                        {thesis.created_at && <span>Created: {thesis.created_at?.slice(0, 10)}</span>}
+                      </div>
+                    </div>
+
+                    {/* Conviction score gauge */}
+                    <div style={{
+                      padding: 16, background: 'var(--bg-surface)',
+                      border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                        Conviction Score
+                      </div>
+                      <div style={{
+                        fontSize: 42, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                        color: (thesis.conviction_score || 0) >= 70 ? 'var(--teal)' :
+                               (thesis.conviction_score || 0) >= 40 ? 'var(--gold)' : '#F06060',
+                      }}>
+                        {thesis.conviction_score ?? '--'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>out of 100</div>
+                    </div>
+
+                    {/* Pillars */}
+                    {(thesis.pillars || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--gold)', marginBottom: 10 }}>
+                          Pillars ({thesis.pillars.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {thesis.pillars.map((p, i) => {
+                            const statusColors = {
+                              holding: 'var(--teal)', strengthening: 'var(--teal)',
+                              weakening: 'var(--gold)', broken: '#F06060', retired: 'var(--text-muted)',
+                            }
+                            const statusIcons = {
+                              holding: '\u2714', strengthening: '\u25B2', weakening: '\u25BC', broken: '\u2718', retired: '\u2014',
+                            }
+                            return (
+                              <div key={i} style={{
+                                padding: '12px 14px', background: 'var(--bg-surface)',
+                                border: `1px solid ${p.status === 'broken' ? 'rgba(240,96,96,0.3)' : 'var(--border)'}`,
+                                borderRadius: 8,
+                              }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {p.claim}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, color: statusColors[p.status] || 'var(--text-muted)',
+                                    textTransform: 'uppercase',
+                                  }}>
+                                    {statusIcons[p.status] || ''} {p.status || 'unknown'}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)' }}>
+                                  <span>Metric: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{p.metric_key}</span></span>
+                                  <span>{p.direction || '>'} {p.threshold}</span>
+                                  {p.last_value != null && (
+                                    <span>Current: <span style={{
+                                      fontFamily: 'var(--font-mono)',
+                                      color: p.status === 'broken' ? '#F06060' : p.status === 'weakening' ? 'var(--gold)' : 'var(--teal)',
+                                    }}>{typeof p.last_value === 'number' ? p.last_value.toFixed(2) : p.last_value}</span></span>
+                                  )}
+                                  {p.conviction_score != null && (
+                                    <span>Score: <span style={{ fontFamily: 'var(--font-mono)' }}>{p.conviction_score}/100</span></span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Drift Alerts */}
+                    {thesisDrift && (thesisDrift.alerts || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#F06060', marginBottom: 10 }}>
+                          Drift Alerts ({thesisDrift.alerts.length})
+                        </div>
+                        {thesisDrift.alerts.map((a, i) => (
+                          <div key={i} style={{
+                            padding: '10px 14px', background: 'rgba(240,96,96,0.06)',
+                            border: '1px solid rgba(240,96,96,0.15)', borderRadius: 8, marginBottom: 6,
+                          }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                              <SeverityBadge severity={a.severity === 'broken' ? 'critical' : 'warning'} />
+                              <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{a.pillar_claim || a.metric_key}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              {a.metric_key}: {a.old_value?.toFixed?.(2) ?? a.old_value} → {a.new_value?.toFixed?.(2) ?? a.new_value}
+                              {a.threshold != null && <span> (threshold: {a.threshold})</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Thesis Log */}
+                    {thesisLog && (thesisLog.log || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 10 }}>
+                          Change History
+                        </div>
+                        {thesisLog.log.slice(0, 10).map((entry, i) => (
+                          <div key={i} style={{
+                            padding: '8px 14px', background: 'var(--bg-surface)',
+                            border: '1px solid var(--border)', borderRadius: 8, marginBottom: 6,
+                          }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                                {entry.timestamp?.slice(0, 10) || ''}
+                              </span>
+                              <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>
+                                {entry.change_reason || entry.action || 'Updated'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

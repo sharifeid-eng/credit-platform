@@ -125,6 +125,9 @@ app.include_router(auth_router)
 from backend.intelligence import router as intelligence_router
 app.include_router(intelligence_router)
 
+from backend.onboarding import router as onboarding_router
+app.include_router(onboarding_router)
+
 # Auth middleware — must be added BEFORE CORSMiddleware (Starlette processes
 # middleware in reverse order, so CORS runs first, then auth)
 from backend.cf_auth import CloudflareAuthMiddleware
@@ -869,6 +872,18 @@ def get_expected_loss(company: str, product: str,
     mult     = apply_multiplier(config, disp)
     return {**compute_expected_loss(df, mult), 'currency': disp}
 
+@app.get("/companies/{company}/products/{product}/charts/facility-pd")
+def get_facility_pd(company: str, product: str,
+                    snapshot: Optional[str] = None,
+                    as_of_date: Optional[str] = None,
+                    currency: Optional[str] = None):
+    from core.analysis import compute_facility_pd
+    df, _    = _load(company, product, snapshot)
+    df       = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult     = apply_multiplier(config, disp)
+    return {**compute_facility_pd(df, mult, as_of_date), 'currency': disp}
+
 @app.get("/companies/{company}/products/{product}/charts/loss-triangle")
 def get_loss_triangle(company: str, product: str,
                       snapshot: Optional[str] = None,
@@ -1211,7 +1226,35 @@ def generate_research_report_endpoint(company: str, product: str,
             _ejari_cache[filepath] = parse_ejari_workbook(filepath)
         data = _ejari_cache[filepath]
     else:
+        # Tape-based: load data and compute key metrics for the report
         data = {'meta': {'company': company, 'product': product}}
+        try:
+            df, sel2 = _load(company, product, snapshot)
+            config2, disp = _currency(company, product, None)
+            mult = apply_multiplier(config2, disp)
+            data['summary'] = compute_summary(df, config2, disp, sel2['date'])
+            try:
+                data['cohort'] = compute_cohort(df, mult)
+            except Exception:
+                pass
+            try:
+                data['concentration'] = compute_concentration(df, mult)
+            except Exception:
+                pass
+            try:
+                data['par'] = compute_par(df, mult)
+            except Exception:
+                pass
+            try:
+                data['expected_loss'] = compute_expected_loss(df, mult)
+            except Exception:
+                pass
+            try:
+                data['dso'] = compute_dso(df, mult)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("Research report data load failed for %s/%s: %s", company, product, e)
 
     config = load_config(company, product) or {}
     ccy = config.get('currency', 'USD')
@@ -3760,7 +3803,11 @@ def dataroom_upload_file(company: str, product: str, filepath: str):
 def dataroom_refresh(company: str, product: str, source_dir: Optional[str] = None):
     """Incremental re-scan of the data room directory."""
     if not source_dir:
-        raise HTTPException(status_code=400, detail="source_dir parameter required for refresh")
+        source_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', company, 'dataroom')
+        if not os.path.exists(source_dir):
+            raise HTTPException(status_code=400,
+                              detail=f"No data room directory found at data/{company}/dataroom/. "
+                                     f"Create the folder and add documents, or provide source_dir parameter.")
     result = _dataroom_engine.refresh(company, product, source_dir)
     if result.get('error'):
         raise HTTPException(status_code=400, detail=result['error'])

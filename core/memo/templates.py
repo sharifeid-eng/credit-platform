@@ -400,6 +400,117 @@ MEMO_TEMPLATES = {
             },
         ],
     },
+    },
+
+    "amendment_memo": {
+        "name": "Amendment Memo",
+        "description": "Facility amendment analysis — size changes, covenant modifications, impact assessment",
+        "sections": [
+            {
+                "key": "exec_summary",
+                "title": "Executive Summary",
+                "required": True,
+                "source": "mixed",
+                "ai_guided": True,
+                "guidance": (
+                    "1-2 paragraph overview: what is being amended, rationale, "
+                    "net impact on borrowing capacity and risk profile. "
+                    "Reference specific before/after metrics."
+                ),
+            },
+            {
+                "key": "facility_size_changes",
+                "title": "Facility Size Changes",
+                "required": True,
+                "source": "dataroom",
+                "ai_guided": False,
+                "guidance": (
+                    "Old vs new facility limit, availability impact, "
+                    "tranche-level changes if applicable. "
+                    "Pull from amended facility agreement."
+                ),
+            },
+            {
+                "key": "advance_rate_modifications",
+                "title": "Advance Rate Modifications",
+                "required": True,
+                "source": "dataroom",
+                "ai_guided": False,
+                "guidance": (
+                    "Old vs new advance rates by product/segment/region. "
+                    "Impact on eligible receivable base and borrowing base."
+                ),
+            },
+            {
+                "key": "covenant_amendments",
+                "title": "Covenant Amendments",
+                "required": True,
+                "source": "mixed",
+                "ai_guided": False,
+                "guidance": (
+                    "Old thresholds vs new thresholds for each modified covenant. "
+                    "Rationale for changes. Impact on compliance headroom."
+                ),
+            },
+            {
+                "key": "concentration_limit_updates",
+                "title": "Concentration Limit Updates",
+                "required": True,
+                "source": "analytics",
+                "ai_guided": False,
+                "guidance": (
+                    "Tier changes, new single-borrower limits, sector caps. "
+                    "Identify currently breaching counterparties affected."
+                ),
+            },
+            {
+                "key": "covenant_compliance_impact",
+                "title": "Covenant Compliance Impact",
+                "required": True,
+                "source": "analytics",
+                "ai_guided": False,
+                "guidance": (
+                    "Headroom analysis under new covenants using current portfolio "
+                    "metrics. Flag any covenants that move from compliant to "
+                    "breaching or vice versa."
+                ),
+            },
+            {
+                "key": "recommendation",
+                "title": "Recommendation",
+                "required": True,
+                "source": "mixed",
+                "ai_guided": True,
+                "guidance": (
+                    "Net effect on borrowing capacity, risk profile, and fund "
+                    "economics. Clear recommendation (approve/reject/negotiate). "
+                    "Specific conditions or counter-proposals if applicable."
+                ),
+            },
+            {
+                "key": "implementation_timeline",
+                "title": "Implementation Timeline",
+                "required": True,
+                "source": "manual",
+                "ai_guided": False,
+                "guidance": (
+                    "Effective date, transition period, required approvals, "
+                    "operational steps for implementation."
+                ),
+            },
+            {
+                "key": "appendix",
+                "title": "Appendix \u2014 Old vs New Terms",
+                "required": False,
+                "source": "auto",
+                "ai_guided": False,
+                "guidance": (
+                    "Auto-generated: side-by-side comparison of old vs new "
+                    "facility agreement terms. Uses legal extraction diff engine."
+                ),
+            },
+        ],
+    },
 }
 
 
