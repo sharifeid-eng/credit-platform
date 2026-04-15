@@ -25,15 +25,23 @@
   "group_column_contains": "healthcare_provider_names",
   "unique_groups_count": 143,
   "expected_payment_date_gap": {
-    "status": "PARTIALLY_ADDRESSED",
-    "updated_at": "2026-04-14",
-    "detail": "April 14 tape adds 'Expected collection days' (53-364d range, mean 88d) and 'Collection days so far' columns. Enables direct DPD calculation for PAR and temporal Paid vs Due covenant. However: (1) only available on April tape, older tapes still use proxies, (2) April tape appears to be active-deals-only (357 deals vs 7,697 in March) — awaiting Klaim confirmation on tape scope.",
-    "remaining_gap": "Need Klaim to confirm whether April tape is active-only or full portfolio. Once confirmed, the new columns enable contractual PAR and Paid vs Due measurements."
+    "status": "RESOLVED",
+    "updated_at": "2026-04-15",
+    "detail": "April 15 tape (8,080 deals, full portfolio) adds 'Expected collection days' (28-364d range, mean 94d, median 87d, 100% coverage) and 'Collection days so far' (-448 to 1084d range). Enables: (1) direct DPD for PAR — method reports 'direct' not 'proxy', (2) temporal Paid vs Due covenant — filters to deals with expected payment date in period, (3) DSO Operational = true_dso - expected_collection_days per deal (method 'direct').",
+    "par_results_direct": {
+      "par30_active": "36.6% of active outstanding (AED 16.0M)",
+      "par60_active": "34.4% (AED 15.1M)",
+      "par90_active": "32.0% (AED 14.0M)",
+      "par30_lifetime": "2.37%",
+      "covenant_par30_threshold": "7% — BREACHED (36.6% > 7%)",
+      "covenant_par60_threshold": "5% — BREACHED (34.4% > 5%)"
+    },
+    "remaining_gap": "Older tapes (pre-April 2026) still use proxy DPD. Platform gracefully degrades to proxy when column absent."
   },
   "recommendations": [
     "STILL OPEN: Request Klaim add an 'Insurance Company' or 'Payer' column — Account Debtor gap remains",
-    "RESOLVED (partial): Expected collection days now in April tape — enables direct DPD for PAR",
-    "PENDING: Confirm with Klaim whether April tape is active-deals-only or full portfolio snapshot",
+    "RESOLVED: Expected collection days now in April 15 tape — direct DPD for PAR working",
+    "RESOLVED: April 15 tape confirmed as full portfolio (8,080 deals, up from 7,697 in March)",
     "The 10% non-eligible debtor concentration limit STILL cannot be enforced from tape data alone",
     "Consider adding payer identification to the Integration API invoice schema (extra_data JSONB field)"
   ],
