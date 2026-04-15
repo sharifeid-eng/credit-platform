@@ -5,9 +5,10 @@ Track active work here. Claude updates this as tasks progress.
 
 ## Next Session Priorities
 
-### Klaim — Pending Confirmation
-- [ ] **Confirm April tape scope with Klaim** — is it active-deals-only (357) or full portfolio? If full, load as snapshot. If active-only, request full export with new columns.
-- [ ] **Load confirmed tape as platform snapshot** — once scope confirmed, move from staging/ to main dir
+### Klaim — Remaining
+- [x] ~~Confirm April tape scope~~ — RESOLVED: April 15 tape is full portfolio (8,080 deals)
+- [x] ~~Load tape as platform snapshot~~ — loaded, direct DPD working
+- [ ] **Account Debtor (payer) gap** — still no payer column in tape, MRPA concentration limit unenforceable
 
 ### Aajil — Phase B (when tape arrives from Cascade Debt)
 - [ ] **Obtain Aajil loan tape** from Cascade Debt platform export
