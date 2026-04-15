@@ -385,7 +385,7 @@ def get_aggregate_stats():
     FX = {'AED': rates.get('AED', 0.2723), 'SAR': rates.get('SAR', 0.2667)}
 
     # Schema version — bump this whenever the stats fields change
-    STATS_SCHEMA_VERSION = "5"  # v5: exclude Tamara outstanding from face value sum
+    STATS_SCHEMA_VERSION = "6"  # v6: include Aajil Principal Amount in face value sum
 
     # Build fingerprint from schema version + all snapshot filenames
     all_snap_ids = [f"schema:{STATS_SCHEMA_VERSION}"]
@@ -480,7 +480,12 @@ def get_aggregate_stats():
 
                     # Face value only from latest snapshot to avoid double-counting deals
                     if i == len(snaps) - 1:
-                        val_col = 'Disbursed_Amount (SAR)' if analysis_type == 'silq' else 'Purchase value'
+                        if analysis_type == 'silq':
+                            val_col = 'Disbursed_Amount (SAR)'
+                        elif analysis_type == 'aajil':
+                            val_col = 'Principal Amount'
+                        else:
+                            val_col = 'Purchase value'
                         if val_col in df.columns:
                             total_value_usd += float(df[val_col].sum()) * fx
                 except Exception:
