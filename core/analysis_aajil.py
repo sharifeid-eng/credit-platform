@@ -78,10 +78,15 @@ def _enrich_overview(data):
 
 
 def _enrich_traction(data):
-    """Build traction (Volume + Balance) data from GMV milestones and customer growth."""
-    milestones = data.get('gmv_milestones', [])
+    """Enrich traction data. If Cascade monthly data exists, use it; otherwise fall back to milestones."""
+    traction = data.get('traction', {})
 
-    # Volume: per-year disbursement (incremental, not cumulative)
+    # If we already have Cascade monthly data, just ensure it has the right structure
+    if traction.get('volume_monthly'):
+        return  # Already populated from Cascade — don't overwrite
+
+    # Fallback: build from GMV milestones (investor deck only)
+    milestones = data.get('gmv_milestones', [])
     volume = []
     for i, m in enumerate(milestones):
         disbursed = m['gmv_sar']
@@ -93,7 +98,6 @@ def _enrich_traction(data):
             'disbursed_usd': round(disbursed * 0.2667)
         })
 
-    # Compute growth rates
     growth_stats = {}
     if len(volume) >= 2:
         latest = volume[-1]['disbursed_sar']

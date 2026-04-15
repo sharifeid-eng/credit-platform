@@ -7,7 +7,7 @@ import { getAajilSummary } from '../services/api'
 import KpiCard from '../components/KpiCard'
 import ChartPanel from '../components/ChartPanel'
 import {
-  BarChart, Bar, PieChart, Pie, Cell, ComposedChart, Line,
+  BarChart, Bar, PieChart, Pie, Cell, ComposedChart, Line, AreaChart, Area,
   XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 
@@ -97,10 +97,33 @@ export default function AajilDashboard() {
   if (loading) return <div style={{ color: MUTED, padding: 40 }}>Loading Aajil dashboard...</div>
   if (!data) return <div style={{ color: RED, padding: 40 }}>Failed to load Aajil data</div>
 
+  const [dpdThreshold, setDpdThreshold] = useState('dpd_7')
+  const [tractionView, setTractionView] = useState('volume')
+
   const activeTab = tab || 'overview'
   const co = data.company_overview || {}
   const ov = data.overview || {}
   const traction = data.traction || {}
+  const delinquency = data.delinquency || {}
+  const collectionsData = data.collections || {}
+  const vintageData = data.vintage_cohorts || {}
+
+  // Prepare monthly volume data with short labels
+  const volumeMonthly = (traction.volume_monthly || []).map(v => ({
+    ...v,
+    label: v.date?.slice(0, 7),
+    value: v.disbursed_sar
+  }))
+  const balanceMonthly = (traction.balance_monthly || []).map(v => ({
+    ...v,
+    label: v.date?.slice(0, 7),
+    value: v.balance_sar
+  }))
+  const collectionsMonthly = (collectionsData.monthly || []).map(c => ({
+    ...c,
+    label: c.date?.slice(0, 7),
+    rate: c.collection_rate != null ? c.collection_rate * 100 : null
+  }))
 
   const fadeIn = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: { duration: 0.25 } }
 
@@ -174,99 +197,188 @@ export default function AajilDashboard() {
           </div>
         )}
 
-        {/* ── TRACTION TAB (Cascade-inspired) ──────────────────────────── */}
+        {/* ── TRACTION TAB (Cascade-inspired — real data) ────────────── */}
         {activeTab === 'traction' && (
           <div>
+            {/* Volume/Balance toggle */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
+              {['volume', 'balance'].map(v => (
+                <button key={v} onClick={() => setTractionView(v)}
+                  style={{ padding: '8px 24px', background: tractionView === v ? GOLD : 'transparent', color: tractionView === v ? '#0A1119' : MUTED, border: `1px solid ${BORDER}`, borderRadius: v === 'volume' ? '6px 0 0 6px' : '0 6px 6px 0', cursor: 'pointer', fontWeight: 600, fontSize: 13, textTransform: 'capitalize' }}>
+                  {v}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row' }}>
               <div style={{ flex: 1 }}>
-                <ChartPanel title="Disbursement Volume (Annual)" height={300}>
+                <ChartPanel title={tractionView === 'volume' ? 'Monthly Disbursement Volume' : 'Outstanding Balance'} height={350}>
                   <ResponsiveContainer>
-                    <BarChart data={traction.volume || []}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-                      <XAxis dataKey="year" stroke={MUTED} fontSize={12} />
-                      <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v, 'SAR ')} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="disbursed_sar" fill={GOLD} radius={[4, 4, 0, 0]} name="Disbursed (SAR)" />
-                    </BarChart>
+                    {tractionView === 'volume' ? (
+                      <BarChart data={volumeMonthly}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                        <XAxis dataKey="label" stroke={MUTED} fontSize={10} interval={5} angle={-45} textAnchor="end" height={50} />
+                        <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v)} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="disbursed_sar" fill={GOLD} radius={[2, 2, 0, 0]} name="Disbursed (SAR)" />
+                      </BarChart>
+                    ) : (
+                      <AreaChart data={balanceMonthly}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                        <XAxis dataKey="label" stroke={MUTED} fontSize={10} interval={5} angle={-45} textAnchor="end" height={50} />
+                        <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v)} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="balance_sar" fill={`${GOLD}30`} stroke={GOLD} strokeWidth={2} name="Balance (SAR)" />
+                      </AreaChart>
+                    )}
                   </ResponsiveContainer>
                 </ChartPanel>
               </div>
-              <GrowthStats stats={traction.growth_stats} label="Disbursements" />
+              <GrowthStats stats={tractionView === 'volume' ? traction.volume_summary_stats : traction.balance_summary_stats} label={tractionView === 'volume' ? 'Disbursements' : 'Balance'} />
             </div>
 
-            {/* Balance */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 16 }}>
-              <KpiCard label="Outstanding Balance (AUM)" value={fmt(traction.balance_sar, 'SAR ')} subtitle={fmt(traction.balance_sar * 0.2667, '$')} index={0} />
-              <KpiCard label="GMV YoY Growth" value={ov.gmv_yoy_growth ? `+${ov.gmv_yoy_growth}%` : '--'} index={1} />
-            </div>
-
-            <div style={{ marginTop: 16, padding: '12px 16px', background: `${GOLD}10`, border: `1px solid ${GOLD}33`, borderRadius: 8, color: MUTED, fontSize: 12 }}>
-              {traction.note || 'Monthly granularity available from Cascade Debt tape.'}
+              <KpiCard label="Total Disbursed (GMV)" value={fmt(traction.total_disbursed, 'SAR ')} index={0} />
+              <KpiCard label="Outstanding Balance" value={fmt(traction.latest_balance, 'SAR ')} index={1} />
+              <KpiCard label="Volume Months" value={volumeMonthly.length} subtitle="May 2022 - Apr 2026" index={2} />
             </div>
           </div>
         )}
 
-        {/* ── DELINQUENCY TAB ──────────────────────────────────────────── */}
-        {activeTab === 'delinquency' && (
+        {/* ── DELINQUENCY TAB (real Cascade data) ──────────────────────── */}
+        {activeTab === 'delinquency' && (() => {
+          const dpd = delinquency[dpdThreshold] || {}
+          const recent = (dpd.recent || []).map(r => ({
+            ...r,
+            label: r.date?.slice(0, 7),
+            balance_m: r.balance / 1e6
+          }))
+          const stats = dpd.summary_stats || {}
+          const dpdLabel = dpdThreshold.replace('dpd_', '') + ' DPD'
+          const latestBal = recent.length ? recent[recent.length - 1].balance : 0
+          return (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-              <KpiCard label="DPD 7+" value="--" subtitle="Tape data required" index={0} />
-              <KpiCard label="DPD 30+" value="--" subtitle="Tape data required" index={1} />
-              <KpiCard label="DPD 60+" value={`<${(co.dpd60_plus_rate * 100).toFixed(0)}%`} subtitle="Trailing 12M (Dec 2025)" index={2} />
-              <KpiCard label="DPD 90+" value="--" subtitle="Tape data required" index={3} />
+            {/* DPD toggle buttons */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
+              {['dpd_7', 'dpd_30', 'dpd_60', 'dpd_90'].map(d => (
+                <button key={d} onClick={() => setDpdThreshold(d)}
+                  style={{ padding: '8px 18px', background: dpdThreshold === d ? GOLD : 'transparent', color: dpdThreshold === d ? '#0A1119' : MUTED, border: `1px solid ${BORDER}`, borderRadius: d === 'dpd_7' ? '6px 0 0 6px' : d === 'dpd_90' ? '0 6px 6px 0' : 0, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                  {d.replace('dpd_', '')} DPD
+                </button>
+              ))}
             </div>
-            <ChartPanel title="Rolling Default Rate">
-              <div style={{ padding: 40, textAlign: 'center', color: MUTED }}>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>DPD threshold toggles: 7 / 30 / 60 / 90 DPD</div>
-                <div style={{ fontSize: 12 }}>Rolling default rate chart requires loan tape data from Cascade Debt.</div>
-                <div style={{ fontSize: 12, marginTop: 8, color: GOLD }}>
-                  Cascade shows: MoM -5.35%, QoQ -9.15%, YoY -13.56% at 7 DPD (improving trend)
-                </div>
-              </div>
-            </ChartPanel>
-          </div>
-        )}
 
-        {/* ── COLLECTIONS TAB ──────────────────────────────────────────── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
+              <KpiCard label={`${dpdLabel} Balance`} value={fmt(latestBal, 'SAR ')} subtitle="Latest month" index={0} />
+              <KpiCard label="MoM Change" value={stats.mom_pct != null ? `${stats.mom_pct > 0 ? '+' : ''}${stats.mom_pct}%` : '--'} subtitle="Month over Month" index={1} />
+              <KpiCard label="QoQ Change" value={stats.qoq_pct != null ? `${stats.qoq_pct > 0 ? '+' : ''}${stats.qoq_pct}%` : '--'} subtitle="Quarter over Quarter" index={2} />
+              <KpiCard label="YoY Change" value={stats.yoy_pct != null ? `${stats.yoy_pct > 0 ? '+' : ''}${stats.yoy_pct}%` : '--'} subtitle="Year over Year" index={3} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, flexDirection: isMobile ? 'column' : 'row' }}>
+              <div style={{ flex: 1 }}>
+                <ChartPanel title={`Rolling Default Rate — ${dpdLabel}`} height={300}>
+                  <ResponsiveContainer>
+                    <ComposedChart data={recent}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                      <XAxis dataKey="label" stroke={MUTED} fontSize={11} />
+                      <YAxis stroke={MUTED} fontSize={11} tickFormatter={v => `${v.toFixed(1)}M`} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="balance_m" fill={`${RED}20`} stroke={RED} strokeWidth={2} name={`${dpdLabel} Balance (M SAR)`} />
+                      <Line type="monotone" dataKey="balance_m" stroke={RED} strokeWidth={2} dot={{ r: 3, fill: RED }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </ChartPanel>
+              </div>
+              <GrowthStats stats={stats} label={dpdLabel} />
+            </div>
+          </div>
+          )
+        })()}
+
+        {/* ── COLLECTIONS TAB (real Cascade data) ──────────────────────── */}
         {activeTab === 'collections' && (
           <div>
-            <ChartPanel title="Cash Collected by Cohort">
-              <div style={{ padding: 40, textAlign: 'center', color: MUTED }}>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>Monthly collection rate per vintage cohort</div>
-                <div style={{ fontSize: 12 }}>Requires loan tape with disbursement and payment data.</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>Will include: Payment Breakdown toggle (Total vs Principal)</div>
-              </div>
+            <ChartPanel title="Cash Collected by Cohort" height={350}>
+              <ResponsiveContainer>
+                <ComposedChart data={collectionsMonthly}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="label" stroke={MUTED} fontSize={10} interval={5} angle={-45} textAnchor="end" height={50} />
+                  <YAxis yAxisId="left" stroke={MUTED} fontSize={11} tickFormatter={v => fmt(v)} />
+                  <YAxis yAxisId="right" orientation="right" stroke={TEAL} fontSize={11} tickFormatter={v => `${v}%`} domain={[0, 130]} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar yAxisId="left" dataKey="collected_sar" fill={GOLD} radius={[2, 2, 0, 0]} name="Collected (SAR)" />
+                  <Line yAxisId="right" type="monotone" dataKey="rate" stroke={TEAL} strokeWidth={2} dot={false} name="Collection Rate %" connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
             </ChartPanel>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 16 }}>
+              <KpiCard label="Total Collected" value={fmt(collectionsMonthly.reduce((s, c) => s + (c.collected_sar || 0), 0), 'SAR ')} index={0} />
+              <KpiCard label="Months with Data" value={collectionsMonthly.filter(c => c.collected_sar > 0).length} index={1} />
+              <KpiCard label="Avg Monthly Collection" value={fmt(collectionsMonthly.filter(c => c.collected_sar > 0).reduce((s, c) => s + c.collected_sar, 0) / Math.max(1, collectionsMonthly.filter(c => c.collected_sar > 0).length), 'SAR ')} index={2} />
+            </div>
           </div>
         )}
 
-        {/* ── COHORT ANALYSIS TAB ──────────────────────────────────────── */}
-        {activeTab === 'cohort-analysis' && (
+        {/* ── COHORT ANALYSIS TAB (real Cascade vintage heatmap) ─────── */}
+        {activeTab === 'cohort-analysis' && (() => {
+          const cohorts = vintageData.cohorts || []
+          const maxMob = 12
+          const getColor = (val) => {
+            if (val == null || val === 0) return 'transparent'
+            if (val < 3) return 'rgba(45, 212, 191, 0.25)'
+            if (val < 8) return 'rgba(45, 212, 191, 0.5)'
+            if (val < 15) return 'rgba(201, 168, 76, 0.4)'
+            if (val < 25) return 'rgba(240, 96, 96, 0.4)'
+            return 'rgba(240, 96, 96, 0.7)'
+          }
+          return (
           <div>
-            <ChartPanel title="Vintage Analysis">
-              <div style={{ padding: 40, textAlign: 'center', color: MUTED }}>
-                <div style={{ fontSize: 14, marginBottom: 8 }}>DPD% by Month on Books (MoB) per cohort</div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
-                  {['30 DPD', '60 DPD', '90 DPD'].map(d => (
-                    <span key={d} style={{ padding: '4px 12px', borderRadius: 12, background: `${GOLD}15`, border: `1px solid ${GOLD}33`, color: MUTED, fontSize: 11 }}>{d}</span>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
-                  {['Original Balance', 'Number of Loans'].map(d => (
-                    <span key={d} style={{ padding: '4px 12px', borderRadius: 12, background: `${BLUE}15`, border: `1px solid ${BLUE}33`, color: MUTED, fontSize: 11 }}>{d}</span>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
-                  {['Loan', 'Borrower'].map(d => (
-                    <span key={d} style={{ padding: '4px 12px', borderRadius: 12, background: `${TEAL}15`, border: `1px solid ${TEAL}33`, color: MUTED, fontSize: 11 }}>{d}</span>
-                  ))}
-                </div>
-                <div style={{ fontSize: 12 }}>Vintage curves + color-coded heatmap table require loan tape data.</div>
-                <div style={{ fontSize: 11, color: GOLD, marginTop: 8 }}>Cascade supports: With Cure / Without Cure toggle</div>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ color: MUTED, fontSize: 12 }}>DPD {vintageData.dpd_threshold}+ | {vintageData.measurement} | {vintageData.cohort_type}-level | {vintageData.recoveries}</span>
+              <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                {[{c:'rgba(45,212,191,0.25)',l:'<3%'},{c:'rgba(45,212,191,0.5)',l:'3-8%'},{c:'rgba(201,168,76,0.4)',l:'8-15%'},{c:'rgba(240,96,96,0.4)',l:'15-25%'},{c:'rgba(240,96,96,0.7)',l:'>25%'}].map(({c,l}) => (
+                  <span key={l} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10,color:MUTED }}>
+                    <span style={{ width:12,height:12,borderRadius:2,background:c,border:`1px solid ${BORDER}` }} />{l}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <ChartPanel title="Vintage Analysis — DPD 30+ by Month on Books">
+              <div style={{ overflowX: 'auto', padding: '0 4px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '6px 8px', textAlign: 'left', color: MUTED, position: 'sticky', left: 0, background: SURFACE, borderBottom: `1px solid ${BORDER}`, minWidth: 70 }}>Cohort</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right', color: MUTED, borderBottom: `1px solid ${BORDER}`, minWidth: 80 }}>Orig Bal</th>
+                      {Array.from({length: maxMob}, (_, i) => (
+                        <th key={i} style={{ padding: '6px 6px', textAlign: 'center', color: MUTED, borderBottom: `1px solid ${BORDER}`, minWidth: 48 }}>{i + 1}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cohorts.map((c, idx) => (
+                      <tr key={idx}>
+                        <td style={{ padding: '4px 8px', color: '#E8EAF0', fontWeight: 600, position: 'sticky', left: 0, background: SURFACE, borderBottom: `1px solid ${BORDER}22`, whiteSpace: 'nowrap' }}>{c.cohort}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'right', color: MUTED, fontFamily: 'var(--font-mono)', borderBottom: `1px solid ${BORDER}22`, whiteSpace: 'nowrap' }}>{fmt(c.original_balance, 'SAR ')}</td>
+                        {Array.from({length: maxMob}, (_, i) => {
+                          const val = c.mob && i < c.mob.length ? c.mob[i] : null
+                          return (
+                            <td key={i} style={{ padding: '4px 6px', textAlign: 'center', background: getColor(val), color: val != null && val > 0 ? '#E8EAF0' : MUTED, fontFamily: 'var(--font-mono)', borderBottom: `1px solid ${BORDER}22`, fontSize: 10 }}>
+                              {val != null ? (val === 0 ? '0' : `${val.toFixed(1)}%`) : ''}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </ChartPanel>
           </div>
-        )}
+          )
+        })()}
 
         {/* ── CONCENTRATION TAB ────────────────────────────────────────── */}
         {activeTab === 'concentration' && (
