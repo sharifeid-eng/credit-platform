@@ -231,7 +231,10 @@ def compute_aajil_delinquency(df, mult=1, ref_date=None, aux=None):
     active = df[df[C_STATUS] == 'Accrued'].copy()
     total_active = active[C_RECEIVABLE].fillna(0).sum() * mult
 
-    overdue = active[C_OVERDUE_INST].fillna(0)
+    # Overdue No of Installments can be fractional (proportional overdue).
+    # Round to nearest integer for bucketing.
+    overdue_raw = active[C_OVERDUE_INST].fillna(0)
+    overdue = overdue_raw.round().astype(int)
     overdue_amt = active[C_SALE_OVERDUE].fillna(0) * mult
 
     buckets = [
@@ -245,10 +248,10 @@ def compute_aajil_delinquency(df, mult=1, ref_date=None, aux=None):
          'balance': _safe(active.loc[overdue >= 3, C_RECEIVABLE].fillna(0).sum() * mult)},
     ]
 
-    # PAR metrics
-    par_1 = overdue_amt[overdue >= 1].sum()
-    par_2 = overdue_amt[overdue >= 2].sum()
-    par_3 = overdue_amt[overdue >= 3].sum()
+    # PAR metrics (using rounded overdue installment count)
+    par_1 = active.loc[overdue >= 1, C_SALE_OVERDUE].fillna(0).sum() * mult
+    par_2 = active.loc[overdue >= 2, C_SALE_OVERDUE].fillna(0).sum() * mult
+    par_3 = active.loc[overdue >= 3, C_SALE_OVERDUE].fillna(0).sum() * mult
 
     # By Deal Type
     by_type = []
