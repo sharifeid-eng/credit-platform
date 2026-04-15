@@ -213,6 +213,7 @@ credit-platform/
 │   ├── auth_routes.py      # Auth API routes (/auth/me, /auth/users CRUD)
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   ├── intelligence.py     # Intelligence System endpoints (thesis, briefing, learning, KB search, feedback)
+│   ├── onboarding.py       # Self-service org/product/API key provisioning (2 endpoints)
 │   ├── operator.py         # Operator Command Center endpoints (status, todo, mind review, digest)
 │   └── schemas.py          # Pydantic request/response models for integration API
 ├── core/
@@ -318,7 +319,8 @@ credit-platform/
 │   │   │   ├── UserManagement.jsx  # Admin user management page (/admin/users)
 │   │   │   ├── EjariDashboard.jsx  # Read-only Ejari summary dashboard (12 sections from ODS)
 │   │   │   ├── TamaraDashboard.jsx # Tamara BNPL dashboard (14 KSA + 10 UAE tabs, VintageHeatmap, CovenantTriggerCards)
-│   │   │   └── AajilDashboard.jsx  # Aajil SME trade credit dashboard (13 tabs, Cascade-inspired Traction + GrowthStats)
+│   │   │   ├── AajilDashboard.jsx  # Aajil SME trade credit dashboard (13 tabs, Cascade-inspired Traction + GrowthStats)
+│   │   │   └── Onboarding.jsx      # Self-service company onboarding (4-step form: org → products → review → API key)
 │   │   │   ├── research/          # Research Hub pages
 │   │   │   │   ├── DocumentLibrary.jsx   # Browse ingested documents
 │   │   │   │   ├── ResearchChat.jsx      # AI chat across all documents
@@ -357,6 +359,7 @@ credit-platform/
 │   │   │   │   ├── SegmentAnalysisChart.jsx      # Multi-dimensional cuts with heat-map coloring
 │   │   │   │   ├── SeasonalityChart.jsx          # YoY comparison + seasonal index
 │   │   │   │   ├── CdrCcrChart.jsx               # CDR/CCR conditional rates by vintage (Klaim)
+│   │   │   │   ├── VintageHeatmap.jsx            # Shared: CSS grid vintage × MOB heatmap (from Tamara)
 │   │   │   │   └── silq/                    # SILQ-specific chart components
 │   │   │   │       ├── DelinquencyChart.jsx
 │   │   │   │       ├── SilqCollectionsChart.jsx
@@ -385,6 +388,7 @@ credit-platform/
 │   │   │       ├── WaterfallTable.jsx        # Borrowing base waterfall table
 │   │   │       ├── LimitCard.jsx             # Click-to-expand limit card (breaching items, adjustments)
 │   │   │       ├── CovenantCard.jsx          # Covenant card with threshold visualization
+│   │   │       ├── CovenantTriggerCard.jsx  # Shared: 3-level trigger zone visualization (from Tamara)
 │   │   │       ├── ComplianceBadge.jsx       # Shared Compliant/Breach badge
 │   │   │       ├── InvoicesTable.jsx         # Paginated invoice table (eligible/ineligible tabs, search)
 │   │   │       ├── PaymentsTable.jsx         # Payment ledger (ADVANCE/PARTIAL/FINAL badges, filters)
@@ -499,6 +503,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/hhi-timeseries`     |HHI concentration across all snapshots|
 |`GET /companies/{co}/products/{p}/charts/seasonality`        |YoY seasonal patterns + seasonal index|
 |`GET /companies/{co}/products/{p}/charts/cdr-ccr`            |CDR/CCR by vintage (annualized conditional default/collection rates)|
+|`GET /companies/{co}/products/{p}/charts/facility-pd`        |Facility-mode PD (Markov chain DPD bucket transitions)             |
 |`GET /companies/{co}/products/{p}/charts/methodology-log`    |Data corrections & column availability log|
 |`GET /framework`                                             |Analysis Framework markdown document  |
 
@@ -548,6 +553,12 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/mind/profile`              |Company mind profile               |
 |`POST /companies/{co}/products/{p}/mind/record`              |Record mind entry                  |
 |`GET /mind/master/context`                                   |Preview master mind context        |
+
+**Onboarding endpoints:**
+|Endpoint                                                     |Description                        |
+|-------------------------------------------------------------|-----------------------------------|
+|`POST /api/onboarding/validate`                              |Check org name uniqueness          |
+|`POST /api/onboarding/organizations`                         |Create org + products + API key    |
 
 **Memo Engine endpoints:**
 |Endpoint                                                     |Description                        |
@@ -610,6 +621,7 @@ Integration endpoints require `X-API-Key` header (SHA-256 hashed, org-scoped).
 | `/company/:co/:product/legal/:tab` | `LegalAnalytics` | Legal analysis 8-tab dashboard |
 | `/operator` | `OperatorCenter` | Command Center — health matrix, commands, follow-ups, activity log, mind review |
 | `/framework` | `Framework` | Analysis Framework — analytical philosophy with sticky TOC |
+| `/onboard` | `Onboarding` | Self-service company onboarding (4-step form) |
 
 **Sidebar navigation:** 240px persistent sidebar on all company pages. Sections: Company name, Products (if multiple), Executive Summary (gold accent, AI-powered), Tape Analytics (18 links), Portfolio Analytics (6 links), Legal Analysis (8 links), Research Hub (Document Library, Research Chat, IC Memos), Methodology. Active state: gold left border + gold text.
 
@@ -1473,9 +1485,9 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Automated compliance certificate / BBC export — `core/compliance_cert.py` (ReportLab dark-themed PDF: facility summary, waterfall, concentration limits, covenants, officer cert); `POST .../portfolio/compliance-cert` streams PDF; "Download BBC" button in BorrowingBase.jsx.
 - [x] Conditional monthly rates (CDR/CCR) — `compute_cdr_ccr()` (Klaim) + `compute_silq_cdr_ccr()` (SILQ); new tab for both; annualizes cumulative default/collection rates by vintage age to strip out maturity effects; 4 KPI tiles + dual-line chart + net spread line
 - [x] Breach notification system (Slack webhook) — `POST .../portfolio/notify-breaches` sends Slack block message; webhook URL in FacilityParamsPanel Notifications section; "Notify" bell button in Covenants header.
-- [ ] Portfolio company onboarding flow (self-service API key provisioning)
-- [ ] Facility-mode PD — probability of aging into ineligibility (not just credit default)
-- [ ] Recovery discounting — PV-adjusted LGD using discount rate (undiscounted LGD overstates recovery value)
+- [x] Portfolio company onboarding flow — `backend/onboarding.py` (validate + create org/product/API key), `Onboarding.jsx` (4-step form), route `/onboard`
+- [x] Facility-mode PD — `compute_facility_pd()` Markov chain (DPD bucket transitions, forward PD curve), endpoint `/charts/facility-pd`
+- [x] Recovery discounting — `_compute_pv_adjusted_lgd()` discounts recoveries by time-to-recovery (8% annual rate), integrated into `compute_expected_loss()` output as `lgd_pv_adjusted`
 **Tamara — P0 ✅ COMPLETE:**
 - [x] AI Executive Summary — `_build_tamara_full_context()` (40 context lines), section_guidance, tab_slugs
 - [x] Concentration gauges wired to HSBC data + instalment type pie chart added
@@ -1492,21 +1504,21 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Add Briefing + Learning tabs to OperatorCenter
 - [x] Add DataChat thumbs-up/down feedback buttons
 - [x] Add Layer 5 (thesis context) to AI prompts — `build_mind_context()` now 5-layer
-- [ ] Create ThesisTracker.jsx frontend (pillar cards, drift history, edit mode)
-- [ ] Enhance build_mind_context() with graph-aware scoring (Phase 1B)
-- [ ] Copy 6 new slash commands from worktree to main repo .claude/commands/
+- [x] Create ThesisTracker.jsx frontend (pillar cards, drift history, edit mode) — 8th OperatorCenter tab
+- [x] Enhance build_mind_context() with graph-aware scoring (Phase 1B) — `query_text` param, KnowledgeGraph for Layers 2+4
+- [x] Copy 6 new slash commands — /morning, /thesis, /drift, /learn, /emerge, /know
 **Research Hub & Memo — Near-term:**
-- [ ] CSV tape classifier improvement (currently classified as "other" instead of "portfolio_tape")
-- [ ] Seed Tamara Company Mind from data room findings
+- [x] CSV tape classifier improvement — text-preview rule for loan column headers
+- [x] Seed Tamara Company Mind — 11 entries + relations at company level (`data/Tamara/mind/`)
 - [ ] Insight extraction integration tests with real investor reports
-- [ ] Amendment memo template (facility size changes, covenant modifications)
+- [x] Amendment memo template — 9-section `amendment_memo` in templates.py
 - [ ] Add framework sections 16-20 to ANALYSIS_FRAMEWORK.md (documenting new systems)
-**Tamara — P1 (remaining showcase items):**
-- [ ] Facility payment waterfall (17-step horizontal waterfall)
-- [ ] Dilution time-series by vintage
-- [ ] HSBC trigger trend heatmap (6 metrics x 10 months)
+**Tamara — P1 ✅ COMPLETE (session 20):**
+- [x] Facility payment waterfall — `facility-waterfall` tab (horizontal bar chart + detail table)
+- [x] Dilution time-series by vintage — enhanced dilution tab with vintage line chart
+- [x] HSBC trigger trend heatmap — `trigger-trends` tab (CSS grid heatmap)
 - [ ] Collections by BB delinquency bucket
-- [ ] Promote VintageHeatmap and CovenantTriggerCard to shared components
+- [x] Promote VintageHeatmap and CovenantTriggerCard to shared components
 **Tamara — P2 (polish):**
 - [ ] AI-powered research report narrative — wire `ai_narrative` to Claude
 - [ ] Frontend "Generate Research Report" button
@@ -1516,11 +1528,11 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Generalized data room ingestion — `core/dataroom/engine.py` ingests any directory of mixed files (PDF, Excel, CSV, JSON, DOCX, ODS), auto-classifies (16 types), chunks for search, builds TF-IDF index. Replaces `prepare_tamara_data.py` proof-of-concept.
 - [x] Data room file inventory — `registry.json` catalogs all files (type, size, page count, chunk count, classification)
 - [x] PDF table extraction — pluggable parsers in `core/dataroom/parsers/` standardize extraction
-- [ ] Incremental data room updates — detect new/changed files, re-parse only those
-**Research Report — Platform capability expansion:**
-- [ ] Company-specific report builders for Ejari, Klaim, SILQ (currently Tamara-only)
+- [x] Incremental data room updates — `POST /dataroom/refresh` now defaults to company dataroom dir
+**Research Report — Platform capability ✅ MOSTLY COMPLETE (session 20):**
+- [x] Company-specific report builders for Ejari, Klaim, SILQ — dedicated builders + dispatch + TOC
 - [ ] AI narrative injection for all companies via Claude prompt per analysis_type
-- [ ] Report template customization — analyst selects sections, adds custom commentary
+- [x] Report template customization — `section_order` + `excluded_sections` params; tape data loaded for report generation
 - [ ] Historical report versioning — saved with timestamps, comparison across dates
 **Phase 3 (Team & Deployment):**
 - [x] Cloud deployment

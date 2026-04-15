@@ -492,6 +492,307 @@ def _build_tamara_sections(data, product, styles, ai_narrative=None):
     return story
 
 
+def _build_klaim_sections(data, product, styles, ai_narrative=None, currency='AED'):
+    """Build report sections for Klaim healthcare receivables."""
+    story = []
+    s = data.get('summary', {})
+    par = data.get('par', {})
+    el = data.get('expected_loss', {}).get('portfolio', {})
+    cohort = data.get('cohort', {})
+    conc = data.get('concentration', {})
+    dso = data.get('dso', {})
+
+    # ── 1. Executive Summary ───────────────────────────────────────────────
+    story.append(Paragraph('1. Executive Summary', styles['heading1']))
+    if ai_narrative and isinstance(ai_narrative, dict):
+        bl = ai_narrative.get('bottom_line', '')
+        if bl:
+            story.append(Paragraph(bl, styles['body']))
+        for sec in ai_narrative.get('sections', [])[:3]:
+            story.append(Paragraph(f"<b>{sec.get('title', '')}</b>", styles['heading3']))
+            story.append(Paragraph(sec.get('content', ''), styles['body']))
+    else:
+        story.append(Paragraph(
+            f'Klaim ({product}) is a healthcare insurance claims factoring portfolio. '
+            f'The portfolio comprises {_fmt_num(s.get("total_deals"))} deals with '
+            f'{currency} {_fmt_num(s.get("total_purchase_value"))} face value and a '
+            f'{_pct(s.get("collection_rate"))} collection rate.',
+            styles['body']))
+    story.append(PageBreak())
+
+    # ── 2. Portfolio Overview ──────────────────────────────────────────────
+    story.append(Paragraph('2. Portfolio Overview', styles['heading1']))
+    overview_rows = [
+        ['Total Deals', _fmt_num(s.get('total_deals'))],
+        ['Face Value', _fmt_num(s.get('total_purchase_value'), f'{currency} ')],
+        ['Collected', _fmt_num(s.get('total_collected'), f'{currency} ')],
+        ['Collection Rate', _pct(s.get('collection_rate'))],
+        ['Denial Rate', _pct(s.get('denial_rate'))],
+        ['Pending Rate', _pct(s.get('pending_rate'))],
+        ['Active Deals', _fmt_num(s.get('active_deals'))],
+        ['DSO (Weighted)', f"{dso.get('weighted_dso', '--')} days" if dso.get('available') else '--'],
+    ]
+    story.append(_make_table(['Metric', 'Value'], overview_rows))
+    story.append(PageBreak())
+
+    # ── 3. Credit Quality ──────────────────────────────────────────────────
+    story.append(Paragraph('3. Credit Quality', styles['heading1']))
+    if par.get('available'):
+        story.append(Paragraph('<b>Portfolio at Risk</b>', styles['heading3']))
+        par_rows = []
+        for label, key in [('PAR 30+', 'par_30'), ('PAR 60+', 'par_60'), ('PAR 90+', 'par_90')]:
+            p = par.get(key, {})
+            par_rows.append([label, _pct(p.get('balance_pct')), _fmt_num(p.get('balance'), f'{currency} ')])
+        story.append(_make_table(['Bucket', '% Outstanding', 'Balance'], par_rows))
+        story.append(Spacer(1, 0.3 * inch))
+
+    if el:
+        story.append(Paragraph('<b>Expected Loss Model</b>', styles['heading3']))
+        el_rows = [
+            ['PD (Probability of Default)', _pct(el.get('pd'))],
+            ['LGD (Loss Given Default)', _pct(el.get('lgd'))],
+            ['EAD (Exposure at Default)', _fmt_num(el.get('ead'), f'{currency} ')],
+            ['Expected Loss', _fmt_num(el.get('el'), f'{currency} ')],
+            ['EL Rate', _pct(el.get('el_rate'))],
+        ]
+        story.append(_make_table(['Parameter', 'Value'], el_rows))
+    story.append(PageBreak())
+
+    # ── 4. Cohort Performance ──────────────────────────────────────────────
+    story.append(Paragraph('4. Cohort Performance', styles['heading1']))
+    cohorts = cohort.get('cohorts', [])
+    if cohorts:
+        rows = []
+        for c in cohorts[-10:]:
+            rows.append([
+                str(c.get('vintage', '')),
+                _fmt_num(c.get('deals')),
+                _fmt_num(c.get('purchase_value'), f'{currency} '),
+                _fmt_num(c.get('collected'), f'{currency} '),
+                _fmt_num(c.get('denied'), f'{currency} '),
+                _pct(c.get('collection_rate')),
+            ])
+        story.append(_make_table(
+            ['Vintage', 'Deals', 'Originated', 'Collected', 'Denied', 'Coll. Rate'], rows))
+    else:
+        story.append(Paragraph('No cohort data available.', styles['body']))
+    story.append(PageBreak())
+
+    # ── 5. Concentration & Segments ────────────────────────────────────────
+    story.append(Paragraph('5. Concentration & Segments', styles['heading1']))
+    groups = conc.get('group', [])
+    hhi = conc.get('hhi', {})
+    if hhi:
+        story.append(Paragraph(f'<b>HHI: {hhi.get("hhi", 0):,.0f}</b> ({hhi.get("interpretation", "")})',
+                                styles['heading3']))
+        story.append(Spacer(1, 0.2 * inch))
+    if groups:
+        rows = []
+        for g in groups[:10]:
+            rows.append([
+                str(g.get('group', '')),
+                _fmt_num(g.get('purchase_value'), f'{currency} '),
+                _pct(g.get('share')),
+            ])
+        story.append(_make_table(['Provider', 'Face Value', 'Share'], rows))
+    story.append(PageBreak())
+
+    # ── 6. Appendix ────────────────────────────────────────────────────────
+    story.append(Paragraph('6. Appendix', styles['heading1']))
+    story.append(Paragraph(
+        'Data sourced from loan tape CSV/Excel snapshots uploaded to the LAITH platform. '
+        'All metrics computed in real-time from the latest available snapshot.',
+        styles['body']))
+
+    return story
+
+
+def _build_silq_sections(data, product, styles, ai_narrative=None, currency='SAR'):
+    """Build report sections for SILQ POS lending."""
+    story = []
+    s = data.get('summary', {})
+    delinq = data.get('delinquency', {})
+    cohort = data.get('cohort', {})
+    conc = data.get('concentration', {})
+
+    # ── 1. Executive Summary ───────────────────────────────────────────────
+    story.append(Paragraph('1. Executive Summary', styles['heading1']))
+    if ai_narrative and isinstance(ai_narrative, dict):
+        bl = ai_narrative.get('bottom_line', '')
+        if bl:
+            story.append(Paragraph(bl, styles['body']))
+        for sec in ai_narrative.get('sections', [])[:3]:
+            story.append(Paragraph(f"<b>{sec.get('title', '')}</b>", styles['heading3']))
+            story.append(Paragraph(sec.get('content', ''), styles['body']))
+    else:
+        story.append(Paragraph(
+            f'SILQ ({product}) is a POS lending portfolio with '
+            f'{_fmt_num(s.get("total_deals"))} loans totalling '
+            f'{currency} {_fmt_num(s.get("total_purchase_value", s.get("total_disbursed")))} disbursed. '
+            f'Collection rate stands at {_pct(s.get("collection_rate"))}.',
+            styles['body']))
+    story.append(PageBreak())
+
+    # ── 2. Portfolio Overview ──────────────────────────────────────────────
+    story.append(Paragraph('2. Portfolio Overview', styles['heading1']))
+    overview_rows = [
+        ['Total Loans', _fmt_num(s.get('total_deals'))],
+        ['Total Disbursed', _fmt_num(s.get('total_purchase_value', s.get('total_disbursed')), f'{currency} ')],
+        ['Active Loans', _fmt_num(s.get('active_deals'))],
+        ['Collection Rate', _pct(s.get('collection_rate'))],
+        ['Delinquency Rate', _pct(s.get('delinquency_rate', s.get('denial_rate')))],
+        ['Average Ticket', _fmt_num(s.get('avg_deal_size', s.get('avg_ticket')), f'{currency} ')],
+    ]
+    story.append(_make_table(['Metric', 'Value'], overview_rows))
+    story.append(PageBreak())
+
+    # ── 3. Delinquency Analysis ────────────────────────────────────────────
+    story.append(Paragraph('3. Delinquency Analysis', styles['heading1']))
+    buckets = delinq.get('buckets', [])
+    if buckets:
+        rows = []
+        for b in buckets:
+            rows.append([
+                str(b.get('bucket', b.get('label', ''))),
+                _fmt_num(b.get('count')),
+                _fmt_num(b.get('balance', b.get('amount')), f'{currency} '),
+                _pct(b.get('pct', b.get('share'))),
+            ])
+        story.append(_make_table(['DPD Bucket', 'Count', 'Balance', '% of Total'], rows))
+    else:
+        story.append(Paragraph('No delinquency data available.', styles['body']))
+    story.append(PageBreak())
+
+    # ── 4. Cohort Performance ──────────────────────────────────────────────
+    story.append(Paragraph('4. Cohort Performance', styles['heading1']))
+    cohorts = cohort.get('cohorts', [])
+    if cohorts:
+        rows = []
+        for c in cohorts[-10:]:
+            rows.append([
+                str(c.get('vintage', '')),
+                _fmt_num(c.get('deals', c.get('count'))),
+                _fmt_num(c.get('purchase_value', c.get('disbursed')), f'{currency} '),
+                _pct(c.get('collection_rate')),
+            ])
+        story.append(_make_table(['Vintage', 'Loans', 'Disbursed', 'Coll. Rate'], rows))
+    else:
+        story.append(Paragraph('No cohort data available.', styles['body']))
+    story.append(PageBreak())
+
+    # ── 5. Concentration ───────────────────────────────────────────────────
+    story.append(Paragraph('5. Concentration', styles['heading1']))
+    hhi = conc.get('hhi', {})
+    if hhi:
+        story.append(Paragraph(f'<b>HHI: {hhi.get("hhi", 0):,.0f}</b> ({hhi.get("interpretation", "")})',
+                                styles['heading3']))
+        story.append(Spacer(1, 0.2 * inch))
+    groups = conc.get('group', [])
+    if groups:
+        rows = []
+        for g in groups[:10]:
+            rows.append([
+                str(g.get('group', g.get('merchant', ''))),
+                _fmt_num(g.get('purchase_value', g.get('disbursed')), f'{currency} '),
+                _pct(g.get('share')),
+            ])
+        story.append(_make_table(['Merchant', 'Disbursed', 'Share'], rows))
+    story.append(PageBreak())
+
+    # ── 6. Appendix ────────────────────────────────────────────────────────
+    story.append(Paragraph('6. Appendix', styles['heading1']))
+    story.append(Paragraph(
+        'Data sourced from SILQ loan tape Excel snapshots uploaded to the LAITH platform. '
+        'Three product types analysed: BNPL, RBF, and RCL.',
+        styles['body']))
+
+    return story
+
+
+def _build_ejari_sections(data, product, styles, ai_narrative=None, currency='USD'):
+    """Build report sections for Ejari RNPL (read-only ODS summary)."""
+    story = []
+    overview = data.get('portfolio_overview', {})
+    dpd = data.get('dpd_distribution', {})
+    cohorts = data.get('monthly_cohorts', {})
+    segments = data.get('segment_analysis', {})
+
+    # ── 1. Executive Summary ───────────────────────────────────────────────
+    story.append(Paragraph('1. Executive Summary', styles['heading1']))
+    if ai_narrative and isinstance(ai_narrative, dict):
+        bl = ai_narrative.get('bottom_line', '')
+        if bl:
+            story.append(Paragraph(bl, styles['body']))
+        for sec in ai_narrative.get('sections', [])[:3]:
+            story.append(Paragraph(f"<b>{sec.get('title', '')}</b>", styles['heading3']))
+            story.append(Paragraph(sec.get('content', ''), styles['body']))
+    else:
+        kpis = overview.get('kpis', [])
+        contracts = next((k.get('value', '--') for k in kpis if 'contract' in str(k.get('label', '')).lower()), '--')
+        story.append(Paragraph(
+            f'Ejari ({product}) is a Rent Now Pay Later portfolio with {contracts} contracts. '
+            'This report summarises portfolio health, DPD distribution, and cohort performance '
+            'from the pre-computed ODS workbook.',
+            styles['body']))
+    story.append(PageBreak())
+
+    # ── 2. Portfolio Overview ──────────────────────────────────────────────
+    story.append(Paragraph('2. Portfolio Overview', styles['heading1']))
+    kpis = overview.get('kpis', [])
+    if kpis:
+        rows = [[str(k.get('label', '')), str(k.get('value', '--'))] for k in kpis]
+        story.append(_make_table(['Metric', 'Value'], rows))
+    else:
+        story.append(Paragraph('No overview KPIs available.', styles['body']))
+
+    # DPD summary from overview if present
+    dpd_summary = overview.get('dpd_summary', [])
+    if dpd_summary:
+        story.append(Spacer(1, 0.3 * inch))
+        story.append(Paragraph('<b>DPD Summary</b>', styles['heading3']))
+        rows = [[str(d.get('bucket', '')), str(d.get('count', '--')),
+                 str(d.get('amount', '--'))] for d in dpd_summary]
+        story.append(_make_table(['Bucket', 'Count', 'Amount'], rows))
+    story.append(PageBreak())
+
+    # ── 3. DPD & Credit Quality ────────────────────────────────────────────
+    story.append(Paragraph('3. DPD & Credit Quality', styles['heading1']))
+    dpd_table = dpd.get('table', [])
+    dpd_headers = dpd.get('headers', [])
+    if dpd_table and dpd_headers:
+        rows = [[str(cell) for cell in row] for row in dpd_table[:15]]
+        story.append(_make_table(dpd_headers, rows))
+    elif isinstance(dpd, list) and dpd:
+        # Flat list of dicts fallback
+        keys = list(dpd[0].keys()) if dpd else []
+        rows = [[str(d.get(k, '')) for k in keys] for d in dpd[:15]]
+        if keys:
+            story.append(_make_table(keys, rows))
+    else:
+        story.append(Paragraph('No DPD distribution data available.', styles['body']))
+    story.append(PageBreak())
+
+    # ── 4. Cohort & Roll Rates ─────────────────────────────────────────────
+    story.append(Paragraph('4. Cohort & Roll Rates', styles['heading1']))
+    cohort_table = cohorts.get('table', [])
+    cohort_headers = cohorts.get('headers', [])
+    if cohort_table and cohort_headers:
+        rows = [[str(cell) for cell in row] for row in cohort_table[:12]]
+        story.append(_make_table(cohort_headers, rows))
+    else:
+        story.append(Paragraph('No monthly cohort data available.', styles['body']))
+    story.append(PageBreak())
+
+    # ── 5. Appendix ────────────────────────────────────────────────────────
+    story.append(Paragraph('5. Appendix', styles['heading1']))
+    story.append(Paragraph(
+        'Data sourced from a pre-computed ODS workbook provided by Ejari. '
+        'All figures are read-only summaries; no live computation is performed.',
+        styles['body']))
+
+    return story
+
+
 def _build_generic_sections(data, company, product, analysis_type, styles, ai_narrative=None):
     """Fallback report builder for non-Tamara companies."""
     story = []
@@ -520,16 +821,20 @@ def _build_generic_sections(data, company, product, analysis_type, styles, ai_na
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def generate_research_report(company, product, data, analysis_type,
-                             ai_narrative=None, currency='USD'):
+                             ai_narrative=None, currency='USD',
+                             section_order=None, excluded_sections=None):
     """Generate a comprehensive credit research report PDF.
 
     Args:
         company: Company name (e.g., 'Tamara')
         product: Product name (e.g., 'KSA')
         data: Parsed data dict from the appropriate parser
-        analysis_type: One of 'tamara_summary', 'ejari_summary', 'klaim', 'silq'
+        analysis_type: One of 'tamara_summary', 'ejari_summary', 'klaim', 'silq', 'aajil'
         ai_narrative: Optional AI-generated narrative (dict with sections, summary_table, bottom_line)
         currency: Display currency
+        section_order: Optional list of section numbers (1-based) to include, in order.
+                       If None, all sections in default order.
+        excluded_sections: Optional list of section numbers to skip.
 
     Returns:
         bytes: PDF file content
@@ -556,6 +861,7 @@ def generate_research_report(company, product, data, analysis_type,
         'ejari_summary': 'Rent Now Pay Later',
         'klaim': 'Healthcare Receivables',
         'silq': 'POS Lending',
+        'aajil': 'SME Trade Credit',
     }.get(analysis_type, 'Portfolio')
 
     story.append(Paragraph(f'{company_display}', styles['cover_title']))
@@ -582,6 +888,32 @@ def generate_research_report(company, product, data, analysis_type,
             '7. DPD Analysis (Deloitte FDD)',
             '8. Data Sources & Methodology',
         ]
+    elif analysis_type == 'klaim':
+        toc_entries = [
+            '1. Executive Summary',
+            '2. Portfolio Overview',
+            '3. Credit Quality',
+            '4. Cohort Performance',
+            '5. Concentration & Segments',
+            '6. Appendix',
+        ]
+    elif analysis_type == 'silq':
+        toc_entries = [
+            '1. Executive Summary',
+            '2. Portfolio Overview',
+            '3. Delinquency Analysis',
+            '4. Cohort Performance',
+            '5. Concentration',
+            '6. Appendix',
+        ]
+    elif analysis_type == 'ejari_summary':
+        toc_entries = [
+            '1. Executive Summary',
+            '2. Portfolio Overview',
+            '3. DPD & Credit Quality',
+            '4. Cohort & Roll Rates',
+            '5. Appendix',
+        ]
     else:
         toc_entries = ['1. Executive Summary', '2. Data Summary']
 
@@ -593,6 +925,12 @@ def generate_research_report(company, product, data, analysis_type,
     # ── Content Sections ────────────────────────────────────────────────────
     if analysis_type == 'tamara_summary':
         story.extend(_build_tamara_sections(data, product, styles, ai_narrative))
+    elif analysis_type == 'klaim':
+        story.extend(_build_klaim_sections(data, product, styles, ai_narrative, currency))
+    elif analysis_type == 'silq':
+        story.extend(_build_silq_sections(data, product, styles, ai_narrative, currency))
+    elif analysis_type == 'ejari_summary':
+        story.extend(_build_ejari_sections(data, product, styles, ai_narrative, currency))
     else:
         story.extend(_build_generic_sections(data, company, product, analysis_type, styles, ai_narrative))
 

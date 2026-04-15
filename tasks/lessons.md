@@ -8,6 +8,16 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 **Decision:** Moved `legal/` and `mind/` from product level (`data/{company}/{product}/`) to company level (`data/{company}/`), matching the existing pattern for `dataroom/`. These resources are shared across all products within a company — facility agreements and institutional memory aren't product-specific.
 **Rule:** When adding a new shared directory under a company, remember to: (1) add it to `_NON_PRODUCT_DIRS` in `core/loader.py` so it's not discovered as a product, (2) update ALL discovery loops that iterate `company/product/` subdirectories (operator, intelligence, briefing, kb_query, master_mind — there are many), (3) update tests that create mock directory structures. A single `get_X_dir()` function is the right pattern — but watch for hardcoded paths in discovery loops that bypass it.
 
+## 2026-04-15 — Parallel branch path migrations require data file audits
+
+**Discovery:** A parallel branch moved `mind/` and `legal/` from product-level to company-level (`data/{company}/mind/` instead of `data/{company}/{product}/mind/`). Code changes referencing `base_dir` attributes were fine — they automatically pick up new paths. But *data files* I created at `data/Tamara/KSA/mind/` needed manual migration to `data/Tamara/mind/`. Multi-product companies also needed entries merged (KSA + UAE into one directory with `product` metadata tags).
+**Rule:** When a parallel branch changes directory structure, audit (1) code paths (grep for old pattern), (2) new data files created in this session, and (3) attribute-based references (safe if constructors change). Data files are the easiest to miss because they don't show up in code diffs.
+
+## 2026-04-15 — React.useState inside IIFE render callbacks breaks hooks rules
+
+**Discovery:** Tried adding `React.useState` inside an immediately-invoked function expression within a `renderSection()` switch-case return. This violates React's Rules of Hooks — hooks must be at the top level of a component, not inside callbacks/IIFEs. Fixed by using the first product as default instead of a stateful selector.
+**Rule:** Never use `useState` inside `(() => { ... })()` patterns within render functions. If you need local state within a switch case, extract it to a separate component or use parent-level state.
+
 ## 2026-04-15 — Cascade Volume = Principal Amount, not Bill Notional
 
 **Discovery:** Compared Laith's computed volume (SAR 327M) vs Cascade Debt's displayed volume (SAR 381M). After testing all tape columns against Cascade's monthly figures, found that Cascade uses `Principal Amount` (bill + margin + origination fee, no VAT) — NOT `Bill Notional` (raw materials cost) and NOT `Sale Total` (includes VAT). The match was exact to within SAR 5-180 per month.

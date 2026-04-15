@@ -18,6 +18,7 @@ import MemoEditor from './pages/research/MemoEditor';
 import LegalAnalytics from './pages/LegalAnalytics';
 import OperatorCenter from './pages/OperatorCenter';
 import UserManagement from './pages/UserManagement';
+import Onboarding from './pages/Onboarding';
 
 function CompanyRedirect() {
   // Redirect /company/:name to first product's tape overview
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/framework" element={<Framework />} />
         <Route path="/operator" element={<OperatorCenter />} />
+        <Route path="/onboard" element={<Onboarding />} />
         <Route path="/admin/users" element={
           <ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute>
         } />

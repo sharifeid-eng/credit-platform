@@ -15,7 +15,9 @@
     { "slug": "collections", "label": "Collections" },
     { "slug": "concentration", "label": "Concentration" },
     { "slug": "covenant-compliance", "label": "Covenant Compliance" },
+    { "slug": "trigger-trends", "label": "Trigger Trends" },
     { "slug": "facility-structure", "label": "Facility Structure" },
+    { "slug": "facility-waterfall", "label": "Payment Waterfall" },
     { "slug": "notes", "label": "Data Notes" }
   ]
 }

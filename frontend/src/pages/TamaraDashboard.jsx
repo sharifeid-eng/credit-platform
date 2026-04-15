@@ -6,6 +6,8 @@ import useBreakpoint from '../hooks/useBreakpoint'
 import { getTamaraSummary } from '../services/api'
 import KpiCard from '../components/KpiCard'
 import ChartPanel from '../components/ChartPanel'
+import VintageHeatmap from '../components/charts/VintageHeatmap'
+import CovenantTriggerCard from '../components/portfolio/CovenantTriggerCard'
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ComposedChart,
@@ -50,164 +52,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// VINTAGE HEATMAP (novel component — CSS grid)
-// ═══════════════════════════════════════════════════════════════════════════════
-function VintageHeatmap({ data, metric = 'default' }) {
-  const [activeMetric, setActiveMetric] = useState(metric)
-  const metricData = data?.vintage_performance?.[activeMetric] || {}
-  const portfolio = metricData.portfolio || []
-  const colorScale = metricData._color_scale || {}
-
-  if (!portfolio.length) return <div style={{ color: MUTED, padding: 20 }}>No vintage data available for {activeMetric}</div>
-
-  // Get all MOB columns (reporting months)
-  const allCols = new Set()
-  portfolio.forEach(r => Object.keys(r).forEach(k => { if (k !== 'vintage') allCols.add(k) }))
-  const columns = [...allCols].sort()
-
-  // Color mapping
-  const getColor = (val) => {
-    if (val == null) return 'transparent'
-    const maxVal = colorScale.p75 || colorScale.max || 0.05
-    const ratio = Math.min(val / maxVal, 1)
-    if (ratio < 0.33) return `rgba(45, 212, 191, ${0.15 + ratio * 1.5})`  // teal
-    if (ratio < 0.66) return `rgba(201, 168, 76, ${0.2 + (ratio - 0.33) * 1.5})`  // gold
-    return `rgba(240, 96, 96, ${0.3 + (ratio - 0.66) * 2})`  // red
-  }
-
-  const toggles = ['default', 'delinquency', 'dilution']
-
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {toggles.map(m => (
-          <button key={m} onClick={() => setActiveMetric(m)}
-            style={{
-              padding: '6px 16px', borderRadius: 6, border: `1px solid ${m === activeMetric ? GOLD : BORDER}`,
-              background: m === activeMetric ? 'rgba(201,168,76,0.15)' : 'transparent',
-              color: m === activeMetric ? GOLD : MUTED, fontSize: 12, cursor: 'pointer', textTransform: 'capitalize',
-            }}>{m === 'default' ? 'Default (+120DPD)' : m === 'delinquency' ? 'Delinquency (+7DPD)' : 'Dilution (Refund)'}</button>
-        ))}
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `100px repeat(${columns.length}, 60px)`, gap: 1, fontSize: 10 }}>
-          {/* Header row */}
-          <div style={{ padding: '4px 6px', color: GOLD, fontWeight: 600, position: 'sticky', left: 0, background: DEEP, zIndex: 1 }}>Vintage</div>
-          {columns.map(c => (
-            <div key={c} style={{ padding: '4px 2px', color: MUTED, textAlign: 'center', whiteSpace: 'nowrap' }}>
-              {c.replace('20', "'")}
-            </div>
-          ))}
-
-          {/* Data rows */}
-          {portfolio.map((row, ri) => (
-            <React.Fragment key={ri}>
-              <div style={{ padding: '4px 6px', color: '#E8EAF0', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
-                position: 'sticky', left: 0, background: DEEP, zIndex: 1 }}>
-                {row.vintage}
-              </div>
-              {columns.map(c => {
-                const val = row[c]
-                return (
-                  <div key={c} style={{
-                    padding: '4px 2px', textAlign: 'center', background: getColor(val),
-                    color: val != null ? '#E8EAF0' : 'transparent', borderRadius: 2,
-                    fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
-                  }}>
-                    {val != null ? `${(val * 100).toFixed(1)}` : ''}
-                  </div>
-                )
-              })}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-
-      {colorScale.min != null && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 16, fontSize: 11, color: MUTED }}>
-          <span>Min: {(colorScale.min * 100).toFixed(2)}%</span>
-          <span>P25: {(colorScale.p25 * 100).toFixed(2)}%</span>
-          <span>P75: {(colorScale.p75 * 100).toFixed(2)}%</span>
-          <span>Max: {(colorScale.max * 100).toFixed(2)}%</span>
-          <span>({colorScale.count} data points)</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// COVENANT TRIGGER CARD
-// ═══════════════════════════════════════════════════════════════════════════════
-function CovenantTriggerCard({ trigger }) {
-  const { name, metric, current_value, l1_threshold, l2_threshold, l3_threshold, status, headroom_pct } = trigger
-  const maxVal = l3_threshold * 1.2
-  const barWidth = (val) => `${Math.min((val / maxVal) * 100, 100)}%`
-
-  const statusColors = {
-    compliant: TEAL,
-    l1_breach: '#F59E0B',
-    l2_breach: '#F97316',
-    l3_breach: RED,
-    unknown: MUTED,
-  }
-
-  return (
-    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ color: '#E8EAF0', fontWeight: 600, textTransform: 'capitalize' }}>{name}</span>
-        <span style={{ color: statusColors[status] || MUTED, fontSize: 12, fontWeight: 600 }}>
-          {status === 'compliant' ? 'COMPLIANT' : status === 'unknown' ? 'N/A' : status.toUpperCase().replace('_', ' ')}
-        </span>
-      </div>
-      <div style={{ fontSize: 11, color: MUTED, marginBottom: 12 }}>{metric}</div>
-
-      {/* Trigger zone bar */}
-      <div style={{ position: 'relative', height: 24, background: DEEP, borderRadius: 4, overflow: 'hidden' }}>
-        {/* L3 zone (red) */}
-        <div style={{ position: 'absolute', left: barWidth(l2_threshold), right: 0, top: 0, bottom: 0, background: 'rgba(240,96,96,0.15)' }} />
-        {/* L2 zone (orange) */}
-        <div style={{ position: 'absolute', left: barWidth(l1_threshold), width: `calc(${barWidth(l2_threshold)} - ${barWidth(l1_threshold)})`, top: 0, bottom: 0, background: 'rgba(249,115,22,0.15)' }} />
-        {/* L1 zone (amber) */}
-        <div style={{ position: 'absolute', left: barWidth(l1_threshold * 0.7), width: `calc(${barWidth(l1_threshold)} - ${barWidth(l1_threshold * 0.7)})`, top: 0, bottom: 0, background: 'rgba(245,158,11,0.1)' }} />
-
-        {/* Current value marker */}
-        {current_value != null && (
-          <div style={{
-            position: 'absolute', left: barWidth(current_value), top: 0, bottom: 0,
-            width: 3, background: statusColors[status] || TEAL, borderRadius: 2,
-          }} />
-        )}
-
-        {/* Threshold markers — stagger label vertically when thresholds are close */}
-        {[{ val: l1_threshold, label: 'L1' }, { val: l2_threshold, label: 'L2' }, { val: l3_threshold, label: 'L3' }].map((t, i) => {
-          const thresholds = [l1_threshold, l2_threshold, l3_threshold]
-          const prevVal = i > 0 ? thresholds[i - 1] : 0
-          const tooClose = i > 0 && maxVal > 0 && ((t.val - prevVal) / maxVal) < 0.08
-          return (
-            <div key={t.label} style={{
-              position: 'absolute', left: barWidth(t.val), top: 0, bottom: 0,
-              borderLeft: `1px dashed ${MUTED}`, opacity: 0.5,
-            }}>
-              <span style={{ position: 'absolute', top: tooClose ? -24 : -14, left: -8, fontSize: 9, color: MUTED }}>{t.label}</span>
-            </div>
-          )
-        })}
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11 }}>
-        <span style={{ color: statusColors[status] || MUTED }}>
-          Current: {current_value != null ? `${current_value.toFixed(2)}%` : 'N/A'}
-        </span>
-        {headroom_pct != null && (
-          <span style={{ color: TEAL }}>Headroom: {headroom_pct.toFixed(1)}pp to L1</span>
-        )}
-      </div>
-    </div>
-  )
-}
+// VintageHeatmap and CovenantTriggerCard imported from shared components
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONCENTRATION GAUGE
@@ -494,6 +339,45 @@ export default function TamaraDashboard() {
               </ResponsiveContainer>
             ) : <div style={{ color: MUTED, padding: 20 }}>No dilution data available</div>}
           </ChartPanel>
+
+          {/* Dilution time-series by vintage — use first product */}
+          {(() => {
+            const firstProd = products[0]
+            const records = firstProd ? (dilutionData[firstProd] || []) : []
+            if (!records.length) return null
+
+            const allMobs = new Set()
+            records.forEach(r => Object.keys(r).forEach(k => { if (k !== 'vintage') allMobs.add(k) }))
+            const mobs = [...allMobs].sort()
+            const recentVintages = records.slice(-8)
+
+            const lineData = mobs.map(mob => {
+              const point = { mob }
+              recentVintages.forEach(v => {
+                if (v[mob] != null) point[v.vintage] = (v[mob] * 100)
+              })
+              return point
+            })
+
+            return (
+              <ChartPanel title="Dilution Curves by Vintage" subtitle={`${firstProd} — cumulative dilution rate over time`} style={{ marginTop: 16 }}>
+                <ResponsiveContainer width="100%" height={350}>
+                  <LineChart data={lineData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                    <XAxis dataKey="mob" tick={{ fill: MUTED, fontSize: 10 }} />
+                    <YAxis tick={{ fill: MUTED, fontSize: 10 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    {recentVintages.map((v, i) => (
+                      <Line key={v.vintage} type="monotone" dataKey={v.vintage} stroke={PIE_COLORS[i % PIE_COLORS.length]}
+                        dot={false} strokeWidth={1.5} name={v.vintage} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            )
+          })()}
+        </div>
         )
       }
 
@@ -941,6 +825,146 @@ export default function TamaraDashboard() {
               />
             </ChartPanel>
           </div>
+        )
+      }
+
+      // ── TRIGGER TRENDS HEATMAP ───────────────────────────────────────────
+      case 'trigger-trends': {
+        // Build time-series from all HSBC reports
+        const ft = facilityTerms.triggers || {}
+        const triggerKeys = Object.keys(ft)
+        const months = hsbc.map((r, i) => {
+          const label = r.report_date || r.meta?.report_date || `Report ${i + 1}`
+          return label.slice(0, 7)
+        }).filter(Boolean)
+
+        // Build matrix: for each trigger key, for each report month, determine status
+        const matrix = triggerKeys.map(tKey => {
+          const def = ft[tKey] || {}
+          const l1 = def.l1 || 0
+          const l2 = def.l2 || 0
+          const l3 = def.l3 || 0
+          const row = { trigger: tKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }
+          hsbc.forEach((report, ri) => {
+            const triggerRows = report.triggers || []
+            let val = null
+            for (const tr of triggerRows) {
+              const lbl = (tr.label || '').toLowerCase()
+              if (tKey.toLowerCase().includes(lbl.slice(0, 8)) || lbl.includes(tKey.toLowerCase().slice(0, 8))) {
+                for (const v of (tr.values || [])) {
+                  try {
+                    const n = parseFloat(String(v).replace('%', '').replace(',', ''))
+                    if (n >= 0 && n <= 100) { val = n / 100; break }
+                  } catch {}
+                }
+              }
+            }
+            let status = 0 // 0=unknown
+            if (val !== null) {
+              if (val < l1) status = 1 // compliant
+              else if (val < l2) status = 2 // l1 breach
+              else if (val < l3) status = 3 // l2 breach
+              else status = 4 // l3 breach
+            }
+            row[months[ri] || `r${ri}`] = status
+          })
+          return row
+        })
+
+        const statusColors = ['transparent', 'rgba(45,212,191,0.5)', 'rgba(245,158,11,0.5)', 'rgba(249,115,22,0.6)', 'rgba(240,96,96,0.7)']
+        const statusLabels = ['N/A', 'Compliant', 'L1 Breach', 'L2 Breach', 'L3 Breach']
+        const cols = months.length ? months : hsbc.map((_, i) => `r${i}`)
+
+        return (
+          <ChartPanel title="Trigger Status Heatmap" subtitle="Performance trigger compliance across HSBC reporting months">
+            {matrix.length > 0 && cols.length > 0 ? (
+              <div>
+                <div style={{ overflowX: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: `160px repeat(${cols.length}, 70px)`, gap: 1, fontSize: 10 }}>
+                    <div style={{ padding: '6px 8px', color: GOLD, fontWeight: 600, position: 'sticky', left: 0, background: DEEP, zIndex: 1 }}>Trigger</div>
+                    {cols.map(c => <div key={c} style={{ padding: '6px 4px', color: MUTED, textAlign: 'center', whiteSpace: 'nowrap' }}>{c}</div>)}
+                    {matrix.map((row, ri) => (
+                      <React.Fragment key={ri}>
+                        <div style={{ padding: '6px 8px', color: '#E8EAF0', fontSize: 10, position: 'sticky', left: 0, background: DEEP, zIndex: 1 }}>{row.trigger}</div>
+                        {cols.map(c => {
+                          const s = row[c] || 0
+                          return (
+                            <div key={c} style={{
+                              padding: '6px 4px', textAlign: 'center', borderRadius: 2,
+                              background: statusColors[s], color: s > 0 ? '#E8EAF0' : 'transparent',
+                              fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
+                            }}>
+                              {s > 0 ? statusLabels[s]?.charAt(0) : ''}
+                            </div>
+                          )
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, display: 'flex', gap: 16, fontSize: 11 }}>
+                  {statusLabels.slice(1).map((label, i) => (
+                    <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, color: MUTED }}>
+                      <span style={{ width: 12, height: 12, borderRadius: 2, background: statusColors[i + 1], display: 'inline-block' }} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : <div style={{ color: MUTED, padding: 20 }}>No trigger trend data available</div>}
+          </ChartPanel>
+        )
+      }
+
+      // ── FACILITY PAYMENT WATERFALL ────────────────────────────────────────
+      case 'facility-waterfall': {
+        // Get waterfall from latest HSBC report that has it
+        let waterfallData = []
+        let waterfallMonth = ''
+        for (let i = hsbc.length - 1; i >= 0; i--) {
+          const wf = hsbc[i].waterfall || []
+          if (wf.length > 0) {
+            waterfallData = wf
+            waterfallMonth = (hsbc[i].report_date || hsbc[i].meta?.report_date || `Report ${i + 1}`).slice(0, 7)
+            break
+          }
+        }
+
+        // Build chart data from waterfall steps
+        const chartData = waterfallData.map((step, i) => {
+          const value = Array.isArray(step.values) ? step.values[0] : step.value
+          let numVal = 0
+          if (typeof value === 'number') numVal = value
+          else if (typeof value === 'string') {
+            numVal = parseFloat(value.replace(/[$,]/g, '')) || 0
+          }
+          return { step: step.step || step.label || `Step ${i + 1}`, value: numVal / 1e6 }
+        })
+
+        return (
+          <ChartPanel title="Payment Waterfall" subtitle={waterfallMonth ? `Facility payment cascade — ${waterfallMonth}` : 'Facility payment cascade'}>
+            {chartData.length > 0 ? (
+              <div>
+                <ResponsiveContainer width="100%" height={Math.max(400, chartData.length * 28)}>
+                  <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                    <XAxis type="number" tick={{ fill: MUTED, fontSize: 10 }} tickFormatter={v => `$${v.toFixed(1)}M`} />
+                    <YAxis type="category" dataKey="step" tick={{ fill: MUTED, fontSize: 9 }} width={200} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="value" name="Amount ($M)" radius={[0, 4, 4, 0]}>
+                      {chartData.map((entry, i) => (
+                        <Cell key={i} fill={i === 0 ? TEAL : i === chartData.length - 1 ? GOLD : BLUE} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <DataTable
+                  headers={['Step', 'Amount']}
+                  rows={chartData.map(d => [d.step, `$${d.value.toFixed(2)}M`])}
+                />
+              </div>
+            ) : <div style={{ color: MUTED, padding: 20 }}>No waterfall data available in HSBC reports</div>}
+          </ChartPanel>
         )
       }
 
