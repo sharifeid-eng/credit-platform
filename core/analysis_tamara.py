@@ -31,6 +31,7 @@ def parse_tamara_data(filepath):
     _enrich_vintage_heatmap(data)
     _enrich_deloitte_summary(data)
     _enrich_hsbc_summary(data)
+    _enrich_repayment_behavior(data)
 
     return data
 
@@ -256,6 +257,124 @@ def _enrich_hsbc_summary(data):
         'date_range': f"{reports[0].get('report_date', '')} to {reports[-1].get('report_date', '')}",
         'concentration_timeseries': concentration_timeseries,
     }
+
+
+def _enrich_repayment_behavior(data):
+    """Compute summary metrics from repayment lifecycle and customer behavior."""
+    latest = 'Q1 2026'
+    prev = 'Q4 2025'
+
+    # ── Repayment lifecycle summary ──
+    rep = data.get('repayment_lifecycle', {})
+    rep_bal = rep.get('balance', [])
+    if rep_bal:
+        current_by_stage = {}
+        default_by_stage = {}
+        total_by_stage = {}
+        for r in rep_bal:
+            stage = r.get('installments_left', '?')
+            val = r.get(latest, 0) or 0
+            total_by_stage[stage] = total_by_stage.get(stage, 0) + val
+            if r['dpd_bucket'] == 'Current':
+                current_by_stage[stage] = current_by_stage.get(stage, 0) + val
+            elif 'Default' in r['dpd_bucket']:
+                default_by_stage[stage] = default_by_stage.get(stage, 0) + val
+
+        # Build stage breakdown for charts — use actual keys from data
+        all_stages = sorted(total_by_stage.keys(),
+                            key=lambda s: (0 if s == '1' else 1 if '2' in s else 2 if '4' in s else 3))
+        stages = []
+        for stage in all_stages:
+            total = total_by_stage.get(stage, 0)
+            if total > 0:
+                stages.append({
+                    'stage': stage,
+                    'total_pct': round(total * 100, 2),
+                    'current_pct': round((current_by_stage.get(stage, 0) / total) * 100, 1),
+                    'default_pct': round((default_by_stage.get(stage, 0) / total) * 100, 2),
+                })
+
+        near_maturity = total_by_stage.get('1', 0)
+        early_stage = total_by_stage.get('7+', 0)
+
+        data['repayment_summary'] = {
+            'near_maturity_pct': round(near_maturity * 100, 1),
+            'early_stage_pct': round(early_stage * 100, 1),
+            'stages': stages,
+            'quarters': ['Q4 2023', 'Q4 2024', 'Q4 2025', 'Q1 2026'],
+        }
+
+        # Quarterly time series by stage (for stacked bar)
+        quarterly_series = []
+        for q in ['Q4 2023', 'Q4 2024', 'Q4 2025', 'Q1 2026']:
+            point = {'quarter': q}
+            for stage in all_stages:
+                current = sum(r.get(q, 0) or 0 for r in rep_bal
+                              if r.get('installments_left') == stage and r['dpd_bucket'] == 'Current')
+                delinquent = sum(r.get(q, 0) or 0 for r in rep_bal
+                                if r.get('installments_left') == stage and r['dpd_bucket'] != 'Current')
+                point[f'{stage}_current'] = round(current * 100, 2)
+                point[f'{stage}_delinquent'] = round(delinquent * 100, 2)
+            quarterly_series.append(point)
+        data['repayment_summary']['quarterly'] = quarterly_series
+
+    # ── Customer behavior summary ──
+    beh = data.get('customer_behavior', {})
+    beh_bal = beh.get('balance', [])
+    if beh_bal:
+        current_by_tier = {}
+        default_by_tier = {}
+        total_by_tier = {}
+        for r in beh_bal:
+            tier = r.get('lifetime_transactions', '?')
+            val = r.get(latest, 0) or 0
+            total_by_tier[tier] = total_by_tier.get(tier, 0) + val
+            if r['dpd_bucket'] == 'Current':
+                current_by_tier[tier] = current_by_tier.get(tier, 0) + val
+            elif 'Default' in r['dpd_bucket']:
+                default_by_tier[tier] = default_by_tier.get(tier, 0) + val
+
+        all_tiers = sorted(total_by_tier.keys(),
+                           key=lambda t: (0 if t == '1' else 1 if '2' in t else 2 if '4' in t else 3))
+        tiers = []
+        for tier in all_tiers:
+            total = total_by_tier.get(tier, 0)
+            if total > 0:
+                tiers.append({
+                    'tier': tier,
+                    'total_pct': round(total * 100, 2),
+                    'current_pct': round((current_by_tier.get(tier, 0) / total) * 100, 1),
+                    'default_pct': round((default_by_tier.get(tier, 0) / total) * 100, 2),
+                })
+
+        repeat_pct = total_by_tier.get('>5', 0)
+        new_default = default_by_tier.get('1', 0)
+        new_total = total_by_tier.get('1', 0)
+        repeat_default = default_by_tier.get('>5', 0)
+        repeat_total = total_by_tier.get('>5', 0)
+
+        data['behavior_summary'] = {
+            'repeat_balance_pct': round(repeat_pct * 100, 1),
+            'new_default_rate': round((new_default / new_total * 100), 2) if new_total > 0 else 0,
+            'repeat_default_rate': round((repeat_default / repeat_total * 100), 2) if repeat_total > 0 else 0,
+            'tiers': tiers,
+            'quarters': ['Q4 2023', 'Q4 2024', 'Q4 2025', 'Q1 2026'],
+        }
+
+        # Quarterly time series by tier
+        quarterly_series = []
+        for q in ['Q4 2023', 'Q4 2024', 'Q4 2025', 'Q1 2026']:
+            point = {'quarter': q}
+            for tier in all_tiers:
+                current = sum(r.get(q, 0) or 0 for r in beh_bal
+                              if r.get('lifetime_transactions') == tier and r['dpd_bucket'] == 'Current')
+                delinquent = sum(r.get(q, 0) or 0 for r in beh_bal
+                                if r.get('lifetime_transactions') == tier and r['dpd_bucket'] != 'Current')
+                safe_tier = tier.replace('>', 'gt')
+                point[f'{safe_tier}_current'] = round(current * 100, 2)
+                point[f'{safe_tier}_delinquent'] = round(delinquent * 100, 2)
+            quarterly_series.append(point)
+        data['behavior_summary']['quarterly'] = quarterly_series
 
 
 def get_tamara_summary_kpis(data):

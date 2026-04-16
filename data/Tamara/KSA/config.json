@@ -13,6 +13,8 @@
     { "slug": "default-analysis", "label": "Default Analysis" },
     { "slug": "dilution", "label": "Dilution" },
     { "slug": "collections", "label": "Collections" },
+    { "slug": "repayment-lifecycle", "label": "Repayment Lifecycle" },
+    { "slug": "customer-behavior", "label": "Customer Behavior" },
     { "slug": "concentration", "label": "Concentration" },
     { "slug": "covenant-compliance", "label": "Covenant Compliance" },
     { "slug": "trigger-trends", "label": "Trigger Trends" },

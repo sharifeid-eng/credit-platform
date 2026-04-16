@@ -408,6 +408,94 @@ export default function TamaraDashboard() {
         )
       }
 
+      // ── REPAYMENT LIFECYCLE ──────────────────────────────────────────────
+      case 'repayment-lifecycle': {
+        const repSummary = data.repayment_summary || {}
+        const stages = repSummary.stages || []
+        const stageColors = [TEAL, BLUE, GOLD, RED]
+
+        return (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginBottom: 24 }}>
+              <KpiCard label="Near Maturity (1 inst)" value={`${repSummary.near_maturity_pct || 0}%`} subtitle="of outstanding balance" />
+              <KpiCard label="Early Stage (7+ inst)" value={`${repSummary.early_stage_pct || 0}%`} subtitle="of outstanding balance" />
+              {stages.map(s => (
+                <KpiCard key={s.stage} label={`${s.stage} inst — Default`} value={`${s.default_pct}%`} subtitle={`${s.total_pct}% of book`} />
+              ))}
+            </div>
+
+            <ChartPanel title="Default Rate by Lifecycle Stage" subtitle="Q1 2026 — default % within each installment stage">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={stages} barSize={40}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="stage" tick={{ fill: MUTED, fontSize: 12 }} />
+                  <YAxis tick={{ fill: MUTED, fontSize: 10 }} unit="%" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="default_pct" name="Default Rate %" fill={RED} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="current_pct" name="Current %" fill={TEAL} radius={[4, 4, 0, 0]} opacity={0.5} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <ChartPanel title="Portfolio Composition by Stage" subtitle="% of outstanding balance">
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={stages} dataKey="total_pct" nameKey="stage" cx="50%" cy="50%"
+                    innerRadius={60} outerRadius={110} paddingAngle={3}
+                    label={({ stage, total_pct }) => `${stage}: ${total_pct}%`}>
+                    {stages.map((_, i) => <Cell key={i} fill={stageColors[i % stageColors.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          </div>
+        )
+      }
+
+      // ── CUSTOMER BEHAVIOR ─────────────────────────────────────────────────
+      case 'customer-behavior': {
+        const behSummary = data.behavior_summary || {}
+        const tiers = behSummary.tiers || []
+        const tierColors = [RED, GOLD, BLUE, TEAL]
+
+        return (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginBottom: 24 }}>
+              <KpiCard label="Repeat (>5 txn)" value={`${behSummary.repeat_balance_pct || 0}%`} subtitle="of outstanding balance" />
+              <KpiCard label="New Customer Default" value={`${behSummary.new_default_rate || 0}%`} subtitle="1st transaction" />
+              <KpiCard label="Repeat Default" value={`${behSummary.repeat_default_rate || 0}%`} subtitle=">5 transactions" />
+            </div>
+
+            <ChartPanel title="Default Rate by Engagement Tier" subtitle="Q1 2026 — default % within each customer tier">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={tiers} barSize={40}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="tier" tick={{ fill: MUTED, fontSize: 12 }} />
+                  <YAxis tick={{ fill: MUTED, fontSize: 10 }} unit="%" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="default_pct" name="Default Rate %" fill={RED} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="current_pct" name="Current %" fill={TEAL} radius={[4, 4, 0, 0]} opacity={0.5} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <ChartPanel title="Portfolio Composition by Engagement" subtitle="% of outstanding balance">
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={tiers} dataKey="total_pct" nameKey="tier" cx="50%" cy="50%"
+                    innerRadius={60} outerRadius={110} paddingAngle={3}
+                    label={({ tier, total_pct }) => `${tier}: ${total_pct}%`}>
+                    {tiers.map((_, i) => <Cell key={i} fill={tierColors[i % tierColors.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          </div>
+        )
+      }
+
       // ── CONCENTRATION ────────────────────────────────────────────────────
       case 'concentration': {
         const latestReport = hsbc[hsbc.length - 1] || {}
