@@ -125,6 +125,12 @@ app.include_router(auth_router)
 from backend.intelligence import router as intelligence_router
 app.include_router(intelligence_router)
 
+
+@app.get("/health")
+async def health_check():
+    """Unauthenticated health check for deploy scripts and monitoring."""
+    return {"status": "ok"}
+
 from backend.onboarding import router as onboarding_router
 app.include_router(onboarding_router)
 
