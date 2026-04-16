@@ -1,9 +1,9 @@
 {
-  "6e88b7aa-135": {
-    "doc_id": "6e88b7aa-135",
+  "c6b58510-fc2": {
+    "doc_id": "c6b58510-fc2",
     "filename": "03.2026 - Aajil - vAmwal - vF.pdf",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\03.2026 - Aajil - vAmwal - vF.pdf",
-    "document_type": "portfolio_tape",
+    "document_type": "company_presentation",
     "sha256": "78e620ca7226d08531e708a6b63a63abf7bda58fb136c2f5f83f4099bdc9e49e",
     "page_count": 47,
     "chunk_count": 84,
@@ -12,13 +12,13 @@
     "parser_metadata": {
       "filename": "03.2026 - Aajil - vAmwal - vF.pdf"
     },
-    "ingested_at": "2026-04-15T21:37:57"
+    "ingested_at": "2026-04-16T09:53:16"
   },
-  "0b4cb988-ff6": {
-    "doc_id": "0b4cb988-ff6",
+  "bae3a838-957": {
+    "doc_id": "bae3a838-957",
     "filename": "01. BUILDNOW FS 28 Feb 2026 MA.xlsx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\01. BUILDNOW FS 28 Feb 2026 MA.xlsx",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "15733bb64352ca29d6fa5fadd56932645add76c6f3ef543cfa3da9911b10c69d",
     "page_count": 11,
     "chunk_count": 12,
@@ -85,13 +85,13 @@
       ],
       "total_sheets": 11
     },
-    "ingested_at": "2026-04-15T21:37:58"
+    "ingested_at": "2026-04-16T09:53:20"
   },
-  "8ecc3e6c-7c5": {
-    "doc_id": "8ecc3e6c-7c5",
+  "4162be64-7a0": {
+    "doc_id": "4162be64-7a0",
     "filename": "01. BUILDNOW FS 31 Dec 2025 MA.xlsx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\01. BUILDNOW FS 31 Dec 2025 MA.xlsx",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "f7c412c3a621c5f6a2ce7df3629b14b7e9e20ee99b0a48cf21ed76ad5683e0fb",
     "page_count": 11,
     "chunk_count": 12,
@@ -158,13 +158,13 @@
       ],
       "total_sheets": 11
     },
-    "ingested_at": "2026-04-15T21:38:00"
+    "ingested_at": "2026-04-16T09:53:25"
   },
-  "3943cb80-a7b": {
-    "doc_id": "3943cb80-a7b",
+  "8985c7d5-414": {
+    "doc_id": "8985c7d5-414",
     "filename": "Consolidated Financial Statements FY2022 - FY2023.xlsx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Consolidated Financial Statements FY2022 - FY2023.xlsx",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "713e637021d8656db6cacdeb2ec68a8e1dec763a02a24def0c661b80a9faf183",
     "page_count": 3,
     "chunk_count": 3,
@@ -191,13 +191,13 @@
       ],
       "total_sheets": 3
     },
-    "ingested_at": "2026-04-15T21:38:00"
+    "ingested_at": "2026-04-16T09:53:26"
   },
-  "d5b2837f-6f7": {
-    "doc_id": "d5b2837f-6f7",
+  "629ae179-1e6": {
+    "doc_id": "629ae179-1e6",
     "filename": "Consolidated Financial Statements FY2024.xlsx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Consolidated Financial Statements FY2024.xlsx",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "da67e434cd12e22e59cad649c04b8ceeb8fc63f50358cafddf248c394196eda1",
     "page_count": 10,
     "chunk_count": 10,
@@ -259,13 +259,13 @@
       ],
       "total_sheets": 10
     },
-    "ingested_at": "2026-04-15T21:38:01"
+    "ingested_at": "2026-04-16T09:53:27"
   },
-  "dceb7072-25d": {
-    "doc_id": "dceb7072-25d",
+  "93a85913-817": {
+    "doc_id": "93a85913-817",
     "filename": "Overview of Debt Facilities.xlsx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Overview of Debt Facilities.xlsx",
-    "document_type": "other",
+    "document_type": "debt_overview",
     "sha256": "9b4d565c6d2de50146735be672c6a4d087db5dc9369c28b37c79fc1180621cf4",
     "page_count": 1,
     "chunk_count": 1,
@@ -282,13 +282,13 @@
       ],
       "total_sheets": 1
     },
-    "ingested_at": "2026-04-15T21:38:01"
+    "ingested_at": "2026-04-16T09:53:27"
   },
-  "217fd045-d59": {
-    "doc_id": "217fd045-d59",
+  "e946a16e-cf1": {
+    "doc_id": "e946a16e-cf1",
     "filename": "Audited Financial Statements 2022.pdf",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Audited Financial Statements (KSA)\\Audited Financial Statements 2022.pdf",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "bbf0493a239979ccf38be8fb83286fbe4b6f98433bfbfb8ba56bdd7687b8db5d",
     "page_count": 18,
     "chunk_count": 37,
@@ -297,13 +297,13 @@
     "parser_metadata": {
       "filename": "Audited Financial Statements 2022.pdf"
     },
-    "ingested_at": "2026-04-15T21:38:02"
+    "ingested_at": "2026-04-16T09:53:34"
   },
-  "beb0de12-8ea": {
-    "doc_id": "beb0de12-8ea",
+  "5d7600b2-6b6": {
+    "doc_id": "5d7600b2-6b6",
     "filename": "Audited Financial Statements 2023.pdf",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Audited Financial Statements (KSA)\\Audited Financial Statements 2023.pdf",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "5083f2c1039b1bb1d3ea8682345adfff1e5abb9cf1ec80d72aef9f35c8d189b3",
     "page_count": 18,
     "chunk_count": 41,
@@ -312,13 +312,13 @@
     "parser_metadata": {
       "filename": "Audited Financial Statements 2023.pdf"
     },
-    "ingested_at": "2026-04-15T21:38:04"
+    "ingested_at": "2026-04-16T09:53:42"
   },
-  "355bb389-db7": {
-    "doc_id": "355bb389-db7",
+  "b4c08aa9-764": {
+    "doc_id": "b4c08aa9-764",
     "filename": "Buildnow Audited Financial Statement for 2024 (1).pdf",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Audited Financial Statements (KSA)\\Buildnow Audited Financial Statement for 2024 (1).pdf",
-    "document_type": "other",
+    "document_type": "financial_statement",
     "sha256": "19d31c1d91cce0965473b491113d555ee7a6cf17589544d9ccbe7faf541770c1",
     "page_count": 19,
     "chunk_count": 0,
@@ -327,13 +327,13 @@
     "parser_metadata": {
       "filename": "Buildnow Audited Financial Statement for 2024 (1).pdf"
     },
-    "ingested_at": "2026-04-15T21:38:04"
+    "ingested_at": "2026-04-16T09:53:42"
   },
-  "e0737959-f5b": {
-    "doc_id": "e0737959-f5b",
+  "068a3469-fc1": {
+    "doc_id": "068a3469-fc1",
     "filename": "US Tax Return 2022.pdf",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Financial Statements (USA)\\US Tax Return 2022.pdf",
-    "document_type": "other",
+    "document_type": "tax_filing",
     "sha256": "be4b17af7594430a0b86439311c4ae6dbad441a577c6cc93768041208cebb056",
     "page_count": 18,
     "chunk_count": 76,
@@ -342,13 +342,13 @@
     "parser_metadata": {
       "filename": "US Tax Return 2022.pdf"
     },
-    "ingested_at": "2026-04-15T21:38:07"
+    "ingested_at": "2026-04-16T09:53:56"
   },
-  "aacd0ec5-79e": {
-    "doc_id": "aacd0ec5-79e",
+  "12149f06-53b": {
+    "doc_id": "12149f06-53b",
     "filename": "US Tax Return 2023.pdf",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Finance\\Financial Statements (USA)\\US Tax Return 2023.pdf",
-    "document_type": "other",
+    "document_type": "tax_filing",
     "sha256": "e047d54d4d8a633c38666a974c22be32c31eef80143c6c80eca81ae1464a5b74",
     "page_count": 20,
     "chunk_count": 72,
@@ -357,13 +357,13 @@
     "parser_metadata": {
       "filename": "US Tax Return 2023.pdf"
     },
-    "ingested_at": "2026-04-15T21:38:16"
+    "ingested_at": "2026-04-16T09:54:35"
   },
-  "d87aa142-6fa": {
-    "doc_id": "d87aa142-6fa",
+  "e2920a76-2e7": {
+    "doc_id": "e2920a76-2e7",
     "filename": "Credit Policies - Notion.docx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Risk Management and Compliance\\Credit Policies - Notion.docx",
-    "document_type": "other",
+    "document_type": "credit_policy",
     "sha256": "fd4180dd83236fbfcf082fa14ab8c874565c00c2715aa77506ceab0bb98be58e",
     "page_count": 1,
     "chunk_count": 1,
@@ -375,13 +375,13 @@
       "created": "2026-03-25",
       "modified": "2026-03-25"
     },
-    "ingested_at": "2026-04-15T21:38:16"
+    "ingested_at": "2026-04-16T09:54:35"
   },
-  "26aa2fa2-7ac": {
-    "doc_id": "26aa2fa2-7ac",
+  "751a930b-4ff": {
+    "doc_id": "751a930b-4ff",
     "filename": "2024 - 2025 - 2026 YTD Sales Funnel_v03.2026.xlsx",
     "filepath": "C:\\Users\\SharifEid\\credit-platform\\backend\\..\\data\\Aajil\\dataroom\\Sales Strategy\\2024 - 2025 - 2026 YTD Sales Funnel_v03.2026.xlsx",
-    "document_type": "other",
+    "document_type": "sales_data",
     "sha256": "d22eac4100ba4e4795eace573212b47e1691538d29216ad52d2ee8307e36a40d",
     "page_count": 1,
     "chunk_count": 1,
@@ -398,6 +398,6 @@
       ],
       "total_sheets": 1
     },
-    "ingested_at": "2026-04-15T21:38:16"
+    "ingested_at": "2026-04-16T09:54:35"
   }
 }
