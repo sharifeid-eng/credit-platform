@@ -20,6 +20,16 @@ docker compose up -d
 echo "Running migrations..."
 docker compose exec backend alembic upgrade head
 
+# Wait for backend to be ready
+echo "Waiting for backend..."
+for i in $(seq 1 30); do
+    if docker compose exec -T backend curl -sf http://localhost:8000/companies > /dev/null 2>&1; then
+        echo "  Backend ready"
+        break
+    fi
+    sleep 2
+done
+
 # Rebuild dataroom search indexes if needed
 echo "Checking dataroom indexes..."
 for registry in data/*/dataroom/registry.json; do

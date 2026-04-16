@@ -10,7 +10,7 @@ services:
       - FRONTEND_URL=http://frontend:80
       - BACKEND_URL=http://localhost:8000
     volumes:
-      - ./data:/app/data:ro
+      - ./data:/app/data
       - ./reports:/app/reports
     depends_on:
       db:
