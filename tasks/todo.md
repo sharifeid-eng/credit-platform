@@ -59,6 +59,10 @@ Track active work here. Claude updates this as tasks progress.
 - [x] **EOD process improved** — Step 1b added to check for untracked data artifacts (registry.json, NLM state, mind entries, memos)
 - [x] **Recovered lost session 19 work** — found registry.json in `nifty-chebyshev` worktree, confirmed all code changes were already merged (0 unique commits)
 - [x] **All data artifacts committed** — registry.json, notebooklm_state.json, memo files committed to main (prevents worktree cleanup loss)
+- [x] **Production data sync pipeline** — `scripts/sync-data.ps1` (laptop → server via scp), `deploy.sh` auto-ingest (detects missing chunks), EOD auto-detects registry changes
+- [x] **Deploy.sh hardened** — auto `--no-cache` when backend/core code changes, dataroom auto-ingest via Python import (bypasses HTTP auth), /health endpoint added
+- [x] **docker-compose.yml** — data volume changed from read-only to read-write (ingest needs to write chunks)
+- [x] **Production datarooms synced and ingested** — Tamara (268 files), Klaim (152), Aajil (26)
 
 ---
 

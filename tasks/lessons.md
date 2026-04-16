@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-16 — Docker compose build caches stale code after git pull
+
+**Problem:** `deploy.sh` ran `git pull` then `docker compose build`, but Docker cached the `COPY core/` and `COPY backend/` layers from a previous build. The container ran old code despite the host having new files. Health check and ingest calls failed because the container didn't have the new `/health` endpoint.
+**Fix:** `deploy.sh` now compares `HEAD` before and after `git pull`. If any `core/` or `backend/` files changed, it runs `--no-cache` for the backend build automatically.
+**Rule:** When adding deploy-time features that depend on new backend code (endpoints, Python imports), always verify the container actually has the new code. `docker compose build` with Docker's layer cache is not guaranteed to pick up file changes after `git pull`.
+
+## 2026-04-16 — Production endpoints require auth — use Python imports for internal calls
+
+**Problem:** `deploy.sh` tried to call the dataroom ingest endpoint via HTTP from inside the container, but Cloudflare Auth middleware returned 401. Internal deploy scripts can't authenticate against the production auth layer.
+**Fix:** Call `DataRoomEngine.ingest()` directly via `docker compose exec -T backend python -c "..."` — bypasses HTTP entirely. Added `/health` endpoint to auth skip list for future health checks.
+**Rule:** Deploy scripts that need to trigger backend operations should use direct Python imports, not HTTP endpoints. HTTP endpoints have auth middleware in production.
+
 ## 2026-04-15 — Runtime data artifacts must be committed in EOD
 
 **Problem:** Session 19 ingested Tamara data room (226 files, registry.json, NLM state) but the EOD process didn't commit `registry.json` — it only existed in the worktree's working directory. When the worktree was cleaned up, the registry was lost. Found it by accident in a stale worktree (`nifty-chebyshev`).
