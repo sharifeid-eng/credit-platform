@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-16 — Always --no-cache backend builds in deploy.sh
+
+**Problem:** Docker's `COPY core/` layer cache doesn't reliably invalidate after `git pull`. The `--no-cache` detection logic (comparing HEAD before/after pull) only catches changes in the *current* pull. If a previous deploy pulled code but built with stale cache, subsequent deploys see "Already up to date" and never trigger `--no-cache`. Required manual `docker compose build --no-cache backend` multiple times.
+**Fix:** Changed `deploy.sh` to always use `--no-cache` for backend builds. The ~2min build time is acceptable for infrequent deploys. Frontend still uses cache (it invalidates correctly).
+**Rule:** Don't try to be clever with Docker cache invalidation on deploy. The cost of a stale container (broken features, debugging time) far exceeds the cost of a 2-minute rebuild.
+
 ## 2026-04-16 — Worktrees can't run ETL scripts that read raw data files
 
 **Problem:** ETL script `prepare_tamara_data.py` uses `PROJECT_ROOT` (derived from `__file__`) to find source data. When run from a worktree, `PROJECT_ROOT` points to the worktree directory which doesn't have raw dataroom files (they're not in git). The script silently produced empty sections.

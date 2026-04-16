@@ -14,15 +14,11 @@ BEFORE=$(git rev-parse HEAD)
 git pull origin main
 AFTER=$(git rev-parse HEAD)
 
-# Build containers — force rebuild backend if code changed
+# Build containers — always --no-cache for backend to avoid stale code
+# Docker layer cache unreliably invalidates COPY core/ after git pull
 echo "Building containers..."
-if git diff --name-only "$BEFORE" "$AFTER" | grep -qE '^(core/|backend/)'; then
-    echo "  Backend code changed — rebuilding without cache..."
-    docker compose build --no-cache backend
-    docker compose build frontend
-else
-    docker compose build
-fi
+docker compose build --no-cache backend
+docker compose build frontend
 
 echo "Starting services..."
 docker compose up -d
