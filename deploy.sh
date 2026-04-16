@@ -23,10 +23,11 @@ docker compose exec backend alembic upgrade head
 # Wait for backend to be ready
 echo "Waiting for backend..."
 for i in $(seq 1 30); do
-    if docker compose exec -T backend curl -sf http://localhost:8000/companies > /dev/null 2>&1; then
+    if docker compose exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/companies')" > /dev/null 2>&1; then
         echo "  Backend ready"
         break
     fi
+    echo "  Attempt $i/30..."
     sleep 2
 done
 
@@ -43,7 +44,13 @@ for registry in data/*/dataroom/registry.json; do
                 product=$(basename $(dirname "$config"))
                 if [ "$product" != "dataroom" ]; then
                     echo "  Ingesting dataroom for $company/$product..."
-                    docker compose exec -T backend curl -s -X POST "http://localhost:8000/companies/$company/products/$product/dataroom/ingest" > /dev/null 2>&1 && echo "    Done" || echo "    Skipped (endpoint not available)"
+                    docker compose exec -T backend python -c "
+import urllib.request, json
+req = urllib.request.Request('http://localhost:8000/companies/$company/products/$product/dataroom/ingest', method='POST')
+resp = urllib.request.urlopen(req)
+data = json.loads(resp.read())
+print(f\"    Done: {data.get('total_files', '?')} files, {data.get('ingested', '?')} ingested, {data.get('skipped', '?')} skipped\")
+" 2>&1 || echo "    Failed"
                 fi
             done
         else
