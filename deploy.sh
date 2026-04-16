@@ -5,13 +5,21 @@ set -e
 
 echo "=== Laith Deploy ==="
 
-# Pull latest code
+# Pull latest code — record what changed
 echo "Pulling latest code..."
+BEFORE=$(git rev-parse HEAD)
 git pull origin main
+AFTER=$(git rev-parse HEAD)
 
-# Build and restart containers
+# Build containers — force rebuild backend if code changed
 echo "Building containers..."
-docker compose build
+if git diff --name-only "$BEFORE" "$AFTER" | grep -qE '^(core/|backend/)'; then
+    echo "  Backend code changed — rebuilding without cache..."
+    docker compose build --no-cache backend
+    docker compose build frontend
+else
+    docker compose build
+fi
 
 echo "Starting services..."
 docker compose up -d
