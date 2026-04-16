@@ -21,6 +21,7 @@ import warnings
 from datetime import datetime
 from pathlib import Path
 
+import openpyxl
 import pandas as pd
 import numpy as np
 
@@ -920,6 +921,78 @@ def get_company_overview():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 10. Repayment Status & Transaction History
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def parse_repayment_and_behavior():
+    """Parse Repayment Status & Transaction History workbook.
+
+    Returns dict with 'repayment_lifecycle' and 'customer_behavior' keys,
+    each containing 'balance' and 'customer_count' lists of dicts.
+    Country codes in file: AE, SA.
+    """
+    filepath = str(DATA_OUT / "dataroom" / "Portfolio Performance Breakdowns" /
+                   "Repayment Status & Transaction History.xlsx")
+    if not os.path.exists(filepath):
+        print("  [WARN] Repayment Status file not found")
+        return {}, {}
+
+    print("\n--- Parsing Repayment Status & Transaction History ---")
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    quarters = ['Q4 2023', 'Q4 2024', 'Q4 2025', 'Q1 2026']
+
+    def _parse_sheet_section(ws, start_row, dimension_label):
+        """Parse a section (balance or customer count) from a sheet."""
+        records = []
+        country = product = dimension = None
+        row = start_row
+        while row <= ws.max_row:
+            cells = {c.column: c.value for c in ws[row] if c.value is not None}
+            if not cells:
+                break
+            # Grand Total row = end of section
+            if cells.get(2) == 'Grand Total':
+                break
+            # Pick up country/product/dimension from merge-style layout
+            if 2 in cells:
+                country = cells[2]
+            if 3 in cells:
+                product = cells[3]
+            if 4 in cells:
+                dimension = str(cells[4])
+            dpd_bucket = cells.get(5)
+            if dpd_bucket and country and product and dimension:
+                rec = {
+                    'country': country,
+                    'product': product,
+                    dimension_label: dimension,
+                    'dpd_bucket': dpd_bucket,
+                }
+                for i, q in enumerate(quarters):
+                    rec[q] = cells.get(6 + i, 0) or 0
+                records.append(rec)
+            row += 1
+        return records
+
+    # Sheet 1: Repayment Status
+    ws1 = wb['Repayment Status']
+    repayment_balance = _parse_sheet_section(ws1, 4, 'installments_left')
+    repayment_customers = _parse_sheet_section(ws1, 67, 'installments_left')
+
+    # Sheet 2: Transaction History
+    ws2 = wb['Transaction History']
+    behavior_balance = _parse_sheet_section(ws2, 4, 'lifetime_transactions')
+    behavior_customers = _parse_sheet_section(ws2, 68, 'lifetime_transactions')
+
+    print(f"  Repayment: {len(repayment_balance)} balance rows, {len(repayment_customers)} customer rows")
+    print(f"  Behavior: {len(behavior_balance)} balance rows, {len(behavior_customers)} customer rows")
+
+    repayment = {'balance': repayment_balance, 'customer_count': repayment_customers}
+    behavior = {'balance': behavior_balance, 'customer_count': behavior_customers}
+    return repayment, behavior
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN: Assemble and output
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -968,6 +1041,20 @@ def build_country_json(country):
         dpd7 = parse_daily_dpd7()
         data['daily_dpd7'] = dpd7.get('UAE', [])
 
+    # Repayment lifecycle & customer behavior (both countries)
+    repayment_all, behavior_all = parse_repayment_and_behavior()
+    cc = 'SA' if country == 'KSA' else 'AE'
+    if repayment_all:
+        data['repayment_lifecycle'] = {
+            'balance': [r for r in repayment_all.get('balance', []) if r['country'] == cc],
+            'customer_count': [r for r in repayment_all.get('customer_count', []) if r['country'] == cc],
+        }
+    if behavior_all:
+        data['customer_behavior'] = {
+            'balance': [r for r in behavior_all.get('balance', []) if r['country'] == cc],
+            'customer_count': [r for r in behavior_all.get('customer_count', []) if r['country'] == cc],
+        }
+
     # Data notes
     data['data_notes'] = [
         'Default = +120DPD (receivables >120 days past due)',
@@ -980,6 +1067,7 @@ def build_country_json(country):
         f'Securitisation facility: {data["facility_terms"]["facility_name"]}',
         f'Total facility limit: ${data["facility_terms"]["total_limit"]:,.0f}',
         'Eligible receivable criteria: resident, 18+, max balance, no 30-day-late in prior 12M, down payment paid',
+        'Repayment Status and Transaction History: whole-book quarterly stratification (Q4 2023 – Q1 2026)',
     ]
 
     return data
