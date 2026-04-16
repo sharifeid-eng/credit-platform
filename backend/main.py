@@ -3737,7 +3737,15 @@ def dataroom_document_view(company: str, product: str, doc_id: str):
     if result.get('error'):
         raise HTTPException(status_code=404, detail=result['error'])
     filepath = result.get('filepath', '')
-    if not filepath or not os.path.exists(filepath):
+    if not filepath:
+        raise HTTPException(status_code=404, detail="Source file not found on disk")
+    # Normalize path separators (registry may have Windows backslashes on Linux)
+    filepath = filepath.replace('\\', os.sep).replace('/', os.sep)
+    # If relative path, resolve against project root
+    if not os.path.isabs(filepath):
+        filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', filepath)
+    filepath = os.path.normpath(filepath)
+    if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Source file not found on disk")
     content_type = mimetypes.guess_type(filepath)[0] or 'application/octet-stream'
     return FileResponse(filepath, media_type=content_type, filename=os.path.basename(filepath))

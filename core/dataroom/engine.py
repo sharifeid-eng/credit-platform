@@ -82,6 +82,15 @@ _EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json",
 _EXCLUDE_DIRS = {"chunks", "analytics", "__pycache__", "node_modules", ".git", "mind"}
 
 
+def _normalize_filepath(filepath: str) -> str:
+    """Normalize filepath for cross-platform comparison.
+
+    Registry entries may have Windows backslashes from local ingestion.
+    Normalize to forward slashes for consistent matching on any OS.
+    """
+    return filepath.replace('\\', '/')
+
+
 def _is_supported(filepath: str) -> bool:
     """Check if a file has a supported extension for parsing."""
     p = Path(filepath)
@@ -330,12 +339,12 @@ class DataRoomEngine:
 
         registry = self._load_registry(company, product)
 
-        # Map current registry: filepath -> (doc_id, hash)
+        # Map current registry: normalized filepath -> (doc_id, hash)
         current_files = {}
         for doc_id, doc in registry.items():
             fp = doc.get("filepath")
             if fp:
-                current_files[fp] = (doc_id, doc.get("sha256"))
+                current_files[_normalize_filepath(fp)] = (doc_id, doc.get("sha256"))
 
         # Scan source directory
         disk_files = {}
@@ -349,8 +358,9 @@ class DataRoomEngine:
 
         # Detect new and changed files
         for fpath, file_hash in disk_files.items():
-            if fpath in current_files:
-                old_id, old_hash = current_files[fpath]
+            norm_fpath = _normalize_filepath(fpath)
+            if norm_fpath in current_files:
+                old_id, old_hash = current_files[norm_fpath]
                 if old_hash == file_hash:
                     result["unchanged"] += 1
                 else:
@@ -380,7 +390,7 @@ class DataRoomEngine:
                     result["errors"].append({"file": fpath, "error": str(e)})
 
         # Detect removed files (in registry but not on disk)
-        disk_paths = set(disk_files.keys())
+        disk_paths = {_normalize_filepath(p) for p in disk_files.keys()}
         for fpath, (doc_id, _) in current_files.items():
             if fpath not in disk_paths:
                 self._remove_doc(company, product, doc_id, registry)
@@ -529,7 +539,7 @@ class DataRoomEngine:
         doc_record = {
             "doc_id": doc_id,
             "filename": path.name,
-            "filepath": str(path),
+            "filepath": _normalize_filepath(str(path)),
             "document_type": doc_type.value,
             "sha256": file_hash,
             "page_count": parse_result.page_count,

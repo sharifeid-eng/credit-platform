@@ -19,7 +19,22 @@ Track active work here. Claude updates this as tasks progress.
 - [ ] **GrowthStats platform-wide** — apply to all company Overview tabs
 - [ ] **Global "Display by" segmentation** — Cascade-style cross-tab filter
 
-### NotebookLM Removal ✅ COMPLETE (2026-04-16)
+### Intelligence System — Remaining
+- [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
+
+---
+
+## Completed — 2026-04-16 (session 22: Dataroom filepath cross-platform fix)
+
+- [x] **Fix document view "Source file not found"** — view endpoint now resolves relative paths against project root and normalizes separators
+- [x] **Cross-platform filepath normalization** — `_normalize_filepath()` in engine.py, applied to registry reads, disk scan comparisons, removal detection, new record storage
+- [x] **All 3 companies fixed** — Klaim (relative backslash), Tamara (relative backslash), Aajil (absolute Windows path) — all affected by same bug
+- [x] **Re-ingest matching fix** — path comparison now normalized, prevents unnecessary re-processing when ingesting from Linux vs Windows
+
+---
+
+## Completed — 2026-04-16 (session 22b: NotebookLM Removal)
+
 - [x] **Delete NLM files** — notebooklm_bridge.py, synthesizer.py, test_notebooklm_bridge.py, 3 notebooklm_state.json
 - [x] **Simplify dual_engine.py** — rewritten as Claude-only wrapper (374→112 lines)
 - [x] **Remove NLM endpoints** — 4 endpoints deleted from main.py, operator health probe removed
@@ -27,31 +42,6 @@ Track active work here. Claude updates this as tasks progress.
 - [x] **Remove notebooklm-py dependency** — removed from requirements.txt
 - [x] **Clean all docs** — CLAUDE.md, ANALYSIS_FRAMEWORK.md, FRAMEWORK_INDEX.md, lessons.md, todo.md, eod.md
 - [x] **Verify** — 287 tests pass, zero "notebooklm" references in codebase, net -2,748 lines
-
-### Tamara Data Room + Memo ✅ COMPLETE (session 21)
-- [x] **Ingest Tamara data room** — 134 files, 4,076 chunks, 1,744 pages
-- [x] **Generate Tamara Credit Memo (v2)** — `f3af2d4e-b88`, 12 AI sections, 45 citations
-- [x] **Delete placeholder Tamara memo** — removed `0ae5cbe3-095`
-
-### Intelligence System — Remaining
-- [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
-- [x] **Create ThesisTracker.jsx frontend** — pillar cards, drift history, edit mode (session 20)
-- [x] **Enhance `build_mind_context()` with graph-aware scoring** — Phase 1B integration (session 20)
-- [x] **Copy slash commands to main repo .claude/commands/** — 6 new commands: /morning, /thesis, /drift, /learn, /emerge, /know (session 20)
-
-### Platform Improvements from Session 17
-- [x] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape" (session 20)
-
-### Klaim Data Room + Memo Exercise ✅ COMPLETE (session 17)
-1. [x] **Validate Legal Analysis tabs render** — all 8 tabs render with rich data
-2. [x] **Validate Account Debtors against tape** — 0/13 match, Group = provider names not payer names, recorded in Company Mind
-3. [x] **Implement consecutive breach history** — already built, verified working (PAR30=breach_no_eod, PAR60=eod_triggered, Paid vs Due=first_breach)
-5. [x] **Ingest Klaim data room** — 23 new files from OneDrive, 28 total docs, 492 chunks, DOCUMENT_INGESTED events fired, entities extracted
-6. [x] **Generate first Klaim Credit Memo** — 12 AI sections, 5-layer context pipeline working end-to-end, renders in MemoEditor
-7. [x] **Generate Tamara Credit Memo** — 11/12 AI sections (covenant bug fixed: list vs dict format)
-
-### Other Remaining
-- [x] **Store payment schedule** — already in `legal/payment_schedule.json`, served via reporting endpoint
 
 ---
 

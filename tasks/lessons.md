@@ -3,6 +3,12 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-16 — Dataroom registry stores platform-specific filepaths
+
+**Problem:** `registry.json` stores filepaths with whatever separator the OS produces. Klaim/Tamara had relative Windows backslash paths (`data\klaim\dataroom\file.pdf`), Aajil had absolute Windows paths (`C:\Users\...\data\Aajil\...`). The document view endpoint did `os.path.exists(filepath)` on the raw path — fails on Linux production. Re-ingest also failed to match existing files when separator changed.
+**Fix:** Added `_normalize_filepath()` to `core/dataroom/engine.py` — normalizes all paths to forward slashes. Applied at: registry reads (comparison), disk scan comparisons, removal detection, new record storage, and view endpoint resolution.
+**Rule:** Any filepath stored in JSON/config files must be normalized to forward slashes before storage. When reading stored paths for filesystem access, resolve relative paths against a known root and normalize separators for the current OS.
+
 ## 2026-04-16 — Docker compose build caches stale code after git pull
 
 **Problem:** `deploy.sh` ran `git pull` then `docker compose build`, but Docker cached the `COPY core/` and `COPY backend/` layers from a previous build. The container ran old code despite the host having new files. Health check and ingest calls failed because the container didn't have the new `/health` endpoint.
