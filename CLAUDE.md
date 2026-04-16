@@ -1239,13 +1239,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - ✅ **Tamara BNPL onboarded (data room ingestion — third pattern):**
   - Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants)
   - **Data room ingestion pipeline:** `scripts/prepare_tamara_data.py` reads ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models, demographics) from OneDrive data room → structured JSON snapshots
-  - **Two products:** KSA (SAR, 14 tabs) and UAE (AED, 10 tabs) — geography-based split matching securitization facilities
+  - **Two products:** KSA (SAR, 18 tabs) and UAE (AED, 14 tabs) — geography-based split matching securitization facilities
   - `analysis_type: "tamara_summary"` — follows Ejari read-only summary pattern but with much richer data
-  - **14 KSA tabs:** Overview, Vintage Performance, Delinquency, Default Analysis, Dilution, Collections, Concentration, Covenant Compliance, Facility Structure, Demographics, Financial Performance, Business Plan, BNPL+ Deep Dive, Data Notes
+  - **18 KSA tabs:** Overview, Vintage Performance, Delinquency, Default Analysis, Dilution, Collections, Repayment Lifecycle, Customer Behavior, Concentration, Covenant Compliance, Trigger Trends, Facility Structure, Payment Waterfall, Demographics, Financial Performance, Business Plan, BNPL+ Deep Dive, Data Notes
   - **Novel visualizations:** VintageHeatmap (CSS-grid color-coded vintage × MOB matrix with toggle for default/delinquency/dilution), CovenantTriggerCard (3-level L1/L2/L3 trigger zone visualization), ConcentrationGauge (horizontal gauge bars)
   - **Securitisation facilities:** KSA $2.375B (Goldman, Citi, Atlas/Apollo, Morgan Stanley — 5 tranches), UAE $131M (Goldman — 2 tranches)
   - **Products:** BNPL (Pi2-6, up to SAR 5K), BNPL+ (Pi4-24, SAR 5K-20K, Murabaha profit APR 21-40%)
-  - **Data sources parsed:** ~50 vintage cohort Excel files, Deloitte FDD loan portfolio (12,799 rows), 20 HSBC PDF investor reports, monthly investor reporting (25 months), portfolio demographics, 5-year business plan
+  - **Data sources parsed:** ~50 vintage cohort Excel files, Deloitte FDD loan portfolio (12,799 rows), 20 HSBC PDF investor reports, monthly investor reporting (25 months), portfolio demographics, 5-year business plan, Repayment Status & Transaction History (quarterly stratification Q4 2023–Q1 2026)
   - Frontend: `TamaraDashboard.jsx` (821 lines, all components inline), Recharts interactive charts
   - Backend: `core/analysis_tamara.py` parser, `/tamara-summary` endpoint, `tamara_summary` branches in 7 existing endpoints
 - ✅ **Credit Research Report — platform capability:**

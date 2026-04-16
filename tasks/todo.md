@@ -58,6 +58,10 @@ Track active work here. Claude updates this as tasks progress.
 - [x] **Deploy.sh hardened** — auto `--no-cache` when backend/core code changes, dataroom auto-ingest via Python import (bypasses HTTP auth), /health endpoint added
 - [x] **docker-compose.yml** — data volume changed from read-only to read-write (ingest needs to write chunks)
 - [x] **Production datarooms synced and ingested** — Tamara (268 files), Klaim (152), Aajil (26)
+- [x] **Repayment Lifecycle tab** — ETL parser, enrichment, dashboard (KPI cards + bar chart + pie), KSA 18 tabs, UAE 14 tabs
+- [x] **Customer Behavior tab** — repeat customer analysis, default rate by engagement tier, pie chart composition
+- [x] **Tamara JSON snapshots regenerated** — KSA: 40 repayment + 40 behavior rows, UAE: 18 + 20 rows
+- [x] **Credit Memo updated** — portfolio_analytics (7.7K chars) and credit_quality (5.3K chars) regenerated with lifecycle/behavior data
 
 ---
 
