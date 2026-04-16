@@ -16,12 +16,17 @@ class DocumentType(Enum):
     INVESTOR_REPORT = "investor_report"
     FDD_REPORT = "fdd_report"
     FINANCIAL_MODEL = "financial_model"
+    FINANCIAL_STATEMENT = "financial_statement"
+    TAX_FILING = "tax_filing"
     VINTAGE_COHORT = "vintage_cohort"
     PORTFOLIO_TAPE = "portfolio_tape"
     LEGAL_DOCUMENT = "legal_document"
     COMPANY_PRESENTATION = "company_presentation"
     DEMOGRAPHICS = "demographics"
     BUSINESS_PLAN = "business_plan"
+    CREDIT_POLICY = "credit_policy"
+    SALES_DATA = "sales_data"
+    DEBT_OVERVIEW = "debt_overview"
     ANALYTICS_TAPE = "analytics_tape"
     ANALYTICS_PORTFOLIO = "analytics_portfolio"
     ANALYTICS_AI_SUMMARY = "analytics_ai"
@@ -44,6 +49,16 @@ _FILENAME_RULES = [
     (re.compile(r"(fdd|due.?diligence|deloitte|kpmg|ey\b|pwc|ernst)"), DocumentType.FDD_REPORT),
     # Financial models
     (re.compile(r"(financial.?model|financial.?master|fin.?model|valuation.?model)"), DocumentType.FINANCIAL_MODEL),
+    # Tax filings (must be before financial statements — "Financial Statements (USA)/US Tax Return" has both keywords)
+    (re.compile(r"(tax.?return|tax.?filing|tax.?report|vat.?return|zakat)"), DocumentType.TAX_FILING),
+    # Financial statements (audited, management, consolidated)
+    (re.compile(r"(audited.?financial|financial.?statement|consolidated.?financial|management.?account|annual.?report|\bfs\b.*\d{4}|\bfs\b.*20[2-3]\d)"), DocumentType.FINANCIAL_STATEMENT),
+    # Debt / facility overview
+    (re.compile(r"(debt.?facilit|debt.?overview|facility.?overview|facility.?summary|borrowing.?summary)"), DocumentType.DEBT_OVERVIEW),
+    # Credit policies
+    (re.compile(r"(credit.?polic|underwriting.?polic|risk.?polic|lending.?polic|collection.?polic)"), DocumentType.CREDIT_POLICY),
+    # Sales / pipeline data
+    (re.compile(r"(sales.?funnel|sales.?pipeline|sales.?data|pipeline.?report|sales.?track)"), DocumentType.SALES_DATA),
     # Vintage / cohort data
     (re.compile(r"(vintage|cohort|default.?rat|delinquen|dilution|dpd|roll.?rate|loss.?curve)"), DocumentType.VINTAGE_COHORT),
     # Portfolio / loan tapes (including date-named files: YYYY-MM-DD_*.csv/xlsx)
@@ -51,8 +66,8 @@ _FILENAME_RULES = [
     (re.compile(r"\d{4}-\d{2}-\d{2}_.*\.(csv|xlsx?)$"), DocumentType.PORTFOLIO_TAPE),
     # Legal documents
     (re.compile(r"(legal|najiz|court|litigation|arbitrat|enforcement|judgment)"), DocumentType.LEGAL_DOCUMENT),
-    # Presentations / decks
-    (re.compile(r"(presentation|deck|pitch|investor.?day|overview.?deck|pptx?)"), DocumentType.COMPANY_PRESENTATION),
+    # Presentations / decks / investor materials
+    (re.compile(r"(presentation|deck|pitch|investor.?day|overview.?deck|pptx?|v\s?amwal|investor.?pack)"), DocumentType.COMPANY_PRESENTATION),
     # Demographics / market data
     (re.compile(r"(demographic|breakdown|population|market.?data|segmentation|customer.?profile)"), DocumentType.DEMOGRAPHICS),
     # Business plan / projections
