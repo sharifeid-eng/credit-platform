@@ -16,4 +16,3 @@ alembic>=1.14,<2.0
 httpx>=0.28,<1.0
 PyJWT>=2.8,<3.0
 cryptography>=41.0,<45.0
-notebooklm-py>=0.3,<1.0

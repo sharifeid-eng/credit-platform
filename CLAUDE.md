@@ -13,7 +13,7 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 - Enter plan mode for any non-trivial task (3+ steps or architectural decisions). Write the plan to `tasks/todo.md` with checkable items.
 - If something goes sideways, STOP and re-plan immediately — don't keep pushing.
 - Write detailed specs upfront to reduce ambiguity. Check in with the user before starting implementation.
-- **State assumptions explicitly.** Before implementing any non-trivial feature, list your assumptions (data availability, API contract, column names, user workflow, external service behavior). If uncertain about any, ask — don't guess silently. (See lessons.md: NotebookLM API, sort order, registry format — all caused by silent assumptions.)
+- **State assumptions explicitly.** Before implementing any non-trivial feature, list your assumptions (data availability, API contract, column names, user workflow, external service behavior). If uncertain about any, ask — don't guess silently. (See lessons.md: sort order, registry format — all caused by silent assumptions.)
 - **Surface ambiguity.** If a requirement could have 2+ interpretations, present all of them and ask the user to pick. Don't silently choose one. Example: "Add export" could mean API endpoint, file download, or background job — name the options.
 
 ### Coding Discipline (adapted from Karpathy's principles)
@@ -78,14 +78,6 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 - Explain changes with high-level summaries at each step.
 - After completing a major task, add a review section to `tasks/todo.md` and capture lessons.
 
-### NotebookLM Connectivity
-**NotebookLM is a first-class research engine.** Before any task involving data room research, memo generation, or company analysis:
-1. Check NLM status: `GET /notebooklm/status` — verify `authenticated: true`
-2. If `authenticated: false`: remind the user to run `notebooklm login` in the venv, then restart the backend
-3. For new companies: create an NLM notebook and sync dataroom PDFs after ingestion
-4. The NLM bridge auto-recovers: if auth file appears (user runs `notebooklm login`), the next NLM call within 5 minutes will detect it and re-enable dual-engine research
-5. **Never silently skip NLM** — if it's unavailable, warn the user with the fix instructions
-
 ### Analysis Framework Authority
 **The Analysis Framework (`core/ANALYSIS_FRAMEWORK.md`) is the authoritative source for ALL analytical decisions.** It is the "brain" of the platform — not just documentation, but the specification that drives every metric, dashboard, and AI prompt.
 
@@ -119,7 +111,7 @@ The platform allows analysts and investment committee members to:
 - Explore the Analysis Framework — a structured analytical philosophy guiding all metrics
 - Generate AI-powered portfolio commentary and ask natural language questions about the data
 - Generate AI-powered IC investment memos with data room research integration
-- Query documents across data rooms using dual-engine research (Claude + NotebookLM)
+- Query documents across data rooms using AI-powered research (Claude RAG)
 -----
 ## Branding
 - **Platform name:** Laith (لَيث — Arabic for "lion"; the AI in L-**AI**-th is intentional)
@@ -135,7 +127,7 @@ The platform allows analysts and investment committee members to:
 - **SILQ** — POS lending, KSA. Data in SAR. Live dataset: `data/SILQ/KSA/` (4 tapes: Nov 2025, Jan 2026, Feb 2026, Mar 2026). Three product types: BNPL, RBF, RCL (Revolving Credit Line). Has dedicated analysis module (`core/analysis_silq.py`), validation (`core/validation_silq.py`), dynamic chart endpoint, and tests.
 - **Ejari** — Rent Now Pay Later (RNPL), KSA. Data in USD. **Read-only summary** — no raw loan tape, only a pre-computed ODS workbook with 13 sheets of analysis. Rendered as a dedicated dashboard (`EjariDashboard.jsx`) without live computation. Parser: `core/analysis_ejari.py`. Config: `analysis_type: "ejari_summary"`. Live dataset: `data/Ejari/RNPL/`
 - **Tamara** — Buy Now Pay Later (BNPL + BNPL+), KSA & UAE. Saudi Arabia's first fintech unicorn ($1B valuation, 20M+ users, 87K+ merchants). **Data room ingestion** — ~100 source files (vintage cohort matrices, Deloitte FDD, HSBC investor reports, financial models) parsed by `scripts/prepare_tamara_data.py` into structured JSON snapshots. Two products: KSA (SAR, 14 tabs) and UAE (AED, 10 tabs). Dashboard: `TamaraDashboard.jsx`. Parser: `core/analysis_tamara.py`. Config: `analysis_type: "tamara_summary"`. Securitisation: KSA $2.375B (Goldman, Citi, Apollo), UAE $131M (Goldman). Live dataset: `data/Tamara/{KSA,UAE}/`
-- **Aajil** — SME raw materials trade credit, KSA. Data in SAR. **Live tape analytics** — multi-sheet xlsx (1,245 deals, 7 sheets: Deals, Payments, DPD Cohorts, Collections). 227 customers, SAR 381M GMV (Principal Amount), SAR 80M outstanding, 87.3% collection rate, 1.5% write-off (19 deals, all Bullet). 3 customer types: Manufacturer, Contractor, Wholesale Trader. Deal types: EMI (51%) and Bullet (49%). Has dedicated analysis module (`core/analysis_aajil.py`, 11 compute functions), validation (`core/validation_aajil.py`), dynamic chart endpoint, and 38 tests. Dashboard: `AajilDashboard.jsx` (13 tabs). Config: `analysis_type: "aajil"`. Live dataset: `data/Aajil/KSA/`. Uses Cascade Debt (app.cascadedebt.com) as external reporting platform. Dataroom: 14 files (investor deck, audited financials, tax returns, budget). NLM notebook with 6 PDFs.
+- **Aajil** — SME raw materials trade credit, KSA. Data in SAR. **Live tape analytics** — multi-sheet xlsx (1,245 deals, 7 sheets: Deals, Payments, DPD Cohorts, Collections). 227 customers, SAR 381M GMV (Principal Amount), SAR 80M outstanding, 87.3% collection rate, 1.5% write-off (19 deals, all Bullet). 3 customer types: Manufacturer, Contractor, Wholesale Trader. Deal types: EMI (51%) and Bullet (49%). Has dedicated analysis module (`core/analysis_aajil.py`, 11 compute functions), validation (`core/validation_aajil.py`), dynamic chart endpoint, and 38 tests. Dashboard: `AajilDashboard.jsx` (13 tabs). Config: `analysis_type: "aajil"`. Live dataset: `data/Aajil/KSA/`. Uses Cascade Debt (app.cascadedebt.com) as external reporting platform. Dataroom: 14 files (investor deck, audited financials, tax returns, budget).
 **Asset classes:** Receivables (insurance claims factoring), short-term consumer/POS loans, rent payment financing (RNPL), BNPL consumer instalment lending, and SME trade credit (raw materials).
 **Data format:** Single Excel or CSV loan tapes, typically thousands to tens of thousands of rows. Each row is a deal/receivable. Snapshots are taken periodically (e.g. monthly) and named `YYYY-MM-DD_description.csv`. Also supports ODS files (Ejari summary workbook) and JSON files (Tamara data room ingestion).
 **Data notes:**
@@ -233,9 +225,7 @@ credit-platform/
 │   │   └── parsers/           # Pluggable parsers: PDF, Excel, CSV, JSON, DOCX, ODS
 │   ├── research/              # Research intelligence layer
 │   │   ├── query_engine.py    # Claude RAG: retrieve + synthesize with citations
-│   │   ├── dual_engine.py     # Dual-engine orchestrator (Claude + NotebookLM)
-│   │   ├── synthesizer.py     # Merges answers from dual engines
-│   │   ├── notebooklm_bridge.py  # NotebookLM integration (Python + CLI fallback)
+│   │   ├── dual_engine.py     # Research orchestrator (Claude RAG)
 │   │   └── extractors.py      # Rules-based insight extraction at ingest time
 │   ├── memo/                  # IC Memo Engine
 │   │   ├── templates.py       # 4 IC memo templates (credit, DD, monitoring, quarterly)
@@ -289,7 +279,6 @@ credit-platform/
 │       ├── legal/             # Legal documents and extraction cache
 │       ├── dataroom/          # Ingested documents, chunks, search index
 │       │   ├── registry.json
-│       │   ├── notebooklm_state.json  # NLM notebook ID + synced source tracking
 │       │   ├── chunks/
 │       │   ├── analytics/
 │       │   └── index.pkl
@@ -405,7 +394,6 @@ credit-platform/
 │   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
 │   ├── test_analysis_silq.py   # Integration tests for SILQ analytics
 │   ├── test_analysis_aajil.py  # Integration tests for Aajil analytics (38 tests)
-│   └── test_notebooklm_bridge.py  # NotebookLM bridge, dual engine, synthesizer, NLM warning tests (19 tests)
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
@@ -544,12 +532,8 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/dataroom/search?q=...`     |Search across all documents        |
 |`GET /companies/{co}/products/{p}/dataroom/documents/{id}/view`|Stream original file for browser viewing|
 |`POST /companies/{co}/products/{p}/dataroom/snapshot-analytics`|Snapshot current analytics       |
-|`POST /companies/{co}/products/{p}/research/query`           |Dual-engine research query         |
+|`POST /companies/{co}/products/{p}/research/query`           |Claude RAG research query          |
 |`POST /companies/{co}/products/{p}/research/chat`            |Research chat (for frontend)       |
-|`GET /notebooklm/status`                                     |NotebookLM engine health status    |
-|`POST /companies/{co}/products/{p}/notebooklm/sync`          |Sync data room to NLM notebook     |
-|`POST /companies/{co}/products/{p}/notebooklm/configure`     |Set NLM chat persona               |
-|`GET /companies/{co}/products/{p}/notebooklm/sources`        |List NLM notebook sources          |
 |`GET /companies/{co}/products/{p}/mind/profile`              |Company mind profile               |
 |`POST /companies/{co}/products/{p}/mind/record`              |Record mind entry                  |
 |`GET /mind/master/context`                                   |Preview master mind context        |
@@ -741,11 +725,6 @@ The platform includes an AI-powered research and memo generation system built on
 
 **Research Intelligence** (`core/research/`):
 - Claude RAG query engine with source citations
-- NotebookLM bridge (`notebooklm-py` v0.3.4) — first-class second-opinion engine via Python API or CLI fallback
-- Dual-engine synthesis: merges best insights from both engines, preserves citation origins
-- Notebook ID + synced source persistence via JSON sidecars (`data/{co}/{prod}/dataroom/notebooklm_state.json`)
-- Auto-sync: data room ingest triggers NLM source upload
-- Auth: `notebooklm login` (local) or `NOTEBOOKLM_AUTH_JSON` env var (headless/server)
 - Rules-based insight extraction at ingest time (metrics, covenants, dates, risk flags)
 
 **IC Memo Engine** (`core/memo/`):
@@ -874,7 +853,7 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **PDF parsing pipeline** — `core/legal_parser.py` uses PyMuPDF (`pymupdf4llm`) for markdown conversion preserving headers/structure, plus `pdfplumber` for table extraction (advance rate schedules, concentration tier tables). Semantic chunking by article/section headers (legal docs are well-structured). Definitions section isolated first as context for all subsequent extraction passes.
 - **Legal extraction schema** — `core/LEGAL_EXTRACTION_SCHEMA.md` defines extraction taxonomy (7 sections), Pydantic models in `core/legal_schemas.py`, confidence grading (HIGH >= 0.85, MED >= 0.70, LOW < 0.70), and facility_params mapping table (12 fields). Companion to ANALYSIS_FRAMEWORK.md Section 16.
 - **Living Mind 4-layer architecture** — Framework (codified rules) → Master Mind (fund lessons) → Methodology (company rules) → Company Mind (position notes). Every AI prompt sees all 4 layers. Knowledge flows upward: fast corrections → consolidation → codification.
-- **Dual-engine research** — Claude RAG (primary) + NotebookLM (second opinion, first-class). Both run on every query when available, synthesis merges best insights with citation origin tracking. `notebooklm-py` v0.3.4 via Python API (preferred) or CLI fallback. Auth: `notebooklm login` (browser OAuth, saves to `~/.notebooklm/storage_state.json`) or `NOTEBOOKLM_AUTH_JSON` env var (headless). Notebook IDs + synced sources persisted to `data/{co}/{prod}/dataroom/notebooklm_state.json`. Data room ingest auto-syncs to NLM. Chat persona configured for credit analysis. Frontend shows engine badges (blue=Claude, teal=NLM, gold=merged), NLM status indicator, and synthesis notes. Graceful fallback to Claude-only when NLM unavailable. **Important:** `ClaudeQueryEngine._get_client()` uses `load_dotenv(override=True)` to ensure `.env` values override empty env vars inherited from parent shell — without `override`, an empty `ANTHROPIC_API_KEY` in the shell silently disables Claude synthesis.
+- **Research engine** — Claude RAG queries across all ingested documents with source citations. **Important:** `ClaudeQueryEngine._get_client()` uses `load_dotenv(override=True)` to ensure `.env` values override empty env vars inherited from parent shell — without `override`, an empty `ANTHROPIC_API_KEY` in the shell silently disables Claude synthesis.
 - **Analytics-as-source** — Platform-computed analytics (tape summaries, PAR, DSO) snapshotted into the data room as searchable documents. Memos can cite "Tape Analytics — PAR Analysis, Mar 2026" alongside "HSBC Investor Report, Jan 2026".
 - **Memo feedback loop** — Analyst edits to AI-generated memo sections are recorded in Company Mind. Future memos benefit from accumulated style preferences and corrections.
 - **Legal extraction caching** — Extract once per PDF, cache forever. 5-pass Claude pipeline (~$1.25/doc). 3-tier merge: document > manual > hardcoded.
@@ -1292,7 +1271,6 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - 13-tab dashboard: Overview, Traction (Volume/Balance toggle), Delinquency (overdue buckets + by Deal Type), Collections, Cohort Analysis (DPD time series + vintage table), Concentration (HHI + top-15 + industry), Underwriting (drift by vintage), Trust & Collections (trust score system), Customer Segments (EMI/Bullet + industry + size), Yield & Margins (revenue decomposition), Loss Waterfall (per-vintage), Covenants, Data Notes
   - Cascade Debt alignment: Volume = Principal Amount (99.9% match), MoM = +32.36% (exact), Collection rate = Realised/Principal (87.3%)
   - Dataroom: 14 files ingested (investor deck, 3 audited financials, 2 tax returns, monthly statements, budget, debt overview)
-  - NLM notebook with 6 PDFs uploaded, auto-recovery auth fix
   - Key finding: ALL 19 write-offs are Bullet deals (0 EMI) — structural shift to EMI reducing default risk
 - ✅ **Tamara P0 fixes — data extraction, AI context, dashboard charts:**
   - Fixed column-offset bug (labels in col 1 not col 0) across investor reporting, business plan, financial master parsers
@@ -1309,19 +1287,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Row 2 adapts: "Facility" row for multi-product (Limit, Merchants, Users) vs "Live Portfolio" for single-product
   - All product summaries fetched (not just first) to populate carousel data
   - Single-product cards (Klaim, SILQ, Ejari) completely unaffected
-- ✅ **Research Hub (data room ingestion + dual-engine research):**
+- ✅ **Research Hub (data room ingestion + Claude RAG research):**
   - Data room engine: ingest any directory (PDF, Excel, CSV, JSON, DOCX), chunk, index, search
   - Claude RAG query engine with source citations
-  - NotebookLM bridge rewritten against real `notebooklm-py` v0.3.4 API (was non-functional before)
-  - Dual-engine synthesis with citation origin tracking (claude vs notebooklm)
-  - Notebook ID + synced source persistence via JSON sidecars (survives restarts)
-  - Auto-sync: data room ingest triggers NLM source upload
-  - 4 NLM endpoints: status, sync, configure, sources
-  - NLM status in Operator Command Center health matrix
   - Rules-based insight extraction at ingest time
   - Analytics snapshots as searchable research sources
-  - Frontend: DocumentLibrary, ResearchChat (engine badges, NLM status indicator, sync button, synthesis notes)
-  - **Tamara data room ingested** (session 21, fresh re-ingest): 134 files, 4,076 chunks, 1,744 pages, 9 document types, 63 PDFs synced to NLM. Document classification: vintage cohort matrices (51) are whole-book data, HSBC investor reports (20) + legal DD are facility-specific.
+  - Frontend: DocumentLibrary, ResearchChat
+  - **Tamara data room ingested** (session 21, fresh re-ingest): 134 files, 4,076 chunks, 1,744 pages, 9 document types, 63 PDFs. Document classification: vintage cohort matrices (51) are whole-book data, HSBC investor reports (20) + legal DD are facility-specific.
   - **Klaim data room ingested** (session 17): 28 docs, 492 chunks, 320 pages
 - ✅ **Living Mind (institutional memory):**
   - Master Mind: fund-level preferences, IC norms, cross-company patterns
@@ -1373,17 +1345,17 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **10 API endpoints in `backend/intelligence.py`:** thesis CRUD + drift check + log, morning briefing, KB search, learning summary + rules, chat feedback. Router registered in main.py.
   - **OperatorCenter:** 7 tabs (was 5) — added Briefing (priority cards, thesis alerts, recommendations, learning summary) and Learning (correction frequency, auto-rules, codification candidates).
   - **DataChat feedback:** Thumbs up/down buttons on AI responses. Thumbs-down fires CORRECTION_RECORDED, records in CompanyMind.
-  - **263 tests passing** (was 249 — 14 NLM tests added in prior session).
+  - **263 tests passing** (was 249).
 - ✅ **Klaim Data Room + Memo Exercise (session 17):**
   - **Legal Analysis tabs** — all 8 validated rendering with extracted data from 4 facility PDFs
   - **Account Debtor validation** — confirmed tape lacks payer column (Group = 143 providers, not 13 approved insurance payers). Recorded in Company Mind.
   - **Consecutive breach history** — `annotate_covenant_eod()` + `covenant_history.json` verified working per MMA 18.3
   - **Klaim data room ingested** — 87 files from `data/klaim/dataroom/`, 1,720 chunks, 1,334 pages. Intelligence System events fired (entity extraction + compilation).
-  - **Klaim Credit Memo** — 12 AI sections with dual-engine research (Claude RAG + NotebookLM). Full 5-layer context pipeline. Renders in MemoEditor.
+  - **Klaim Credit Memo** — 12 AI sections with Claude RAG research. Full 5-layer context pipeline. Renders in MemoEditor.
   - **Tamara Credit Memo v2** (session 21) — `f3af2d4e-b88`, 12 AI sections (~55K chars), 45 data room citations, covers both KSA + UAE. Old placeholder `0ae5cbe3-095` deleted.
 - ✅ **Data room engine moved to company level:**
   - Path: `data/{company}/dataroom/` (was `data/{company}/{product}/dataroom/`)
-  - `_dataroom_dir()` updated in engine.py, analytics_snapshot.py, notebooklm_bridge.py
+  - `_dataroom_dir()` updated in engine.py, analytics_snapshot.py
   - `dataroom` excluded from product discovery in `get_products()`
   - Default ingest source: `data/{company}/dataroom/` (removed OneDrive fallback)
   - `_EXCLUDE_DIRS` now blocks `chunks`/`analytics` subdirs instead of "dataroom" itself
@@ -1392,12 +1364,6 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `mind/`: `data/{company}/mind/` (was `data/{company}/{product}/mind/`). CompanyMind, ThesisTracker, listeners, and all discovery loops (operator, intelligence, briefing, kb_query, master_mind) updated
   - Matches existing pattern for `dataroom/` at company level
   - Klaim files moved: `data/klaim/UAE_healthcare/{legal,mind}/` → `data/klaim/{legal,mind}/`
-- ✅ **NLM unavailability warning system (replaces silent degradation):**
-  - `NotebookLMEngine.get_warning()` — structured warning with code, message, fix instructions
-  - `DualResearchEngine.query()` includes `nlm_warning` in response when NLM unavailable
-  - `dataroom/ingest` endpoint includes NLM sync warning in `nlm_sync` object
-  - **ResearchChat.jsx**: blocking NLMWarningBanner on first query — "Proceed without NLM" / "Retry Connection" buttons, session-level dismissal
-  - **DocumentLibrary.jsx**: NLM sync status strip after ingest (teal success / amber warning with fix)
   - 5 new tests (268 total, all passing)
 - ✅ **Bug fixes (session 17):**
   - `core/loader.py`: Added `covenant_history.json`, `facility_params.json`, `debtor_validation.json` to `_EXCLUDE` (was crashing snapshot sort with None date)

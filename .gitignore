@@ -20,6 +20,3 @@ data/_master_mind/
 **/mind/consolidated.json
 **/mind/style_guide.md
 **/mind/profile.json
-
-# NotebookLM session data
-.notebooklm/

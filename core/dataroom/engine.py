@@ -76,7 +76,7 @@ _SUPPORTED_EXTENSIONS = {
 
 # Files to exclude from data room ingestion (config files, not data)
 _EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json",
-                      "notebooklm_state.json", "index.pkl"}
+                      "index.pkl"}
 
 # Directories to skip during recursive scan (prevents ingesting engine output)
 _EXCLUDE_DIRS = {"chunks", "analytics", "__pycache__", "node_modules", ".git", "mind"}

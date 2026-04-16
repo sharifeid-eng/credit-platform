@@ -28,7 +28,7 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 | 16 | Living Mind Architecture | Two-tier institutional memory, prompt injection layers | `/mind-review`, `/eod`, all AI endpoints |
 | 17 | Legal Extraction & Facility Params Binding | AI extraction pipeline, 3-tier params merge | `/onboard-company`, portfolio analytics |
 | 18 | Data Room & Document Classification | File ingestion, chunking, TF-IDF indexing | `/onboard-company`, `/research-query` |
-| 19 | Research Hub & Query Engine | Dual-engine RAG (Claude + NotebookLM), citations | `/research-query` |
+| 19 | Research Hub & Query Engine | Claude RAG, citations | `/research-query` |
 | 20 | IC Memo Generation Pipeline | 4 templates, analytics bridge, versioned workflow | `/generate-memo` |
 
 ---

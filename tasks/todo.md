@@ -19,9 +19,17 @@ Track active work here. Claude updates this as tasks progress.
 - [ ] **GrowthStats platform-wide** — apply to all company Overview tabs
 - [ ] **Global "Display by" segmentation** — Cascade-style cross-tab filter
 
+### NotebookLM Removal ✅ COMPLETE (2026-04-16)
+- [x] **Delete NLM files** — notebooklm_bridge.py, synthesizer.py, test_notebooklm_bridge.py, 3 notebooklm_state.json
+- [x] **Simplify dual_engine.py** — rewritten as Claude-only wrapper (374→112 lines)
+- [x] **Remove NLM endpoints** — 4 endpoints deleted from main.py, operator health probe removed
+- [x] **Clean frontend** — ResearchChat.jsx rewritten (760→290 lines), DocumentLibrary NLM strip removed, 3 API functions removed
+- [x] **Remove notebooklm-py dependency** — removed from requirements.txt
+- [x] **Clean all docs** — CLAUDE.md, ANALYSIS_FRAMEWORK.md, FRAMEWORK_INDEX.md, lessons.md, todo.md, eod.md
+- [x] **Verify** — 287 tests pass, zero "notebooklm" references in codebase, net -2,748 lines
+
 ### Tamara Data Room + Memo ✅ COMPLETE (session 21)
 - [x] **Ingest Tamara data room** — 134 files, 4,076 chunks, 1,744 pages
-- [x] **Sync Tamara to NotebookLM** — 63/64 PDFs synced to fresh notebook
 - [x] **Generate Tamara Credit Memo (v2)** — `f3af2d4e-b88`, 12 AI sections, 45 citations
 - [x] **Delete placeholder Tamara memo** — removed `0ae5cbe3-095`
 
@@ -32,14 +40,12 @@ Track active work here. Claude updates this as tasks progress.
 - [x] **Copy slash commands to main repo .claude/commands/** — 6 new commands: /morning, /thesis, /drift, /learn, /emerge, /know (session 20)
 
 ### Platform Improvements from Session 17
-- [ ] **NLM sync optimization** — cap at ~20 sources per sync for large data rooms
 - [x] **Improve CSV tape classifier** — tapes classified as "other" instead of "portfolio_tape" (session 20)
 
 ### Klaim Data Room + Memo Exercise ✅ COMPLETE (session 17)
 1. [x] **Validate Legal Analysis tabs render** — all 8 tabs render with rich data
 2. [x] **Validate Account Debtors against tape** — 0/13 match, Group = provider names not payer names, recorded in Company Mind
 3. [x] **Implement consecutive breach history** — already built, verified working (PAR30=breach_no_eod, PAR60=eod_triggered, Paid vs Due=first_breach)
-4. [x] **Test NotebookLM dual-engine** — NLM auth expired (needs manual `notebooklm login`), Claude-only fallback works
 5. [x] **Ingest Klaim data room** — 23 new files from OneDrive, 28 total docs, 492 chunks, DOCUMENT_INGESTED events fired, entities extracted
 6. [x] **Generate first Klaim Credit Memo** — 12 AI sections, 5-layer context pipeline working end-to-end, renders in MemoEditor
 7. [x] **Generate Tamara Credit Memo** — 11/12 AI sections (covenant bug fixed: list vs dict format)
@@ -53,12 +59,11 @@ Track active work here. Claude updates this as tasks progress.
 
 - [x] **Tamara data room ingested** — 134 files from `data/Tamara/dataroom/`, 4,076 chunks, 1,744 pages, 9 document types classified
 - [x] **Document classification** — vintage matrices (51 files) confirmed as whole-book data, not facility-specific; HSBC reports + legal DD identified as facility-specific
-- [x] **NLM authenticated and synced** — 63/64 PDFs uploaded to fresh NLM notebook (1 processing failure)
 - [x] **Placeholder Tamara memo deleted** — removed `reports/memos/Tamara_KSA/0ae5cbe3-095/`
 - [x] **Tamara Credit Memo v2 generated** — `f3af2d4e-b88`, 12 AI sections (~55K chars), 45 data room citations, covers both KSA + UAE
-- [x] **EOD process improved** — Step 1b added to check for untracked data artifacts (registry.json, NLM state, mind entries, memos)
+- [x] **EOD process improved** — Step 1b added to check for untracked data artifacts (registry.json, mind entries, memos)
 - [x] **Recovered lost session 19 work** — found registry.json in `nifty-chebyshev` worktree, confirmed all code changes were already merged (0 unique commits)
-- [x] **All data artifacts committed** — registry.json, notebooklm_state.json, memo files committed to main (prevents worktree cleanup loss)
+- [x] **All data artifacts committed** — registry.json, memo files committed to main (prevents worktree cleanup loss)
 - [x] **Production data sync pipeline** — `scripts/sync-data.ps1` (laptop → server via scp), `deploy.sh` auto-ingest (detects missing chunks), EOD auto-detects registry changes
 - [x] **Deploy.sh hardened** — auto `--no-cache` when backend/core code changes, dataroom auto-ingest via Python import (bypasses HTTP auth), /health endpoint added
 - [x] **docker-compose.yml** — data volume changed from read-only to read-write (ingest needs to write chunks)
@@ -117,8 +122,6 @@ Track active work here. Claude updates this as tasks progress.
 - [x] **Backend wiring** — `AAJIL_CHART_MAP`, generic chart endpoint, tape-aware /summary, AI context builder
 - [x] **Dashboard refactored** — all tabs fetch from chart endpoints, real charts for Traction/Delinquency/Collections/Cohort/Concentration/Yield/Loss Waterfall
 - [x] **Dataroom ingested** — 13 new files (financials, tax returns, budget, debt overview)
-- [x] **NLM notebook created** — 6 PDFs uploaded to NotebookLM, state saved
-- [x] **NLM auth fix** — lazy file check + 5-min periodic re-check + auto-recovery via `ensure_available()`
 
 **Cascade Debt alignment (metric mapping):**
 - [x] **Volume = Principal Amount** (not Bill Notional) — all 9 functions updated, now matches Cascade within 0.1%
@@ -191,7 +194,6 @@ End-to-end validation of the full analysis pipeline — Legal Analysis, Data Roo
 - [x] **Legal Analysis tabs** — all 8 render with rich extracted data from 4 facility PDFs
 - [x] **Account Debtor validation** — confirmed: tape Group column = 143 healthcare providers (sellers), NOT insurance companies (payers). 0/13 approved Account Debtors found. MRPA concentration limit (d) unenforceable.
 - [x] **Consecutive breach history** — `annotate_covenant_eod()` + `covenant_history.json` already working, verified EoD status annotations
-- [x] **NotebookLM** — auth expired (needs manual re-login), Claude-only fallback operational
 
 **Data Room Ingestion:**
 - [x] **Klaim data room** — 23 new files ingested from OneDrive (facility agreements, pitch decks, corporate docs, SPV filings). Total: 28 docs, 492 chunks, 320 pages
@@ -256,7 +258,7 @@ Fixed absolute-vs-flow positioning collisions across the platform:
 
 ## Completed — 2026-04-12 (session 13: Intelligence System — Second Brain)
 
-**Inspired by Claude+Obsidian "second brain" pattern (Defileo viral post + NotebookLM research).**
+**Inspired by Claude+Obsidian "second brain" pattern (Defileo viral post).**
 
 Built the complete Laith Intelligence System across 7 phases:
 
@@ -271,24 +273,6 @@ Built the complete Laith Intelligence System across 7 phases:
 - [x] **Event Listeners** — `core/mind/listeners.py` (wires TAPE_INGESTED → compilation + thesis drift, DOCUMENT_INGESTED → entity extraction + compilation, MEMO_EDITED → learning rule generation, CORRECTION_RECORDED → analysis)
 - [x] **6 Slash Commands** — `/morning` (briefing), `/thesis` (tracker), `/drift` (check all), `/learn` (review), `/emerge` (patterns), `/know` (KB query)
 - [x] **93 new tests** — 42 foundation + 51 system, all passing alongside 134+22 existing = 249 total
-
----
-
-## Completed — 2026-04-12 (session 12: NotebookLM Integration Rewrite)
-- [x] **Audit NotebookLM bridge** — discovered existing `notebooklm_bridge.py` was entirely non-functional (speculative API, wrong method names, wrong response types). Package `notebooklm-py` not in requirements.txt.
-- [x] **Install and verify `notebooklm-py 0.3.4`** — Python package + CLI both functional. Inspected full API surface (NotebookLMClient, AskResult, ChatReference, NotebooksAPI, SourcesAPI, ChatAPI, ResearchAPI).
-- [x] **Rewrite `notebooklm_bridge.py`** — complete rewrite against real v0.3.4 API.
-- [x] **Rewrite `dual_engine.py`** — handles `AskResult` dataclass with references.
-- [x] **Fix `synthesizer.py`** — citation converter handles ChatReference dicts.
-- [x] **Add 4 backend endpoints** — NLM status, sync, configure, sources.
-- [x] **Wire NLM into Operator Command Center** — `get_operator_status()` includes NLM health.
-- [x] **Rewrite `ResearchChat.jsx`** — engine badges, NLM status indicator, citation pills.
-- [x] **Add `notebooklm-py` to `requirements.txt`**.
-- [x] **14 new tests** — bridge, persistence, query, synthesizer, dual engine.
-- [x] **Fix backend startup crash** — `backend/operator.py` stdlib shadowing.
-- [x] **Fix `start.ps1`** — runs from project root with `backend.main:app`.
-- [x] **Add `/notebooklm` nginx proxy rule**.
-- [x] **Production deployment verified** — NLM Active on laithanalytics.ai.
 
 ---
 
@@ -392,9 +376,8 @@ Built the complete Laith Intelligence System across 7 phases:
   - api.js: 4 research API functions
   - Master Mind seeded from CLAUDE.md + ANALYSIS_FRAMEWORK.md
   - Mind context wired into ALL 4 `_build_*_full_context()` functions in main.py
-- [x] **Phase 2: Research Intelligence** — Dual-engine queries, NotebookLM integration
-  - `core/research/` (6 files, 1,917 lines) — ClaudeQueryEngine, DualResearchEngine, ResearchSynthesizer, NotebookLMEngine, extractors
-  - `notebooklm-py` installed and authenticated (9 notebooks detected)
+- [x] **Phase 2: Research Intelligence** — Claude RAG queries
+  - `core/research/` — ClaudeQueryEngine, DualResearchEngine, extractors
   - `scikit-learn` installed for TF-IDF search
   - 15+ backend endpoints for dataroom, research, mind
 - [x] **Phase 3: IC Memo Engine** — Templates, generation, versioning, PDF export
@@ -415,7 +398,7 @@ Built the complete Laith Intelligence System across 7 phases:
   - ANALYSIS_FRAMEWORK.md: sections 16-20 (Living Mind, Legal, Data Room, Research Hub, Memos)
   - FRAMEWORK_INDEX.md: 3 new commands, 3 new principles
   - CLAUDE.md: comprehensive updates across all sections
-  - .gitignore: dataroom chunks/index, mind JSONL, .notebooklm excluded
+  - .gitignore: dataroom chunks/index, mind JSONL excluded
 - **Total: 27+ new Python modules, 14 React files, ~17,000 lines of new code, 156 tests passing**
 
 ---

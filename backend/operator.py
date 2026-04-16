@@ -324,15 +324,6 @@ def get_operator_status():
         except Exception:
             pass
 
-    # NotebookLM engine status
-    nlm_status = None
-    try:
-        from core.research.notebooklm_bridge import NotebookLMEngine
-        engine = NotebookLMEngine()
-        nlm_status = engine.get_status()
-    except Exception:
-        nlm_status = {"available": False, "error": "Failed to probe NLM engine"}
-
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "commands": COMMANDS,
@@ -340,7 +331,6 @@ def get_operator_status():
         "activity_log": activity,
         "todos": todos,
         "deep_work_sessions": deep_work_sessions,
-        "notebooklm": nlm_status,
     }
 
 

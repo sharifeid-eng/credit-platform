@@ -61,7 +61,7 @@ foreach ($co in $companies) {
     $rootFiles = Get-ChildItem -Path $localDir -File |
         Where-Object { $_.Name -ne 'index.pkl' }
 
-    # Sync root files (registry.json, notebooklm_state.json, etc.)
+    # Sync root files (registry.json, etc.)
     foreach ($file in $rootFiles) {
         scp "$($file.FullName)" "${Server}:${RemotePath}/${co}/dataroom/"
     }

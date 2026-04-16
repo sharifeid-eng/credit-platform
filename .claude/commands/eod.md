@@ -12,7 +12,7 @@ Run `git status` and `git diff --stat`. List every modified, untracked, or delet
 
 These files are generated at runtime but ARE tracked (not gitignored). Check if any exist and are untracked:
 ```
-git ls-files --others --exclude-standard -- "data/*/dataroom/registry.json" "data/*/dataroom/notebooklm_state.json" "data/*/mind/relations.json" "data/*/legal/*_extracted.json" "reports/memos/"
+git ls-files --others --exclude-standard -- "data/*/dataroom/registry.json" "data/*/mind/relations.json" "data/*/legal/*_extracted.json" "reports/memos/"
 ```
 If any results appear, stage them — they represent work product that won't survive worktree cleanup.
 

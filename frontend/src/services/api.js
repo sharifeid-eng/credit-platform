@@ -224,12 +224,6 @@ export const getDataroomDocumentViewUrl = (co, prod, docId) =>
   `${API_BASE}/companies/${co}/products/${prod}/dataroom/documents/${docId}/view`;
 export const postResearchChat = (co, prod, question, history = []) =>
   api.post(`/companies/${co}/products/${prod}/research/chat`, { question, history }).then(r => r.data);
-export const getNotebookLMStatus = () =>
-  api.get('/notebooklm/status').then(r => r.data);
-export const syncNotebookLM = (co, prod) =>
-  api.post(`/companies/${co}/products/${prod}/notebooklm/sync`).then(r => r.data);
-export const getNotebookLMSources = (co, prod) =>
-  api.get(`/companies/${co}/products/${prod}/notebooklm/sources`).then(r => r.data);
 
 // ── Memo Engine ──────────────────────────────────────────────────────────────
 export const getMemoTemplates = () =>

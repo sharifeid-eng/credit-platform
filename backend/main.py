@@ -3760,37 +3760,6 @@ def dataroom_ingest(company: str, product: str, source_dir: Optional[str] = None
     result = _dataroom_engine.ingest(company, product, source_dir)
     log_activity(DATAROOM_INGEST, company, product, f"Ingested data room: {result.get('documents_ingested', '?')} documents")
 
-    # Auto-sync to NotebookLM if available
-    try:
-        nlm_sync = _research_engine.sync_to_notebooklm(company, product)
-        nlm_avail = nlm_sync.get("notebook_id") is not None
-        result["nlm_sync"] = {
-            "uploaded": nlm_sync.get("uploaded", 0),
-            "skipped": nlm_sync.get("skipped", 0),
-            "errors": nlm_sync.get("errors", []),
-            "available": nlm_avail,
-        }
-        if not nlm_avail:
-            nlm_eng = getattr(_research_engine, 'nlm_engine', None)
-            result["nlm_sync"]["warning"] = nlm_eng.get_warning() if nlm_eng else {
-                "code": "nlm_not_installed",
-                "message": "NotebookLM not installed. Documents were not synced.",
-                "fix": "Install with 'pip install notebooklm-py' then run 'notebooklm login'.",
-                "severity": "warning",
-            }
-    except Exception as exc:
-        logger.warning("NLM sync after ingest failed: %s", exc)
-        result["nlm_sync"] = {
-            "available": False,
-            "error": str(exc),
-            "warning": {
-                "code": "nlm_sync_error",
-                "message": f"NLM sync failed: {exc}",
-                "fix": "Check NotebookLM authentication and try again.",
-                "severity": "warning",
-            },
-        }
-
     return result
 
 
@@ -3828,67 +3797,20 @@ def dataroom_search(company: str, product: str, q: str, top_k: int = 10):
     return _dataroom_engine.search(company, product, q.strip(), top_k=min(top_k, 50))
 
 
-# ── NotebookLM management endpoints ───────────────────────────────────────────
-
-@app.get("/notebooklm/status")
-def notebooklm_status():
-    """Return NotebookLM engine health and configuration status."""
-    return _research_engine.get_nlm_status()
-
-
-@app.post("/companies/{company}/products/{product}/notebooklm/sync")
-def notebooklm_sync(company: str, product: str):
-    """Explicitly sync all data room documents to the NotebookLM notebook.
-
-    Creates a notebook if one doesn't exist, then uploads any documents
-    not already synced.
-    """
-    result = _research_engine.sync_to_notebooklm(company, product)
-    if result.get("uploaded", 0) > 0:
-        log_activity(DATAROOM_INGEST, company, product,
-                     f"NLM sync: {result['uploaded']} sources uploaded")
-    return result
-
-
-@app.post("/companies/{company}/products/{product}/notebooklm/configure")
-def notebooklm_configure(company: str, product: str):
-    """Configure the NotebookLM notebook chat persona for credit analysis."""
-    success = _research_engine.configure_notebook(company, product)
-    return {"configured": success}
-
-
-@app.get("/companies/{company}/products/{product}/notebooklm/sources")
-def notebooklm_sources(company: str, product: str):
-    """List all sources in the company's NotebookLM notebook."""
-    nlm = _research_engine.nlm_engine
-    if not nlm or not nlm.available:
-        return {"sources": [], "available": False}
-    notebook_id = nlm.ensure_notebook(company, product)
-    if not notebook_id:
-        return {"sources": [], "available": True, "error": "No notebook found"}
-    sources = nlm.list_sources(notebook_id)
-    return {"sources": sources, "notebook_id": notebook_id, "available": True}
-
-
 # ── Research Intelligence endpoints ──────────────────────────────────────────
 
 @app.post("/companies/{company}/products/{product}/research/query")
 def research_query(company: str, product: str, question: str,
-                   include_analytics: bool = True, top_k: int = 10,
-                   use_notebooklm: bool = True):
-    """Ask a question across all ingested documents using dual-engine research.
+                   include_analytics: bool = True, top_k: int = 10):
+    """Ask a question across all ingested documents using Claude RAG.
 
-    Primary: Claude RAG (internal chunks + analytics + mind context)
-    Secondary: NotebookLM (if available, runs in parallel for second opinion)
-    Synthesis: merges best insights from both engines
-
-    Falls back gracefully at each level if a component is unavailable.
+    Uses Claude RAG with internal document chunks, analytics snapshots,
+    and mind context for research synthesis.
     """
     result = _research_engine.query(
         company=company,
         product=product,
         question=question,
-        use_notebooklm=use_notebooklm,
         include_analytics=include_analytics,
     )
     log_activity(RESEARCH_QUERY, company, product, f"Research: {question[:80]}")

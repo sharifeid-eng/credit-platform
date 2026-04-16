@@ -886,11 +886,11 @@ Each product maintains a registry at `data/{co}/{prod}/dataroom/registry.json`:
 
 ## 19. Research Hub & Query Engine
 
-Dual-engine research intelligence combining Claude RAG and NotebookLM, accessible through a dedicated Research page in the frontend. The Research Hub answers natural-language questions across all ingested documents, analytics snapshots, and mind entries.
+Research intelligence powered by Claude RAG, accessible through a dedicated Research page in the frontend. The Research Hub answers natural-language questions across all ingested documents, analytics snapshots, and mind entries.
 
 ### Claude RAG Pipeline
 
-The primary research engine uses the platform's own data room index:
+The research engine uses the platform's own data room index:
 
 ```
 Query → TF-IDF retrieval (top 10 chunks) → Rerank by relevance
@@ -900,28 +900,7 @@ Build prompt: retrieved chunks + mind context + analytics context
 Claude synthesis → answer with inline citations [Doc: filename, p.X]
 ```
 
-**Implementation:** `core/research/claude_rag.py` exposes `research_query(company, product, question)`. The retrieval step uses the TF-IDF index built by `DataRoomEngine`. Mind context is injected via `build_mind_context()` so that answers respect accumulated corrections and preferences.
-
-### NotebookLM Bridge
-
-A second-opinion engine powered by Google's Gemini RAG via the NotebookLM API:
-
-- **Python import** (preferred): `from notebooklm import NotebookLMClient`
-- **CLI fallback**: `notebooklm query --notebook {id} --question "..."`
-- **Authentication**: browser-based login (`notebooklm login`), token cached locally
-- **Graceful degradation**: when NotebookLM is unavailable (no auth, API down, package not installed), the platform falls back to Claude-only mode with no error — just a note that dual-engine was unavailable
-
-### Dual-Engine Synthesis
-
-When both engines are available, the Research Hub runs them in parallel and merges results:
-
-| Step | Action |
-|------|--------|
-| 1 | Run Claude RAG and NotebookLM query concurrently |
-| 2 | Compare answers for agreement/contradiction |
-| 3 | Merge complementary insights (Claude may find data room details, NotebookLM may surface PDF passages) |
-| 4 | Flag contradictions with `"⚠ Engines disagree"` badge and show both perspectives |
-| 5 | Note source strength: `"Claude cited 3 data room docs"` / `"NotebookLM cited 2 investor reports"` |
+**Implementation:** `core/research/query_engine.py` exposes the Claude RAG query. The retrieval step uses the TF-IDF index built by `DataRoomEngine`. Mind context is injected via `build_mind_context()` so that answers respect accumulated corrections and preferences.
 
 ### Insight Extraction (Rules-Based)
 
