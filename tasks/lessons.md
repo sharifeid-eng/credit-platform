@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-16 — Worktrees can't run ETL scripts that read raw data files
+
+**Problem:** ETL script `prepare_tamara_data.py` uses `PROJECT_ROOT` (derived from `__file__`) to find source data. When run from a worktree, `PROJECT_ROOT` points to the worktree directory which doesn't have raw dataroom files (they're not in git). The script silently produced empty sections.
+**Fix:** Copy the modified script to the main repo and run from there, or set `PROJECT_ROOT` explicitly. The JSON outputs then need to be copied back to the worktree.
+**Rule:** Any script that reads from `data/*/dataroom/` (raw files) must be run from the main repo, not a worktree. The ETL output (JSON snapshots) should be committed so it IS available in worktrees.
+
+## 2026-04-16 — Use data-driven keys, not hardcoded Unicode strings
+
+**Problem:** Excel values contained en-dash characters (`–`, U+2013) that looked identical to hyphen-minus but were different Unicode codepoints. Hardcoded Python strings `'2\u20133'` didn't match the actual JSON values `'2–3'` from openpyxl parsing, causing enrichment lookups to silently miss.
+**Fix:** Instead of iterating over hardcoded key lists, extract the actual keys from the data (`sorted(total_by_stage.keys())`). This is resilient to any Unicode encoding the source uses.
+**Rule:** When processing user-provided Excel data, never hardcode dimension values. Always derive them from the data itself.
+
 ## 2026-04-16 — Dataroom registry stores platform-specific filepaths
 
 **Problem:** `registry.json` stores filepaths with whatever separator the OS produces. Klaim/Tamara had relative Windows backslash paths (`data\klaim\dataroom\file.pdf`), Aajil had absolute Windows paths (`C:\Users\...\data\Aajil\...`). The document view endpoint did `os.path.exists(filepath)` on the raw path — fails on Linux production. Re-ingest also failed to match existing files when separator changed.
