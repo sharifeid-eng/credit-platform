@@ -3427,5 +3427,33 @@
       "filename": "Tamara valuation 2025 Draft Report_v3 (1).pdf"
     },
     "ingested_at": "2026-04-15T21:44:50"
+  },
+  "23335fde-e73": {
+    "doc_id": "23335fde-e73",
+    "filename": "Repayment Status & Transaction History.xlsx",
+    "filepath": "data/Tamara/dataroom/Portfolio Performance Breakdowns/Repayment Status & Transaction History.xlsx",
+    "document_type": "demographics",
+    "sha256": "bdcf043fd9dd0c2ba7c6f71496ceb252fe14ee54dfad004bb134d1a9d7424888",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2985,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "Repayment Status & Transaction History.xlsx",
+      "sheets": [
+        {
+          "name": "Repayment Status",
+          "rows": 122,
+          "cols": 8
+        },
+        {
+          "name": "Transaction History",
+          "rows": 126,
+          "cols": 8
+        }
+      ],
+      "total_sheets": 2
+    },
+    "ingested_at": "2026-04-16T16:16:12"
   }
 }
