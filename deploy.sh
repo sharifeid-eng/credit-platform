@@ -5,6 +5,9 @@ set -e
 
 echo "=== Laith Deploy ==="
 
+# Stash any local changes from dataroom ingests (registry.json, chunks metadata)
+git stash -q 2>/dev/null || true
+
 # Pull latest code — record what changed
 echo "Pulling latest code..."
 BEFORE=$(git rev-parse HEAD)
