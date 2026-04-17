@@ -6,21 +6,735 @@
       "title": "Portfolio Overview",
       "level": 1,
       "order": 1,
-      "prose": "Ejari operates as a Rent Now Pay Later (RNPL) product in KSA. The platform displays pre-computed analysis from an ODS workbook -- no live computation is performed. All metrics shown are extracted from the workbook sheets.",
-      "metrics": [],
-      "tables": [],
-      "notes": ["This is a read-only summary dashboard. No raw loan tape is available for Ejari -- all analysis is pre-computed."],
+      "prose": "Ejari operates as a Rent Now Pay Later (RNPL) product in KSA. The platform displays pre-computed analysis from an ODS workbook -- no live computation is performed. All metrics shown are extracted directly from the Portfolio_Overview sheet of the workbook. The overview presents two sections: key portfolio metrics (size, balances, collections) and credit quality indicators (PAR at multiple thresholds).",
+      "metrics": [
+        {
+          "name": "Total Contracts",
+          "formula": "Extracted from ODS key_metrics.total_contracts. Count of all loans originated to date.",
+          "notes": "Includes both active and matured/closed loans. Pre-computed in the ODS workbook."
+        },
+        {
+          "name": "Active Loans",
+          "formula": "Extracted from ODS key_metrics.active_loans. Count of loans with outstanding balance.",
+          "notes": "Excludes write-offs (32 loans fully excluded from all sheets except Write-offs & Fraud)."
+        },
+        {
+          "name": "Matured / Closed Loans",
+          "formula": "Extracted from ODS key_metrics.matured_loans. Loans that have reached contractual maturity or been fully paid.",
+          "notes": "Does not include write-offs."
+        },
+        {
+          "name": "Total Originated",
+          "formula": "Extracted from ODS key_metrics.total_originated. Sum of all original principal amounts at origination (USD).",
+          "notes": "This is the lifetime face value of all RNPL contracts."
+        },
+        {
+          "name": "Total Funded",
+          "formula": "Extracted from ODS key_metrics.total_funded. Total capital deployed to landlords (USD).",
+          "notes": "May differ from Total Originated due to advance rates or fee structures."
+        },
+        {
+          "name": "Outstanding Principal",
+          "formula": "Extracted from ODS key_metrics.outstanding_principal. Sum of remaining principal balance across active loans (USD).",
+          "notes": "Active balance at risk. Used as denominator for PAR calculations."
+        },
+        {
+          "name": "Outstanding Fee",
+          "formula": "Extracted from ODS key_metrics.outstanding_fee. Sum of outstanding fee balances (USD).",
+          "notes": "Separate from principal -- represents service/platform fees owed by borrowers."
+        },
+        {
+          "name": "Total Collections",
+          "formula": "Extracted from ODS key_metrics.total_collections. Cumulative cash collected across all loans (USD).",
+          "notes": "Includes principal and fee collections. Does not distinguish between on-time and late payments."
+        },
+        {
+          "name": "PAR 30+ / 60+ / 90+ / 180+",
+          "formula": "Extracted from ODS key_metrics.par30, par60, par90, par180. Percentage of outstanding principal that is past due by the respective number of days.",
+          "notes": "Denominator is outstanding principal of active loans. Based on contractual DPD (days past due from scheduled payment date). Write-off loans excluded."
+        }
+      ],
+      "tables": [
+        {
+          "name": "DPD Distribution (Active Loans)",
+          "description": "Breakdown of active loan portfolio by days-past-due bucket. Shows loan count, outstanding principal, and percentage share for each DPD tier.",
+          "columns": ["DPD Bucket", "# Loans", "O/S Principal", "% of Loans", "% of O/S"],
+          "notes": "Buckets: Current, 1-30, 31-60, 61-90, 91-120, 121-180, 181-365, 365+. Write-offs excluded."
+        }
+      ],
+      "notes": [
+        "This is a read-only summary dashboard. No raw loan tape is available for Ejari -- all analysis is pre-computed in the ODS workbook.",
+        "All monetary values are in USD.",
+        "32 write-off loans are fully excluded from this sheet and all other sheets except the dedicated Write-offs & Fraud tab.",
+        "PAR thresholds use contractual DPD, not estimated DPD. This is more reliable than proxy methods used for companies without contractual due dates."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "cohort",
+      "title": "Monthly Cohorts",
+      "level": 2,
+      "order": 2,
+      "prose": "Monthly cohort analysis groups loans by their rent start date (origination month) to track vintage-level performance. Each cohort row shows origination volume, current outstanding balance, cumulative collections, collection percentage, PAR rates, and borrower quality proxies (SIMAH score, salary, ticket size). Write-off loans are excluded. A TOTAL row aggregates across all vintages.",
+      "metrics": [
+        {
+          "name": "Loans (per cohort)",
+          "formula": "Extracted from ODS Monthly_Cohort sheet. Count of loans originated in that month.",
+          "notes": "Excludes the 32 write-off loans."
+        },
+        {
+          "name": "Active (per cohort)",
+          "formula": "Count of loans from that cohort still active (outstanding balance > 0).",
+          "notes": "A low active count in older cohorts indicates healthy maturation."
+        },
+        {
+          "name": "Originated",
+          "formula": "Sum of original principal amounts for loans in the cohort (USD).",
+          "notes": "Face value at origination. Denominator for cohort-level default and collection rates."
+        },
+        {
+          "name": "Funded",
+          "formula": "Sum of funded amounts for loans in the cohort (USD).",
+          "notes": "Capital actually deployed. May differ from originated due to advance rates."
+        },
+        {
+          "name": "Collections",
+          "formula": "Cumulative cash collected from loans in the cohort (USD).",
+          "notes": "Includes both principal and fee collections."
+        },
+        {
+          "name": "Collection %",
+          "formula": "Extracted as coll_pct. Collections / Originated for the cohort.",
+          "notes": "Younger cohorts naturally have lower collection percentages due to less time elapsed. Compare within similar vintage ages, not across vintages at different maturity stages."
+        },
+        {
+          "name": "PAR 30+ / 60+ / 90+ / 180+ (per cohort)",
+          "formula": "Percentage of the cohort's outstanding principal that is past due by the respective threshold.",
+          "notes": "Allows vintage-level credit quality comparison. Rising PAR in newer cohorts signals underwriting deterioration."
+        },
+        {
+          "name": "Avg SIMAH Score",
+          "formula": "Average credit bureau (SIMAH) score for borrowers in the cohort.",
+          "notes": "Saudi credit bureau score. Higher is better. Tracks underwriting quality over time."
+        },
+        {
+          "name": "Avg Salary",
+          "formula": "Average borrower salary in the cohort (USD).",
+          "notes": "Proxy for repayment capacity. Declining salary in newer cohorts may indicate credit box expansion."
+        },
+        {
+          "name": "Avg Ticket Size",
+          "formula": "Average loan principal per borrower in the cohort (USD).",
+          "notes": "Rising ticket size with stable salary suggests increasing leverage per borrower."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Monthly Cohort Performance Table",
+          "description": "Full vintage-level performance matrix. One row per origination month plus a TOTAL aggregation row.",
+          "columns": ["Cohort", "Vintage", "# Loans", "Active", "Originated", "Collections", "Coll %", "PAR30+", "PAR90+"],
+          "notes": "TOTAL row has null values for PAR and borrower quality metrics since blended averages would be misleading across vintages of different ages."
+        }
+      ],
+      "notes": [
+        "Write-off loans (32) are excluded from all cohort calculations.",
+        "Collection % for younger cohorts is naturally lower -- do not compare raw percentages across vintages without adjusting for vintage age.",
+        "The Vintage column provides a secondary grouping label within each Cohort (month).",
+        "SIMAH, salary, and ticket size are point-in-time at origination -- they do not update over the life of the loan."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "loss-waterfall",
+      "title": "Cohort Loss Waterfall",
+      "level": 4,
+      "order": 3,
+      "prose": "The loss waterfall decomposes each cohort from origination through default, fraud isolation, recovery, and net loss. Default is defined as 90+ DPD. Fraud is isolated as a separate loss driver because its recovery path and root cause differ fundamentally from credit default. The recovery rate excluding fraud provides a cleaner view of the credit loss recovery process.",
+      "metrics": [
+        {
+          "name": "Disbursed",
+          "formula": "Total principal disbursed for the cohort (USD). Same as Originated in the Monthly Cohort tab.",
+          "notes": "Denominator for default rate and net loss rate calculations."
+        },
+        {
+          "name": "Gross Default",
+          "formula": "Total outstanding balance of loans that reached 90+ DPD in the cohort (USD).",
+          "notes": "Includes both fraud and credit defaults. This is the first-cut loss measure before recovery."
+        },
+        {
+          "name": "Default Rate",
+          "formula": "Gross Default / Disbursed for the cohort.",
+          "notes": "Cumulative gross default rate. Younger cohorts have lower rates since not all loans have had time to season into default."
+        },
+        {
+          "name": "Fraud Amount",
+          "formula": "Portion of gross default attributable to fraud (USD).",
+          "notes": "Fraud is isolated because it represents a fundamentally different risk (identity/operational) vs credit risk."
+        },
+        {
+          "name": "Non-Fraud Default",
+          "formula": "Gross Default - Fraud Amount (USD).",
+          "notes": "Pure credit loss before recovery. This is the amount that entered the recovery pipeline due to borrower inability/unwillingness to pay."
+        },
+        {
+          "name": "Recovery",
+          "formula": "Cash recovered from defaulted loans in the cohort (USD).",
+          "notes": "Includes all recovery channels (collections, Najiz court executions, settlements)."
+        },
+        {
+          "name": "Net Loss",
+          "formula": "Gross Default - Recovery (USD).",
+          "notes": "The actual economic loss after all recovery efforts. This is the bottom-line loss measure."
+        },
+        {
+          "name": "Net Loss Rate",
+          "formula": "Net Loss / Disbursed for the cohort.",
+          "notes": "Key IC metric. Represents the permanent capital impairment per vintage."
+        },
+        {
+          "name": "Fraud %",
+          "formula": "Fraud Amount / Gross Default.",
+          "notes": "Proportion of defaults attributable to fraud. High fraud % suggests operational/underwriting controls need improvement."
+        },
+        {
+          "name": "Recovery Rate (ex-Fraud)",
+          "formula": "Recovery / Non-Fraud Default. Measures recovery effectiveness on genuine credit defaults.",
+          "notes": "Excludes fraud from the denominator since fraud recovery follows a different path (often near-zero). Provides a cleaner view of the credit workout process."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Loss Waterfall Table",
+          "description": "Per-cohort waterfall: Disbursed -> Gross Default -> Fraud -> Non-Fraud Default -> Recovery -> Net Loss. Includes TOTAL row.",
+          "columns": ["Cohort", "Disbursed", "Gross Default", "Default %", "Fraud", "Recovery", "Net Loss", "Net Loss %", "Recovery % (ex-Fraud)"],
+          "notes": "TOTAL row sums across all cohorts. Default defined as 90+ DPD."
+        }
+      ],
+      "notes": [
+        "Default is defined as 90+ DPD (days past due from contractual payment date).",
+        "Fraud is isolated as a distinct loss category -- different root cause, different recovery path, different prevention strategy.",
+        "Recovery Rate (ex-Fraud) is the preferred metric for evaluating the collections/workout function since fraud losses are typically unrecoverable.",
+        "Younger cohorts may show artificially low default and loss rates since loans have not yet had enough time to season into delinquency."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "roll-rates",
+      "title": "Roll Rates",
+      "level": 3,
+      "order": 4,
+      "prose": "Roll rate analysis examines clean active loans (write-offs excluded) grouped by DPD bucket. For each bucket, it shows recent payment activity and derives implied cure and roll rates. A cure means the borrower moves to a better DPD bucket (or current); a roll means they move to a worse bucket. This is a forward-looking credit quality indicator -- rising roll rates in early buckets signal portfolio deterioration before it shows up in PAR or loss metrics.",
+      "metrics": [
+        {
+          "name": "Loans (per bucket)",
+          "formula": "Count of active loans in the DPD bucket.",
+          "notes": "Write-off loans excluded."
+        },
+        {
+          "name": "Outstanding (per bucket)",
+          "formula": "Sum of outstanding principal for loans in the DPD bucket (USD).",
+          "notes": "Balance-weighted view. A few large loans in deep delinquency may dominate."
+        },
+        {
+          "name": "% of Outstanding",
+          "formula": "Bucket outstanding / total active outstanding.",
+          "notes": "Shows concentration of risk by DPD tier."
+        },
+        {
+          "name": "Avg DPD",
+          "formula": "Average days past due within the bucket.",
+          "notes": "Loans near the upper bound of a bucket are closer to rolling into the next tier."
+        },
+        {
+          "name": "Avg Days Since Last Payment",
+          "formula": "Average number of days since the borrower last made any payment.",
+          "notes": "Long gaps between payments signal disengagement. More granular than DPD alone since a borrower can be delinquent but still making partial payments."
+        },
+        {
+          "name": "% Paying Within 30d / 60d",
+          "formula": "Percentage of loans in the bucket that made at least one payment in the last 30 or 60 days.",
+          "notes": "Behavioral signal. Even delinquent borrowers who are paying recently have better cure prospects."
+        },
+        {
+          "name": "% No Payment in 90d",
+          "formula": "Percentage of loans in the bucket with no payment activity in the last 90 days.",
+          "notes": "Extracted as pct_no_pay_90d. High values in early DPD buckets are a leading indicator of loss migration."
+        },
+        {
+          "name": "Implied Cure Rate",
+          "formula": "Pre-computed in ODS. Proportion of loans in the bucket expected to move to a better (lower DPD) bucket based on observed payment behavior.",
+          "notes": "Derived from payment activity signals. Higher cure rates indicate borrowers are recovering."
+        },
+        {
+          "name": "Implied Roll Rate",
+          "formula": "Pre-computed in ODS. Proportion of loans in the bucket expected to move to a worse (higher DPD) bucket.",
+          "notes": "Roll Rate + Cure Rate should approximate 1 (some loans stay in the same bucket). Rising roll rates in the 1-30 DPD bucket are the earliest warning signal."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Roll Rate Analysis Table",
+          "description": "Per-DPD-bucket view of loan count, outstanding balance, payment behavior, and implied transition probabilities.",
+          "columns": ["DPD Bucket", "# Loans", "O/S", "% of O/S", "Avg DPD", "Days Since Pay", "% Pay<30d", "% Pay<60d", "Cure Rate", "Roll Rate"],
+          "notes": "Clean active loans only (write-offs excluded). DPD buckets align with the Portfolio Overview DPD distribution."
+        }
+      ],
+      "notes": [
+        "Roll rates are implied from payment behavior, not observed month-over-month bucket transitions (which would require multiple snapshots).",
+        "This is a single-snapshot view. For true transition matrix analysis, two consecutive tape snapshots would be needed.",
+        "The cure/roll rates are particularly informative for the 1-30 and 31-60 DPD buckets, where early intervention can prevent loss migration.",
+        "Write-offs are fully excluded from this analysis."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "historical",
+      "title": "Historical Performance",
+      "level": 4,
+      "order": 5,
+      "prose": "Historical vintage performance tracks cumulative default and recovery curves over time for each origination vintage. Default is defined at the 90+ DPD threshold. Fraud is isolated to provide a clean view of credit loss dynamics. This tab enables vintage-over-vintage comparison of default seasoning curves and recovery effectiveness. The LGD (Loss Given Default) column shows the ultimate loss severity for defaulted loans after recovery.",
+      "metrics": [
+        {
+          "name": "Disbursed (per vintage)",
+          "formula": "Total principal disbursed for the vintage (USD).",
+          "notes": "Same as cohort-level originated amount. Denominator for percentage calculations."
+        },
+        {
+          "name": "90DPD Outstanding",
+          "formula": "Cumulative outstanding balance that reached 90+ DPD at the observation period (USD).",
+          "notes": "This is the gross default amount at each point in time. Shows the seasoning curve of defaults."
+        },
+        {
+          "name": "Fraud",
+          "formula": "Portion of 90DPD outstanding attributable to fraud (USD).",
+          "notes": "Isolated to show true credit default separate from operational/identity fraud."
+        },
+        {
+          "name": "Non-Fraud Default",
+          "formula": "90DPD Outstanding - Fraud (USD). Pure credit default amount.",
+          "notes": "This is the base for credit loss recovery analysis."
+        },
+        {
+          "name": "Recovery",
+          "formula": "Cumulative recovery at the observation period (USD).",
+          "notes": "All recovery channels combined."
+        },
+        {
+          "name": "Recovery Rate (ex-Fraud)",
+          "formula": "Recovery / Non-Fraud Default.",
+          "notes": "Tracks recovery effectiveness over time. Should increase as more workout efforts complete."
+        },
+        {
+          "name": "Gross Default %",
+          "formula": "90DPD Outstanding / Disbursed.",
+          "notes": "Cumulative gross default rate at each observation period. Compare across vintages at the same age to identify vintage deterioration."
+        },
+        {
+          "name": "Net Default %",
+          "formula": "(90DPD Outstanding - Recovery) / Disbursed.",
+          "notes": "Gross default minus recoveries, expressed as a percentage of disbursed. The net economic loss rate."
+        },
+        {
+          "name": "LGD (Loss Given Default)",
+          "formula": "Pre-computed in ODS. Net Loss / Gross Default for the vintage.",
+          "notes": "Measures severity of loss once a loan defaults. A 60% LGD means 40% of the defaulted balance is ultimately recovered."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Historical Vintage Performance Table",
+          "description": "Multi-period view of each vintage's default and recovery trajectory. One row per vintage per observation period.",
+          "columns": ["Vintage", "Period", "Disbursed", "90DPD O/S", "Fraud", "Non-Fraud", "Recovery", "Rec Rate (ex-Fraud)", "Gross Def %", "LGD"],
+          "notes": "Periods represent successive observation dates for each vintage. Enables construction of vintage default curves."
+        }
+      ],
+      "notes": [
+        "Multiple rows per vintage allow plotting cumulative default curves over time (seasoning analysis).",
+        "Compare vintages at the same age (months since origination) rather than at the same calendar date to control for maturity effects.",
+        "Fraud isolation is critical -- blending fraud with credit defaults overstates the credit loss rate and understates recovery effectiveness.",
+        "LGD is a lagging indicator -- newer vintages will show higher LGD since recovery has not completed."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "collections-month",
+      "title": "Collections by Month",
+      "level": 2,
+      "order": 6,
+      "prose": "Collections by payment month shows the timing distribution of actual cash collections. For each calendar month, it breaks down total due, total paid, overall collection percentage, and the timing of when payments were received relative to the due date. This reveals whether collections are concentrated in early buckets (healthy) or spreading into late buckets (deteriorating).",
+      "metrics": [
+        {
+          "name": "Total Due",
+          "formula": "Sum of scheduled payment amounts due in the calendar month (USD).",
+          "notes": "This is the contractual obligation for the month. Includes both principal and fee components."
+        },
+        {
+          "name": "Total Paid",
+          "formula": "Sum of actual cash collected for payments due in the calendar month (USD).",
+          "notes": "May exceed Total Due if arrears from prior months are also collected."
+        },
+        {
+          "name": "Collection %",
+          "formula": "Total Paid / Total Due for the month.",
+          "notes": "Can exceed 100% if arrears are collected. Values below 100% indicate cash shortfall for the period."
+        },
+        {
+          "name": "Early",
+          "formula": "Payments received before the due date (USD).",
+          "notes": "Positive signal -- borrowers paying ahead of schedule."
+        },
+        {
+          "name": "Timing Buckets (0-15d, 15-30d, 30-45d, 45-60d, 60-90d, 90-120d, 120-150d, 150-180d, 180+d)",
+          "formula": "Cash collected within each timing window after the due date (USD).",
+          "notes": "Healthy portfolios have collections concentrated in Early + 0-15d. Cash migrating into later buckets signals collection deterioration."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Collections Waterfall by Payment Month",
+          "description": "Monthly collection waterfall showing timing distribution of cash receipts relative to due dates.",
+          "columns": ["Month", "Total Due", "Total Paid", "Coll %", "Early", "0-15d", "15-30d", "30-45d", "60-90d", "180+d"],
+          "notes": "Not all timing columns shown in the dashboard to avoid table width overflow. Full set available in ODS data."
+        }
+      ],
+      "notes": [
+        "This is a 'when did we get paid' view -- indexed by the calendar month the payment was due.",
+        "Contrast with Collections by Origination, which indexes by when the loan was originated.",
+        "A declining Early + 0-15d concentration over time is a leading indicator of portfolio stress.",
+        "Collection % above 100% indicates arrears recovery -- positive for cash flow but may mask underlying delinquency."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "collections-orig",
+      "title": "Collections by Origination",
+      "level": 2,
+      "order": 7,
+      "prose": "Collections by origination month presents the same timing waterfall as Collections by Month, but indexed by the month the loan was originated rather than when the payment was due. This provides a vintage-level view of collection behavior -- how quickly each origination cohort converts to cash. Includes a fraud flag column indicating whether the vintage has known fraud cases.",
+      "metrics": [
+        {
+          "name": "Total Due (by origination month)",
+          "formula": "Sum of all scheduled payments for loans originated in that month (USD).",
+          "notes": "Cumulative contractual obligation for the vintage."
+        },
+        {
+          "name": "Total Paid (by origination month)",
+          "formula": "Sum of all actual collections for loans originated in that month (USD).",
+          "notes": "Cumulative cash collected from the vintage."
+        },
+        {
+          "name": "Collection %",
+          "formula": "Total Paid / Total Due for the origination cohort.",
+          "notes": "Older vintages should have higher collection percentages due to longer collection runway."
+        },
+        {
+          "name": "Timing Buckets (Early, 0-15d, 15-30d, ... 180+d)",
+          "formula": "Cash collected within each timing window after respective due dates, aggregated for all loans in the vintage (USD).",
+          "notes": "Shows the collection velocity profile of each origination vintage."
+        },
+        {
+          "name": "Fraud Flag",
+          "formula": "Extracted from the ODS fraud column. Indicates whether the origination vintage includes identified fraud cases.",
+          "notes": "Text indicator. Vintages with fraud may show distorted collection patterns."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Collections Waterfall by Origination Month",
+          "description": "Per-vintage collection timing distribution showing how quickly each cohort converts scheduled payments to cash.",
+          "columns": ["Month", "Total Due", "Total Paid", "Coll %", "Early", "0-15d", "15-30d", "60-90d", "Fraud?"],
+          "notes": "Fraud flag column helps contextualize poor collection rates in specific vintages."
+        }
+      ],
+      "notes": [
+        "This is a 'how does each vintage collect' view -- indexed by loan origination month.",
+        "Compare collection timing profiles across vintages to detect vintage deterioration (later vintages collecting more slowly).",
+        "Younger vintages will naturally have lower collection percentages -- compare within similar age brackets.",
+        "The fraud flag identifies vintages contaminated by fraud, which should be treated separately in performance analysis."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "segments",
+      "title": "Segment Analysis",
+      "level": 1,
+      "order": 8,
+      "prose": "Segment analysis breaks down portfolio performance across six borrower and product dimensions: use case, employment sector, region, gender, marital status, and payment scheme. Each dimension shows loan count, active count, originated amount, outstanding balance, collection percentage, PAR rates, and borrower quality proxies. Write-off loans are excluded. This multi-dimensional view identifies concentration risks and performance outliers that aggregate metrics would hide.",
+      "metrics": [
+        {
+          "name": "Segment Loans / Active",
+          "formula": "Count of loans and active loans per segment value.",
+          "notes": "Identifies concentration by dimension. A single segment dominating loan count is a concentration risk."
+        },
+        {
+          "name": "Originated (per segment)",
+          "formula": "Sum of original principal for loans in the segment (USD).",
+          "notes": "Volume-weighted concentration measure."
+        },
+        {
+          "name": "Outstanding (per segment)",
+          "formula": "Sum of outstanding principal for active loans in the segment (USD).",
+          "notes": "Current exposure by segment. This is the risk-at-stake measure."
+        },
+        {
+          "name": "Collection % (per segment)",
+          "formula": "Cumulative collections / originated for the segment.",
+          "notes": "Compare across segments within the same dimension to identify high- and low-performing segments."
+        },
+        {
+          "name": "PAR 30+ / PAR 90+ (per segment)",
+          "formula": "Percentage of segment outstanding that is 30+ or 90+ DPD.",
+          "notes": "Key credit quality comparison across segments. Segments with elevated PAR require attention."
+        },
+        {
+          "name": "Avg SIMAH Score (per segment)",
+          "formula": "Average borrower credit bureau score within the segment.",
+          "notes": "Underwriting quality proxy. Segments with low SIMAH scores carrying high PAR confirm risk correlation."
+        },
+        {
+          "name": "Avg Salary (per segment)",
+          "formula": "Average borrower salary within the segment (USD).",
+          "notes": "Repayment capacity proxy by segment."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Segment Performance Tables (6 dimensions)",
+          "description": "One table per dimension: Use Case, Employment Sector, Region, Gender, Marital Status, Payment Scheme. Each shows segment-level performance metrics.",
+          "columns": ["Segment", "# Loans", "Active", "Originated", "Outstanding", "Coll %", "PAR30+", "PAR90+", "Avg SIMAH", "Avg Salary"],
+          "notes": "All six dimensions rendered as separate sub-tables within the same tab. Write-offs excluded."
+        }
+      ],
+      "notes": [
+        "Six dimensions available: use_case, employment, region, gender, marital, payment_scheme.",
+        "Write-off loans (32) are excluded from segment calculations to avoid contaminating performance metrics.",
+        "Use this tab to identify which borrower profiles or product configurations drive the best and worst performance.",
+        "High concentration in a single segment (e.g., one region accounting for 80% of volume) is a risk factor regardless of current performance.",
+        "Cross-reference high-PAR segments with SIMAH and salary to determine whether the issue is underwriting (accepted bad risk) or macro (good borrowers hitting stress)."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "credit-quality",
+      "title": "Credit Quality Trends",
+      "level": 5,
+      "order": 9,
+      "prose": "Credit quality trends track underwriting characteristics by monthly cohort to detect shifts in the borrower profile over time. Metrics include credit bureau scores (SIMAH), salary levels, ticket sizes, debt burden ratios (DBR), and demographic composition (government employment, gender, marital status). Write-offs are excluded. This is a forward-looking tab -- deterioration in underwriting inputs today predicts higher losses in future vintages.",
+      "metrics": [
+        {
+          "name": "Avg SIMAH / Median SIMAH",
+          "formula": "Average and median credit bureau scores for borrowers in each cohort.",
+          "notes": "Declining SIMAH scores across cohorts indicates credit box expansion (accepting weaker borrowers). Median is more robust to outliers."
+        },
+        {
+          "name": "Avg Salary / Median Salary",
+          "formula": "Average and median borrower salaries per cohort (USD).",
+          "notes": "Declining salaries signal acceptance of borrowers with lower repayment capacity."
+        },
+        {
+          "name": "Avg Ticket Size",
+          "formula": "Average loan principal per borrower in the cohort (USD).",
+          "notes": "Rising ticket size with declining salary or SIMAH is a red flag -- larger loans to weaker borrowers."
+        },
+        {
+          "name": "Avg DBR (Debt Burden Ratio)",
+          "formula": "Average borrower debt-to-income ratio for the cohort. Pre-computed in ODS.",
+          "notes": "SAMA (Saudi Central Bank) typically caps DBR at 33% for consumer lending. Rising DBR indicates borrowers are more leveraged."
+        },
+        {
+          "name": "% Government Employed",
+          "formula": "Percentage of borrowers in the cohort employed in the government sector.",
+          "notes": "Government employees have more stable income in KSA. Declining % Govt may indicate riskier employment mix."
+        },
+        {
+          "name": "% Female",
+          "formula": "Percentage of female borrowers in the cohort.",
+          "notes": "Demographic composition tracking. Changes may reflect market expansion or shifting target demographics."
+        },
+        {
+          "name": "% Married",
+          "formula": "Percentage of married borrowers in the cohort.",
+          "notes": "Marital status can correlate with housing stability in RNPL context."
+        },
+        {
+          "name": "Avg Term",
+          "formula": "Average loan term (months) for the cohort.",
+          "notes": "Longer terms increase credit exposure duration. RNPL terms are typically aligned with lease periods (6-12 months)."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Credit Quality Trends Table",
+          "description": "Per-cohort underwriting metrics. One row per origination month. Tracks drift in borrower quality over time.",
+          "columns": ["Cohort", "# Loans", "Avg SIMAH", "Avg Salary", "Avg Ticket", "Avg DBR", "% Govt", "% Female", "% Married", "Avg Term"],
+          "notes": "Write-offs excluded. Read left-to-right across cohorts to identify trends. Combine with Monthly Cohort PAR data to correlate underwriting inputs with credit outcomes."
+        }
+      ],
+      "notes": [
+        "This is the primary early warning tab for underwriting drift.",
+        "Write-off loans are excluded to avoid skewing averages with known-bad outcomes.",
+        "Cross-reference with Monthly Cohort PAR rates: if newer cohorts have both weaker underwriting inputs AND higher PAR, the credit box has expanded too far.",
+        "SIMAH scores are point-in-time at origination -- they reflect the borrower's creditworthiness when the loan was approved, not their current status.",
+        "DBR is a regulatory focus metric in KSA. Trends approaching the SAMA cap warrant attention."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "najiz",
+      "title": "Najiz & Legal",
+      "level": 4,
+      "order": 10,
+      "prose": "Najiz & Legal tracks court-based recovery efforts through the Saudi Najiz court execution system. For each vintage, it shows the number of cases filed, execution rates, recovery amounts, and fraud-specific write-offs and recoveries. This tab measures the effectiveness of the legal recovery channel -- a critical backstop for RNPL collections since rental agreements have strong legal enforceability in KSA.",
+      "metrics": [
+        {
+          "name": "Cases (per vintage)",
+          "formula": "Number of Najiz court cases filed for defaulted loans in the vintage.",
+          "notes": "Not all defaults result in legal action. Case count relative to defaults indicates the legal escalation rate."
+        },
+        {
+          "name": "Executions",
+          "formula": "Number of cases where court execution was obtained.",
+          "notes": "An execution is a court order that enables asset seizure, salary garnishment, or travel ban."
+        },
+        {
+          "name": "Execution Rate",
+          "formula": "Executions / Cases.",
+          "notes": "Measures the success rate of legal proceedings. Higher rates indicate stronger legal documentation and case preparation."
+        },
+        {
+          "name": "Execution Value",
+          "formula": "Total value of court-ordered executions (USD).",
+          "notes": "The face value of court orders obtained. Actual recovery may differ from execution value."
+        },
+        {
+          "name": "Recovery (Najiz)",
+          "formula": "Actual cash recovered through Najiz executions (USD).",
+          "notes": "Cash-in-hand from legal recovery. The ultimate measure of legal channel effectiveness."
+        },
+        {
+          "name": "Recovery / Execution Rate",
+          "formula": "Recovery / Execution Value.",
+          "notes": "Measures how much of the court-ordered value is actually collected. Gap indicates enforcement friction."
+        },
+        {
+          "name": "Avg Recovery per Case",
+          "formula": "Recovery / Cases (USD).",
+          "notes": "Average economic value per legal case. Use to assess ROI of legal proceedings against cost of litigation."
+        },
+        {
+          "name": "Fraud Write-off",
+          "formula": "Value of fraud-related write-offs in the vintage that were referred to legal (USD).",
+          "notes": "Fraud cases have distinct legal paths (criminal vs civil) and typically lower recovery rates."
+        },
+        {
+          "name": "Fraud Recovery / Fraud Recovery Rate",
+          "formula": "Cash recovered from fraud write-offs, and as a percentage of fraud write-off value.",
+          "notes": "Typically much lower than credit default recovery. Fraud recovery often requires criminal prosecution which is slower."
+        }
+      ],
+      "tables": [
+        {
+          "name": "Najiz & Legal Collections Table",
+          "description": "Per-vintage legal recovery metrics with fraud isolation. Includes TOTAL row.",
+          "columns": ["Vintage", "# Cases", "# Exec", "Exec Rate", "Exec Value", "Recovery", "Rec/Exec", "Avg Rec/Case", "Fraud WO"],
+          "notes": "TOTAL row aggregates across all vintages."
+        }
+      ],
+      "notes": [
+        "Najiz is the Saudi Ministry of Justice electronic execution system.",
+        "Execution does not guarantee full recovery -- enforcement mechanisms include salary garnishment, asset seizure, and travel bans.",
+        "Fraud recovery is tracked separately because the legal path (criminal referral) and expected recovery rate differ materially from credit default.",
+        "Legal recovery is a lagging indicator -- cases take months to progress through the court system.",
+        "Compare Avg Recovery per Case against estimated legal costs to assess the ROI of litigation strategy."
+      ],
+      "subsections": []
+    },
+    {
+      "id": "writeoffs",
+      "title": "Write-offs & Fraud",
+      "level": 4,
+      "order": 11,
+      "prose": "This tab provides a dedicated view of the 32 write-off loans that are fully excluded from all other tabs in the dashboard. Write-offs are classified by reason code and split into fraud vs credit categories. Includes a summary view (aggregate metrics for all write-offs, fraud subset, and credit subset), a breakdown by reason code, and a by-cohort distribution. This isolation follows the Separation Principle -- write-offs are analyzed in their own context to avoid contaminating healthy portfolio metrics.",
+      "metrics": [
+        {
+          "name": "Write-off Summary (All / Fraud / Credit)",
+          "formula": "Extracted from ODS summary section. Key metrics broken out by All write-offs, Fraud write-offs, and Credit write-offs.",
+          "notes": "The summary provides totals for loan count, original principal, outstanding balance, and loss amounts across all three categories."
+        },
+        {
+          "name": "By Reason Code",
+          "formula": "Each write-off loan is tagged with a reason code. This section aggregates by reason.",
+          "notes": "Reason codes help categorize the root cause: identity fraud, payment fraud, credit default, job loss, etc."
+        },
+        {
+          "name": "Loans (per reason)",
+          "formula": "Count of write-off loans with this reason code.",
+          "notes": "Identifies the most common write-off cause."
+        },
+        {
+          "name": "Original Principal / Outstanding Principal / Outstanding Fee",
+          "formula": "Original and current outstanding balances for write-off loans (USD).",
+          "notes": "Difference between original and outstanding reflects partial collections before write-off."
+        },
+        {
+          "name": "Total Outstanding",
+          "formula": "Outstanding Principal + Outstanding Fee (USD).",
+          "notes": "Total economic exposure from write-off loans."
+        },
+        {
+          "name": "% of Write-offs",
+          "formula": "Reason's outstanding / total write-off outstanding.",
+          "notes": "Identifies which reason codes drive the largest share of losses."
+        },
+        {
+          "name": "Type (Fraud / Credit)",
+          "formula": "Classification of the reason code as either Fraud or Credit.",
+          "notes": "Binary classification. Fraud requires operational/preventive controls; credit losses require underwriting improvement."
+        },
+        {
+          "name": "Write-offs by Cohort",
+          "formula": "Distribution of write-off loans across origination cohorts, split by fraud vs credit count and outstanding.",
+          "notes": "Identifies whether write-offs are concentrated in specific vintages or spread across the book."
+        }
+      ],
+      "tables": [
+        {
+          "name": "By Reason Code Table",
+          "description": "Write-off loans grouped by reason code showing count, original principal, outstanding amounts, share, and fraud/credit classification.",
+          "columns": ["Reason", "# Loans", "Orig Principal", "O/S Principal", "Total O/S", "% of WO", "Type"],
+          "notes": "Types: Fraud or Credit. Helps prioritize whether fraud prevention or credit underwriting needs more attention."
+        },
+        {
+          "name": "Write-offs by Cohort Table",
+          "description": "Distribution of write-offs by origination month, split into fraud and credit categories.",
+          "columns": ["Cohort", "Vintage", "WO Count", "Fraud Count", "Credit Count", "WO O/S", "Fraud O/S", "Credit O/S"],
+          "notes": "Concentration in specific cohorts may indicate vintage-specific underwriting issues or fraud rings."
+        }
+      ],
+      "notes": [
+        "32 write-off loans are FULLY EXCLUDED from all other tabs (Portfolio Overview, Monthly Cohorts, Roll Rates, Segment Analysis, Credit Quality Trends, Collections). This tab is their dedicated view.",
+        "This exclusion follows the Separation Principle from the Analysis Framework -- loss loans are analyzed separately to avoid distorting healthy portfolio performance metrics.",
+        "Fraud and credit write-offs have fundamentally different root causes and require different remediation strategies.",
+        "The by-cohort view helps identify whether write-offs cluster in specific origination periods (vintage problem) or are evenly distributed (systemic underwriting issue).",
+        "The summary section breaks totals into All / Fraud / Credit columns for quick comparison of loss drivers."
+      ],
       "subsections": []
     },
     {
       "id": "data-source",
-      "title": "Data Source",
+      "title": "Data Notes",
       "level": null,
-      "order": 2,
-      "prose": "Analysis is based on a pre-computed ODS workbook with 13 sheets covering portfolio overview, monthly cohorts, loss waterfall, roll rates, historical performance, collections by month and origination, segment analysis, credit quality trends, Najiz & legal recovery, write-offs & fraud, and data notes.",
+      "order": 12,
+      "prose": "Data notes document the full audit trail of corrections, methodology decisions, and data quality observations applied during the preparation of the ODS workbook. This section is rendered as free-form text extracted from the Data_Notes sheet. It provides transparency into how the data was processed and what caveats apply to the analysis.",
       "metrics": [],
       "tables": [],
-      "notes": ["The ODS file is parsed once per session and cached. All monetary values are in USD."],
+      "notes": [
+        "The ODS file is parsed once per session and cached. All monetary values are in USD.",
+        "Data notes are extracted verbatim from the workbook -- no transformation or interpretation is applied.",
+        "Section headers in the notes (uppercase text) are rendered with emphasis for readability.",
+        "Numbered items are rendered in monospace font for clarity.",
+        "This tab serves as the methodology audit trail -- consult it before drawing conclusions from other tabs to understand data limitations and corrections."
+      ],
       "subsections": []
     }
   ]

@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../../contexts/CompanyContext'
 import useBreakpoint from '../../hooks/useBreakpoint'
-import { getMemoTemplates, generateMemo } from '../../services/api'
+import { getMemoTemplates, generateMemo, AGENT_MEMO_URL } from '../../services/api'
 
 // ── Template definitions (fallback if backend not yet wired) ────────────────
 const FALLBACK_TEMPLATES = [
@@ -124,7 +124,10 @@ export default function MemoBuilder() {
   const [sectionToggles, setSectionToggles] = useState({})
   const [generating, setGenerating] = useState(false)
   const [genProgress, setGenProgress] = useState('')
+  const [genToolCall, setGenToolCall] = useState(null) // current tool being called
+  const [useAgent, setUseAgent] = useState(true)
   const [error, setError] = useState(null)
+  const abortRef = useRef(null)
 
   // Try to load templates from backend (fall back to hardcoded)
   useEffect(() => {
@@ -166,32 +169,127 @@ export default function MemoBuilder() {
     setGenerating(true)
     setError(null)
     setGenProgress('Initializing generation...')
+    setGenToolCall(null)
 
-    // Simulate progress updates for sections
     const sectionKeys = enabledSections.map(s => s.key)
-    let progressIdx = 0
-    const progressTimer = setInterval(() => {
-      if (progressIdx < enabledSections.length) {
-        setGenProgress(`Generating: ${enabledSections[progressIdx].title}...`)
-        progressIdx++
-      }
-    }, 3000)
 
-    try {
-      const result = await generateMemo(company, product, selectedTemplate.key, sectionKeys)
-      clearInterval(progressTimer)
-      setGenProgress('Complete!')
-      // Navigate to the editor
-      const memoId = result.memo_id || result.id
-      if (memoId) {
-        setTimeout(() => {
-          navigate(`/company/${company}/${product}/research/memos/${memoId}`)
-        }, 600)
+    if (useAgent) {
+      // Agent mode: SSE streaming with live tool indicators
+      const API_BASE = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:8000'
+      const abortController = new AbortController()
+      abortRef.current = abortController
+
+      try {
+        const response = await fetch(`${API_BASE}/agents/${company}/${product}/memo/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            template_key: selectedTemplate.key,
+            sections: sectionKeys,
+          }),
+          signal: abortController.signal,
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          const errText = await response.text()
+          throw new Error(errText)
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let sectionCount = 0
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const events = buffer.split('\n\n')
+          buffer = events.pop()
+
+          for (const event of events) {
+            if (!event.trim()) continue
+            const lines = event.split('\n')
+            let eventType = '', eventData = ''
+            for (const line of lines) {
+              if (line.startsWith('event: ')) eventType = line.slice(7)
+              if (line.startsWith('data: ')) eventData = line.slice(6)
+            }
+            if (!eventType || !eventData) continue
+            try {
+              const data = JSON.parse(eventData)
+              if (eventType === 'tool_call') {
+                setGenToolCall(data.description)
+                setGenProgress(`Writing section ${sectionCount + 1}/${sectionKeys.length}...`)
+              } else if (eventType === 'tool_result') {
+                setGenToolCall(null)
+              } else if (eventType === 'text') {
+                // Count section outputs in the text
+                const sectionMatches = (data.delta || '').match(/"section_key"/g)
+                if (sectionMatches) sectionCount += sectionMatches.length
+              } else if (eventType === 'done') {
+                setGenProgress('Complete!')
+                setGenToolCall(null)
+              } else if (eventType === 'error') {
+                setError(data.message)
+              }
+            } catch (_) { /* skip malformed */ }
+          }
+        }
+
+        // Agent streaming complete — save memo via legacy endpoint
+        setGenProgress('Saving memo...')
+        try {
+          const result = await generateMemo(company, product, selectedTemplate.key, sectionKeys)
+          const memoId = result.memo_id || result.id
+          if (memoId) {
+            setGenProgress('Complete! Redirecting...')
+            setTimeout(() => {
+              navigate(`/company/${company}/${product}/research/memos/${memoId}`)
+            }, 500)
+          } else {
+            navigate(`/company/${company}/${product}/research/memos`)
+          }
+        } catch (saveErr) {
+          console.error('[MemoBuilder] Agent save fallback failed:', saveErr)
+          navigate(`/company/${company}/${product}/research/memos`)
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Agent generation failed. Please try again.')
+        }
+      } finally {
+        setGenerating(false)
+        setGenToolCall(null)
+        abortRef.current = null
       }
-    } catch (err) {
-      clearInterval(progressTimer)
-      setError(err?.response?.data?.detail || 'Generation failed. Please try again.')
-      setGenerating(false)
+    } else {
+      // Legacy mode: single API call with simulated progress
+      let progressIdx = 0
+      const progressTimer = setInterval(() => {
+        if (progressIdx < enabledSections.length) {
+          setGenProgress(`Generating: ${enabledSections[progressIdx].title}...`)
+          progressIdx++
+        }
+      }, 3000)
+
+      try {
+        const result = await generateMemo(company, product, selectedTemplate.key, sectionKeys)
+        clearInterval(progressTimer)
+        setGenProgress('Complete!')
+        const memoId = result.memo_id || result.id
+        if (memoId) {
+          setTimeout(() => {
+            navigate(`/company/${company}/${product}/research/memos/${memoId}`)
+          }, 600)
+        }
+      } catch (err) {
+        clearInterval(progressTimer)
+        setError(err?.response?.data?.detail || 'Generation failed. Please try again.')
+        setGenerating(false)
+      }
     }
   }
 
@@ -492,15 +590,21 @@ export default function MemoBuilder() {
                   }} />
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-                      Generating Memo
+                      {useAgent ? 'Agent Generating Memo' : 'Generating Memo'}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                       {genProgress}
                     </div>
+                    {genToolCall && (
+                      <div style={{ fontSize: 10, color: 'var(--accent-gold)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent-gold)', animation: 'pulse 1s infinite' }} />
+                        {genToolCall}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {/* Inline keyframes */}
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }`}</style>
               </motion.div>
             )}
 

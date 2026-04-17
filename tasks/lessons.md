@@ -3,6 +3,19 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-17 — Integration discipline: infrastructure ≠ feature
+
+**Problem:** Built a complete agent framework (41 tools, 4 agent types, SSE streaming, rate limiting, 69 tests) but left it dormant. Backend had `if mode == 'agent'` branches, api.js had `getExecutiveSummaryAgent()` function, `useAgentStream` hook existed — but no frontend component actually passed `mode: 'agent'`. The infrastructure was correct and tested, but the user experience was unchanged. Marked the plan as complete because every technical component existed.
+
+**Root cause:** The plan was organized by technical layer (runtime → tools → endpoints → frontend hooks), not by user outcome. Verification was component-level ("does this function exist?") not flow-level ("when the user clicks Generate Commentary, does the agent path execute?"). Treated "capability exists" as "capability is active."
+
+**Rules (BINDING for all future plans):**
+1. **Organize plans by user-visible outcome, not technical layer.** Each feature is a vertical slice: backend + frontend + wiring + verification. A feature is not done until the user's experience changes.
+2. **Write verification steps as user actions.** Bad: "✅ `generate_agent_commentary()` exists." Good: "✅ Load dashboard → click Generate → backend logs show agent path, not legacy path."
+3. **For every new function/hook/endpoint, answer: "Who calls this?"** If no existing call site invokes the new code, it's dead capability. Show the specific line in a .jsx component or endpoint handler that triggers it.
+4. **Demand a "diff of user experience" before marking complete.** "What does the user see differently now vs before?" If the answer is only "new endpoints exist" — it's an API, not a feature.
+5. **Never mark a multi-phase plan complete without an integration sweep.** After all phases, audit: does every new backend capability have a frontend caller? Does every new frontend hook have a component using it? Does every event listener actually do work (not just log)?
+
 ## 2026-04-16 — Dataroom registry stores platform-specific filepaths
 
 **Problem:** `registry.json` stores filepaths with whatever separator the OS produces. Klaim/Tamara had relative Windows backslash paths (`data\klaim\dataroom\file.pdf`), Aajil had absolute Windows paths (`C:\Users\...\data\Aajil\...`). The document view endpoint did `os.path.exists(filepath)` on the raw path — fails on Linux production. Re-ingest also failed to match existing files when separator changed.

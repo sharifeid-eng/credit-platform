@@ -349,7 +349,11 @@ class MemoGenerator:
             response = self._client.messages.create(
                 model=_MODEL,
                 max_tokens=max_tokens,
-                system=system_prompt,
+                system=[{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }],
                 messages=[{"role": "user", "content": user_prompt}],
             )
             ai_text = response.content[0].text

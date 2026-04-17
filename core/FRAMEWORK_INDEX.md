@@ -12,7 +12,7 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 |---|---------|---------|---------|
 | 1 | Analytical Hierarchy (L1–L5) | Metric classification pyramid | All commands |
 | 2 | Tape vs Portfolio Analytics | Dual-perspective philosophy | `/onboard-company`, `/extend-framework` |
-| 3 | Asset Class Adaptations | Per-asset-class rules (Klaim, SILQ, Ejari) | `/onboard-company` |
+| 3 | Asset Class Adaptations | Per-asset-class rules (Klaim, SILQ, Ejari, Tamara, Aajil) | `/onboard-company` |
 | 4 | Leading vs Lagging Indicators | Temporal classification | `/extend-framework` |
 | 5 | Separation Principle | Clean vs loss portfolio | `/framework-audit` |
 | 6 | Denominator Discipline | Rate/ratio denominator rules | `/framework-audit`, `/extend-framework` |
@@ -30,6 +30,7 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 | 18 | Data Room & Document Classification | File ingestion, chunking, TF-IDF indexing | `/onboard-company`, `/research-query` |
 | 19 | Research Hub & Query Engine | Claude RAG, citations | `/research-query` |
 | 20 | IC Memo Generation Pipeline | 4 templates, analytics bridge, versioned workflow | `/generate-memo` |
+| 21 | Intelligence System & Knowledge Graph | 7-phase self-learning, entity extraction, thesis tracker, 5-layer AI context | `/morning`, `/thesis`, `/drift`, `/learn` |
 
 ---
 
@@ -37,10 +38,11 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 
 | Company | analysis_type | Clock | Default Event | Backend Module | Tabs | Tests |
 |---------|--------------|-------|---------------|----------------|------|-------|
-| Klaim | `klaim` | Operational Delay | Insurance denial | `core/analysis.py` (34 fn) | 19 | 66 |
-| SILQ | `silq` | Contractual DPD | DPD > 90 | `core/analysis_silq.py` (14 fn) | 13 | 68 |
+| Klaim | `klaim` | Operational Delay | Insurance denial | `core/analysis.py` (40+ fn) | 19 | 66+ |
+| SILQ | `silq` | Contractual DPD | DPD > 90 | `core/analysis_silq.py` (14 fn) | 13 | 68+ |
 | Ejari | `ejari_summary` | Pre-computed | Pre-computed | `core/analysis_ejari.py` (parser) | 12 | 0 |
 | Tamara | `tamara_summary` | Contractual DPD | DPD > 120 (covenant), WO at DPD 90 | `core/analysis_tamara.py` (ETL+parser) | 14 KSA / 10 UAE | 0 |
+| Aajil | `aajil` | Contractual DPD | DPD 60+ | `core/analysis_aajil.py` (11 fn) | 13 | 38 |
 
 ---
 

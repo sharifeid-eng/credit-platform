@@ -64,6 +64,7 @@ class Briefing:
     cross_company_patterns: List[Dict[str, Any]] = field(default_factory=list)
     thesis_alerts: List[Dict[str, Any]] = field(default_factory=list)
     learning_summary: Dict[str, Any] = field(default_factory=dict)
+    agent_activity: Dict[str, Any] = field(default_factory=dict)
     recommendations: List[str] = field(default_factory=list)
     generated_at: str = ""
 
@@ -78,6 +79,7 @@ class Briefing:
             "cross_company_patterns": self.cross_company_patterns,
             "thesis_alerts": self.thesis_alerts,
             "learning_summary": self.learning_summary,
+            "agent_activity": self.agent_activity,
             "recommendations": self.recommendations,
             "generated_at": self.generated_at,
         }
@@ -127,7 +129,10 @@ def generate_morning_briefing(data_dir: Optional[Path] = None) -> Briefing:
     # 5. Learning Summary
     briefing.learning_summary = _build_learning_summary(companies, data_dir, last_session)
 
-    # 6. Recommendations
+    # 6. Agent Activity
+    briefing.agent_activity = _build_agent_activity(last_session)
+
+    # 7. Recommendations
     briefing.recommendations = _build_recommendations(briefing)
 
     return briefing
@@ -329,6 +334,39 @@ def _build_learning_summary(
     return {
         "total_rules": total_rules,
         "new_since_last_session": new_rules,
+    }
+
+
+def _build_agent_activity(last_session: Optional[datetime]) -> Dict[str, Any]:
+    """Summarize agent session activity since last analyst login."""
+    sessions_dir = _PROJECT_ROOT / "data" / "_agent_sessions"
+    if not sessions_dir.exists():
+        return {"total_sessions": 0, "sessions": []}
+
+    import json
+    cutoff = last_session.timestamp() if last_session else 0
+    recent = []
+
+    for path in sessions_dir.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("last_active", 0) > cutoff:
+                recent.append({
+                    "agent": data.get("agent_name", "?"),
+                    "company": data.get("metadata", {}).get("company", "?"),
+                    "product": data.get("metadata", {}).get("product", "?"),
+                    "turns": data.get("turn_count", 0),
+                    "tokens": data.get("total_input_tokens", 0) + data.get("total_output_tokens", 0),
+                })
+        except Exception:
+            continue
+
+    recent.sort(key=lambda s: s.get("tokens", 0), reverse=True)
+
+    return {
+        "total_sessions": len(recent),
+        "total_tokens": sum(s.get("tokens", 0) for s in recent),
+        "sessions": recent[:10],
     }
 
 

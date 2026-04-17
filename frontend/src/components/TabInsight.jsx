@@ -27,7 +27,7 @@ export default function TabInsight({ company, product, snapshot, currency, tab, 
     setOpen(true)
     setError(null)
     try {
-      const result = await getTabInsight(company, product, snapshot, currency, tab, undefined, { refresh })
+      const result = await getTabInsight(company, product, snapshot, currency, tab, undefined, { refresh, mode: 'agent' })
       setText(result.insight)
       setFromCache(!!result.cached && !refresh)
     } catch {

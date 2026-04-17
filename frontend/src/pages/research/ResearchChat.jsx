@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../../contexts/CompanyContext'
 import useBreakpoint from '../../hooks/useBreakpoint'
 import { postResearchChat } from '../../services/api'
+import { useAgentStream } from '../../hooks/useAgentStream'
 
 const SUGGESTED_QUESTIONS = {
   tamara_summary: [
@@ -59,37 +60,57 @@ export default function ResearchChat() {
   const { company, product, analysisType } = useCompany()
   const { isMobile } = useBreakpoint()
 
-  const [messages, setMessages] = useState([])
+  const [useAgent, setUseAgent] = useState(true)
+  const [deepResearch, setDeepResearch] = useState(false) // Deep Research mode: more turns, higher budget
+  const agent = useAgentStream()
+
+  // Legacy mode state
+  const [legacyMessages, setLegacyMessages] = useState([])
+  const [legacyInput, setLegacyInput] = useState('')
+  const [legacyLoading, setLegacyLoading] = useState(false)
+
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+  const messages = useAgent ? agent.messages : legacyMessages
+  const loading = useAgent ? agent.isStreaming : legacyLoading
+
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, agent.currentToolCall])
 
   async function send(question) {
     const q = (question || input).trim()
     if (!q || loading) return
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', text: q }])
-    setLoading(true)
-    try {
-      const reply = await postResearchChat(company, product, q, messages)
-      setMessages(prev => [...prev, {
-        role: 'ai',
-        text: reply.answer || reply.text || reply,
-        citations: reply.citations || [],
-      }])
-    } catch {
-      setMessages(prev => [...prev, {
-        role: 'ai',
-        text: 'Error -- please try again.',
-        isError: true,
-      }])
-    } finally {
-      setLoading(false)
+
+    if (useAgent) {
+      const prefix = deepResearch
+        ? '[DEEP RESEARCH MODE — be thorough: search the data room extensively, cross-reference multiple sources, check analytics, verify with data. Produce a structured research brief with citations.]\n\n'
+        : ''
+      agent.send(`/agents/${company}/${product}/analyst/stream`, {
+        question: prefix + q,
+      })
+    } else {
+      setLegacyMessages(prev => [...prev, { role: 'user', text: q }])
+      setLegacyLoading(true)
+      try {
+        const reply = await postResearchChat(company, product, q, legacyMessages)
+        setLegacyMessages(prev => [...prev, {
+          role: 'ai',
+          text: reply.answer || reply.text || reply,
+          citations: reply.citations || [],
+        }])
+      } catch {
+        setLegacyMessages(prev => [...prev, {
+          role: 'ai',
+          text: 'Error -- please try again.',
+          isError: true,
+        }])
+      } finally {
+        setLegacyLoading(false)
+      }
     }
   }
 
@@ -128,19 +149,61 @@ export default function ResearchChat() {
           </h1>
           <div style={{
             width: 8, height: 8, borderRadius: '50%',
-            background: 'var(--accent-blue)',
-            boxShadow: '0 0 8px rgba(91,141,239,0.5)',
+            background: useAgent ? 'var(--accent-gold)' : 'var(--accent-blue)',
+            boxShadow: useAgent ? '0 0 8px rgba(201,168,76,0.5)' : '0 0 8px rgba(91,141,239,0.5)',
             animation: 'pulse 2s ease-in-out infinite',
           }} />
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {useAgent && (
+              <button
+                onClick={() => setDeepResearch(!deepResearch)}
+                style={{
+                  background: deepResearch ? 'rgba(167,139,250,0.15)' : 'none',
+                  border: `1px solid ${deepResearch ? 'rgba(167,139,250,0.4)' : 'var(--border)'}`,
+                  borderRadius: 6, padding: '3px 10px', fontSize: 10, cursor: 'pointer',
+                  color: deepResearch ? '#A78BFA' : 'var(--text-faint)',
+                  fontWeight: deepResearch ? 700 : 400,
+                }}
+                title="Deep Research: more thorough analysis with extensive data room search and cross-referencing"
+              >
+                Deep Research {deepResearch ? 'ON' : 'OFF'}
+              </button>
+            )}
+            {messages.length > 0 && (
+              <button onClick={() => useAgent ? agent.reset() : setLegacyMessages([])} style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+                padding: '3px 10px', fontSize: 10, color: 'var(--text-faint)', cursor: 'pointer',
+              }}>New Chat</button>
+            )}
+            <button onClick={() => { setUseAgent(!useAgent); if (useAgent) agent.reset(); else setLegacyMessages([]) }} style={{
+              background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+              padding: '3px 10px', fontSize: 10, color: 'var(--text-faint)', cursor: 'pointer',
+            }}>{useAgent ? 'Legacy' : 'Agent'}</button>
+          </div>
         </div>
         <p style={{
           fontSize: 12,
           color: 'var(--text-muted)',
           margin: 0,
         }}>
-          AI-powered research across all ingested documents
+          {useAgent ? 'AI analyst with live data access and data room search' : 'AI-powered research across all ingested documents'}
         </p>
       </div>
+
+      {/* Agent tool indicator */}
+      {useAgent && agent.currentToolCall && (
+        <div style={{
+          marginBottom: 8, padding: '6px 14px',
+          background: 'rgba(201,168,76,0.08)',
+          border: '1px solid rgba(201,168,76,0.15)',
+          borderRadius: 6,
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 11, color: 'var(--accent-gold)',
+        }}>
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent-gold)', animation: 'pulse 1s infinite' }} />
+          {agent.currentToolCall.description}
+        </div>
+      )}
 
       {/* Chat area */}
       <div style={{

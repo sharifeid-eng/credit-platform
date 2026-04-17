@@ -51,6 +51,9 @@ class Events:
     MIND_ENTRY_CREATED = "mind_entry_created"
     SESSION_STARTED = "session_started"
     SESSION_ENDED = "session_ended"
+    COVENANT_BREACH_DETECTED = "covenant_breach_detected"
+    AGENT_FINDING = "agent_finding"
+    MEMO_GENERATED = "memo_generated"
 
 
 # Type alias for event handlers

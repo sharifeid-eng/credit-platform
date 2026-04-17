@@ -1,0 +1,18 @@
+{
+  "model": "claude-sonnet-4-6",
+  "tools": [
+    "compliance.*",
+    "analytics.get_portfolio_summary",
+    "analytics.get_par_analysis",
+    "analytics.get_covenants",
+    "analytics.get_collection_velocity",
+    "mind.record_finding",
+    "mind.get_thesis",
+    "mind.check_thesis_drift",
+    "portfolio.list_snapshots"
+  ],
+  "max_turns": 10,
+  "max_tokens_per_response": 2000,
+  "max_budget_tokens": 50000,
+  "temperature": 0.1
+}

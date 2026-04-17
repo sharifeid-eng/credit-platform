@@ -31,19 +31,20 @@ _FILES = {
     "ic_feedback": "ic_feedback.jsonl",
     "data_quality": "data_quality.jsonl",
     "session_lessons": "session_lessons.jsonl",
+    "entities": "entities.jsonl",
 }
 
 # Task-type to category relevance mapping
 _TASK_RELEVANCE: Dict[str, List[str]] = {
-    "commentary": ["corrections", "findings", "data_quality"],
-    "executive_summary": ["corrections", "findings", "ic_feedback", "data_quality"],
+    "commentary": ["corrections", "findings", "data_quality", "entities"],
+    "executive_summary": ["corrections", "findings", "ic_feedback", "data_quality", "entities"],
     "tab_insight": ["corrections", "findings", "data_quality"],
-    "chat": ["findings", "data_quality", "corrections"],
-    "memo": ["corrections", "memo_edits", "ic_feedback", "findings"],
-    "research_report": ["findings", "ic_feedback", "data_quality", "corrections"],
+    "chat": ["findings", "data_quality", "corrections", "entities"],
+    "memo": ["corrections", "memo_edits", "ic_feedback", "findings", "entities"],
+    "research_report": ["findings", "ic_feedback", "data_quality", "corrections", "entities"],
     "onboarding": ["data_quality", "session_lessons"],
     "validation": ["data_quality", "corrections"],
-    "default": ["corrections", "findings", "data_quality"],
+    "default": ["corrections", "findings", "data_quality", "entities"],
 }
 
 # Max entries to include per category and total

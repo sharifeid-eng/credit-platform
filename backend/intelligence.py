@@ -278,9 +278,10 @@ def record_chat_feedback(company: str, product: str, body: dict = {}):
     if rating == "down":
         original = body.get("original_response", "")
         corrected = body.get("corrected_response", "")
-        reason = body.get("reason", "")
+        reason = body.get("reason", "User marked AI response as unhelpful")
 
         if original and corrected:
+            # Full correction — fire learning pipeline
             try:
                 from core.mind.event_bus import event_bus, Events
                 from core.mind.company_mind import CompanyMind
@@ -303,16 +304,17 @@ def record_chat_feedback(company: str, product: str, body: dict = {}):
                 })
             except Exception as e:
                 logger.warning("Chat feedback correction recording failed: %s", e)
-        elif reason:
-            # Record reason-only feedback in company mind
+        elif original:
+            # Negative signal without correction — record as finding
             try:
                 from core.mind.company_mind import CompanyMind
                 cm = CompanyMind(company, product)
-                cm.record_data_quality_note(
-                    f"Chat feedback (negative): {reason}",
-                    tape_or_doc="data_chat",
+                cm.record_finding(
+                    category="data_quality",
+                    content=f"AI chat response marked unhelpful: {original[:200]}",
+                    metadata={"source": "chat_feedback", "rating": "down", "reason": reason},
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Chat feedback finding failed: %s", e)
 
     return {"status": "recorded", "rating": rating}

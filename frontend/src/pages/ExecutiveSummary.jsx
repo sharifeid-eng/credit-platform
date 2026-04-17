@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
-import { getExecutiveSummary } from '../services/api'
+import { getExecutiveSummaryAgent as getExecutiveSummary } from '../services/api'
 import useBreakpoint from '../hooks/useBreakpoint'
 
 const SEVERITY_STYLES = {

@@ -7,6 +7,22 @@ const api = axios.create({
   withCredentials: true,  // Send CF_Authorization cookie with every request
 });
 
+// Log API errors for debugging (errors still propagate to callers)
+api.interceptors.response.use(
+  response => response,
+  error => {
+    const status = error.response?.status
+    const url = error.config?.url
+    const detail = error.response?.data?.detail
+    if (status >= 500) {
+      console.error(`[API] ${status} on ${url}:`, detail || error.message)
+    } else if (status >= 400 && status !== 401) {
+      console.warn(`[API] ${status} on ${url}:`, detail || error.message)
+    }
+    return Promise.reject(error)
+  }
+)
+
 export default api;
 
 // ── Framework ────────────────────────────────────────────────────────────────
@@ -35,14 +51,28 @@ export const getSummary          = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/summary`, { params: p(snap, cur, asOf) }).then(r => r.data);
 export const getPortfolioSummary = getSummary; // legacy alias
 
-export const getAICommentary     = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
-  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
+export const getAICommentary     = (co, prod, snap, cur, asOf, { refresh = false, mode = null } = {}) =>
+  api.get(`/companies/${co}/products/${prod}/ai-commentary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}), ...(mode ? { mode } : {}) } }).then(r => r.data);
 
-export const getTabInsight       = (co, prod, snap, cur, tab, asOf, { refresh = false } = {}) =>
-  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab, ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
+export const getTabInsight       = (co, prod, snap, cur, tab, asOf, { refresh = false, mode = null } = {}) =>
+  api.get(`/companies/${co}/products/${prod}/ai-tab-insight`, { params: { ...p(snap, cur, asOf), tab, ...(refresh ? { refresh: true } : {}), ...(mode ? { mode } : {}) } }).then(r => r.data);
+
+export const getExecutiveSummaryAgent = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
+  api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}), mode: 'agent' } }).then(r => r.data);
 
 export const postChat            = (co, prod, snap, cur, question, history = []) =>
   api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data.answer);
+
+// ── Agent endpoints ─────────────────────────────────────────────────────
+export const AGENT_ANALYST_URL   = (co, prod) => `/agents/${co}/${prod}/analyst/stream`;
+export const AGENT_MEMO_URL      = (co, prod) => `/agents/${co}/${prod}/memo/generate`;
+export const AGENT_COMPLIANCE_URL = (co, prod) => `/agents/${co}/${prod}/compliance/check`;
+
+export const postAgentChat       = (co, prod, question, sessionId, snap, cur) =>
+  api.post(`/agents/${co}/${prod}/analyst/sync`, { question, session_id: sessionId, snapshot: snap, currency: cur }).then(r => r.data);
+
+export const postAgentCompliance = (co, prod, snap, cur) =>
+  api.post(`/agents/${co}/${prod}/compliance/check/sync`, { snapshot: snap, currency: cur }).then(r => r.data);
 
 export const getExecutiveSummary = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
   api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
@@ -239,9 +269,9 @@ export const generateMemo = (co, prod, template, customSections) =>
     { template, custom_sections: customSections },
     { timeout: 300_000 }
   ).then(r => r.data);
-export const regenerateSection = (co, prod, memoId, sectionKey) =>
+export const regenerateSection = (co, prod, memoId, sectionKey, { mode = null } = {}) =>
   api.post(`/companies/${co}/products/${prod}/memos/${memoId}/sections/${sectionKey}/regenerate`,
-    {}, { timeout: 120_000 }
+    {}, { timeout: 120_000, params: mode ? { mode } : {} }
   ).then(r => r.data);
 export const updateMemoSection = (co, prod, memoId, sectionKey, content) =>
   api.patch(`/companies/${co}/products/${prod}/memos/${memoId}/sections/${sectionKey}`, { content }).then(r => r.data);
@@ -312,8 +342,6 @@ export const getThesis               = (co, prod) => api.get(`/companies/${co}/p
 export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
 export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);
 export const getThesisLog            = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/log`).then(r => r.data);
-export const searchKnowledge         = (q, company, categories) =>
-  api.get('/knowledge/search', { params: { q, ...(company ? { company } : {}), ...(categories ? { categories } : {}) } }).then(r => r.data);
 export const postChatFeedback        = (co, prod, feedback) =>
   api.post(`/companies/${co}/products/${prod}/chat-feedback`, feedback).then(r => r.data);
 

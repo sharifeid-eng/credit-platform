@@ -67,6 +67,13 @@ This is the **CLAUDE.md** for the project — automatically loaded by Claude Cod
 - Never mark a task complete without proving it works — run tests, check logs, demonstrate correctness.
 - **Test-first by default.** Before implementing: write the test for the happy path. Implementation is done when that test passes. Then add 2-3 edge-case tests. For financial functions, include at least one test with a non-1.0 FX multiplier.
 - When a task depends on external data (tape edits, DB migrations), **verify the data first** before updating code that references it.
+
+### Integration Discipline (learned 2026-04-17 — BINDING)
+- **Plans organized by user outcome, not technical layer.** Each feature is a vertical slice through the stack (backend + frontend + wiring). A feature is not done until the user's experience changes.
+- **Verification = user action.** Every verification step must start with what the user does ("Load dashboard → click X → observe Y"), not what code exists.
+- **"Who calls this?" gate.** For every new function/hook/endpoint, identify the specific call site in a .jsx component or endpoint handler. If nothing calls it, it's dead capability — not a completed feature.
+- **Integration sweep before marking multi-phase plans complete.** After all phases: does every backend capability have a frontend caller? Does every frontend hook have a component using it? Does every event listener do work (not just log)?
+- **"Diff of user experience" gate.** Before marking done: "What does the user see differently?" If only "new endpoints exist" — it's infrastructure, not a feature.
 - Ask yourself: "Would a staff engineer approve this?"
 
 ### Self-Improvement

@@ -36,11 +36,12 @@ def register_all_listeners() -> None:
     from core.mind.event_bus import event_bus, Events
 
     event_bus.subscribe(Events.TAPE_INGESTED, _on_tape_ingested)
+    event_bus.subscribe(Events.TAPE_INGESTED, _on_tape_ingested_compliance)
     event_bus.subscribe(Events.DOCUMENT_INGESTED, _on_document_ingested)
     event_bus.subscribe(Events.MEMO_EDITED, _on_memo_edited)
     event_bus.subscribe(Events.CORRECTION_RECORDED, _on_correction_recorded)
 
-    logger.info("Intelligence listeners registered: 4 handlers on event bus")
+    logger.info("Intelligence listeners registered: 5 handlers on event bus")
 
 
 def _get_mind_dir(company: str, product: str) -> Path:
@@ -247,3 +248,75 @@ def _on_correction_recorded(payload: Dict[str, Any]) -> None:
             # Rule is logged; storage handled by the correction recording itself
     except Exception as e:
         logger.warning("Correction analysis failed: %s", e)
+
+
+# --------------------------------------------------------------------------
+# TAPE_INGESTED → auto-compliance check (if facility_params exist)
+# --------------------------------------------------------------------------
+
+_compliance_runs_fired: set = set()  # Track (company, product, snapshot) to avoid duplicates
+
+
+def _on_tape_ingested_compliance(payload: Dict[str, Any]) -> None:
+    """Run compliance agent check when a new tape is ingested.
+
+    Only fires if facility_params.json exists for the company/product,
+    indicating active facility monitoring is configured.
+    Runs asynchronously via thread pool to avoid blocking.
+    """
+    company = payload.get("company", "")
+    product = payload.get("product", "")
+    snapshot = payload.get("snapshot", "")
+
+    if not company or not product:
+        return
+
+    # Deduplicate — only run once per (company, product, snapshot)
+    run_key = (company, product, snapshot)
+    if run_key in _compliance_runs_fired:
+        return
+
+    # Check if facility monitoring is configured
+    params_path = _PROJECT_ROOT / "data" / company / product / "facility_params.json"
+    if not params_path.exists():
+        return
+
+    _compliance_runs_fired.add(run_key)
+
+    try:
+        logger.info(
+            "Tape ingested for %s/%s (snapshot: %s) — running compliance agent check",
+            company, product, snapshot,
+        )
+
+        # Run compliance agent in background thread to avoid blocking
+        import concurrent.futures
+        def _run_compliance():
+            try:
+                from core.agents.internal import _run_agent_sync
+                result = _run_agent_sync(
+                    "compliance_monitor",
+                    f"[Context: company={company}, product={product}, snapshot={snapshot}]\n\n"
+                    "Run a full covenant compliance check. Check all covenants against thresholds. "
+                    "Report pass/fail with headroom for each. Record any findings.",
+                    metadata={"company": company, "product": product, "type": "auto_compliance"},
+                    max_turns=8,
+                )
+                logger.info("Auto-compliance check completed for %s/%s: %s", company, product, result[:200])
+                try:
+                    from core.activity_log import log_activity
+                    log_activity(
+                        "compliance_check_auto",
+                        company, product,
+                        f"Auto-compliance check completed after tape ingestion: {snapshot}",
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.warning("Auto-compliance agent failed for %s/%s: %s", company, product, e)
+
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        executor.submit(_run_compliance)
+
+    except Exception as e:
+        logger.warning("Compliance trigger check failed: %s", e)

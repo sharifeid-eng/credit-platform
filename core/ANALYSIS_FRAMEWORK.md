@@ -148,6 +148,49 @@ Key differences from receivables factoring:
 - Counterparty risk = merchant/shop (not insurance company)
 - PAR directly computable from DPD columns
 
+### Ejari — Rent Now Pay Later (RNPL, KSA)
+**What is financed:** Tenant rent payments advanced to landlords
+**Obligor:** Tenants (consumer borrowers)
+**Default event:** DPD-based delinquency, write-off
+**Data pattern:** Pre-computed ODS workbook (no raw loan tape). 12 analysis tabs parsed from 13 sheets.
+
+Key differences from raw tape analytics:
+- Read-only summary — all metrics pre-computed by Ejari's internal team
+- No live computation; `analysis_type: "ejari_summary"` bypasses tape loading entirely
+- DPD buckets and roll rates provided directly in the workbook
+- Write-off cohort (32 loans) isolated in a dedicated sheet — clean separation principle applied at source
+- Najiz (Saudi legal enforcement) recovery tracked as a separate process
+- `hide_portfolio_tabs: true` — no facility agreement, no portfolio monitoring
+
+### Tamara — Buy Now Pay Later (BNPL, KSA & UAE)
+**What is financed:** Consumer instalment purchases (BNPL Pi2-6 up to SAR 5K, BNPL+ Pi4-24 up to SAR 20K via Murabaha)
+**Obligor:** Consumer borrowers
+**Default event:** DPD > 120 (covenant trigger), write-off at DPD 90
+**Data pattern:** Data room ingestion (~100 source files). Two geographies: KSA (SAR, 14 tabs) and UAE (AED, 10 tabs).
+
+Key differences from single-tape analytics:
+- No raw loan tape — data synthesized from vintage cohort matrices, HSBC investor reports, Deloitte FDD, financial models
+- ETL script (`scripts/prepare_tamara_data.py`) runs once offline; runtime parser loads JSON snapshot
+- Vintage performance tracked via MOB (Months on Book) cohort matrices — default, delinquency, dilution views
+- HSBC investor reports provide covenant trigger levels (L1/L2/L3 tiered thresholds)
+- Securitisation context: KSA $2.375B (Goldman, Citi, Apollo), UAE $131M (Goldman)
+- Two-product structure maps to geography, not product type
+
+### Aajil — SME Trade Credit (Raw Materials, KSA)
+**What is financed:** Raw materials purchased by SMEs on trade credit terms
+**Obligor:** SME buyers (Manufacturers, Contractors, Wholesale Traders)
+**Default event:** DPD 60+ (contractual delinquency)
+**Data pattern:** Multi-sheet xlsx tape (1,245 deals across 7 sheets: Deals, Payments, DPD Cohorts, Collections).
+
+Key differences from consumer lending:
+- Two deal structures: EMI (equal monthly instalments, 51%) and Bullet (lump-sum at maturity, 49%)
+- ALL 19 write-offs are Bullet deals — structural insight: EMI shift reduces default risk
+- Three customer types with distinct risk profiles: Manufacturer, Contractor, Wholesale Trader
+- Trust score system measures customer reliability based on payment history
+- Concentration risk at customer level (227 customers, top-15 drive bulk of volume)
+- Industry-level segmentation meaningful (unlike consumer BNPL where borrowers are homogeneous)
+- Uses Cascade Debt (app.cascadedebt.com) as external reporting platform — dashboard metrics aligned
+
 ---
 
 ## 4. Leading vs Lagging Indicators
@@ -657,7 +700,7 @@ The Living Mind is the platform's institutional memory system. It captures analy
 | Tier | Scope | Location | Purpose |
 |------|-------|----------|---------|
 | **Master Mind** | Fund-level | `data/_master_mind/` | Cross-company preferences, IC norms, writing style, framework evolution |
-| **Company Mind** | Per-position | `data/{co}/{prod}/mind/` | Position-specific corrections, findings, memo edits, data quality notes |
+| **Company Mind** | Per-position | `data/{co}/mind/` | Position-specific corrections, findings, memo edits, data quality notes |
 
 Both tiers use **append-only JSONL** files (one JSON object per line). This format is audit-friendly, git-trackable, and supports incremental reads without parsing the entire history.
 
@@ -1044,3 +1087,82 @@ This creates a self-improving cycle: the first memo for a new company may need h
 | `MemoBuilder` | 4-step wizard: select template → choose sections → configure sources → generate |
 | `MemoEditor` | Section navigation panel + rich text editor + regenerate button per section |
 | `MemoArchive` | History of all memos with status filters, search, and version comparison |
+
+---
+
+## 21. Intelligence System & Knowledge Graph
+
+Self-learning institutional memory built in 7 phases. The system captures corrections, extracts entities, detects patterns across companies, and feeds accumulated knowledge into every AI prompt.
+
+### 7-Phase Architecture
+
+| Phase | Module | Purpose |
+|-------|--------|---------|
+| **0 — Foundation** | `core/mind/schema.py`, `relation_index.py`, `event_bus.py` | KnowledgeNode + Relation dataclasses, bidirectional adjacency list, sync pub/sub |
+| **1 — Knowledge Graph** | `core/mind/graph.py` | Graph-aware query engine with recency/category/graph bonus scoring, supersession exclusion |
+| **2 — Incremental Compilation** | `core/mind/entity_extractor.py`, `compiler.py` | Regex extraction of 7 entity types, one-input-many-updates pipeline, cross-document discrepancy detection |
+| **3 — Closed-Loop Learning** | `core/mind/learning.py` | Auto-classifies corrections, generates rules as KnowledgeNodes, pattern extraction from 3+ similar corrections |
+| **4 — Thesis Tracker** | `core/mind/thesis.py` | Per-company investment thesis with measurable pillars, auto-drift detection (holding/weakening/broken) |
+| **5 — Proactive Intelligence** | `core/mind/intelligence.py`, `briefing.py`, `analyst.py` | Cross-company pattern detection, morning briefings, persistent analyst context |
+| **6 — Queryable KB** | `core/mind/kb_decomposer.py`, `kb_query.py` | Decomposes lessons.md + CLAUDE.md into linked nodes, unified search across all knowledge stores |
+
+### Storage & Schema
+
+JSONL-first — no database dependency. Each scope (master, per-company) maintains its own set of JSONL files. KnowledgeNode extends MindEntry via composition: graph metadata stored in `metadata["_graph"]` subkey for backward compatibility. Lazy upgrade on read via `upgrade_entry()` — no batch migration needed. RelationIndex is a separate `relations.json` per scope (bidirectional adjacency list).
+
+### Event-Driven Wiring
+
+Four events fire from live endpoints and propagate through the event bus to registered listeners:
+
+| Event | Trigger | Listeners |
+|-------|---------|-----------|
+| `TAPE_INGESTED` | New tape loaded (deduped per session) | Metric compilation, thesis drift check |
+| `DOCUMENT_INGESTED` | Data room file parsed | Entity extraction, knowledge compilation |
+| `MEMO_EDITED` | Analyst edits AI-generated section | Learning rule generation (with old content for diff) |
+| `CORRECTION_RECORDED` | DataChat thumbs-down or explicit correction | Correction analysis, auto-rule creation |
+
+Event bus is synchronous and in-process. `disable()` method available for test isolation.
+
+### Entity Types
+
+`core/mind/entity_extractor.py` uses regex-based extraction (no ML) to identify 7 entity types from text and tape metrics:
+
+| Entity Type | Examples |
+|-------------|---------|
+| `COVENANT` | PAR 30+ < 7%, Collection Ratio > 85% |
+| `METRIC` | Collection rate 94.2%, HHI 1,850 |
+| `RISK_FLAG` | Concentration breach, PAR threshold exceeded |
+| `COUNTERPARTY` | Goldman Sachs, HSBC, Deloitte |
+| `DATE_EVENT` | Maturity date, facility renewal, IC review |
+| `THRESHOLD` | Advance rate 85%, aging cutoff 91 days |
+| `FACILITY_TERM` | Facility limit $20M, revolving period 2 years |
+
+One document typically produces 10-15 knowledge updates via the compilation pipeline.
+
+### 5-Layer AI Context
+
+Every AI call assembles context in priority order (later layers override earlier for the same topic):
+
+```
+Layer 1: Analysis Framework (codified rules from this document)
+Layer 2: Master Mind (fund-level preferences, cross-company patterns)
+Layer 3: Methodology (company-specific metric definitions and formulas)
+Layer 4: Company Mind (position-specific corrections and IC feedback)
+Layer 5: Thesis (investment thesis pillars, drift alerts, conviction score)
+```
+
+Layer 5 was added by the Intelligence System. When no thesis exists for a company, Layer 5 is an empty string (backward-compatible). `build_mind_context()` in `core/mind/` assembles all 5 layers.
+
+### Knowledge Lifecycle
+
+```
+Fast correction (single company, single session)
+   ↓ accumulates
+Consolidation (Company Mind — corrections, findings, rules)
+   ↓ appears in 2+ companies
+Master Mind promotion (fund-level pattern)
+   ↓ becomes permanent rule
+Framework codification (added to ANALYSIS_FRAMEWORK.md)
+```
+
+Learning rules auto-generated when the same correction type appears 3+ times. Codification candidates surfaced in the Operator Center Learning tab. Rules have `last_triggered` and `trigger_count` metadata for decay tracking.
