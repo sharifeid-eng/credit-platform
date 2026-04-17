@@ -1,53 +1,82 @@
 """
-AI-powered IC Memo Generator.
+AI-powered IC Memo Generator — Hybrid 6-Stage Pipeline.
 
-Generates memo sections by combining:
-  1. Live analytics context (via AnalyticsBridge)
-  2. Data room research chunks (via DataRoomEngine.search)
-  3. Living Mind institutional memory (via build_mind_context)
-  4. Claude API for narrative generation
+Stages:
+  1. Context Assembly   — load analytics + research + mind context (no API calls)
+  2. Parallel Structured — fan out structured sections via ThreadPoolExecutor (Sonnet)
+  3. Auto Sections      — cheap templated content (Haiku) — parallel with stage 2
+  4. Research Packs     — short-burst agent runs per judgment section (Sonnet, 5-turn cap)
+  5. Judgment Synthesis — one Opus call per judgment section, sequential (for coherence)
+  6. Polish Pass        — single Opus call rewriting the whole memo for coherence
 
-Each section is generated independently with awareness of prior sections
-for coherence. Full memos are built sequentially so later sections can
-reference earlier analysis.
+Model routing (all via core.ai_client):
+  auto       → Haiku 4    (appendix)
+  structured → Sonnet 4.6 (analytics / dataroom / mixed sections, ai_guided=False)
+  research   → Sonnet 4.6 (agent research packs)
+  judgment   → Opus 4.7   (ai_guided=True: exec_summary, investment_thesis, recommendation)
+  polish     → Opus 4.7   (final whole-memo pass)
+
+Rate-limit engineering: retries handled by core.ai_client.get_client() with max_retries=3.
+A `LAITH_PARALLEL_SECTIONS` env var (default 3) caps concurrent stage-2 calls to
+avoid bursting past org ITPM limits.
 """
 
+from __future__ import annotations
+
+import concurrent.futures
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .templates import get_template, MEMO_TEMPLATES
 from .analytics_bridge import AnalyticsBridge
 
 logger = logging.getLogger(__name__)
 
-# Anthropic client — wrapped in try/except for environments without the SDK
-try:
-    import anthropic
-    _HAS_ANTHROPIC = True
-except ImportError:
-    _HAS_ANTHROPIC = False
-    logger.warning("anthropic SDK not installed; AI generation will be unavailable")
+# ── Constants ────────────────────────────────────────────────────────────────
 
-# Model to use for memo generation
-_MODEL = "claude-opus-4-6"
-_MAX_TOKENS_PER_SECTION = 2000
-_MAX_TOKENS_EXEC_SUMMARY = 3000
+# Output token budgets per tier/section type
+_MAX_TOKENS_STRUCTURED = 2000
+_MAX_TOKENS_AUTO       = 800
+_MAX_TOKENS_JUDGMENT   = 3500
+_MAX_TOKENS_POLISH     = 16000   # polish pass needs the whole memo in output
+
+# Maximum concurrent section calls during stage 2 (Sonnet parallel fan-out).
+# Low default keeps peak input-tokens-per-minute under common org caps.
+_PARALLEL_CAP = int(os.getenv("LAITH_PARALLEL_SECTIONS", "3"))
+
+# Section source types (from templates.SourceLayer enum, used as strings here)
+_SOURCE_ANALYTICS = "analytics"
+_SOURCE_DATAROOM  = "dataroom"
+_SOURCE_MIXED     = "mixed"
+_SOURCE_AUTO      = "auto"
+_SOURCE_NARRATIVE = "ai_narrative"
 
 
-def _get_anthropic_client():
-    """Create an Anthropic client from environment variable."""
-    if not _HAS_ANTHROPIC:
-        return None
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set; AI generation unavailable")
-        return None
-    return anthropic.Anthropic(api_key=api_key)
+# ── Tier classification ──────────────────────────────────────────────────────
 
+def classify_section(section_def: Dict[str, Any]) -> str:
+    """Return tier name for a section based on template metadata.
+
+    Uses existing `ai_guided` and `source` fields — no new schema required.
+
+    - source=auto               → "auto" (Haiku)
+    - ai_guided=True            → "judgment" (Opus)
+    - anything else             → "structured" (Sonnet)
+    """
+    source = section_def.get("source", "")
+    if source == _SOURCE_AUTO:
+        return "auto"
+    if section_def.get("ai_guided"):
+        return "judgment"
+    return "structured"
+
+
+# ── Prompt builders ──────────────────────────────────────────────────────────
 
 def _build_section_system_prompt(company: str, product: str,
                                  template_name: str,
@@ -73,31 +102,24 @@ def _build_section_system_prompt(company: str, product: str,
     )
 
 
-def _build_section_user_prompt(section: dict,
+def _build_section_user_prompt(section: Dict[str, Any],
                                analytics_text: str,
                                research_text: str,
-                               prior_text: str) -> str:
-    """Build the user prompt for a specific section."""
+                               prior_text: str,
+                               research_pack_text: str = "") -> str:
+    """Build the user prompt for a section."""
     parts = [
         f"## Section: {section['title']}\n",
         f"**Guidance:** {section['guidance']}\n",
     ]
-
     if analytics_text:
-        parts.append(
-            f"\n### Analytics Context\n{analytics_text}\n"
-        )
-
+        parts.append(f"\n### Analytics Context\n{analytics_text}\n")
     if research_text:
-        parts.append(
-            f"\n### Data Room Research\n{research_text}\n"
-        )
-
+        parts.append(f"\n### Data Room Research\n{research_text}\n")
+    if research_pack_text:
+        parts.append(f"\n{research_pack_text}\n")
     if prior_text:
-        parts.append(
-            f"\n### Prior Sections (for coherence)\n{prior_text}\n"
-        )
-
+        parts.append(f"\n### Prior Sections (for coherence)\n{prior_text}\n")
     parts.append(
         "\nWrite this section now. Return JSON with this structure:\n"
         '{\n'
@@ -111,13 +133,11 @@ def _build_section_user_prompt(section: dict,
         "Citations should reference specific data room documents or analytics "
         "sources used. Return ONLY valid JSON, no markdown fences."
     )
-
     return "\n".join(parts)
 
 
-def _parse_ai_response(text: str) -> dict:
-    """Parse AI response, handling both JSON and plain text."""
-    # Strip markdown fences if present
+def _parse_ai_response(text: str) -> Dict[str, Any]:
+    """Parse AI response, handling JSON with or without fences, plus plain-text fallback."""
     cleaned = text.strip()
     if cleaned.startswith("```json"):
         cleaned = cleaned[7:]
@@ -135,235 +155,217 @@ def _parse_ai_response(text: str) -> dict:
             "citations": parsed.get("citations", []),
         }
     except (json.JSONDecodeError, TypeError):
-        # If JSON parsing fails, treat the whole response as content
         logger.warning("AI response was not valid JSON; using as plain text")
-        return {
-            "content": text.strip(),
-            "metrics": [],
-            "citations": [],
-        }
+        return {"content": text.strip(), "metrics": [], "citations": []}
 
+
+# ── Prior-sections summary (now much richer — full analytical content visible) ──
+
+def _build_prior_text(prior_sections: List[Dict[str, Any]], char_cap_per_section: int = 1200) -> str:
+    """Render prior sections for coherence. Richer than the old 200-char × 3 approach:
+    all structured sections are included, each capped at char_cap_per_section chars."""
+    if not prior_sections:
+        return ""
+    parts = []
+    for ps in prior_sections:
+        title = ps.get("title", "")
+        content = ps.get("content", "") or ""
+        if len(content) > char_cap_per_section:
+            content = content[:char_cap_per_section] + "…"
+        parts.append(f"**{title}:**\n{content}")
+    return "\n\n".join(parts)
+
+
+# ── MemoGenerator ────────────────────────────────────────────────────────────
 
 class MemoGenerator:
-    """Generates memo sections using AI with analytics + research context."""
+    """Hybrid memo generator — tier-routed, parallel where safe, polished at the end."""
 
     def __init__(self):
-        """Initialize the generator with its dependencies."""
         self.bridge = AnalyticsBridge()
-        self._client = _get_anthropic_client()
         self._dataroom = None
         self._mind_available = False
 
-        # Lazy-load DataRoomEngine
         try:
             from core.dataroom import DataRoomEngine
             self._dataroom = DataRoomEngine()
         except Exception as e:
             logger.warning("DataRoomEngine not available: %s", e)
 
-        # Check if mind module is available
         try:
-            from core.mind import build_mind_context
+            from core.mind import build_mind_context  # noqa: F401
             self._mind_available = True
         except Exception as e:
             logger.warning("Mind module not available: %s", e)
 
-    # ── Research context ────────────────────────────────────────────────────
+    # ── Research chunks ─────────────────────────────────────────────────────
 
     def _get_research_chunks(self, company: str, product: str,
-                             section: dict,
+                             section: Dict[str, Any],
                              top_k: int = 5) -> str:
-        """Search the data room for relevant chunks for a section.
-
-        Returns formatted text with source attribution.
-        """
         if self._dataroom is None:
             return ""
-
-        # Build search query from section title + guidance keywords
-        query = f"{section['title']} {section['guidance']}"
-
+        query = f"{section.get('title', '')} {section.get('guidance', '')}"
         try:
             results = self._dataroom.search(company, product, query, top_k=top_k)
         except Exception as e:
-            logger.warning("Data room search failed for '%s': %s",
-                           section["key"], e)
+            logger.warning("Data room search failed for '%s': %s", section.get("key"), e)
             return ""
-
         if not results:
             return ""
-
         parts = []
         for i, hit in enumerate(results, 1):
             source = hit.get("source_file", hit.get("doc_id", "unknown"))
             text = hit.get("text", hit.get("content", ""))
             score = hit.get("score", 0)
-            # Truncate long chunks
             if len(text) > 600:
                 text = text[:600] + "..."
             parts.append(f"[{i}] Source: {source} (relevance: {score:.2f})\n{text}")
-
         return "\n\n".join(parts)
 
     # ── Mind context ────────────────────────────────────────────────────────
 
     def _get_mind_context(self, company: str, product: str,
-                          section_key: str) -> str:
-        """Load living mind context for the AI prompt."""
+                          section_key: Optional[str],
+                          query_text: str = "") -> str:
         if not self._mind_available:
             return ""
-
         try:
             from core.mind import build_mind_context
             ctx = build_mind_context(
-                company=company,
-                product=product,
+                company=company, product=product,
                 task_type="memo",
                 section_key=section_key,
+                query_text=query_text,
             )
             if ctx.is_empty:
                 return ""
-            return (
-                "### Institutional Knowledge\n"
-                f"{ctx.formatted}\n"
-            )
+            return f"### Institutional Knowledge\n{ctx.formatted}\n"
         except Exception as e:
             logger.warning("Mind context failed: %s", e)
             return ""
 
-    # ── Section generation ──────────────────────────────────────────────────
+    # ── Analytics formatting ────────────────────────────────────────────────
+
+    def _format_analytics(self, analytics_context: Optional[Dict[str, Any]]) -> str:
+        if not analytics_context or not analytics_context.get("available"):
+            return ""
+        text = analytics_context.get("text", "") or ""
+        metrics = analytics_context.get("metrics", [])
+        if metrics:
+            bullets = [f"- {m.get('label')}: {m.get('value')} ({m.get('assessment', 'neutral')})"
+                       for m in metrics]
+            text += "\n\nMetrics:\n" + "\n".join(bullets)
+        return text
+
+    # ── Single-section generation (tier-aware) ──────────────────────────────
 
     def generate_section(self, company: str, product: str,
                          template_key: str, section_key: str,
-                         analytics_context: Optional[dict] = None,
+                         tier: Optional[str] = None,
+                         analytics_context: Optional[Dict[str, Any]] = None,
                          research_chunks: Optional[str] = None,
-                         prior_sections: Optional[list] = None,
+                         prior_sections: Optional[List[Dict[str, Any]]] = None,
+                         research_pack: Optional[Dict[str, Any]] = None,
                          snapshot: Optional[str] = None,
-                         currency: Optional[str] = None) -> dict:
+                         currency: Optional[str] = None) -> Dict[str, Any]:
         """Generate one memo section.
 
-        Args:
-            company: Company identifier.
-            product: Product identifier.
-            template_key: Which template (credit_memo, monitoring_update, etc.).
-            section_key: Which section within the template.
-            analytics_context: Pre-computed analytics (if None, will be fetched).
-            research_chunks: Pre-searched research text (if None, will be searched).
-            prior_sections: List of already-generated sections (for coherence).
-            snapshot: Optional specific snapshot filename.
-            currency: Optional display currency override.
-
-        Returns:
-            Dict with key, title, content, metrics, citations, generated_by.
+        If `tier` is None, classify from template metadata.
+        If `research_pack` is provided, its formatted summary is injected into the user prompt.
         """
         template = get_template(template_key)
         if not template:
             raise ValueError(f"Unknown template: {template_key}")
 
         # Find the section definition
-        section_def = None
-        for s in template["sections"]:
-            if s["key"] == section_key:
-                section_def = s
-                break
+        section_def = next((s for s in template["sections"] if s["key"] == section_key), None)
         if not section_def:
-            raise ValueError(
-                f"Unknown section '{section_key}' in template '{template_key}'"
-            )
+            raise ValueError(f"Unknown section '{section_key}' in template '{template_key}'")
 
-        # Get analytics context if not provided
-        if analytics_context is None and section_def["source"] in (
-            "analytics", "mixed"
-        ):
-            analytics_context = self.bridge.get_section_context(
-                company, product, section_key,
-                snapshot=snapshot, currency=currency,
-            )
+        # Tier resolution
+        if tier is None:
+            tier = classify_section(section_def)
 
-        # Get research chunks if not provided
-        if research_chunks is None and section_def["source"] in (
-            "dataroom", "mixed"
-        ):
-            research_chunks = self._get_research_chunks(
-                company, product, section_def
-            )
+        # Auto sections have their own builder
+        if tier == "auto" or section_def.get("source") == _SOURCE_AUTO:
+            return self._generate_auto_section(company, product, section_def)
 
-        # Format analytics for the prompt
-        analytics_text = ""
-        if analytics_context and analytics_context.get("available"):
-            # Include both formatted text and raw metrics
-            analytics_text = analytics_context.get("text", "")
-            metrics = analytics_context.get("metrics", [])
-            if metrics:
-                bullet_lines = []
-                for m in metrics:
-                    bullet_lines.append(
-                        f"- {m['label']}: {m['value']} "
-                        f"({m.get('assessment', 'neutral')})"
-                    )
-                analytics_text += "\n\nMetrics:\n" + "\n".join(bullet_lines)
+        # Gather context if not pre-computed
+        source = section_def.get("source", "")
+        if analytics_context is None and source in (_SOURCE_ANALYTICS, _SOURCE_MIXED):
+            try:
+                analytics_context = self.bridge.get_section_context(
+                    company, product, section_key,
+                    snapshot=snapshot, currency=currency,
+                )
+            except Exception as e:
+                logger.warning("Analytics bridge error for section '%s': %s", section_key, e)
+                analytics_context = None
 
-        # Format prior sections for coherence
-        prior_text = ""
-        if prior_sections:
-            summaries = []
-            for ps in prior_sections[-3:]:  # Last 3 sections for context
-                title = ps.get("title", "")
-                content = ps.get("content", "")
-                # Take first 200 chars of each prior section
-                summary = content[:200] + "..." if len(content) > 200 else content
-                summaries.append(f"**{title}:** {summary}")
-            prior_text = "\n\n".join(summaries)
+        if research_chunks is None and source in (_SOURCE_DATAROOM, _SOURCE_MIXED):
+            research_chunks = self._get_research_chunks(company, product, section_def)
 
-        # Auto-generated sections (appendix)
-        if section_def["source"] == "auto":
-            return self._generate_auto_section(
-                company, product, section_def,
-                analytics_context, research_chunks,
-            )
+        analytics_text = self._format_analytics(analytics_context)
+        prior_text = _build_prior_text(prior_sections or [])
 
-        # If no AI client, generate a structured placeholder
-        if self._client is None:
-            return self._generate_placeholder_section(
-                section_def, analytics_context, research_chunks,
-            )
+        # Research pack (judgment sections)
+        research_pack_text = ""
+        if research_pack:
+            from core.memo.agent_research import format_pack_for_prompt
+            research_pack_text = format_pack_for_prompt(research_pack)
 
-        # Build prompts
-        mind_context = self._get_mind_context(company, product, section_key)
+        # Mind context — use section guidance as query_text for graph-aware scoring
+        mind_ctx = self._get_mind_context(
+            company, product, section_key,
+            query_text=f"{section_def.get('title', '')} {section_def.get('guidance', '')}",
+        )
+
         system_prompt = _build_section_system_prompt(
-            company, product, template["name"], mind_context,
+            company, product, template["name"], mind_ctx,
         )
         user_prompt = _build_section_user_prompt(
-            section_def, analytics_text,
-            research_chunks or "", prior_text,
+            section_def, analytics_text, research_chunks or "",
+            prior_text, research_pack_text,
         )
 
-        # Call Claude API
-        max_tokens = (
-            _MAX_TOKENS_EXEC_SUMMARY
-            if section_key == "exec_summary"
-            else _MAX_TOKENS_PER_SECTION
-        )
+        # Token budget by tier
+        if tier == "judgment":
+            max_tokens = _MAX_TOKENS_JUDGMENT
+        elif tier == "auto":
+            max_tokens = _MAX_TOKENS_AUTO
+        else:
+            max_tokens = _MAX_TOKENS_STRUCTURED
 
+        # Call via central client with retry + caching
+        from core.ai_client import complete
+        start = time.time()
         try:
-            response = self._client.messages.create(
-                model=_MODEL,
-                max_tokens=max_tokens,
-                system=[{
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }],
+            resp = complete(
+                tier=tier,
+                system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
+                max_tokens=max_tokens,
+                log_prefix=f"memo.{section_key}",
             )
-            ai_text = response.content[0].text
-            parsed = _parse_ai_response(ai_text)
         except Exception as e:
-            logger.error("Claude API call failed for section '%s': %s",
-                         section_key, e)
-            return self._generate_placeholder_section(
-                section_def, analytics_context, research_chunks,
-            )
+            logger.error("AI call failed for section '%s' (tier=%s): %s", section_key, tier, e)
+            return self._placeholder(section_def, analytics_context, research_chunks)
+
+        elapsed = time.time() - start
+        ai_text = resp.content[0].text if resp.content else ""
+        parsed = _parse_ai_response(ai_text)
+
+        # Extract metadata attached by core.ai_client.complete
+        meta = getattr(resp, "_laith_metadata", {}) or {}
+        gen_meta = {
+            "model_used": meta.get("model"),
+            "tier": tier,
+            "tokens_in": resp.usage.input_tokens,
+            "tokens_out": resp.usage.output_tokens,
+            "cache_read_tokens": meta.get("cache_read_tokens", 0),
+            "elapsed_s": round(elapsed, 2),
+        }
 
         return {
             "key": section_def["key"],
@@ -372,217 +374,58 @@ class MemoGenerator:
             "metrics": parsed["metrics"],
             "citations": parsed["citations"],
             "generated_by": "ai",
-            "source": section_def["source"],
+            "source": section_def.get("source"),
             "generated_at": datetime.utcnow().isoformat(),
+            "generation_meta": gen_meta,
         }
 
-    # ── Full memo generation ────────────────────────────────────────────────
+    # ── Placeholder / auto builders ─────────────────────────────────────────
 
-    def generate_full_memo(self, company: str, product: str,
-                           template_key: str,
-                           custom_sections: Optional[list] = None,
-                           snapshot: Optional[str] = None,
-                           currency: Optional[str] = None) -> dict:
-        """Generate all sections of a memo sequentially.
-
-        Sections are generated in order so later sections can reference
-        earlier analysis for coherence.
-
-        Args:
-            company: Company identifier.
-            product: Product identifier.
-            template_key: Which template to use.
-            custom_sections: Optional list of section keys to generate
-                (if None, generates all sections in the template).
-            snapshot: Optional specific snapshot filename.
-            currency: Optional display currency override.
-
-        Returns:
-            Complete memo dict with id, sections, metadata.
-        """
-        template = get_template(template_key)
-        if not template:
-            raise ValueError(f"Unknown template: {template_key}")
-
-        memo_id = str(uuid.uuid4())[:12]
-        sections_to_generate = template["sections"]
-
-        if custom_sections:
-            sections_to_generate = [
-                s for s in template["sections"]
-                if s["key"] in custom_sections
-            ]
-
-        generated_sections = []
-        errors = []
-
-        for section_def in sections_to_generate:
-            logger.info("Generating section: %s", section_def["key"])
-            try:
-                section = self.generate_section(
-                    company=company,
-                    product=product,
-                    template_key=template_key,
-                    section_key=section_def["key"],
-                    prior_sections=generated_sections,
-                    snapshot=snapshot,
-                    currency=currency,
-                )
-                generated_sections.append(section)
-            except Exception as e:
-                logger.error("Failed to generate section '%s': %s",
-                             section_def["key"], e)
-                errors.append({
-                    "section": section_def["key"],
-                    "error": str(e),
-                })
-                # Add a placeholder so subsequent sections have context
-                generated_sections.append({
-                    "key": section_def["key"],
-                    "title": section_def["title"],
-                    "content": f"[Section generation failed: {e}]",
-                    "metrics": [],
-                    "citations": [],
-                    "generated_by": "error",
-                    "source": section_def["source"],
-                })
-
-        # Build the memo title
-        title = f"{template['name']} \u2014 {company}"
-        if product:
-            title += f" {product}"
-
-        return {
-            "id": memo_id,
-            "company": company,
-            "product": product,
-            "template": template_key,
-            "template_name": template["name"],
-            "title": title,
-            "status": "draft",
-            "sections": generated_sections,
-            "errors": errors,
-            "version": 1,
-            "created_at": datetime.utcnow().isoformat(),
-            "snapshot": snapshot,
-            "currency": currency,
-        }
-
-    # ── Section regeneration ────────────────────────────────────────────────
-
-    def regenerate_section(self, memo: dict, section_key: str,
-                           snapshot: Optional[str] = None,
-                           currency: Optional[str] = None) -> dict:
-        """Regenerate one section while preserving the rest.
-
-        Updates the memo dict in place and returns the regenerated section.
-        """
-        company = memo["company"]
-        product = memo["product"]
-        template_key = memo["template"]
-
-        # Find prior sections (everything before the target section)
-        prior = []
-        for s in memo["sections"]:
-            if s["key"] == section_key:
-                break
-            prior.append(s)
-
-        new_section = self.generate_section(
-            company=company,
-            product=product,
-            template_key=template_key,
-            section_key=section_key,
-            prior_sections=prior,
-            snapshot=snapshot or memo.get("snapshot"),
-            currency=currency or memo.get("currency"),
-        )
-
-        # Replace in the memo
-        for i, s in enumerate(memo["sections"]):
-            if s["key"] == section_key:
-                memo["sections"][i] = new_section
-                break
-
-        # Bump version
-        memo["version"] = memo.get("version", 1) + 1
-
-        return new_section
-
-    # ── Placeholder generation (no AI) ──────────────────────────────────────
-
-    def _generate_placeholder_section(self, section_def: dict,
-                                      analytics_context: Optional[dict],
-                                      research_chunks: Optional[str]) -> dict:
-        """Generate a structured placeholder when AI is unavailable.
-
-        Fills in whatever data is available from analytics and research.
-        """
+    def _placeholder(self, section_def: Dict[str, Any],
+                     analytics_context: Optional[Dict[str, Any]],
+                     research_chunks: Optional[str]) -> Dict[str, Any]:
+        """Structured placeholder when AI call fails entirely."""
         content_parts = []
-
         if analytics_context and analytics_context.get("available"):
-            content_parts.append(analytics_context.get("text", ""))
-            metrics = analytics_context.get("metrics", [])
-            if metrics:
-                content_parts.append("\nKey Metrics:")
-                for m in metrics:
-                    content_parts.append(
-                        f"  - {m['label']}: {m['value']}"
-                    )
-
+            content_parts.append(analytics_context.get("text", "") or "")
+            for m in analytics_context.get("metrics", []):
+                content_parts.append(f"- {m.get('label')}: {m.get('value')}")
         if research_chunks:
-            content_parts.append(
-                "\nData Room Sources:\n" + research_chunks[:500]
-            )
-
+            content_parts.append("\nData Room Sources:\n" + research_chunks[:500])
         if not content_parts:
             content_parts.append(
-                f"[Placeholder: {section_def['title']}]\n"
-                f"{section_def['guidance']}\n\n"
-                "AI generation unavailable. Fill in manually or regenerate "
-                "when the ANTHROPIC_API_KEY is configured."
+                f"[Placeholder: {section_def['title']}]\n{section_def.get('guidance', '')}\n\n"
+                "AI generation failed. Fill in manually or regenerate."
             )
-
         return {
             "key": section_def["key"],
             "title": section_def["title"],
             "content": "\n".join(content_parts),
-            "metrics": (
-                analytics_context.get("metrics", [])
-                if analytics_context else []
-            ),
+            "metrics": (analytics_context or {}).get("metrics", []),
             "citations": [],
             "generated_by": "placeholder",
-            "source": section_def["source"],
+            "source": section_def.get("source"),
             "generated_at": datetime.utcnow().isoformat(),
         }
 
     def _generate_auto_section(self, company: str, product: str,
-                               section_def: dict,
-                               analytics_context: Optional[dict],
-                               research_chunks: Optional[str]) -> dict:
-        """Generate auto-populated sections (e.g., appendix/data sources)."""
+                               section_def: Dict[str, Any]) -> Dict[str, Any]:
+        """Template-fill the appendix/data-sources section. No AI call needed."""
         content_parts = [
             "## Data Sources Used in This Memo\n",
             f"**Company:** {company}",
             f"**Product:** {product}",
             f"**Generated:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n",
         ]
-
-        # List snapshots used
         try:
             from core.loader import get_snapshots
             snapshots = get_snapshots(company, product)
             if snapshots:
                 content_parts.append("### Tape Snapshots")
                 for snap in snapshots:
-                    content_parts.append(
-                        f"  - {snap['filename']} ({snap.get('date', 'no date')})"
-                    )
+                    content_parts.append(f"  - {snap['filename']} ({snap.get('date', 'no date')})")
         except Exception:
             pass
-
-        # List data room documents
         if self._dataroom is not None:
             try:
                 catalog = self._dataroom.catalog(company, product)
@@ -595,7 +438,6 @@ class MemoGenerator:
                         content_parts.append(f"  - {name} ({doc_type})")
             except Exception:
                 pass
-
         return {
             "key": section_def["key"],
             "title": section_def["title"],
@@ -606,3 +448,717 @@ class MemoGenerator:
             "source": "auto",
             "generated_at": datetime.utcnow().isoformat(),
         }
+
+    # ── Stage 2+3: parallel structured + auto ───────────────────────────────
+
+    def _generate_parallel(self, company: str, product: str, template_key: str,
+                           sections: List[Dict[str, Any]],
+                           snapshot: Optional[str], currency: Optional[str],
+                           progress_cb: Optional[callable] = None) -> List[Dict[str, Any]]:
+        """Fan out structured + auto sections across a thread pool.
+
+        Returns sections in the SAME ORDER as input (not completion order).
+        """
+        if not sections:
+            return []
+
+        max_workers = min(_PARALLEL_CAP, len(sections))
+        results: List[Optional[Dict[str, Any]]] = [None] * len(sections)
+
+        def _worker(idx: int, sect: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+            tier = classify_section(sect)
+            if progress_cb:
+                try:
+                    progress_cb("section_start", {"key": sect["key"], "tier": tier})
+                except Exception:
+                    pass
+            try:
+                out = self.generate_section(
+                    company=company, product=product,
+                    template_key=template_key, section_key=sect["key"],
+                    tier=tier,
+                    prior_sections=[],  # parallel sections don't see each other
+                    snapshot=snapshot, currency=currency,
+                )
+            except Exception as e:
+                logger.error("Parallel section '%s' failed: %s", sect["key"], e)
+                out = {
+                    "key": sect["key"], "title": sect["title"],
+                    "content": f"[Section generation failed: {e}]",
+                    "metrics": [], "citations": [],
+                    "generated_by": "error", "source": sect.get("source"),
+                }
+            if progress_cb:
+                try:
+                    progress_cb("section_done", {"key": sect["key"], "tier": tier})
+                except Exception:
+                    pass
+            return idx, out
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_worker, i, s) for i, s in enumerate(sections)]
+            for fut in concurrent.futures.as_completed(futures):
+                idx, section = fut.result()
+                results[idx] = section
+
+        return [r for r in results if r is not None]
+
+    # ── Stage 4+5: judgment sections with research packs ────────────────────
+
+    def _generate_judgment_sections(self, company: str, product: str, template_key: str,
+                                    judgment_sections: List[Dict[str, Any]],
+                                    body_sections: List[Dict[str, Any]],
+                                    snapshot: Optional[str], currency: Optional[str],
+                                    progress_cb: Optional[callable] = None
+                                    ) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+        """Sequential generation of ai_guided sections with preceding body context.
+
+        Each judgment section gets a research pack first, then an Opus synthesis call.
+        Sequential order preserves coherence — each sees prior judgment sections too.
+
+        Returns:
+            (sections_list, packs_by_key) — the synthesized sections AND the raw
+            research packs keyed by section_key. Packs are used by the polish pass
+            (contradictions) and saved as sidecar metadata.
+        """
+        from core.memo.agent_research import generate_research_pack
+
+        out: List[Dict[str, Any]] = []
+        packs_by_key: Dict[str, Dict[str, Any]] = {}
+
+        for sect in judgment_sections:
+            if progress_cb:
+                try:
+                    progress_cb("research_start", {"key": sect["key"]})
+                except Exception:
+                    pass
+
+            # Mind context for research pack
+            mind_ctx_str = self._get_mind_context(
+                company, product, sect["key"],
+                query_text=f"{sect.get('title', '')} {sect.get('guidance', '')}",
+            )
+
+            try:
+                pack = generate_research_pack(
+                    company=company, product=product,
+                    section_key=sect["key"],
+                    section_title=sect.get("title", sect["key"]),
+                    section_guidance=sect.get("guidance", ""),
+                    body_so_far=body_sections + out,
+                    mind_ctx=mind_ctx_str,
+                    max_turns=5,
+                )
+            except Exception as e:
+                logger.warning("Research pack failed for '%s': %s", sect["key"], e)
+                pack = None
+
+            if pack:
+                packs_by_key[sect["key"]] = pack
+
+            if progress_cb:
+                try:
+                    progress_cb("research_done", {"key": sect["key"],
+                                                   "has_pack": bool(pack)})
+                    progress_cb("section_start", {"key": sect["key"], "tier": "judgment"})
+                except Exception:
+                    pass
+
+            # Synthesis — judgment tier (Opus) sees body + prior judgment sections
+            section = self.generate_section(
+                company=company, product=product,
+                template_key=template_key, section_key=sect["key"],
+                tier="judgment",
+                prior_sections=body_sections + out,
+                research_pack=pack,
+                snapshot=snapshot, currency=currency,
+            )
+            out.append(section)
+
+            if progress_cb:
+                try:
+                    progress_cb("section_done", {"key": sect["key"], "tier": "judgment"})
+                except Exception:
+                    pass
+
+        return out, packs_by_key
+
+    # ── Stage 5.5: citation validation ──────────────────────────────────────
+
+    def _validate_citations(self, memo: Dict[str, Any],
+                            company: str, product: str) -> List[Dict[str, Any]]:
+        """Cross-reference every citation in the memo against the data room.
+
+        Returns a list of issues where citations cannot be verified. The polish
+        pass uses this to either qualify or remove flagged citations.
+
+        An "issue" record looks like:
+            {section_key, citation_index, source, snippet, reason, severity}
+
+        This is a Sonnet call (cheap, ~5-15s) that operates over citations only —
+        it does NOT rewrite the memo. Skips silently if the data room engine is
+        unavailable.
+        """
+        if self._dataroom is None:
+            return []
+
+        # Collect all (section_key, citation_index, citation) triples
+        all_citations: List[Tuple[str, int, Dict[str, Any]]] = []
+        for s in memo.get("sections", []):
+            for i, c in enumerate(s.get("citations") or []):
+                if not isinstance(c, dict):
+                    continue
+                if not c.get("source") and not c.get("snippet"):
+                    continue
+                all_citations.append((s["key"], i, c))
+
+        if not all_citations:
+            return []
+
+        # For each unique source document mentioned, pull a small search hit
+        # sample to ground the validator. This prevents the validator from
+        # rejecting genuine citations just because it lacks context.
+        unique_sources = list({c.get("source", "") for _, _, c in all_citations if c.get("source")})
+        source_excerpts: Dict[str, str] = {}
+        for src in unique_sources[:20]:  # cap to 20 to keep prompt bounded
+            try:
+                hits = self._dataroom.search(company, product, src, top_k=2)
+                if hits:
+                    excerpts = []
+                    for h in hits[:2]:
+                        txt = (h.get("text") or h.get("content") or "")[:300]
+                        excerpts.append(txt)
+                    source_excerpts[src] = "\n---\n".join(excerpts)
+            except Exception as e:
+                logger.debug("Citation validation: search failed for '%s': %s", src, e)
+
+        # Build the validation prompt
+        citations_block_lines = []
+        for sk, idx, c in all_citations:
+            citations_block_lines.append(
+                f"[{sk}::{idx}] source='{c.get('source', '')}' "
+                f"snippet='{(c.get('snippet') or '')[:200]}'"
+            )
+        citations_block = "\n".join(citations_block_lines)
+
+        excerpts_block = ""
+        if source_excerpts:
+            excerpts_lines = ["\n--- DATA ROOM EXCERPTS (for grounding) ---"]
+            for src, txt in source_excerpts.items():
+                excerpts_lines.append(f"\n## {src}\n{txt[:500]}")
+            excerpts_block = "\n".join(excerpts_lines)
+
+        system_prompt = (
+            "You are a citation auditor for an IC memo. Your job is to flag "
+            "citations whose source document is not present in the data room "
+            "at all, OR whose snippet obviously contradicts the linked source. "
+            "\n\nBE CONSERVATIVE — only flag clear mismatches. When in doubt, "
+            "trust the citation. A citation is valid if:\n"
+            "  - The source name appears in the data room (even approximately)\n"
+            "  - The snippet is consistent with the document type\n"
+            "  - The snippet is a reasonable factual claim the doc might make\n\n"
+            "FLAG a citation only if:\n"
+            "  - The source name is clearly fabricated (no match in data room)\n"
+            "  - The snippet contradicts available excerpts\n"
+            "  - The snippet is suspiciously specific without source-matching content\n"
+        )
+
+        user_prompt = (
+            "Review these citations. For each one that is clearly unverifiable, "
+            "emit an issue. Return strict JSON:\n\n"
+            "```json\n"
+            '{"issues": [\n'
+            '  {"section_key": "...", "citation_index": 0, '
+            '"source": "...", "reason": "...", "severity": "low|medium|high"},\n'
+            "  ...\n"
+            "]}\n"
+            "```\n\n"
+            "If NO citations are problematic, return: {\"issues\": []}\n\n"
+            "## Citations to audit:\n\n"
+            f"{citations_block}\n"
+            f"{excerpts_block}"
+        )
+
+        from core.ai_client import complete
+        try:
+            resp = complete(
+                tier="structured",  # Sonnet — fast, cheap
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                max_tokens=2000,
+                temperature=0.1,  # Deterministic: same input → same flags
+                log_prefix=f"memo.citation_audit.{company}",
+            )
+        except Exception as e:
+            logger.warning("Citation validation pass failed: %s — skipping", e)
+            return []
+
+        text = resp.content[0].text if resp.content else ""
+        # Strip fences
+        if text.strip().startswith("```"):
+            first = text.find("{")
+            last = text.rfind("}")
+            if 0 <= first < last:
+                text = text[first:last + 1]
+
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning("Citation validation JSON parse failed — treating as no issues")
+            return []
+
+        issues = parsed.get("issues", [])
+        if not isinstance(issues, list):
+            return []
+
+        # Normalize
+        out: List[Dict[str, Any]] = []
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            out.append({
+                "section_key": str(issue.get("section_key", "")),
+                "citation_index": int(issue.get("citation_index", 0)) if str(issue.get("citation_index", "")).isdigit() else 0,
+                "source": str(issue.get("source", "")),
+                "reason": str(issue.get("reason", "")),
+                "severity": str(issue.get("severity", "medium")).lower(),
+            })
+
+        logger.info("Citation audit [%s/%s]: %d issues flagged across %d citations",
+                    company, product, len(out), len(all_citations))
+        return out
+
+    # ── Stage 6: whole-memo polish pass ─────────────────────────────────────
+
+    def _polish_memo(self, memo: Dict[str, Any]) -> Dict[str, Any]:
+        """Single Opus 4.7 pass over the whole memo for coherence.
+
+        Preservation instruction is explicit: metrics, quotes, findings, and
+        per-section assessments must remain. This rewrites PROSE ONLY — the
+        metrics/citations arrays per section are passed through verbatim.
+
+        Contradictions detected by research packs are surfaced to the polish
+        prompt with explicit resolution rules: either resolve (state which
+        source is authoritative) or flag (mark as an open IC question).
+        """
+        company = memo.get("company", "")
+        product = memo.get("product", "")
+        template_name = memo.get("template_name", "")
+
+        # Load mind context once (fund + company level)
+        mind_ctx = self._get_mind_context(
+            company, product, section_key=None,
+            query_text="executive summary investment thesis recommendation polish",
+        )
+
+        # Collect contradictions from all research packs (deduped by description)
+        contradictions: List[Dict[str, Any]] = []
+        seen_desc = set()
+        for pack in (memo.get("_research_packs") or {}).values():
+            for c in pack.get("contradictions", []):
+                desc = (c.get("description") or "").strip()
+                if desc and desc not in seen_desc:
+                    seen_desc.add(desc)
+                    contradictions.append(c)
+
+        # Also pull any citation issues flagged by the validation pass (#2)
+        citation_issues = memo.get("_citation_issues", [])
+
+        # Render contradictions block for the prompt
+        contradictions_block = ""
+        if contradictions:
+            lines = ["\n## CONTRADICTIONS DETECTED BY RESEARCH PACKS\n",
+                     "You MUST resolve every contradiction below. For each one, pick ONE of:",
+                     "  (A) RESOLVE: state which source is authoritative and why, in the relevant",
+                     "      section. Use this when the evidence clearly favours one side.",
+                     "  (B) FLAG: explicitly mark as an open question for IC discussion. Use this",
+                     "      when evidence is genuinely ambiguous.",
+                     "Never leave a contradiction unaddressed.\n"]
+            for i, c in enumerate(contradictions, 1):
+                sev = (c.get("severity") or "medium").upper()
+                a = c.get("section_a", "?")
+                b = c.get("section_b", "?")
+                lines.append(f"{i}. [{sev}] {c.get('description', '')}")
+                lines.append(f"   Sections involved: *{a}* vs *{b}*")
+            contradictions_block = "\n".join(lines)
+
+        # Render citation issues block (from Stage 5.5 validation — optional)
+        citation_block = ""
+        if citation_issues:
+            lines = ["\n## CITATIONS FLAGGED BY VALIDATION\n",
+                     "The following citations were flagged as unverifiable against the data room.",
+                     "If you preserve them, qualify the claim (e.g., 'based on management commentary',",
+                     "'per analyst notes') or remove the citation marker. Do NOT invent a new source.\n"]
+            for ci in citation_issues[:20]:
+                lines.append(f"- Section *{ci.get('section_key')}* citation #{ci.get('citation_index')}: "
+                             f"{ci.get('source')} — {ci.get('reason', 'not found')}")
+            citation_block = "\n".join(lines)
+
+        # Render full memo body for the polish prompt
+        body_parts = []
+        for s in memo.get("sections", []):
+            body_parts.append(f"## {s.get('title', s.get('key', ''))}\n")
+            body_parts.append((s.get("content") or "").strip())
+            metrics = s.get("metrics") or []
+            if metrics:
+                body_parts.append("\nMetrics in this section:")
+                for m in metrics:
+                    body_parts.append(f"  - {m.get('label')}: {m.get('value')} [{m.get('assessment', 'neutral')}]")
+            body_parts.append("")
+        full_body = "\n".join(body_parts)
+
+        system_prompt = (
+            f"You are a senior credit analyst at ACP polishing an IC memo for {company}/{product} "
+            f"({template_name}). Your task is coherence and tone, not fresh analysis.\n\n"
+            "PRESERVE:\n"
+            "- All specific numbers and metrics mentioned in each section\n"
+            "- All direct quotes from source documents\n"
+            "- All risk flags, findings, and per-metric assessments\n"
+            "- The section order and titles\n\n"
+            "IMPROVE:\n"
+            "- Cross-section references (Executive Summary should reference findings in body)\n"
+            "- Tone consistency (institutional, no marketing language)\n"
+            "- Resolve contradictions flagged below — per IC convention, prefer tape data over "
+            "data room narrative when they conflict (tape = live observed state; data room = "
+            "point-in-time management view). When resolving, cite which source is authoritative.\n"
+            "- Ensure Recommendation/Investment Thesis synthesises the body, not restates it\n\n"
+            "DO NOT:\n"
+            "- Introduce new metrics or claims\n"
+            "- Remove caveats or data gap acknowledgements\n"
+            "- Reorder sections or merge them\n\n"
+            f"{mind_ctx}"
+        )
+
+        user_prompt = (
+            "Polish the following IC memo. Return strict JSON:\n\n"
+            "```json\n"
+            "{\n"
+            '  "sections": [\n'
+            '    {"key": "section_key", "content": "polished content ..."},\n'
+            "    ...\n"
+            "  ]\n"
+            "}\n"
+            "```\n\n"
+            "Include every section from the input. Only modify `content`. "
+            "Return ONLY the JSON object, no surrounding prose."
+            f"{contradictions_block}"
+            f"{citation_block}"
+            "\n\n## Memo to polish:\n\n"
+            f"{full_body}"
+        )
+
+        from core.ai_client import complete
+        start = time.time()
+        try:
+            resp = complete(
+                tier="polish",
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                max_tokens=_MAX_TOKENS_POLISH,
+                temperature=0.3,
+                log_prefix=f"memo.polish.{company}",
+            )
+        except Exception as e:
+            logger.error("Polish pass failed for %s/%s: %s", company, product, e)
+            memo["polished"] = False
+            memo.setdefault("errors", []).append({"section": "polish", "error": str(e)})
+            return memo
+
+        elapsed = time.time() - start
+        text = resp.content[0].text if resp.content else ""
+        # Strip possible fences
+        if text.strip().startswith("```"):
+            first_brace = text.find("{")
+            last_brace = text.rfind("}")
+            if 0 <= first_brace < last_brace:
+                text = text[first_brace:last_brace + 1]
+        try:
+            polished = json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.warning("Polish pass JSON parse failed: %s — keeping original content", e)
+            memo["polished"] = False
+            memo.setdefault("errors", []).append({"section": "polish",
+                                                  "error": f"JSON parse: {e}"})
+            return memo
+
+        # Apply polished content to sections — PRESERVE metrics/citations
+        polished_by_key = {s.get("key"): s.get("content", "")
+                           for s in polished.get("sections", []) if isinstance(s, dict)}
+        for section in memo.get("sections", []):
+            new_content = polished_by_key.get(section.get("key"))
+            if new_content:
+                section["pre_polish_content"] = section.get("content", "")
+                section["content"] = new_content
+                section["generated_by"] = section.get("generated_by", "ai") + "+polished"
+
+        meta = getattr(resp, "_laith_metadata", {}) or {}
+        memo["polished"] = True
+        memo.setdefault("generation_meta", {})["polish"] = {
+            "model_used": meta.get("model"),
+            "tokens_in": resp.usage.input_tokens,
+            "tokens_out": resp.usage.output_tokens,
+            "cache_read_tokens": meta.get("cache_read_tokens", 0),
+            "elapsed_s": round(elapsed, 2),
+        }
+        return memo
+
+    # ── Full memo orchestration ─────────────────────────────────────────────
+
+    def generate_full_memo(self, company: str, product: str,
+                           template_key: str,
+                           custom_sections: Optional[List[str]] = None,
+                           snapshot: Optional[str] = None,
+                           currency: Optional[str] = None,
+                           progress_cb: Optional[callable] = None,
+                           polish: bool = True) -> Dict[str, Any]:
+        """Hybrid pipeline memo generation.
+
+        Args:
+            company, product: scope
+            template_key: e.g. 'credit_memo'
+            custom_sections: optional list of section keys to include
+            snapshot, currency: passthrough
+            progress_cb: optional callback(event_type, payload) for streaming updates
+            polish: whether to run the Stage 6 polish pass (default True)
+
+        Returns:
+            Complete memo dict with id, sections, metadata, generation_meta.
+        """
+        template = get_template(template_key)
+        if not template:
+            raise ValueError(f"Unknown template: {template_key}")
+
+        sections = template["sections"]
+        if custom_sections:
+            sections = [s for s in sections if s["key"] in custom_sections]
+
+        memo_id = str(uuid.uuid4())[:12]
+        t0 = time.time()
+
+        # Stage 1 (planning) — partition by tier
+        judgment = [s for s in sections if classify_section(s) == "judgment"]
+        non_judgment = [s for s in sections if classify_section(s) != "judgment"]
+
+        logger.info(
+            "Memo pipeline start: %s/%s template=%s | parallel=%d judgment=%d",
+            company, product, template_key, len(non_judgment), len(judgment),
+        )
+        if progress_cb:
+            try:
+                progress_cb("pipeline_start", {
+                    "memo_id": memo_id,
+                    "parallel_sections": len(non_judgment),
+                    "judgment_sections": len(judgment),
+                })
+            except Exception:
+                pass
+
+        # Stages 2 + 3 — parallel structured + auto
+        body_sections = self._generate_parallel(
+            company, product, template_key, non_judgment,
+            snapshot, currency, progress_cb=progress_cb,
+        )
+
+        # Preserve template order: rebuild sections list in original order,
+        # filling judgment sections with placeholders we'll replace in stage 5
+        final_sections: List[Dict[str, Any]] = []
+        body_by_key = {s["key"]: s for s in body_sections}
+        for sect in sections:
+            if sect["key"] in body_by_key:
+                final_sections.append(body_by_key[sect["key"]])
+            else:
+                # Placeholder for judgment section; will be filled below
+                final_sections.append({"key": sect["key"], "title": sect["title"],
+                                       "content": "", "metrics": [], "citations": [],
+                                       "source": sect.get("source")})
+
+        # Stages 4 + 5 — judgment sections (sequential). Also collect raw
+        # research packs for use by contradiction-aware polish + sidecar save.
+        judgment_results, research_packs = self._generate_judgment_sections(
+            company, product, template_key, judgment, body_sections,
+            snapshot, currency, progress_cb=progress_cb,
+        )
+        judgment_by_key = {s["key"]: s for s in judgment_results}
+        for i, sect in enumerate(final_sections):
+            if sect["key"] in judgment_by_key:
+                final_sections[i] = judgment_by_key[sect["key"]]
+
+        # Build memo object
+        title = f"{template['name']} \u2014 {company}"
+        if product:
+            title += f" {product}"
+
+        errors = [s for s in final_sections if s.get("generated_by") == "error"]
+
+        # Aggregate generation metadata across all sections
+        models_used: Dict[str, int] = {}
+        total_tokens_in = 0
+        total_tokens_out = 0
+        total_cache_read = 0
+        for s in final_sections:
+            m = s.get("generation_meta") or {}
+            model = m.get("model_used")
+            if model:
+                models_used[model] = models_used.get(model, 0) + 1
+            total_tokens_in += m.get("tokens_in", 0) or 0
+            total_tokens_out += m.get("tokens_out", 0) or 0
+            total_cache_read += m.get("cache_read_tokens", 0) or 0
+
+        memo = {
+            "id": memo_id,
+            "company": company,
+            "product": product,
+            "template": template_key,
+            "template_name": template["name"],
+            "title": title,
+            "status": "draft",
+            "sections": final_sections,
+            "errors": [{"section": s["key"], "error": "generation_failed"} for s in errors],
+            "version": 1,
+            "created_at": datetime.utcnow().isoformat(),
+            "snapshot": snapshot,
+            "currency": currency,
+            "generation_mode": "hybrid-v1",
+            "polished": False,
+            "models_used": models_used,
+            "generation_meta": {
+                "total_tokens_in": total_tokens_in,
+                "total_tokens_out": total_tokens_out,
+                "total_cache_read_tokens": total_cache_read,
+                "elapsed_s": round(time.time() - t0, 2),
+                "parallel_cap": _PARALLEL_CAP,
+            },
+            # Transient: research packs (stripped before main save, written as sidecar).
+            "_research_packs": research_packs,
+        }
+
+        # Stage 5.5 — citation validation (always runs; cheap + grounds the polish)
+        if not errors:
+            if progress_cb:
+                try:
+                    progress_cb("citation_audit_start", {"memo_id": memo_id})
+                except Exception:
+                    pass
+            try:
+                citation_issues = self._validate_citations(memo, company, product)
+                if citation_issues:
+                    memo["_citation_issues"] = citation_issues
+            except Exception as e:
+                logger.warning("Citation validation crashed: %s", e)
+                citation_issues = []
+            if progress_cb:
+                try:
+                    progress_cb("citation_audit_done", {
+                        "memo_id": memo_id,
+                        "issues_flagged": len(memo.get("_citation_issues", [])),
+                    })
+                except Exception:
+                    pass
+
+        # Stage 6 — polish
+        if polish and not errors:
+            if progress_cb:
+                try:
+                    progress_cb("polish_start", {"memo_id": memo_id})
+                except Exception:
+                    pass
+            memo = self._polish_memo(memo)
+            if progress_cb:
+                try:
+                    progress_cb("polish_done", {"memo_id": memo_id,
+                                                 "polished": memo.get("polished")})
+                except Exception:
+                    pass
+
+        memo["generation_meta"]["total_elapsed_s"] = round(time.time() - t0, 2)
+
+        # Cost estimate
+        try:
+            from core.ai_client import estimate_cost
+            cost = 0.0
+            for s in memo["sections"]:
+                m = s.get("generation_meta") or {}
+                if m.get("model_used"):
+                    cost += estimate_cost(m["model_used"],
+                                          m.get("tokens_in", 0),
+                                          m.get("tokens_out", 0),
+                                          m.get("cache_read_tokens", 0))
+            polish_meta = memo.get("generation_meta", {}).get("polish") or {}
+            if polish_meta.get("model_used"):
+                cost += estimate_cost(polish_meta["model_used"],
+                                      polish_meta.get("tokens_in", 0),
+                                      polish_meta.get("tokens_out", 0),
+                                      polish_meta.get("cache_read_tokens", 0))
+            memo["generation_meta"]["cost_usd_estimate"] = round(cost, 4)
+        except Exception:
+            pass
+
+        if progress_cb:
+            try:
+                progress_cb("pipeline_done", {"memo_id": memo_id,
+                                              "polished": memo.get("polished"),
+                                              "elapsed_s": memo["generation_meta"]["total_elapsed_s"]})
+            except Exception:
+                pass
+
+        return memo
+
+    # ── Section regeneration (legacy — preserves behaviour for /regenerate) ─
+
+    def regenerate_section(self, memo: Dict[str, Any], section_key: str,
+                           snapshot: Optional[str] = None,
+                           currency: Optional[str] = None) -> Dict[str, Any]:
+        """Regenerate one section in place. Preserves metrics/citations from
+        prior sections but rewrites only the target."""
+        company = memo["company"]
+        product = memo["product"]
+        template_key = memo["template"]
+
+        prior: List[Dict[str, Any]] = []
+        target_idx = None
+        for i, s in enumerate(memo["sections"]):
+            if s.get("key") == section_key:
+                target_idx = i
+                break
+            prior.append(s)
+        if target_idx is None:
+            raise ValueError(f"Section '{section_key}' not in memo")
+
+        # Classify target
+        template = get_template(template_key)
+        section_def = next((s for s in template["sections"] if s["key"] == section_key), None)
+        tier = classify_section(section_def) if section_def else "structured"
+
+        # For judgment regeneration, also build a fresh research pack
+        research_pack = None
+        if tier == "judgment" and section_def:
+            try:
+                from core.memo.agent_research import generate_research_pack
+                mind_ctx_str = self._get_mind_context(
+                    company, product, section_key,
+                    query_text=f"{section_def.get('title', '')} {section_def.get('guidance', '')}",
+                )
+                research_pack = generate_research_pack(
+                    company=company, product=product,
+                    section_key=section_key,
+                    section_title=section_def.get("title", section_key),
+                    section_guidance=section_def.get("guidance", ""),
+                    body_so_far=prior,
+                    mind_ctx=mind_ctx_str,
+                    max_turns=5,
+                )
+            except Exception as e:
+                logger.warning("Regen research pack failed: %s", e)
+
+        new_section = self.generate_section(
+            company=company, product=product,
+            template_key=template_key, section_key=section_key,
+            tier=tier,
+            prior_sections=prior,
+            research_pack=research_pack,
+            snapshot=snapshot or memo.get("snapshot"),
+            currency=currency or memo.get("currency"),
+        )
+        memo["sections"][target_idx] = new_section
+        memo["version"] = memo.get("version", 1) + 1
+        return new_section

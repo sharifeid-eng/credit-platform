@@ -189,9 +189,9 @@ class TestComputationTool:
 
 class TestToolCounts:
     def test_total_tool_count(self):
-        """Verify we have the planned 41 tools."""
-        assert len(registry.tool_names()) == 41, \
-            f"Expected 41 tools, got {len(registry.tool_names())}: {registry.tool_names()}"
+        """Verify tool count (42 after analytics.get_metric_trend addition)."""
+        assert len(registry.tool_names()) == 42, \
+            f"Expected 42 tools, got {len(registry.tool_names())}: {registry.tool_names()}"
 
     def test_all_tools_have_handlers(self):
         """Every registered tool must have a callable handler."""

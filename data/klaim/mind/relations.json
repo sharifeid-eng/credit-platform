@@ -122,5 +122,112 @@
       "confidence": 0.75,
       "created_at": "2026-04-15T17:10:48.849310+00:00"
     }
+  ],
+  "2026-03-03_uae_healthcare.csv": [
+    {
+      "target_id": "8c9fc124-dd63-41c0-8fba-95c6df8424e6",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.067568+00:00"
+    },
+    {
+      "target_id": "2ee348e7-14de-4d28-8f31-9ac5b2a84f05",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.208617+00:00"
+    },
+    {
+      "target_id": "1e7b20c8-069e-404d-b28a-27e88d9032b6",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.505113+00:00"
+    },
+    {
+      "target_id": "953eed86-4a71-4322-bd7d-cb5ccad870f4",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.756039+00:00"
+    },
+    {
+      "target_id": "75fd7f37-9732-43a3-9cec-a9e531558a99",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.875747+00:00"
+    },
+    {
+      "target_id": "a5608532-8f97-4540-bb94-d46b1a8481c5",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:10.056280+00:00"
+    },
+    {
+      "target_id": "b789fabd-5009-4a14-a180-ab3b77693233",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:10.253254+00:00"
+    }
+  ],
+  "8c9fc124-dd63-41c0-8fba-95c6df8424e6": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.067568+00:00",
+      "_reverse": true
+    }
+  ],
+  "2ee348e7-14de-4d28-8f31-9ac5b2a84f05": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.208617+00:00",
+      "_reverse": true
+    }
+  ],
+  "1e7b20c8-069e-404d-b28a-27e88d9032b6": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.505113+00:00",
+      "_reverse": true
+    }
+  ],
+  "953eed86-4a71-4322-bd7d-cb5ccad870f4": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.756039+00:00",
+      "_reverse": true
+    }
+  ],
+  "75fd7f37-9732-43a3-9cec-a9e531558a99": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:09.875747+00:00",
+      "_reverse": true
+    }
+  ],
+  "a5608532-8f97-4540-bb94-d46b1a8481c5": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:10.056280+00:00",
+      "_reverse": true
+    }
+  ],
+  "b789fabd-5009-4a14-a180-ab3b77693233": [
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-17T12:14:10.253254+00:00",
+      "_reverse": true
+    }
   ]
 }

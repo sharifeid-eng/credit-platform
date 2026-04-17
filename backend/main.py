@@ -1772,9 +1772,11 @@ Professional tone, suitable for an investment committee memo. Be specific and da
             traceback.print_exc()
             # Fall through to legacy mode
 
-    msg = _ai_client().messages.create(
-        model="claude-opus-4-6", max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
+    from core.ai_client import complete as _ai_complete
+    msg = _ai_complete(
+        tier="structured", system="", max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}],
+        log_prefix="ai-commentary",
     )
     result = {
         'commentary':   msg.content[0].text,
@@ -2624,9 +2626,11 @@ FINDINGS RULES:
 
 Return ONLY the JSON object, no other text."""
 
-    msg = _ai_client().messages.create(
-        model="claude-opus-4-6", max_tokens=8000,
-        messages=[{"role": "user", "content": prompt}]
+    from core.ai_client import complete as _ai_complete
+    msg = _ai_complete(
+        tier="judgment", system="", max_tokens=8000,
+        messages=[{"role": "user", "content": prompt}],
+        log_prefix="ai-executive-summary",
     )
 
     # Parse the JSON response
@@ -2783,9 +2787,11 @@ Be direct and specific — no generic commentary. No headers, just prose."""
             traceback.print_exc()
             # Fall through to legacy
 
-    msg = _ai_client().messages.create(
-        model="claude-opus-4-6", max_tokens=300,
-        messages=[{"role": "user", "content": prompt}]
+    from core.ai_client import complete as _ai_complete
+    msg = _ai_complete(
+        tier="structured", system="", max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+        log_prefix=f"ai-tab-insight.{tab}",
     )
     result = {'insight': msg.content[0].text, 'tab': tab}
     _ai_cache_put(cache_path, result)
@@ -3012,9 +3018,10 @@ INSTRUCTIONS:
             for h in request.get('history', [])[-6:]]
     msgs.append({"role": "user", "content": request.get('question', '')})
 
-    resp = _ai_client().messages.create(
-        model="claude-opus-4-6", max_tokens=1000,
-        system=system, messages=msgs
+    from core.ai_client import complete as _ai_complete
+    resp = _ai_complete(
+        tier="structured", system=system, max_tokens=1000,
+        messages=msgs, log_prefix=f"chat.{company}",
     )
     log_activity(AI_CHAT, company, product, f"Chat: {request.get('question', '')[:80]}")
     return {'answer': resp.content[0].text, 'question': request.get('question', '')}
@@ -3088,9 +3095,10 @@ INSTRUCTIONS:
     } for h in request.get('history', [])[-6:]]
     msgs.append({"role": "user", "content": request.get('question', '')})
 
-    resp = _ai_client().messages.create(
-        model="claude-opus-4-6", max_tokens=1000,
-        system=system, messages=msgs
+    from core.ai_client import complete as _ai_complete
+    resp = _ai_complete(
+        tier="structured", system=system, max_tokens=1000,
+        messages=msgs, log_prefix="chat.silq",
     )
     log_activity(AI_CHAT, company, product, f"Chat: {request.get('question', '')[:80]}")
     return {'answer': resp.content[0].text, 'question': request.get('question', '')}
@@ -4166,9 +4174,20 @@ def generate_memo(company: str, product: str, body: dict = {}):
         if title:
             memo['title'] = title
 
+        # Capture transient research packs before save strips them
+        research_packs_copy = dict(memo.get('_research_packs') or {})
+
         # Save to storage
         memo_id = _memo_storage.save(memo)
         memo['id'] = memo_id
+
+        # Best-effort: record memo thesis to Company Mind so future memos
+        # see the prior stance and can flag drift.
+        try:
+            from core.memo.agent_research import record_memo_thesis_to_mind
+            record_memo_thesis_to_mind(memo, research_packs=research_packs_copy)
+        except Exception as e:
+            logger.warning("Thesis recording failed: %s", e)
 
         log_activity(MEMO_GENERATED, company, product, f"Generated {template_key} memo: {memo_id}")
         return memo

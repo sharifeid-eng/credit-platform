@@ -126,10 +126,13 @@ class ClaudeQueryEngine:
         )
 
         try:
-            response = client.messages.create(
-                model=self.MODEL,
+            from core.ai_client import complete as _ai_complete
+            response = _ai_complete(
+                tier="judgment",  # Research synthesis needs reasoning
+                system="",
                 max_tokens=self.MAX_TOKENS,
                 messages=[{"role": "user", "content": prompt}],
+                log_prefix="research_query",
             )
             answer = response.content[0].text
         except Exception as exc:

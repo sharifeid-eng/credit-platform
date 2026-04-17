@@ -3,6 +3,75 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-17 — CSS tokens: grep before using a variable name
+
+**Problem:** 142 references to `var(--accent-gold)` across 30 frontend files were all rendering as transparent. The CSS token defined in `tokens.css` is `--gold` (short form); the long form `--accent-gold` was used everywhere but **never defined**. CSS silently fell through to transparent. The Continue, Generate, and New Memo buttons in MemoBuilder all appeared invisible on the dark navy background.
+
+**Fix:** Added aliases (`--accent-gold: var(--gold)`, plus teal/red/blue) to `tokens.css`. Single 4-line change fixed 142 broken references across 30 files.
+
+**Rule:** When writing CSS that references a custom property, grep `styles/tokens.css` first to confirm the exact name exists. Don't rely on a convention (long-form vs short-form) — verify the actual definition. When adding a new token, add both forms as aliases upfront to prevent this drift.
+
+---
+
+## 2026-04-17 — Anthropic tool names: no dots allowed
+
+**Problem:** `/memos/generate` SSE endpoint returned `400 — tools.0.custom.name: String should match pattern '^[a-zA-Z0-9_-]{1,128}$'`. The internal registry used dotted names (`analytics.get_par_analysis`) to enable glob patterns like `analytics.*` via fnmatch. The Anthropic API rejects dots in tool names.
+
+**Fix:** Translate at the API boundary only. `ToolSpec.to_api_schema()` replaces `.` with `_` when building the API payload. `AgentConfig.get_handler()` matches BOTH the dotted name (registry key) and the underscored name (what Claude sends back in tool_use blocks). Internal registry keeps dots so glob patterns work.
+
+**Rule:** When the internal representation of a name differs from what the external API accepts, translate at the boundary in both directions. Never propagate the external constraint into internal code.
+
+---
+
+## 2026-04-17 — Rate-limit engineering for multi-turn agents
+
+**Problem:** Memo agent blew past 10K input-tokens-per-minute rate limit within 2-3 sections because every turn re-sent the accumulated conversation. By turn 8 the conversation is ~30K tokens; making 4 such calls within a minute = 120K ITPM.
+
+**Root cause:** Long-conversation agents compound token cost exponentially. A single-burst agent with 5-turn cap consumes ~10K tokens total, fine. A 30-turn memo agent consumes 150K+ total with bursts that breach any org cap.
+
+**Fix pattern (hybrid pipeline):**
+1. Parallel structured sections each in their own isolated context (no accumulation).
+2. Short-burst agents (max 5 turns) for research — returns JSON, not prose.
+3. Judgment sections synthesized sequentially by a non-agent Opus call that sees body + research pack (no tool loop).
+4. Central client with `max_retries=3` absorbs transient 429s via SDK exponential backoff.
+5. `LAITH_PARALLEL_SECTIONS=3` cap on stage-2 concurrency prevents parallel burst from exceeding ITPM.
+
+**Rule:** Never build a long-running multi-turn agent where context accumulates across >5 turns unless the user can afford enterprise rate limits. Prefer isolated short bursts + sequential synthesis. For internal operations that need tool calls, set `max_turns=5` as the default and only raise with explicit justification.
+
+---
+
+## 2026-04-17 — Transient fields in storage: strip at the save boundary
+
+**Problem:** I wanted the memo object to carry rich runtime data (research packs, citation issues) so the polish pass could see it, but I didn't want that data to bloat the permanent `v{N}.json` memo file. First attempt was to pop the fields in the caller before calling `storage.save(memo)` — but there were two save paths (legacy endpoint + agent SSE) and it was easy to forget in one of them.
+
+**Fix:** Put the strip logic in `MemoStorage.save()` itself. Pop `_research_packs` and `_citation_issues` BEFORE writing the version file. If the fields have content, write them to sidecar files (`research_packs.json`, `citation_issues.json`) next to the memo. Both save paths get the right behavior for free.
+
+**Rule:** Convention: prefix transient fields with underscore (`_research_packs`, `_citation_issues`). Make storage modules aware of the convention and responsible for stripping. Callers shouldn't need to remember which fields are transient — storage knows.
+
+---
+
+## 2026-04-17 — Priority ordering bug: iterate priority list, not stances list
+
+**Problem:** `record_memo_thesis_to_mind()` was supposed to prefer `investment_thesis` stance over `exec_summary` when both existed. Wrote:
+```python
+priority = ("investment_thesis", "exec_summary", "recommendation")
+headline = next((s for s in stances if s["section_key"] in priority), stances[0])
+```
+This iterates `stances` (dict insertion order) and picks the first stance whose key is ANYWHERE in priority — so `exec_summary` (if inserted first) wins regardless of priority rank.
+
+**Fix:** Iterate the priority list in order, picking the first stance matching each priority key:
+```python
+headline = next(
+    (s for key in priority for s in stances if s["section_key"] == key),
+    stances[0],
+)
+```
+The outer loop walks priority in rank order; the inner generator finds a matching stance. First match wins.
+
+**Rule:** When "prefer A over B" logic needs to respect order, iterate the PRIORITY list, not the DATA list. Using `x in priority` checks membership but loses rank. Using nested comprehension `for rank in priority for item in data` walks ranks in order. Caught by a unit test checking both stances were present — manual test would have missed it if `investment_thesis` happened to be inserted first.
+
+---
+
 ## 2026-04-17 — Integration discipline: infrastructure ≠ feature
 
 **Problem:** Built a complete agent framework (41 tools, 4 agent types, SSE streaming, rate limiting, 69 tests) but left it dormant. Backend had `if mode == 'agent'` branches, api.js had `getExecutiveSummaryAgent()` function, `useAgentStream` hook existed — but no frontend component actually passed `mode: 'agent'`. The infrastructure was correct and tested, but the user experience was unchanged. Marked the plan as complete because every technical component existed.

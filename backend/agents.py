@@ -210,42 +210,115 @@ async def analyst_sync(company: str, product: str, body: AgentChatRequest):
 
 @router.post("/{company}/{product}/memo/generate")
 async def memo_generate_stream(company: str, product: str, body: MemoGenerateRequest, request: Request):
-    """Stream memo generation via agent."""
+    """Stream memo generation via the hybrid pipeline.
+
+    Runs the full 6-stage pipeline in a background thread while emitting SSE
+    progress events. The memo is persisted via MemoStorage.save() before the
+    final 'done' event is sent, so the frontend receives a valid memo_id.
+    """
     _check_rate_limits(request)
-    metadata = {
-        "company": company,
-        "product": product,
-        "template_key": body.template_key,
-        "snapshot": body.snapshot,
-        "currency": body.currency,
-    }
-    session = _get_or_create_session(body.session_id, "memo_writer", metadata)
 
-    sections_str = ""
-    if body.sections:
-        sections_str = f" Only generate these sections: {', '.join(body.sections)}."
+    # Run the generator in a thread and bridge its progress_cb to an asyncio queue.
+    # This keeps the pipeline synchronous (already thread-parallel internally)
+    # while letting us yield SSE events as stages complete.
+    async def event_stream():
+        import concurrent.futures
+        from core.memo.generator import MemoGenerator
+        from core.memo.storage import MemoStorage
 
-    prompt = (
-        f"Generate a full IC memo for {company}/{product} using the '{body.template_key}' template."
-        f"{sections_str}"
-        f" First load the template to understand sections, then generate each section in order."
-        f" For each section, pull analytics and search the data room before writing."
-        f" Output each section as a JSON object with keys: section_key, title, content, metrics, citations."
-    )
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
 
-    if body.snapshot:
-        prompt += f" Use snapshot: {body.snapshot}."
-    if body.currency:
-        prompt += f" Display currency: {body.currency}."
+        def progress_cb(event_type: str, payload: dict):
+            # Called from worker thread — thread-safe put via loop
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, (event_type, payload))
+            except RuntimeError:
+                pass  # Loop closed — stream ending
+
+        def _run_pipeline():
+            generator = MemoGenerator()
+            memo = generator.generate_full_memo(
+                company=company,
+                product=product,
+                template_key=body.template_key,
+                custom_sections=body.sections,
+                snapshot=body.snapshot,
+                currency=body.currency,
+                progress_cb=progress_cb,
+                polish=True,
+            )
+            # Capture transient data (research packs) BEFORE save strips them.
+            research_packs_copy = dict(memo.get("_research_packs") or {})
+
+            # Persist before signalling done
+            storage = MemoStorage()
+            try:
+                storage.save(memo)
+            except Exception as e:
+                logger.error("Memo save failed in agent pipeline: %s", e)
+                progress_cb("error", {"message": f"save_failed: {e}"})
+                return memo
+
+            # Best-effort: record the memo's thesis signal into Company Mind
+            # so future memos see prior recommendations and can flag drift.
+            try:
+                from core.memo.agent_research import record_memo_thesis_to_mind
+                record_memo_thesis_to_mind(memo, research_packs=research_packs_copy)
+            except Exception as e:
+                logger.warning("Thesis recording failed: %s", e)
+
+            progress_cb("saved", {
+                "memo_id": memo["id"],
+                "generation_mode": memo.get("generation_mode"),
+                "polished": memo.get("polished"),
+                "elapsed_s": (memo.get("generation_meta") or {}).get("total_elapsed_s"),
+                "cost_usd_estimate": (memo.get("generation_meta") or {}).get("cost_usd_estimate"),
+                "models_used": memo.get("models_used"),
+            })
+            return memo
+
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(_run_pipeline)
+
+        # Stream events until the future resolves
+        done = False
+        while not done:
+            try:
+                event_type, payload = await asyncio.wait_for(queue.get(), timeout=0.5)
+                data = json.dumps(payload)
+                yield f"event: {event_type}\ndata: {data}\n\n"
+                if event_type in ("saved", "error"):
+                    done = True
+            except asyncio.TimeoutError:
+                if future.done():
+                    # Drain any pending events then exit
+                    while not queue.empty():
+                        event_type, payload = queue.get_nowait()
+                        yield f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
+                    done = True
+                continue
+            if await request.is_disconnected():
+                logger.info("Client disconnected from memo stream")
+                done = True
+
+        # Final done event so the frontend stops listening
+        try:
+            memo = future.result(timeout=5)
+            yield f"event: done\ndata: {json.dumps({'memo_id': memo.get('id'), 'ok': True})}\n\n"
+        except Exception as e:
+            logger.error("Memo pipeline failed: %s", e)
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+        finally:
+            executor.shutdown(wait=False)
 
     return StreamingResponse(
-        _stream_agent("memo_writer", prompt, session, request),
+        event_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
-            "X-Session-Id": session.session_id,
         },
     )
 

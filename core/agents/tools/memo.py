@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def _get_memo_templates() -> str:
     try:
-        from core.memo.templates import TEMPLATES
+        from core.memo.templates import MEMO_TEMPLATES as TEMPLATES
         lines = ["Available IC Memo Templates:"]
         for key, tmpl in TEMPLATES.items():
             lines.append(f"\n  Template: {key}")
@@ -93,7 +93,7 @@ def _get_section_research(
 ) -> str:
     """Search data room for content relevant to a memo section."""
     try:
-        from core.memo.templates import TEMPLATES
+        from core.memo.templates import MEMO_TEMPLATES as TEMPLATES
 
         # Map section keys to search queries
         section_queries = {}

@@ -84,18 +84,17 @@ def generate_ai_analysis(company, product, checks):
     """Call Claude API to generate the analysis"""
     print("\nGenerating AI analysis of consistency findings...")
     
-    client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-    
     prompt = build_consistency_prompt(company, product, checks)
-    
-    message = client.messages.create(
-        model="claude-opus-4-6",
+
+    from core.ai_client import complete as _ai_complete
+    message = _ai_complete(
+        tier="judgment",  # Integrity analysis deserves the strongest reasoning
+        system="",
         max_tokens=4000,
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
+        messages=[{"role": "user", "content": prompt}],
+        log_prefix="integrity_report",
     )
-    
+
     return message.content[0].text
 
 def save_pdf_report(company, product, analysis_text, checks):

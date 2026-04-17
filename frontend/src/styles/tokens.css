@@ -25,6 +25,14 @@
   --blue:       #5B8DEF;
   --blue-muted: rgba(91,141,239,0.12);
 
+  /* ── Accent aliases ── */
+  /* Long-form names used by ~142 references across 30 files.
+     Keep both short and long forms working to avoid a mass rename. */
+  --accent-gold: var(--gold);
+  --accent-teal: var(--teal);
+  --accent-red:  var(--red);
+  --accent-blue: var(--blue);
+
   /* ── Text ── */
   --text-primary: #E8EAF0;
   --text-secondary: #8A94A8;

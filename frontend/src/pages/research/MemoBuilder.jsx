@@ -130,9 +130,21 @@ export default function MemoBuilder() {
   const abortRef = useRef(null)
 
   // Try to load templates from backend (fall back to hardcoded)
+  // Backend returns only metadata (key, name, description, section_count) —
+  // merge with FALLBACK_TEMPLATES to hydrate the `sections` array needed for rendering.
   useEffect(() => {
     getMemoTemplates().then(data => {
-      if (data && Array.isArray(data) && data.length > 0) setTemplates(data)
+      if (!data || !Array.isArray(data) || data.length === 0) return
+      const merged = data.map(backendTmpl => {
+        const fallback = FALLBACK_TEMPLATES.find(f => f.key === backendTmpl.key)
+        return {
+          ...backendTmpl,
+          title: backendTmpl.title || backendTmpl.name || fallback?.title,
+          icon: backendTmpl.icon || fallback?.icon || 'doc',
+          sections: backendTmpl.sections || fallback?.sections || [],
+        }
+      })
+      setTemplates(merged)
     }).catch(() => { /* use fallback */ })
   }, [])
 
@@ -199,7 +211,9 @@ export default function MemoBuilder() {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
-        let sectionCount = 0
+        let totalSections = 0
+        let sectionsDone = 0
+        let savedMemoId = null
 
         while (true) {
           const { done, value } = await reader.read()
@@ -220,17 +234,31 @@ export default function MemoBuilder() {
             if (!eventType || !eventData) continue
             try {
               const data = JSON.parse(eventData)
-              if (eventType === 'tool_call') {
-                setGenToolCall(data.description)
-                setGenProgress(`Writing section ${sectionCount + 1}/${sectionKeys.length}...`)
-              } else if (eventType === 'tool_result') {
+              if (eventType === 'pipeline_start') {
+                totalSections = (data.parallel_sections || 0) + (data.judgment_sections || 0)
+                setGenProgress(`Generating ${totalSections} sections (parallel + judgment)...`)
+              } else if (eventType === 'section_start') {
+                const tierLabel = data.tier === 'judgment' ? 'Synthesising' :
+                                   data.tier === 'auto' ? 'Building appendix for' : 'Writing'
+                setGenToolCall(`${tierLabel} ${data.key}...`)
+              } else if (eventType === 'section_done') {
+                sectionsDone += 1
                 setGenToolCall(null)
-              } else if (eventType === 'text') {
-                // Count section outputs in the text
-                const sectionMatches = (data.delta || '').match(/"section_key"/g)
-                if (sectionMatches) sectionCount += sectionMatches.length
+                setGenProgress(`${sectionsDone}/${totalSections || '?'} sections complete`)
+              } else if (eventType === 'research_start') {
+                setGenToolCall(`Gathering research pack for ${data.key}...`)
+              } else if (eventType === 'research_done') {
+                setGenToolCall(null)
+              } else if (eventType === 'polish_start') {
+                setGenProgress('Polishing full memo (Opus coherence pass)...')
+                setGenToolCall(null)
+              } else if (eventType === 'polish_done') {
+                setGenProgress(data.polished ? 'Polish complete.' : 'Polish skipped — saving draft.')
+              } else if (eventType === 'saved') {
+                savedMemoId = data.memo_id
+                setGenProgress('Memo saved. Redirecting...')
               } else if (eventType === 'done') {
-                setGenProgress('Complete!')
+                if (!savedMemoId && data.memo_id) savedMemoId = data.memo_id
                 setGenToolCall(null)
               } else if (eventType === 'error') {
                 setError(data.message)
@@ -239,21 +267,14 @@ export default function MemoBuilder() {
           }
         }
 
-        // Agent streaming complete — save memo via legacy endpoint
-        setGenProgress('Saving memo...')
-        try {
-          const result = await generateMemo(company, product, selectedTemplate.key, sectionKeys)
-          const memoId = result.memo_id || result.id
-          if (memoId) {
-            setGenProgress('Complete! Redirecting...')
-            setTimeout(() => {
-              navigate(`/company/${company}/${product}/research/memos/${memoId}`)
-            }, 500)
-          } else {
-            navigate(`/company/${company}/${product}/research/memos`)
-          }
-        } catch (saveErr) {
-          console.error('[MemoBuilder] Agent save fallback failed:', saveErr)
+        // Backend persisted the memo during the stream — navigate to it.
+        if (savedMemoId) {
+          setTimeout(() => {
+            navigate(`/company/${company}/${product}/research/memos/${savedMemoId}`)
+          }, 400)
+        } else {
+          // Backend didn't emit a saved event — fall back to archive
+          console.warn('[MemoBuilder] No memo_id emitted; navigating to archive')
           navigate(`/company/${company}/${product}/research/memos`)
         }
       } catch (err) {
@@ -590,7 +611,7 @@ export default function MemoBuilder() {
                   }} />
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {useAgent ? 'Agent Generating Memo' : 'Generating Memo'}
+                      {useAgent ? 'Generating Memo (live progress)' : 'Generating Memo'}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                       {genProgress}

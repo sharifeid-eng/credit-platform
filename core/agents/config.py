@@ -33,9 +33,16 @@ class ToolSpec:
     handler: Callable[..., str]
 
     def to_api_schema(self) -> Dict[str, Any]:
-        """Convert to Anthropic API tool schema."""
+        """Convert to Anthropic API tool schema.
+
+        Anthropic's API requires tool names to match ^[a-zA-Z0-9_-]{1,128}$ —
+        no dots allowed. The internal registry uses dotted names (e.g.
+        'analytics.get_par_analysis') so glob patterns like 'analytics.*'
+        work for config-driven tool assignment. Translate dots to
+        underscores at the API boundary only.
+        """
         return {
-            "name": self.name,
+            "name": self.name.replace(".", "_"),
             "description": self.description,
             "input_schema": self.input_schema,
         }
@@ -59,9 +66,16 @@ class AgentConfig:
         return [t.to_api_schema() for t in self.tools]
 
     def get_handler(self, tool_name: str) -> Optional[Callable[..., str]]:
-        """Look up a tool handler by name."""
+        """Look up a tool handler by name.
+
+        Anthropic's API doesn't allow dots in tool names, so to_api_schema()
+        translates 'analytics.get_par_analysis' → 'analytics_get_par_analysis'
+        on the way out. Claude sends the underscored form back in tool_use
+        blocks, but the internal registry is keyed by the dotted form.
+        Match against both so dispatch works from either direction.
+        """
         for t in self.tools:
-            if t.name == tool_name:
+            if t.name == tool_name or t.name.replace(".", "_") == tool_name:
                 return t.handler
         return None
 

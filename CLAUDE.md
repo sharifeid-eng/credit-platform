@@ -234,11 +234,13 @@ credit-platform/
 │   │   ├── query_engine.py    # Claude RAG: retrieve + synthesize with citations
 │   │   ├── dual_engine.py     # Research orchestrator (Claude RAG)
 │   │   └── extractors.py      # Rules-based insight extraction at ingest time
-│   ├── memo/                  # IC Memo Engine
-│   │   ├── templates.py       # 4 IC memo templates (credit, DD, monitoring, quarterly)
-│   │   ├── analytics_bridge.py    # Pulls live analytics into memo sections
-│   │   ├── generator.py       # AI section generator with analytics + research + mind
-│   │   ├── storage.py         # File-based versioning (draft → review → final)
+│   ├── ai_client.py           # Central Anthropic client: retry/backoff, tier routing, cache helpers, cost est
+│   ├── memo/                  # IC Memo Engine — Hybrid 6-Stage Pipeline
+│   │   ├── templates.py       # 5 IC memo templates (credit, DD, monitoring, quarterly, amendment)
+│   │   ├── analytics_bridge.py    # Pulls live analytics into memo sections (multi-company, aux sheets)
+│   │   ├── generator.py       # Hybrid pipeline: parallel structured + agent research + citation audit + polish
+│   │   ├── agent_research.py  # Short-burst agent research packs (5-turn cap, structured JSON, thesis recorder)
+│   │   ├── storage.py         # File-based versioning + sidecar storage (research_packs.json, citation_issues.json)
 │   │   └── pdf_export.py      # Dark-themed PDF export for memos
 │   ├── mind/                  # Living Mind + Intelligence System
 │   │   ├── master_mind.py     # Fund-level: preferences, IC norms, cross-company patterns
@@ -401,6 +403,10 @@ credit-platform/
 │   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
 │   ├── test_analysis_silq.py   # Integration tests for SILQ analytics
 │   ├── test_analysis_aajil.py  # Integration tests for Aajil analytics (38 tests)
+│   ├── test_ai_client.py         # Central client: tier routing, caching, retry (18 tests)
+│   ├── test_memo_agent_research.py # Research pack parser + format helper (15 tests)
+│   ├── test_memo_pipeline.py       # End-to-end hybrid pipeline (8 tests)
+│   ├── test_memo_enhancements.py   # 5 quality enhancements (19 tests)
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
@@ -951,6 +957,33 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Hybrid 6-stage memo pipeline (`core/memo/generator.py`, `core/ai_client.py`, `core/memo/agent_research.py`):**
+  - Stage 1: Context assembly — analytics + data-room chunks + 5-layer mind context
+  - Stage 2: 9 structured sections generated in **parallel** via ThreadPoolExecutor (`LAITH_PARALLEL_SECTIONS=3` cap) — Sonnet 4.6
+  - Stage 3: 1 auto section (appendix) — Haiku 4
+  - Stage 4: **Short-burst research packs** per judgment section — Sonnet agent, 5-turn hard cap, returns structured JSON (key_metrics, quotes, contradictions, recommended_stance, supporting_evidence)
+  - Stage 5: Judgment synthesis — Opus 4.7, sequential (for coherence), consumes research packs
+  - Stage 5.5: **Citation validation** — Sonnet cross-references every citation against data room, flags unverifiable ones
+  - Stage 6: **Polish pass** — single Opus 4.7 call, preserves metrics/citations, explicitly resolves contradictions with resolve/flag rules
+  - Post-save: `record_memo_thesis_to_mind()` writes agent-recommended stance to CompanyMind findings (memo_id provenance) — future memos see prior recommendations
+  - Sidecar storage: `_research_packs` → `research_packs.json`, `_citation_issues` → `citation_issues.json` (audit trail, immutable on first save, stripped from `v{N}.json`)
+  - Rate-limit engineering: SDK retry/backoff via `max_retries=3` (configurable via `LAITH_AI_MAX_RETRIES`), parallel cap prevents ITPM bursts
+  - Model routing: 5 tiers (auto/structured/research/judgment/polish), env-overridable via `LAITH_MODEL_*`, fallback chains (Opus 4.7 → 4.6 → 4.20250514) on NotFoundError
+  - Cost: ~$1.50-2.50 per full Credit Memo, ~3-5 min wall-clock
+  - Memo metadata: `generation_mode: "hybrid-v1"`, `polished: bool`, `models_used: {...}`, `total_tokens_in/out`, `cost_usd_estimate` in meta.json
+  - Both save paths use the pipeline: agent SSE endpoint (`/agents/{co}/{prod}/memo/generate`) streams live progress events (`pipeline_start`, `section_start/done`, `research_start/done`, `citation_audit_start/done`, `polish_start/done`, `saved`, `done`) AND saves the memo; legacy endpoint (`/companies/{co}/products/{prod}/memos/generate`) returns JSON after save
+- ✅ **Central Anthropic client (`core/ai_client.py`):**
+  - Singleton client with `max_retries=3` (SDK exponential backoff on 429/529/503)
+  - `complete(tier, system, messages, max_tokens, ...)` wrapper — logs token usage + cache hits, attaches `_laith_metadata` (tier, model, elapsed_s, cache tokens)
+  - `get_model(tier)` — env override → fallback chain → cached
+  - `_mark_unavailable()` — walks fallback chain on NotFoundError (Opus 4.7 → 4.6 → 4.20250514)
+  - Prompt caching helpers: `system_with_cache()`, `cache_last_tool()`
+  - Cost estimation: `estimate_cost(model, in_tokens, out_tokens, cache_read)` with 10% discount on cache hits
+  - Migration complete: 8 call sites now routed through `complete()` — backend/main.py (5), core/legal_extractor.py, core/research/query_engine.py, core/reporter.py. Agent runtime (`core/agents/runtime.py`) also uses shared client for retry config.
+- ✅ **Extended prompt caching:**
+  - System prompts (4 locations, pre-existing): runtime.py run/stream, legal_extractor, memo generator
+  - **NEW:** Tool schema prefix cached via `cache_last_tool()` on every agent run/stream call — ~20-30% token savings on multi-turn
+  - Bare-string system prompts auto-wrapped with `cache_control` via `ai_client.complete()`
 - ✅ **Authentication + RBAC (Cloudflare Access JWT + app-side roles):**
   - Cloudflare Access handles login (email OTP, allowlists, geo-restrictions) — branded login page with dark navy background + lion logo
   - Backend: `backend/cf_auth.py` — reads `CF_Authorization` cookie / `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against Cloudflare public keys, caches keys (1hr TTL)
@@ -1392,6 +1425,35 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - April 15 tape loaded: 8,080 deals (full portfolio), 65 columns, 5 new incl Expected collection days. Direct DPD working. PAR30 covenant breached (36.6% vs 7% threshold).
 -----
 ## Known Gaps & Next Steps
+
+**Memo Pipeline ✅ COMPLETE (session 23):**
+- [x] Hybrid 6-stage memo pipeline — parallel structured + short-burst agent research + Opus 4.7 polish
+- [x] Central AI client (`core/ai_client.py`) with retry/backoff + tier routing + prompt caching
+- [x] Research packs with structured JSON output (contradictions, key metrics, stance)
+- [x] Sidecar storage for research packs + citation issues (immutable audit trail)
+- [x] Citation validation pass (Sonnet) — flags unverifiable citations before polish
+- [x] Contradiction handling in polish — explicit resolve/flag rules
+- [x] Thesis recording to Company Mind after save — future memos see prior recommendations
+- [x] `analytics.get_metric_trend` tool — research packs can ground claims in time series
+- [x] 8 direct `messages.create` call sites migrated to central client (inherit retry)
+- [x] Prompt caching extended to tool definitions (~20-30% savings on multi-turn)
+- [x] Memo SSE endpoint persists memos (was fire-and-forget) + emits `saved` event with memo_id
+
+**Intelligence System Activation ✅ COMPLETE (session 23):**
+- [x] TAPE_INGESTED event now carries real metrics (was `{}` — killed entity extraction, thesis drift)
+- [x] DataChat feedback pipeline wired (thumbs-down records to CompanyMind even without correction)
+- [x] Graph-aware scoring activated (`query_text` passed to `build_mind_context()` from chat endpoints)
+- [x] `entities.jsonl` added to CompanyMind `_FILES` + `_TASK_RELEVANCE`
+- [x] Entity extractor overhauled — ~80 patterns across all 7 types (11 entities from real text vs ~1 before)
+- [x] Mind seeded for all 5 companies — 98 total entries (from 40). Master Mind 7→26.
+
+**Documentation ✅ COMPLETE (session 23):**
+- [x] ANALYSIS_FRAMEWORK.md Section 21 (Intelligence System) added
+- [x] FRAMEWORK_INDEX.md updated with Aajil + current fn/test counts
+- [x] Ejari methodology expanded 2→12 sections
+- [x] Klaim methodology — CDR/CCR + Facility-Mode PD registered
+- [x] Framework Section 3 — added Ejari/Tamara/Aajil asset class subsections
+
 **Short term:**
 - [x] Onboard SILQ — POS lending asset class (analysis module, validation, tests, 2 tapes live)
 - [x] SILQ Feb 2026 tape — three product types (BNPL, RBF, RCL) consistent across both tapes

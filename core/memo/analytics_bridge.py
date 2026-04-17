@@ -104,8 +104,12 @@ class AnalyticsBridge:
                    snapshot: Optional[str] = None) -> tuple:
         """Load tape data for a company/product.
 
-        Returns (df, config, snapshot_filename, snapshot_date) or
-        (None, None, None, None) if data is unavailable.
+        Returns (df, config, snapshot_filename, snapshot_date, aux) where
+        `aux` is a dict of auxiliary DataFrames for multi-sheet formats
+        (Aajil has Payments, DPD Cohorts, Collections sheets). For tape
+        types without auxiliary sheets, aux is None.
+
+        Returns (None, None, None, None, None) if data is unavailable.
         """
         cache_key = (company, product, snapshot)
         if cache_key in self._snapshot_cache:
@@ -115,20 +119,20 @@ class AnalyticsBridge:
             config = load_config(company, product)
             if not config:
                 logger.warning("No config for %s/%s", company, product)
-                return None, None, None, None
+                return None, None, None, None, None
 
             analysis_type = config.get("analysis_type", "")
 
             # Summary-only types (Ejari, Tamara) do not have raw tapes
             if analysis_type in ("ejari_summary", "tamara_summary"):
-                result = (None, config, None, None)
+                result = (None, config, None, None, None)
                 self._snapshot_cache[cache_key] = result
                 return result
 
             snapshots = get_snapshots(company, product)
             if not snapshots:
                 logger.warning("No snapshots for %s/%s", company, product)
-                return None, config, None, None
+                return None, config, None, None, None
 
             # Pick the requested snapshot or the latest
             if snapshot:
@@ -139,20 +143,29 @@ class AnalyticsBridge:
             else:
                 snap = snapshots[-1]
 
+            aux = None
+
             # SILQ uses a special loader
             if analysis_type == "silq" or company.lower() == "silq":
                 from core.loader import load_silq_snapshot
                 df, _commentary = load_silq_snapshot(snap["filepath"])
+            elif (analysis_type == "aajil" or company.lower() == "aajil") \
+                    and snap["filepath"].endswith((".xlsx", ".xls")):
+                # Aajil tape is a multi-sheet xlsx — load all auxiliary sheets
+                # (Payments, DPD Cohorts, Collections) so compute functions
+                # can use them. JSON snapshots fall through to None below.
+                from core.loader import load_aajil_snapshot
+                df, aux = load_aajil_snapshot(snap["filepath"])
             else:
                 df = load_snapshot(snap["filepath"])
 
-            result = (df, config, snap["filename"], snap.get("date"))
+            result = (df, config, snap["filename"], snap.get("date"), aux)
             self._snapshot_cache[cache_key] = result
             return result
 
         except Exception as e:
             logger.error("Failed to load data for %s/%s: %s", company, product, e)
-            return None, None, None, None
+            return None, None, None, None, None
 
     def _load_summary_data(self, company: str, product: str) -> Optional[dict]:
         """Load pre-computed summary data for Ejari/Tamara types."""
@@ -199,7 +212,7 @@ class AnalyticsBridge:
 
         Handles gracefully when data is unavailable.
         """
-        df, config, snap_fn, snap_date = self._load_data(
+        df, config, snap_fn, snap_date, aux = self._load_data(
             company, product, snapshot
         )
 
@@ -224,6 +237,7 @@ class AnalyticsBridge:
 
         mult = apply_multiplier(config, display_ccy)
         is_silq = analysis_type == "silq" or company.lower() == "silq"
+        is_aajil = analysis_type == "aajil" or company.lower() == "aajil"
 
         # Dispatch to the appropriate section builder
         builder_map = {
@@ -253,7 +267,8 @@ class AnalyticsBridge:
         try:
             return builder(
                 df, config, mult, display_ccy, snap_date,
-                is_silq=is_silq, company=company, product=product,
+                is_silq=is_silq, is_aajil=is_aajil, aux=aux,
+                company=company, product=product,
             )
         except Exception as e:
             logger.error("Analytics bridge error for section '%s': %s",
@@ -375,7 +390,7 @@ class AnalyticsBridge:
     # ── Individual section builders (tape-based) ────────────────────────────
 
     def _build_portfolio_analytics(self, df, config, mult, ccy, snap_date,
-                                   is_silq=False, **kw) -> dict:
+                                   is_silq=False, is_aajil=False, **kw) -> dict:
         """Build portfolio analytics / performance section."""
         metrics = []
         charts_data = {}
@@ -401,6 +416,39 @@ class AnalyticsBridge:
                  "value": _fmt_pct(summary.get("delinquency_rate")),
                  "assessment": (
                      "healthy" if (summary.get("delinquency_rate") or 0) < 10
+                     else "warning"
+                 )},
+            ])
+        elif is_aajil:
+            from core.analysis_aajil import compute_aajil_summary
+            aux = kw.get("aux")
+            summary = compute_aajil_summary(df, mult, aux=aux)
+            charts_data["summary"] = summary
+            # Aajil returns rates as decimals (0.87), bridge expects percent (87)
+            collection_pct = (summary.get("collection_rate") or 0) * 100
+            metrics.extend([
+                {"label": "GMV (Principal)",
+                 "value": _fmt_money(summary.get("total_principal"), ccy),
+                 "assessment": "neutral"},
+                {"label": "Credit Transactions",
+                 "value": f"{summary.get('total_deals', 0):,}",
+                 "assessment": "neutral"},
+                {"label": "Total Customers",
+                 "value": f"{summary.get('total_customers', 0):,}",
+                 "assessment": "neutral"},
+                {"label": "Collection Rate",
+                 "value": _fmt_pct(collection_pct),
+                 "assessment": (
+                     "healthy" if collection_pct > 80 else "warning"
+                 )},
+                {"label": "Outstanding",
+                 "value": _fmt_money(summary.get("total_receivable"), ccy),
+                 "assessment": "neutral"},
+                {"label": "Written Off",
+                 "value": f"{summary.get('written_off_count', 0):,} deals "
+                          f"({_fmt_money(summary.get('total_written_off'), ccy)})",
+                 "assessment": (
+                     "healthy" if (summary.get('written_off_count') or 0) == 0
                      else "warning"
                  )},
             ])
@@ -451,13 +499,40 @@ class AnalyticsBridge:
         }
 
     def _build_credit_quality(self, df, config, mult, ccy, snap_date,
-                              is_silq=False, **kw) -> dict:
+                              is_silq=False, is_aajil=False, **kw) -> dict:
         """Build credit quality / risk section."""
         metrics = []
         charts_data = {}
 
-        # PAR (Klaim only — SILQ uses delinquency)
-        if not is_silq:
+        aux = kw.get("aux")
+
+        # PAR / Delinquency
+        if is_aajil:
+            try:
+                from core.analysis_aajil import compute_aajil_delinquency
+                delq = compute_aajil_delinquency(df, mult, aux=aux)
+                charts_data["delinquency"] = delq
+                active_bal = delq.get("total_active_balance") or 0
+                for bucket in delq.get("buckets", []):
+                    # Aajil uses 'bucket' (label) and 'balance' (amount),
+                    # no per-bucket pct — derive it from balance / active_bal.
+                    label = bucket.get("bucket", "")
+                    balance = bucket.get("balance", 0)
+                    if not label or "Current" in label or active_bal == 0:
+                        continue
+                    pct = balance / active_bal * 100
+                    metrics.append({
+                        "label": label,
+                        "value": _fmt_pct(pct),
+                        "assessment": (
+                            "healthy" if pct < 5
+                            else "warning" if pct < 15
+                            else "critical"
+                        ),
+                    })
+            except Exception as e:
+                logger.warning("Aajil delinquency computation failed: %s", e)
+        elif not is_silq:
             try:
                 par = compute_par(df, mult)
                 charts_data["par"] = par
@@ -483,6 +558,9 @@ class AnalyticsBridge:
             if is_silq:
                 from core.analysis_silq import compute_silq_cohort_loss_waterfall
                 lw = compute_silq_cohort_loss_waterfall(df, mult)
+            elif is_aajil:
+                from core.analysis_aajil import compute_aajil_loss_waterfall
+                lw = compute_aajil_loss_waterfall(df, mult, aux=aux)
             else:
                 lw = compute_cohort_loss_waterfall(df, mult)
             charts_data["loss_waterfall"] = lw
@@ -515,6 +593,9 @@ class AnalyticsBridge:
             if is_silq:
                 from core.analysis_silq import compute_silq_underwriting_drift
                 drift = compute_silq_underwriting_drift(df, mult)
+            elif is_aajil:
+                from core.analysis_aajil import compute_aajil_underwriting
+                drift = compute_aajil_underwriting(df, mult, aux=aux)
             else:
                 drift = compute_underwriting_drift(df, mult)
             charts_data["underwriting_drift"] = drift
@@ -544,7 +625,7 @@ class AnalyticsBridge:
         }
 
     def _build_concentration(self, df, config, mult, ccy, snap_date,
-                             is_silq=False, **kw) -> dict:
+                             is_silq=False, is_aajil=False, **kw) -> dict:
         """Build concentration risk section."""
         metrics = []
         charts_data = {}
@@ -553,48 +634,103 @@ class AnalyticsBridge:
             if is_silq:
                 from core.analysis_silq import compute_silq_concentration
                 conc = compute_silq_concentration(df, mult)
+            elif is_aajil:
+                from core.analysis_aajil import compute_aajil_concentration
+                conc = compute_aajil_concentration(df, mult, aux=kw.get("aux"))
             else:
                 conc = compute_concentration(df, mult)
             charts_data["concentration"] = conc
 
-            hhi_data = conc.get("hhi", {})
-            hhi_val = hhi_data.get("hhi")
-            if hhi_val is not None:
-                metrics.append({
-                    "label": "HHI (Group)",
-                    "value": f"{hhi_val:,.0f}",
-                    "assessment": (
-                        "healthy" if hhi_val < 1500
-                        else "warning" if hhi_val < 2500
-                        else "critical"
-                    ),
-                })
-                classification = hhi_data.get("classification", "")
-                metrics.append({
-                    "label": "Concentration",
-                    "value": classification,
-                    "assessment": (
-                        "healthy" if classification == "unconcentrated"
-                        else "warning" if classification == "moderate"
-                        else "critical"
-                    ),
-                })
+            # HHI — Aajil returns flat `hhi_customer` (0-10000 scale).
+            # Klaim/SILQ return `hhi: {hhi, classification}` dict.
+            if is_aajil:
+                hhi_val = conc.get("hhi_customer")
+                if hhi_val is not None:
+                    metrics.append({
+                        "label": "HHI (Customer)",
+                        "value": f"{hhi_val:,.0f}",
+                        "assessment": (
+                            "healthy" if hhi_val < 1500
+                            else "warning" if hhi_val < 2500
+                            else "critical"
+                        ),
+                    })
+                # Top5/Top10 share are decimals (0-1); convert to percent
+                t5 = (conc.get("top5_share") or 0) * 100
+                t10 = (conc.get("top10_share") or 0) * 100
+                if t5:
+                    metrics.append({
+                        "label": "Top 5 Customers",
+                        "value": _fmt_pct(t5),
+                        "assessment": (
+                            "healthy" if t5 < 30
+                            else "warning" if t5 < 50
+                            else "critical"
+                        ),
+                    })
+                if t10:
+                    metrics.append({
+                        "label": "Top 10 Customers",
+                        "value": _fmt_pct(t10),
+                        "assessment": (
+                            "healthy" if t10 < 50
+                            else "warning" if t10 < 70
+                            else "critical"
+                        ),
+                    })
+                top_customers = conc.get("top_customers", [])
+                if top_customers:
+                    top = top_customers[0]
+                    top_pct = (top.get("share") or 0) * 100
+                    metrics.append({
+                        "label": "Top Customer",
+                        "value": f"Customer {top.get('customer_id', '?')} "
+                                 f"({_fmt_pct(top_pct)})",
+                        "assessment": (
+                            "healthy" if top_pct < 15
+                            else "warning" if top_pct < 25
+                            else "critical"
+                        ),
+                    })
+            else:
+                hhi_data = conc.get("hhi", {})
+                hhi_val = hhi_data.get("hhi")
+                if hhi_val is not None:
+                    metrics.append({
+                        "label": "HHI (Group)",
+                        "value": f"{hhi_val:,.0f}",
+                        "assessment": (
+                            "healthy" if hhi_val < 1500
+                            else "warning" if hhi_val < 2500
+                            else "critical"
+                        ),
+                    })
+                    classification = hhi_data.get("classification", "")
+                    metrics.append({
+                        "label": "Concentration",
+                        "value": classification,
+                        "assessment": (
+                            "healthy" if classification == "unconcentrated"
+                            else "warning" if classification == "moderate"
+                            else "critical"
+                        ),
+                    })
 
-            # Top groups
-            groups = conc.get("group", conc.get("shops", []))
-            if groups:
-                top = groups[0] if groups else {}
-                top_name = top.get("group", top.get("shop", ""))
-                top_pct = top.get("percentage", top.get("pct", 0))
-                metrics.append({
-                    "label": "Top Counterparty",
-                    "value": f"{top_name} ({_fmt_pct(top_pct)})",
-                    "assessment": (
-                        "healthy" if (top_pct or 0) < 15
-                        else "warning" if (top_pct or 0) < 25
-                        else "critical"
-                    ),
-                })
+                # Top groups (Klaim/SILQ)
+                groups = conc.get("group", conc.get("shops", []))
+                if groups:
+                    top = groups[0] if groups else {}
+                    top_name = top.get("group", top.get("shop", ""))
+                    top_pct = top.get("percentage", top.get("pct", 0))
+                    metrics.append({
+                        "label": "Top Counterparty",
+                        "value": f"{top_name} ({_fmt_pct(top_pct)})",
+                        "assessment": (
+                            "healthy" if (top_pct or 0) < 15
+                            else "warning" if (top_pct or 0) < 25
+                            else "critical"
+                        ),
+                    })
         except Exception as e:
             logger.warning("Concentration computation failed: %s", e)
 
@@ -609,7 +745,7 @@ class AnalyticsBridge:
         }
 
     def _build_stress(self, df, config, mult, ccy, snap_date,
-                      is_silq=False, **kw) -> dict:
+                      is_silq=False, is_aajil=False, **kw) -> dict:
         """Build stress scenarios section."""
         metrics = []
         charts_data = {}
@@ -621,6 +757,17 @@ class AnalyticsBridge:
                 "metrics": [],
                 "text": "Stress scenario analytics not available for SILQ. "
                         "Use delinquency and covenant data for risk assessment.",
+                "charts_data": {},
+                "available": False,
+            }
+
+        if is_aajil:
+            # Aajil does not have a dedicated stress test;
+            # concentration + loss waterfall carry the risk lens
+            return {
+                "metrics": [],
+                "text": "Stress scenario analytics not available for Aajil. "
+                        "Use concentration and loss waterfall data for risk assessment.",
                 "charts_data": {},
                 "available": False,
             }
@@ -681,10 +828,20 @@ class AnalyticsBridge:
         }
 
     def _build_covenants(self, df, config, mult, ccy, snap_date,
-                         is_silq=False, **kw) -> dict:
+                         is_silq=False, is_aajil=False, **kw) -> dict:
         """Build covenant analysis section."""
         metrics = []
         charts_data = {}
+
+        if is_aajil:
+            # No facility covenants defined for Aajil yet (pre-facility stage)
+            return {
+                "metrics": [],
+                "text": "No facility covenants defined for Aajil. "
+                        "Covenant framework pending facility finalisation.",
+                "charts_data": {},
+                "available": False,
+            }
 
         try:
             from core.portfolio import compute_covenants

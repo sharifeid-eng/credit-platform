@@ -686,6 +686,166 @@ def _get_cdr_ccr(
     return "\n".join(lines)
 
 
+# ── Trend tool (cross-snapshot time series) ───────────────────────────────
+
+# Metrics that can be extracted from a per-snapshot summary dict, regardless
+# of analysis type. The key is the summary field name.
+_TREND_METRICS = {
+    "collection_rate": "collection rate (%)",
+    "denial_rate": "denial rate (%)",
+    "pending_rate": "pending rate (%)",
+    "total_deals": "total deals count",
+    "total_purchase_value": "total originated face value",
+    "active_deals": "active deal count",
+    "completed_deals": "completed deal count",
+    "total_outstanding": "outstanding balance",
+    "par30": "PAR 30+",
+    "par60": "PAR 60+",
+    "par90": "PAR 90+",
+    "delinquency_rate": "delinquency rate (%)",
+    "hhi_customer": "customer HHI",
+    "hhi_group": "group/provider HHI",
+    "total_customers": "total customer count",
+    "total_written_off": "cumulative write-offs",
+    "written_off_count": "write-off deal count",
+    "avg_tenure": "average tenure",
+    "avg_discount": "average discount (%)",
+}
+
+
+def _get_metric_trend(
+    company: str, product: str,
+    metric: str,
+    max_snapshots: int = 12,
+) -> str:
+    """Build a cross-snapshot time series for a single metric.
+
+    Iterates available snapshots (up to `max_snapshots`, latest first),
+    computes the per-snapshot summary for each, extracts the named metric,
+    and returns a compact human-readable trend table.
+
+    Unknown metrics return a helpful list of valid options.
+    """
+    if metric not in _TREND_METRICS:
+        return (
+            f"Unknown metric '{metric}'. Valid metrics:\n"
+            + ", ".join(sorted(_TREND_METRICS.keys()))
+        )
+
+    try:
+        from core.loader import get_snapshots
+        snaps = get_snapshots(company, product)
+    except Exception as e:
+        return f"No snapshots available: {e}"
+
+    if not snaps:
+        return f"No snapshots found for {company}/{product}."
+
+    # Snapshots are typically in chronological order already; take most recent N
+    snaps_to_use = snaps[-max_snapshots:] if len(snaps) > max_snapshots else snaps
+
+    at = detect_analysis_type(company, product)
+
+    # Summary-only types don't have tape data to iterate — return a note
+    if at in ("ejari_summary", "tamara_summary"):
+        return (
+            f"{company}/{product} uses pre-computed summaries "
+            f"(analysis_type={at}); time-series trends require raw tape snapshots. "
+            f"Use analytics.get_portfolio_summary to see the latest available figures."
+        )
+
+    config, disp, mult = get_currency(company, product, None)
+
+    series = []
+    for snap in snaps_to_use:
+        try:
+            snap_fn = snap.get("filename")
+            if at == "silq":
+                df, sel, _ = load_silq_tape(company, product, snap_fn, None)
+                from core.analysis_silq import compute_silq_summary
+                s = compute_silq_summary(df, mult, ref_date=sel.get("date"))
+            elif at == "aajil":
+                df, sel, aux = load_aajil_tape(company, product, snap_fn, None)
+                from core.analysis_aajil import compute_aajil_summary
+                s = compute_aajil_summary(df, mult, aux=aux)
+            else:
+                df, sel = load_tape(company, product, snap_fn, None)
+                from core.analysis import compute_summary
+                s = compute_summary(df, config, disp, sel.get("date", ""), None)
+
+            # Aajil summary returns some rates as decimals — normalize
+            value = s.get(metric)
+            if value is None:
+                continue
+            series.append({
+                "snapshot": snap_fn,
+                "date": snap.get("date") or sel.get("date", ""),
+                "value": value,
+            })
+        except Exception as e:
+            logger.debug("Trend: snapshot %s failed: %s", snap.get("filename"), e)
+            continue
+
+    if not series:
+        return f"Metric '{metric}' could not be computed across any available snapshot."
+
+    # Build output
+    lines = [f"Trend of {metric} ({_TREND_METRICS[metric]}) for {company}/{product}:"]
+    lines.append(f"Snapshots analysed: {len(series)} (of {len(snaps_to_use)} attempted)\n")
+    lines.append(f"{'Date':<12}  {'Value':>16}  {'Change':>10}")
+    lines.append("-" * 44)
+    prev_value = None
+    for point in series:
+        val = point["value"]
+        try:
+            val_str = f"{float(val):,.2f}"
+        except (TypeError, ValueError):
+            val_str = str(val)
+        if prev_value is not None and isinstance(val, (int, float)) and isinstance(prev_value, (int, float)) and prev_value != 0:
+            change_pct = (float(val) - float(prev_value)) / abs(float(prev_value)) * 100
+            change_str = f"{change_pct:+.1f}%"
+        else:
+            change_str = "—"
+        lines.append(f"{point['date']:<12}  {val_str:>16}  {change_str:>10}")
+        prev_value = val
+
+    # Summary
+    if len(series) >= 2 and all(isinstance(p["value"], (int, float)) for p in series):
+        first = series[0]["value"]
+        last = series[-1]["value"]
+        if first != 0:
+            total_change = (last - first) / abs(first) * 100
+            lines.append(
+                f"\nTotal change over {len(series)} snapshots: {total_change:+.1f}% "
+                f"(from {first:.2f} to {last:.2f})"
+            )
+
+    return "\n".join(lines)
+
+
+_TREND_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "company": {"type": "string", "description": "Company name"},
+        "product": {"type": "string", "description": "Product name"},
+        "metric": {
+            "type": "string",
+            "description": (
+                "Metric to trend. Valid options: "
+                + ", ".join(sorted(_TREND_METRICS.keys()))
+            ),
+            "enum": sorted(_TREND_METRICS.keys()),
+        },
+        "max_snapshots": {
+            "type": "integer",
+            "description": "Max number of snapshots to include (default 12, most recent first).",
+            "default": 12,
+        },
+    },
+    "required": ["company", "product", "metric"],
+}
+
+
 # ── Common tool schema ───────────────────────────────────────────────────
 
 _COMMON_SCHEMA = {
@@ -731,6 +891,7 @@ _TOOLS = [
     ("analytics.get_segment_analysis", "Get segment analysis by dimension: per-segment deal counts, collection rates, volume.", _SEGMENT_SCHEMA, _get_segment_analysis),
     ("analytics.get_underwriting_drift", "Get underwriting drift: per-vintage quality metrics and drift flags.", _COMMON_SCHEMA, _get_underwriting_drift),
     ("analytics.get_loss_waterfall", "Get loss waterfall: per-vintage Originated → Gross Default → Recovery → Net Loss.", _COMMON_SCHEMA, _get_loss_waterfall),
+    ("analytics.get_metric_trend", "Get a cross-snapshot time series for a single metric (e.g., collection_rate across the last N tapes). Useful for spotting trends in judgment sections. Only works for companies with raw tape snapshots (not ejari_summary or tamara_summary).", _TREND_SCHEMA, _get_metric_trend),
 ]
 
 for name, desc, schema, handler in _TOOLS:

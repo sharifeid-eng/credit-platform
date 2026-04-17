@@ -57,6 +57,36 @@ class AgentResult:
     stopped_reason: str = "end_turn"  # end_turn, max_turns, budget_exceeded, error
 
 
+# Known module prefixes that appear on fully-qualified tool names.
+# The registry uses dots ("analytics.get_par_analysis"), and the API
+# boundary translates them to underscores ("analytics_get_par_analysis").
+# Claude sends the underscored form back, which won't match the short
+# keys in _TOOL_DESCRIPTIONS — _describe_tool() strips these prefixes.
+_TOOL_MODULE_PREFIXES = (
+    "analytics_", "dataroom_", "mind_", "memo_",
+    "portfolio_", "compliance_", "computation_",
+)
+
+
+def _describe_tool(tool_name: str) -> str:
+    """Look up a human-readable description for a tool name.
+
+    Accepts the fully-qualified underscored form Claude sends
+    ("analytics_get_par_analysis") and the short key used in
+    _TOOL_DESCRIPTIONS ("get_par_analysis"). Falls back to the
+    tool name when unknown.
+    """
+    if tool_name in _TOOL_DESCRIPTIONS:
+        return _TOOL_DESCRIPTIONS[tool_name]
+    for prefix in _TOOL_MODULE_PREFIXES:
+        if tool_name.startswith(prefix):
+            short = tool_name[len(prefix):]
+            if short in _TOOL_DESCRIPTIONS:
+                return _TOOL_DESCRIPTIONS[short]
+            break
+    return f"Using {tool_name}..."
+
+
 # Human-readable descriptions for tool calls shown in frontend
 _TOOL_DESCRIPTIONS = {
     "get_portfolio_summary": "Loading portfolio summary...",
@@ -132,12 +162,10 @@ class AgentRunner:
         self._session_tool_calls: int = 0  # track total tool calls in session
 
     def _get_client(self):
-        """Lazy-init Anthropic client."""
+        """Return the shared Anthropic client (retry + backoff configured)."""
         if self._client is None:
-            import anthropic
-            from dotenv import load_dotenv
-            load_dotenv(override=True)
-            self._client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            from core.ai_client import get_client
+            self._client = get_client()
         return self._client
 
     def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
@@ -221,6 +249,10 @@ class AgentRunner:
             turn += 1
             self._check_budget(session, f"turn {turn}")
 
+            # Cache the tool schema block too — stable across all turns in a
+            # session, so marking the last tool with cache_control lets
+            # Anthropic reuse it on turns 2+.
+            from core.ai_client import cache_last_tool as _cache_last_tool
             response = self._get_client().messages.create(
                 model=self._config.model,
                 max_tokens=self._config.max_tokens_per_response,
@@ -229,7 +261,7 @@ class AgentRunner:
                     "text": self._config.system_prompt,
                     "cache_control": {"type": "ephemeral"},
                 }],
-                tools=self._config.get_api_tools(),
+                tools=_cache_last_tool(self._config.get_api_tools()),
                 messages=session.messages,
                 temperature=self._config.temperature,
             )
@@ -326,6 +358,7 @@ class AgentRunner:
                 input_tokens = 0
                 output_tokens = 0
 
+                from core.ai_client import cache_last_tool as _cache_last_tool
                 with self._get_client().messages.stream(
                     model=self._config.model,
                     max_tokens=self._config.max_tokens_per_response,
@@ -334,7 +367,7 @@ class AgentRunner:
                         "text": self._config.system_prompt,
                         "cache_control": {"type": "ephemeral"},
                     }],
-                    tools=self._config.get_api_tools(),
+                    tools=_cache_last_tool(self._config.get_api_tools()),
                     messages=session.messages,
                     temperature=self._config.temperature,
                 ) as stream:
@@ -348,7 +381,7 @@ class AgentRunner:
                                         "name": block.name,
                                         "input_json": "",
                                     }
-                                    desc = _TOOL_DESCRIPTIONS.get(block.name, f"Using {block.name}...")
+                                    desc = _describe_tool(block.name)
                                     yield StreamEvent("tool_call", {
                                         "tool": block.name,
                                         "description": desc,

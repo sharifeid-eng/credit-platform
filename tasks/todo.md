@@ -24,6 +24,63 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-17 (session 23: Hybrid Memo Pipeline + 5 Quality Enhancements)
+
+### Platform-wide content improvements (morning)
+- [x] **Entity extractor overhauled** — ~80 patterns across all 7 types (was ~20). Added COUNTERPARTY (35 institutions incl. Goldman/HSBC/Deloitte/insurance companies), THRESHOLD (11 patterns), flexible natural-language METRIC patterns. Confidence A/B differentiation. Real-text test extracts 11 entities vs ~1 before.
+- [x] **Mind seeding** — Master Mind 7→26 entries (+preferences, IC norms, cross-company patterns, writing style), SILQ 0→14 entries, Aajil 0→14 entries, Ejari 0→11 entries. Platform total: 40→98 mind entries.
+- [x] **Framework updates** — FRAMEWORK_INDEX: added Aajil row, updated Klaim/SILQ fn/test counts. ANALYSIS_FRAMEWORK: Section 21 (Intelligence System) added, Section 3 expanded with Ejari/Tamara/Aajil asset class subsections, stale mind path fixed.
+- [x] **Ejari methodology expanded** — 2→12 sections covering all dashboard tabs with L1-L5 hierarchy tagging.
+- [x] **Klaim methodology** — added CDR/CCR (L3) and Facility-Mode PD (L5) — 2 previously undocumented tabs now registered.
+- [x] **Klaim memo cleanup** — deleted failed stub `84e15708-cf3` (9 of 12 sections empty).
+
+### Dormant feature activation
+- [x] **TAPE_INGESTED event payload** — was `metrics: {}` (killed entity extraction, compilation, thesis drift). Now extracts 11 metrics from DataFrame with column guards for Klaim + SILQ.
+- [x] **DataChat feedback pipeline** — thumbs-down with no correction now records negative signal as finding in CompanyMind (was silently dropped due to `if original and corrected` guard).
+- [x] **Graph-aware scoring** — `query_text` now passed to `build_mind_context()` from chat endpoints. Layers 2 + 4 use KnowledgeGraph scoring when user question provided.
+- [x] **MemoBuilder agent save** — SSE endpoint now runs the full pipeline + calls `MemoStorage.save()` + emits `saved` event with `memo_id` (was fire-and-forget with no persistence).
+- [x] **Entities in AI prompts** — `entities.jsonl` added to `_FILES` in company_mind.py + included in `_TASK_RELEVANCE` for commentary/executive_summary/chat/memo/research_report/default.
+- [x] **Dead code removal** — `extract_insights` import removed from main.py. `searchKnowledge` dead api.js export removed.
+
+### UI bug fixes
+- [x] **--accent-gold CSS aliases** — 142 broken references across 30 files were falling through to transparent (CSS variable never defined). Added `--accent-gold/teal/red/blue` aliases in tokens.css. Continue/Generate/New Memo buttons now visible.
+- [x] **MemoBuilder "0 sections" bug** — backend returns template metadata without sections array; frontend now merges with FALLBACK_TEMPLATES to hydrate sections.
+- [x] **Agent tool name dots** — Anthropic API rejects dots in tool names (`analytics.get_par_analysis`). `to_api_schema()` translates dots→underscores on way out; `get_handler()` matches both forms on way in.
+- [x] **Analytics Bridge multi-company** — `'Purchase value'` KeyError for non-Klaim memos. Added `is_aajil` flag + Aajil-specific branches in all 5 builders (portfolio_analytics, credit_quality, concentration, stress, covenants).
+- [x] **Analytics Bridge aux sheets** — `_load_data()` now returns aux sheets for Aajil multi-sheet xlsx (Payments, DPD Cohorts, Collections). Collection Rate went from 0.9% → 87.3% (matches CLAUDE.md).
+- [x] **Tool description labels** — `_TOOL_DESCRIPTIONS` was keyed by short names; Claude sends back underscored full names. New `_describe_tool()` helper strips module prefixes.
+
+### Hybrid 6-stage memo generation pipeline (afternoon)
+- [x] **`core/ai_client.py`** — central Anthropic client factory with retry/backoff (max_retries=3, SDK exponential backoff), tier routing, prompt caching helpers, cost estimation. Five tiers: auto (Haiku), structured (Sonnet), research (Sonnet), judgment (Opus 4.7), polish (Opus 4.7). Env overrides via `LAITH_MODEL_*`. Fallback chains (Opus 4.7 → 4.6 → 4.20250514) on NotFoundError.
+- [x] **`core/memo/generator.py` full refactor** — 6-stage pipeline:
+  - Stage 1: Context assembly (no API calls)
+  - Stage 2: 9 structured sections in parallel via ThreadPoolExecutor (cap `LAITH_PARALLEL_SECTIONS=3`)
+  - Stage 3: 1 auto section (Haiku)
+  - Stage 4: Short-burst agent research packs for 2 judgment sections (Sonnet, 5-turn cap)
+  - Stage 5: Judgment synthesis (Opus 4.7) — sequential, with research packs
+  - Stage 5.5: Citation validation pass (Sonnet) — flags unverifiable citations
+  - Stage 6: Whole-memo polish pass (Opus 4.7) — preserves metrics/citations, resolves contradictions
+- [x] **`core/memo/agent_research.py`** — short-burst agent session runner. Returns structured JSON research pack per judgment section (key_metrics, quotes, contradictions, recommended_stance, supporting_evidence). Lenient parser with 3-strategy fallback. `format_pack_for_prompt()` + `record_memo_thesis_to_mind()` helpers.
+- [x] **Memo storage sidecar** — `_research_packs` → `research_packs.json`, `_citation_issues` → `citation_issues.json`. Transient fields stripped from `v{N}.json`. Sidecar only written on first save (immutable audit trail).
+- [x] **Hybrid metadata in meta.json** — generation_mode, polished, models_used, total_tokens_in/out, cost_usd_estimate.
+- [x] **Central client adoption** — migrated 8 direct `messages.create` call sites: 5 in backend/main.py (commentary, exec-summary, tab-insight, 2 chat endpoints), core/legal_extractor.py (Sonnet/Opus split preserved), core/research/query_engine.py, core/reporter.py. All inherit retry/backoff.
+- [x] **Extended prompt caching** — tool definitions now cached via `cache_last_tool()` in agent runtime (both `run()` and `stream()`).
+- [x] **Agent runtime uses central client** — `_get_client()` routes through `core.ai_client.get_client()` for retry config.
+- [x] **memo_writer model switch** — claude-opus-4-6 → claude-sonnet-4-6 (4× rate limit headroom, 5× cheaper for agent research).
+
+### 5 Quality Enhancements (session 23 extended)
+- [x] **#1 analytics.get_metric_trend tool** — cross-snapshot time series for research packs. 19 supported metrics, iterates available snapshots (cap 12 most recent), tolerates Aajil aux, handles summary-only types gracefully. Registered as tool #42.
+- [x] **#2 Citation validation pass** — `MemoGenerator._validate_citations()` runs Sonnet against all memo citations + data room excerpts. Returns structured `_citation_issues` list fed to polish pass. SSE emits `citation_audit_start`/`citation_audit_done` events.
+- [x] **#3 Research pack sidecar storage** — `MemoStorage.save()` extracts `_research_packs` and `_citation_issues`, writes to separate JSON sidecars (immutable on first save).
+- [x] **#4 Thesis recording to Company Mind** — `record_memo_thesis_to_mind()` called from both memo save paths (agent SSE + legacy). Writes agent-recommended stance + supporting metrics to CompanyMind findings with `source_docs: ["memo:{id}"]` provenance.
+- [x] **#5 Contradiction handling in polish** — polish prompt surfaces every contradiction from research packs with explicit resolve/flag rules ("prefer tape data over data room narrative"). Citation issues also surfaced for qualify-or-remove.
+
+### Tests + verification
+- [x] **60 new tests** — tests/test_ai_client.py (18), tests/test_memo_agent_research.py (15), tests/test_memo_pipeline.py (8), tests/test_memo_enhancements.py (19)
+- [x] **All tests pass** — 416 total (356 original + 60 new, up from 356 at session start). Updated `test_total_tool_count` from 41→42.
+
+---
+
 ## Completed — 2026-04-16 (session 22: Dataroom filepath cross-platform fix)
 
 - [x] **Fix document view "Source file not found"** — view endpoint now resolves relative paths against project root and normalizes separators

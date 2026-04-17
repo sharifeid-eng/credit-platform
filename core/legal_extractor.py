@@ -596,27 +596,35 @@ def _definitions_context(definitions: dict) -> str:
 
 
 def _call_claude(context: str, prompt: str, model: str = None) -> tuple[str, tuple[int, int]]:
-    """Call Claude API with context + prompt. Returns (response_text, (input_tokens, output_tokens))."""
-    client = _get_client()
-    used_model = model or MODEL
+    """Call Claude API via the central client with retry + caching.
 
+    The optional `model` arg is interpreted as a tier hint:
+      - `RISK_MODEL` (Opus) → tier="judgment"
+      - anything else       → tier="research" (Sonnet)
+    """
     # Truncate context if too long (keep under 100K tokens ~= 400K chars)
     max_chars = 400_000
     if len(context) > max_chars:
         context = context[:max_chars] + "\n\n[... truncated for length ...]"
 
-    response = client.messages.create(
-        model=used_model,
+    # Map legacy model constants to tiers — preserves Sonnet/Opus split
+    tier = "judgment" if (model == RISK_MODEL) else "research"
+
+    from core.ai_client import complete as _ai_complete
+    response = _ai_complete(
+        tier=tier,
         max_tokens=4096,
-        system=[{
-            "type": "text",
-            "text": "You are a legal document analysis expert specializing in private credit and asset-backed lending facilities. Extract information precisely from the provided document text. Return only valid JSON — no markdown fences, no explanatory text outside the JSON.",
-            "cache_control": {"type": "ephemeral"},
-        }],
+        system=(
+            "You are a legal document analysis expert specializing in private "
+            "credit and asset-backed lending facilities. Extract information "
+            "precisely from the provided document text. Return only valid "
+            "JSON — no markdown fences, no explanatory text outside the JSON."
+        ),
         messages=[{
             "role": "user",
             "content": f"{context}\n\n---\n\n{prompt}",
         }],
+        log_prefix="legal_extract",
     )
 
     text = response.content[0].text if response.content else "{}"

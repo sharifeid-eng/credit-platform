@@ -146,6 +146,13 @@ class MemoStorage:
                 "current_version": version,
                 "created_at": memo.get("created_at", datetime.utcnow().isoformat()),
                 "updated_at": datetime.utcnow().isoformat(),
+                # Hybrid pipeline metadata (additive, safely absent on legacy memos)
+                "generation_mode": memo.get("generation_mode"),
+                "polished": memo.get("polished", False),
+                "models_used": memo.get("models_used", {}),
+                "total_tokens_in": (memo.get("generation_meta") or {}).get("total_tokens_in"),
+                "total_tokens_out": (memo.get("generation_meta") or {}).get("total_tokens_out"),
+                "cost_usd_estimate": (memo.get("generation_meta") or {}).get("cost_usd_estimate"),
             }
         else:
             # Existing memo — increment version
@@ -155,13 +162,55 @@ class MemoStorage:
             # Update title/status if changed in the memo
             if "title" in memo:
                 meta["title"] = memo["title"]
+            # Update hybrid pipeline metadata if present (refresh on regeneration)
+            for field in ("generation_mode", "polished", "models_used"):
+                if field in memo:
+                    meta[field] = memo[field]
+            gen_meta = memo.get("generation_meta") or {}
+            for src, dst in (("total_tokens_in", "total_tokens_in"),
+                             ("total_tokens_out", "total_tokens_out"),
+                             ("cost_usd_estimate", "cost_usd_estimate")):
+                if src in gen_meta:
+                    meta[dst] = gen_meta[src]
 
-        # Write the version file
+        # Extract transient fields that should NOT land in v{N}.json
+        #  - _research_packs → sidecar file (audit trail)
+        #  - _citation_issues → sidecar file (audit trail)
+        research_packs = memo.pop("_research_packs", None) if isinstance(memo, dict) else None
+        citation_issues = memo.pop("_citation_issues", None) if isinstance(memo, dict) else None
+
+        # Write the version file (without transient fields)
         memo_with_version = {**memo, "version": version}
         self._write_version(memo_dir, version, memo_with_version)
 
         # Update meta
         self._write_meta(memo_dir, meta)
+
+        # Sidecar: research packs — only written once (first save; immutable).
+        # Subsequent versions may regenerate individual sections but the
+        # original research evidence is captured at creation time.
+        if research_packs:
+            sidecar_path = memo_dir / "research_packs.json"
+            if not sidecar_path.exists():
+                try:
+                    sidecar_path.write_text(
+                        json.dumps(research_packs, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    logger.info("Wrote research packs sidecar: %s", sidecar_path)
+                except Exception as e:
+                    logger.warning("Failed to write research_packs sidecar: %s", e)
+
+        # Sidecar: citation issues flagged by validation pass
+        if citation_issues:
+            sidecar_path = memo_dir / "citation_issues.json"
+            try:
+                sidecar_path.write_text(
+                    json.dumps(citation_issues, indent=2, default=str),
+                    encoding="utf-8",
+                )
+            except Exception as e:
+                logger.warning("Failed to write citation_issues sidecar: %s", e)
 
         logger.info("Saved memo %s v%d at %s", memo_id, version, memo_dir)
         return memo_id
