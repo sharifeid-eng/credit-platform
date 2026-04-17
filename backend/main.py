@@ -77,7 +77,6 @@ from core.dataroom.engine import DataRoomEngine
 from core.dataroom.analytics_snapshot import AnalyticsSnapshotEngine
 from core.mind import MasterMind, CompanyMind, build_mind_context
 from core.research.dual_engine import DualResearchEngine
-from core.research.extractors import extract_insights
 from core.memo.templates import get_template, list_templates
 from core.memo.generator import MemoGenerator
 from core.memo.storage import MemoStorage
@@ -87,6 +86,10 @@ from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 
 
+import logging
+logger = logging.getLogger("laith")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if engine:
@@ -94,18 +97,26 @@ async def lifespan(app: FastAPI):
             from sqlalchemy import text as sa_text
             with engine.connect() as conn:
                 conn.execute(sa_text("SELECT 1"))
-            print("[Laith] Database connected.")
+            logger.info("Database connected.")
             # Bootstrap first admin user if users table is empty
             from backend.cf_auth import bootstrap_admin
             bootstrap_admin()
         except Exception as e:
-            print(f"[Laith] Database connection failed: {e}. Running in tape-only mode.")
+            logger.warning("Database connection failed: %s. Running in tape-only mode.", e)
     else:
-        print("[Laith] No DATABASE_URL configured. Running in tape-only mode.")
+        logger.info("No DATABASE_URL configured. Running in tape-only mode.")
 
     # Register Intelligence System event listeners
     from core.mind.listeners import register_all_listeners
     register_all_listeners()
+
+    # Register agent tools
+    try:
+        from core.agents.tools import register_all_tools
+        register_all_tools()
+        logger.info("Agent tools registered.")
+    except Exception as e:
+        logger.warning("Agent tool registration failed: %s. Agents unavailable.", e)
 
     yield
 
@@ -124,6 +135,9 @@ app.include_router(auth_router)
 
 from backend.intelligence import router as intelligence_router
 app.include_router(intelligence_router)
+
+from backend.agents import router as agents_router
+app.include_router(agents_router, prefix="/agents", tags=["agents"])
 
 
 @app.get("/health")
@@ -152,8 +166,31 @@ app.add_middleware(
 _tape_events_fired: set = set()
 
 
+def _validate_path_param(value: str, name: str):
+    """Reject path traversal attempts in company/product parameters."""
+    if value and ('..' in value or '/' in value or '\\' in value or '\x00' in value):
+        raise HTTPException(status_code=400, detail=f"Invalid {name}: '{value}'")
+
+
+# Tape loading cache — avoids parsing the same file 25x per page load
+from collections import OrderedDict as _OrderedDict
+
+class _TapeCache(_OrderedDict):
+    """LRU cache for loaded tape DataFrames (max 10 entries)."""
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > 10:
+            self.popitem(last=False)
+
+_tape_cache = _TapeCache()
+
+
 def _load(company, product, snapshot):
     """Load and return the selected snapshot DataFrame + snapshot metadata."""
+    _validate_path_param(company, "company")
+    _validate_path_param(product, "product")
     snaps = get_snapshots(company, product)
     if not snaps:
         raise HTTPException(status_code=404, detail="No snapshots found")
@@ -165,7 +202,14 @@ def _load(company, product, snapshot):
             names = [s['filename'] for s in date_matches]
             raise HTTPException(status_code=400, detail=f"Ambiguous snapshot date '{snapshot}' matches {len(date_matches)} files: {', '.join(names)}. Please specify by filename.")
         sel = date_matches[0] if date_matches else snaps[-1]
-    df = load_snapshot(sel['filepath'])
+    # Cache loaded tapes to avoid re-parsing the same file per page load
+    _cache_key = sel['filepath']
+    if _cache_key in _tape_cache:
+        df = _tape_cache[_cache_key].copy()
+    else:
+        df = load_snapshot(sel['filepath'])
+        _tape_cache[_cache_key] = df
+        df = df.copy()  # Return a copy so downstream mutations don't corrupt cache
 
     # Fire TAPE_INGESTED event (once per unique tape per session)
     _key = (company, product, sel['filename'])
@@ -173,11 +217,43 @@ def _load(company, product, snapshot):
         _tape_events_fired.add(_key)
         try:
             from core.mind.event_bus import event_bus, Events
+            # Extract basic metrics for intelligence listeners
+            _metrics = {}
+            try:
+                _metrics["total_deals"] = len(df)
+                if "Purchase value" in df.columns:
+                    _metrics["total_purchase_value"] = float(df["Purchase value"].sum())
+                if "Collected till date" in df.columns:
+                    _metrics["total_collected"] = float(df["Collected till date"].sum())
+                    if _metrics.get("total_purchase_value"):
+                        _metrics["collection_rate"] = round(_metrics["total_collected"] / _metrics["total_purchase_value"] * 100, 2)
+                if "Denied by insurance" in df.columns:
+                    _metrics["total_denied"] = float(df["Denied by insurance"].sum())
+                    if _metrics.get("total_purchase_value"):
+                        _metrics["denial_rate"] = round(_metrics["total_denied"] / _metrics["total_purchase_value"] * 100, 2)
+                if "Pending insurance response" in df.columns:
+                    _metrics["total_pending"] = float(df["Pending insurance response"].sum())
+                    if _metrics.get("total_purchase_value"):
+                        _metrics["pending_rate"] = round(_metrics["total_pending"] / _metrics["total_purchase_value"] * 100, 2)
+                if "Status" in df.columns:
+                    _metrics["active_deals"] = int((df["Status"] == "Executed").sum())
+                    _metrics["completed_deals"] = int((df["Status"] == "Completed").sum())
+                if "Discount" in df.columns:
+                    _metrics["avg_discount"] = round(float(df["Discount"].mean() * 100), 2)
+                # SILQ columns
+                if "Disbursed_Amount (SAR)" in df.columns:
+                    _metrics["total_purchase_value"] = float(df["Disbursed_Amount (SAR)"].sum())
+                if "Repaid_Amount" in df.columns:
+                    _metrics["total_collected"] = float(df["Repaid_Amount"].sum())
+                    if _metrics.get("total_purchase_value"):
+                        _metrics["collection_rate"] = round(_metrics["total_collected"] / _metrics["total_purchase_value"] * 100, 2)
+            except Exception:
+                pass  # Metrics extraction is best-effort
             event_bus.publish(Events.TAPE_INGESTED, {
                 "company": company,
                 "product": product,
                 "snapshot": sel['filename'],
-                "metrics": {},  # listeners extract metrics from tape files directly
+                "metrics": _metrics,
             })
         except Exception:
             pass
@@ -1588,7 +1664,8 @@ def get_ai_commentary(company: str, product: str,
                       snapshot: Optional[str] = None,
                       as_of_date: Optional[str] = None,
                       currency: Optional[str] = None,
-                      refresh: bool = False):
+                      refresh: bool = False,
+                      mode: Optional[str] = None):
     # Resolve snapshot first for consistent cache key
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
@@ -1675,6 +1752,25 @@ Write a concise portfolio commentary in 3 sections:
 3. WATCH ITEMS (2-3 bullets) — areas that warrant monitoring. Be direct about concerns.
 
 Professional tone, suitable for an investment committee memo. Be specific and data-driven."""
+
+    # Agent mode: dynamic tool-calling agent generates richer commentary
+    if mode == 'agent':
+        try:
+            from core.agents.internal import generate_agent_commentary
+            commentary_text = generate_agent_commentary(company, product, snapshot, currency, as_of_date)
+            result = {
+                'commentary': commentary_text,
+                'generated_at': datetime.now().isoformat(),
+                'as_of_date': as_of_date or sel.get('date', ''),
+                'mode': 'agent',
+            }
+            _ai_cache_put(cache_path, result)
+            log_activity(AI_COMMENTARY, company, product, f"Generated agent commentary for {snap_key}")
+            return result
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            # Fall through to legacy mode
 
     msg = _ai_client().messages.create(
         model="claude-opus-4-6", max_tokens=1000,
@@ -1927,8 +2023,8 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
                        f"Outstanding {disp} {s['total_outstanding']/1e6:.1f}M, "
                        f"Collection {s['collection_rate']:.1f}%, Overdue {s['overdue_rate']:.1f}%, "
                        f"PAR30={s['par30']:.1f}%, PAR60={s['par60']:.1f}%, PAR90={s['par90']:.1f}%")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: summary failed: %s", e)
 
     try:
         d = compute_silq_delinquency(df, mult, ref_date=ref_date)
@@ -1940,8 +2036,8 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
         if top_shops:
             sh_str = ', '.join([f"{s.get('shop','?')}: {disp} {s.get('overdue',0)/1e3:.0f}K" for s in top_shops])
             sections.append(f"TOP OVERDUE SHOPS: {sh_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: delinquency failed: %s", e)
 
     try:
         c = compute_silq_collections(df, mult)
@@ -1949,16 +2045,16 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
         if bp:
             bp_str = ', '.join([f"{p['product']}: {p['rate']:.1f}%" for p in bp])
             sections.append(f"COLLECTIONS BY PRODUCT: {bp_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: collections failed: %s", e)
 
     try:
         conc = compute_silq_concentration(df, mult)
         top_shops = conc.get('shops', [])[:3]
         shop_strs = [f"{s.get('shop','?')} ({s.get('share',0):.1f}%)" for s in top_shops]
         sections.append(f"CONCENTRATION: HHI={conc.get('hhi',0):.4f}, Top shops: {', '.join(shop_strs)}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: concentration failed: %s", e)
 
     try:
         coh = compute_silq_cohorts(df, mult, ref_date=ref_date)
@@ -1966,8 +2062,8 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
         if recent:
             coh_str = ', '.join([f"{c.get('month','?')}: {c.get('loans',0)} loans, coll={c.get('collection_rate',0):.1f}%" for c in recent])
             sections.append(f"RECENT COHORTS: {coh_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: cohorts failed: %s", e)
 
     try:
         y = compute_silq_yield(df, mult)
@@ -1975,8 +2071,8 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
         if bp:
             bp_str = ', '.join([f"{p.get('product','?')}: margin={p.get('margin',0):.1f}%" for p in bp])
             sections.append(f"YIELD BY PRODUCT: {bp_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: yield failed: %s", e)
 
     try:
         t = compute_silq_tenure(df, mult, ref_date=ref_date)
@@ -1984,8 +2080,8 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
         if bands:
             tb_str = ', '.join([f"{b.get('band','?')}: {b.get('count',0)} loans" for b in bands[:4]])
             sections.append(f"TENURE DISTRIBUTION: {tb_str}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: tenure failed: %s", e)
 
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
@@ -1995,8 +2091,8 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
             sections.append("")
             sections.append("PLATFORM MEMORY:")
             sections.append(mind_ctx.formatted)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SILQ context: mind failed: %s", e)
 
     return '\n'.join(sections)
 
@@ -2327,7 +2423,8 @@ def get_executive_summary(company: str, product: str,
                           snapshot: Optional[str] = None,
                           as_of_date: Optional[str] = None,
                           currency: Optional[str] = None,
-                          refresh: bool = False):
+                          refresh: bool = False,
+                          mode: Optional[str] = None):
     """AI Executive Summary — holistic analysis of ALL computed metrics.
 
     Returns top 5-10 findings ranked by business impact with severity levels.
@@ -2344,6 +2441,43 @@ def get_executive_summary(company: str, product: str,
         cached = _ai_cache_get(cache_path)
         if cached:
             return cached
+
+    # Agent mode: skip manual context building — agent pulls data dynamically
+    if mode == 'agent':
+        try:
+            from core.agents.internal import generate_agent_executive_summary
+            section_guidance_map = {
+                'tamara_summary': "Portfolio Overview & Scale, Vintage Default Performance, Delinquency Trends, Dilution, Covenant Compliance, Concentration, Financial Performance, Forward Outlook",
+                'ejari_summary': "Portfolio Overview, Monthly Cohorts, Loss Waterfall, Roll Rates, Historical Performance, Segment Analysis, Credit Quality, Najiz & Legal, Write-offs",
+                'silq': "Portfolio Overview, Delinquency & DPD, Collections by Product, Cohort Performance, Concentration, Yield & Tenure",
+                'aajil': "Portfolio Overview, Traction, Delinquency, Collections, Cohorts, Concentration, Underwriting, Customer Segments, Forward Signals",
+            }
+            at = _get_analysis_type(company, product)
+            guidance = section_guidance_map.get(at, None)
+            summary_text = generate_agent_executive_summary(company, product, snapshot, currency, as_of_date, guidance)
+            # Try to parse as JSON (agent may return structured output)
+            try:
+                parsed = json.loads(summary_text.strip().removeprefix('```json').removeprefix('```').removesuffix('```').strip())
+                narrative = parsed.get('narrative', None)
+                findings = parsed.get('findings', [])
+            except (json.JSONDecodeError, AttributeError):
+                narrative = None
+                findings = [{'rank': 1, 'severity': 'positive', 'title': 'Agent Summary',
+                             'explanation': summary_text, 'data_points': [], 'tab': 'overview'}]
+            result = {
+                'narrative': narrative,
+                'findings': findings,
+                'generated_at': datetime.now().isoformat(),
+                'as_of_date': as_of_date or sel_for_key.get('date', ''),
+                'mode': 'agent',
+            }
+            _ai_cache_put(cache_path, result)
+            log_activity(AI_EXECUTIVE_SUMMARY, company, product, f"Generated agent executive summary for {snap_key}")
+            return result
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            # Fall through to legacy
 
     at = _get_analysis_type(company, product)
 
@@ -2534,7 +2668,8 @@ def get_tab_insight(company: str, product: str,
                     snapshot: Optional[str] = None,
                     as_of_date: Optional[str] = None,
                     currency: Optional[str] = None,
-                    refresh: bool = False):
+                    refresh: bool = False,
+                    mode: Optional[str] = None):
     """Generate a short AI insight for a specific dashboard tab. Cached per (company, product, snapshot, as_of_date, tab)."""
     sel_for_key = _resolve_snapshot(company, product, snapshot)
     snap_key = sel_for_key.get('filename', snapshot or '')
@@ -2630,9 +2765,23 @@ def get_tab_insight(company: str, product: str,
 DATA:
 {tab_data}
 
-Write 2-3 sentences of sharp, data-driven insight specifically about what this view shows. 
+Write 2-3 sentences of sharp, data-driven insight specifically about what this view shows.
 Call out the single most important trend or concern visible in this data.
 Be direct and specific — no generic commentary. No headers, just prose."""
+
+    # Agent mode: agent pulls data dynamically via tools
+    if mode == 'agent':
+        try:
+            from core.agents.internal import generate_agent_tab_insight
+            insight_text = generate_agent_tab_insight(company, product, tab, snapshot, currency, as_of_date)
+            result = {'insight': insight_text, 'tab': tab, 'mode': 'agent'}
+            _ai_cache_put(cache_path, result)
+            log_activity(AI_TAB_INSIGHT, company, product, f"Generated agent tab insight: {tab}")
+            return result
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            # Fall through to legacy
 
     msg = _ai_client().messages.create(
         model="claude-opus-4-6", max_tokens=300,
@@ -2647,11 +2796,23 @@ Be direct and specific — no generic commentary. No headers, just prose."""
 def chat_with_data(company: str, product: str, request: dict,
                    snapshot: Optional[str] = None,
                    as_of_date: Optional[str] = None,
-                   currency: Optional[str] = None):
+                   currency: Optional[str] = None,
+                   mode: Optional[str] = None):
     # Allow snapshot/currency from body (frontend sends them there) or query params
     snap = snapshot or request.get('snapshot')
     cur  = currency or request.get('currency')
     aod  = as_of_date or request.get('as_of_date')
+
+    # Agent mode — use analyst agent with full tool access
+    if mode == "agent":
+        try:
+            from core.agents.internal import generate_agent_chat
+            answer = generate_agent_chat(company, product, request.get('question', ''), snap, cur, aod)
+            log_activity(AI_CHAT, company, product, f"Agent chat: {request.get('question', '')[:80]}")
+            return {'answer': answer, 'question': request.get('question', '')}
+        except Exception:
+            pass  # Fall through to legacy
+
     at = _get_analysis_type(company, product)
 
     if at == 'silq':
@@ -2673,7 +2834,7 @@ def chat_with_data(company: str, product: str, request: dict,
     monthly['collection_rate'] = (monthly['collected'] / monthly['purchase_value'] * 100).round(1)
     monthly['denial_rate']     = (monthly['denied']    / monthly['purchase_value'] * 100).round(1)
 
-    # ── Enriched context sections (each wrapped so failures are silently skipped) ──
+    # ── Enriched context sections (each wrapped so failures are logged but skipped) ──
 
     group_perf_ctx = ""
     try:
@@ -2686,8 +2847,8 @@ def chat_with_data(company: str, product: str, request: dict,
                         f"DSO {g['dso']:.0f}d")
         if rows:
             group_perf_ctx = "\nGROUP PERFORMANCE (top 8 providers):\n" + "\n".join(rows)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: group_performance failed: %s", e)
 
     ageing_ctx = ""
     try:
@@ -2695,8 +2856,8 @@ def chat_with_data(company: str, product: str, request: dict,
         health = {h['status']: f"{h['percentage']}% ({h['deal_count']})" for h in ag['health_summary']}
         ageing_ctx = (f"\nACTIVE PORTFOLIO HEALTH ({ag['total_active_deals']} active deals):\n"
                       f"  {', '.join(f'{k}: {v}' for k, v in health.items())}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: ageing failed: %s", e)
 
     dso_ctx = ""
     try:
@@ -2705,15 +2866,15 @@ def chat_with_data(company: str, product: str, request: dict,
                    f"  Weighted avg: {dso['weighted_dso']:.0f} days, "
                    f"Median: {dso['median_dso']:.0f} days, "
                    f"P95: {dso['p95_dso']:.0f} days")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: dso failed: %s", e)
 
     # compute_returns_analysis mutates df, so pass a copy
     ret = None
     try:
         ret = compute_returns_analysis(df.copy(), mult)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: returns_analysis failed: %s", e)
 
     returns_ctx = ""
     if ret:
@@ -2727,8 +2888,8 @@ def chat_with_data(company: str, product: str, request: dict,
                            f"Completed margin: {rs['completed_margin']:.1f}%\n"
                            f"  Fee yield: {rs['fee_yield']:.2f}%, "
                            f"Completed loss rate: {rs['completed_loss_rate']:.1f}%")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Chat context: returns_ctx failed: %s", e)
 
     discount_ctx = ""
     if ret and ret.get('discount_bands'):
@@ -2740,8 +2901,8 @@ def chat_with_data(company: str, product: str, request: dict,
                                  f"denial {b['denial_rate']}%, "
                                  f"margin {b['margin']:.1f}%")
             discount_ctx = "\nDISCOUNT BAND PERFORMANCE:\n" + "\n".join(band_rows)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Chat context: discount_bands failed: %s", e)
 
     new_repeat_ctx = ""
     if ret and ret.get('new_vs_repeat'):
@@ -2753,8 +2914,8 @@ def chat_with_data(company: str, product: str, request: dict,
                                f"denial {seg['denial_rate']}%, "
                                f"margin {seg['margin']:.1f}%")
             new_repeat_ctx = "\nNEW vs REPEAT BUSINESS:\n" + "\n".join(nr_rows)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Chat context: new_vs_repeat failed: %s", e)
 
     hhi_ctx = ""
     try:
@@ -2769,8 +2930,8 @@ def chat_with_data(company: str, product: str, request: dict,
                              f"({h['count']} unique)")
         if parts:
             hhi_ctx = "\nCONCENTRATION (HHI):\n" + "\n".join(parts)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: hhi failed: %s", e)
 
     # ── New enrichment sections (collection curves, IRR, owner) ──
 
@@ -2783,8 +2944,8 @@ def chat_with_data(company: str, product: str, request: dict,
                        f"Avg Actual IRR: {rs['avg_actual_irr']:.1f}%\n"
                        f"  IRR Spread: {rs['irr_spread']:+.1f}%, "
                        f"Median Actual IRR: {rs['median_actual_irr']:.1f}%")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Chat context: irr failed: %s", e)
 
     collection_speed_ctx = ""
     try:
@@ -2799,8 +2960,8 @@ def chat_with_data(company: str, product: str, request: dict,
                                       f"Accuracy {pt['accuracy']:.0f}%")
             if speed_rows:
                 collection_speed_ctx = "\nCOLLECTION SPEED (% of PV collected by interval):\n" + "\n".join(speed_rows)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: collection_speed failed: %s", e)
 
     owner_ctx = ""
     try:
@@ -2814,8 +2975,18 @@ def chat_with_data(company: str, product: str, request: dict,
                                   f"denial {o['denial_rate']:.1f}%")
             if owner_rows:
                 owner_ctx = "\nOWNER/SPV BREAKDOWN:\n" + "\n".join(owner_rows)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Chat context: owner_breakdown failed: %s", e)
+
+    # Inject mind context with graph-aware scoring keyed to user question
+    mind_chat_ctx = ""
+    try:
+        mind_ctx = build_mind_context(company, product, 'chat',
+                                       query_text=request.get('question', ''))
+        if not mind_ctx.is_empty:
+            mind_chat_ctx = f"\n\nPLATFORM MEMORY:\n{mind_ctx.formatted}"
+    except Exception as e:
+        logger.debug("Chat context: mind failed: %s", e)
 
     system = f"""You are an expert credit analyst assistant for ACP Private Credit,
 analyzing the {company.upper()} - {product.replace('_', ' ').title()} loan portfolio.
@@ -2829,7 +3000,7 @@ PORTFOLIO SUMMARY (as of {aod or sel['date']}, currency: {disp}):
 
 MONTHLY PERFORMANCE (last 12 months):
 {monthly.tail(12).to_string(index=False)}
-{group_perf_ctx}{ageing_ctx}{dso_ctx}{returns_ctx}{discount_ctx}{new_repeat_ctx}{hhi_ctx}{irr_ctx}{collection_speed_ctx}{owner_ctx}
+{group_perf_ctx}{ageing_ctx}{dso_ctx}{returns_ctx}{discount_ctx}{new_repeat_ctx}{hhi_ctx}{irr_ctx}{collection_speed_ctx}{owner_ctx}{mind_chat_ctx}
 
 INSTRUCTIONS:
 - Answer questions precisely with specific numbers from the data above. Be concise but thorough.
@@ -2863,6 +3034,16 @@ def _silq_chat(company, product, request, snap, aod, cur):
     if commentary_text:
         commentary_ctx = f"\nANALYST PORTFOLIO COMMENTARY (from tape):\n{commentary_text}\n"
 
+    # Inject mind context with graph-aware scoring keyed to user question
+    mind_chat_ctx = ""
+    try:
+        mind_ctx = build_mind_context(company, product, 'chat',
+                                       query_text=request.get('question', ''))
+        if not mind_ctx.is_empty:
+            mind_chat_ctx = f"\n\nPLATFORM MEMORY:\n{mind_ctx.formatted}"
+    except Exception as e:
+        logger.debug("SILQ chat context: mind failed: %s", e)
+
     system = f"""You are an expert credit analyst assistant for ACP Private Credit,
 analyzing the SILQ POS lending portfolio (BNPL, RBF & RCL loans) in KSA.
 
@@ -2895,7 +3076,7 @@ YIELD & MARGINS:
 TENURE ANALYSIS:
   Avg: {t['avg_tenure']:.0f} weeks, Median: {t['median_tenure']:.0f} weeks
   By product: {[f"{p['product']}: avg {p['avg_tenure']:.0f}w" for p in t['by_product']]}
-{commentary_ctx}
+{commentary_ctx}{mind_chat_ctx}
 INSTRUCTIONS:
 - Answer questions precisely with specific numbers from the data above. Be concise but thorough.
 - When a question requires deal-level detail or data not in your context, provide the best answer you can and note limitations.
@@ -4065,11 +4246,22 @@ def update_memo_section_endpoint(company: str, product: str, memo_id: str,
 
 @app.post("/companies/{company}/products/{product}/memos/{memo_id}/sections/{section_key}/regenerate")
 def regenerate_memo_section_endpoint(company: str, product: str, memo_id: str,
-                             section_key: str):
+                             section_key: str, mode: Optional[str] = None):
     """Regenerate one section using AI while preserving the rest."""
     memo = _memo_storage.load(company, product, memo_id)
     if not memo:
         raise HTTPException(status_code=404, detail='Memo not found')
+
+    # Agent mode — use memo_writer agent for richer output
+    if mode == "agent":
+        try:
+            from core.agents.internal import generate_agent_section_regen
+            content = generate_agent_section_regen(company, product, memo_id, section_key)
+            if content:
+                _memo_storage.update_section(company, product, memo_id, section_key, content)
+                return {"section_key": section_key, "content": content}
+        except Exception:
+            pass  # Fall through to legacy
 
     try:
         new_section = _memo_generator.regenerate_section(memo, section_key)

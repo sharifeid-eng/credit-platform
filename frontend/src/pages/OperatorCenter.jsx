@@ -678,6 +678,7 @@ export default function OperatorCenter() {
           <TabButton label="Briefing" active={activeTab === 'briefing'} onClick={() => setActiveTab('briefing')} />
           <TabButton label="Learning" active={activeTab === 'learning'} onClick={() => setActiveTab('learning')} count={learning?.total_rules || null} />
           <TabButton label="Thesis" active={activeTab === 'thesis'} onClick={() => setActiveTab('thesis')} />
+          <TabButton label="Agents" active={activeTab === 'agents'} onClick={() => setActiveTab('agents')} />
         </div>
 
         {/* Tab content */}
@@ -1265,8 +1266,181 @@ export default function OperatorCenter() {
               </div>
             )}
 
+            {/* ── Agents Tab ── */}
+            {activeTab === 'agents' && (
+              <AgentsTab companies={status?.companies || []} />
+            )}
+
           </motion.div>
         </AnimatePresence>
+      </div>
+    </div>
+  )
+}
+
+/* ── Agents Tab Component ── */
+function AgentsTab({ companies }) {
+  const [sessions, setSessions] = useState([])
+  const [rateLimits, setRateLimits] = useState(null)
+  const [complianceResults, setComplianceResults] = useState({})
+  const [runningCompliance, setRunningCompliance] = useState(null)
+
+  useEffect(() => {
+    // Load recent sessions
+    const API_BASE = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:8000'
+    fetch(`${API_BASE}/agents/sessions`, { credentials: 'include' })
+      .then(r => r.json()).then(setSessions).catch(() => {})
+    fetch(`${API_BASE}/agents/rate-limits`, { credentials: 'include' })
+      .then(r => r.json()).then(setRateLimits).catch(() => {})
+  }, [])
+
+  async function runComplianceCheck(company, product) {
+    setRunningCompliance(`${company}/${product}`)
+    const API_BASE = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:8000'
+    try {
+      const resp = await fetch(`${API_BASE}/agents/${company}/${product}/compliance/check/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        credentials: 'include',
+      })
+      const data = await resp.json()
+      setComplianceResults(prev => ({ ...prev, [`${company}/${product}`]: data }))
+    } catch (e) {
+      setComplianceResults(prev => ({ ...prev, [`${company}/${product}`]: { error: e.message } }))
+    } finally {
+      setRunningCompliance(null)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      <SectionLabel text="Agent Activity" accent="var(--gold)" />
+
+      {/* Rate Limit Status */}
+      {rateLimits && (
+        <div style={{
+          padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+          borderRadius: 8, marginBottom: 20,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 12 }}>
+            Usage Limits
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Sessions / Hour</div>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                {rateLimits.sessions_this_hour} / {rateLimits.limits?.max_sessions_per_hour}
+              </div>
+            </div>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Active Streams</div>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                {rateLimits.active_streams} / {rateLimits.limits?.max_concurrent_streams}
+              </div>
+            </div>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Tokens Today</div>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                {(rateLimits.tokens_today || 0).toLocaleString()} / {(rateLimits.limits?.max_tokens_per_day || 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compliance Quick Check */}
+      <div style={{
+        padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: 8, marginBottom: 20,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 12 }}>
+          Compliance Check
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {companies.map(co => (
+            <button
+              key={co.company || co.name || co}
+              disabled={runningCompliance !== null}
+              onClick={() => {
+                const name = co.company || co.name || co
+                const prod = (co.products || [])[0] || 'default'
+                runComplianceCheck(name, prod)
+              }}
+              style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: runningCompliance === `${co.company || co.name || co}/${(co.products || [])[0] || 'default'}`
+                  ? 'var(--accent-gold)' : 'var(--bg-deep)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)', cursor: runningCompliance ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {runningCompliance === `${co.company || co.name || co}/${(co.products || [])[0] || 'default'}` ? 'Running...' : (co.company || co.name || co)}
+            </button>
+          ))}
+        </div>
+        {/* Compliance results */}
+        {Object.entries(complianceResults).map(([key, data]) => (
+          <div key={key} style={{
+            marginTop: 12, padding: 12, background: 'var(--bg-deep)',
+            border: '1px solid var(--border)', borderRadius: 6,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-gold)', marginBottom: 6 }}>{key}</div>
+            {data.error ? (
+              <div style={{ fontSize: 11, color: '#F06060' }}>{data.error}</div>
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto' }}>
+                {data.report || JSON.stringify(data, null, 2)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Recent Sessions */}
+      <div style={{
+        padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: 8,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 12 }}>
+          Recent Sessions ({sessions.length})
+        </div>
+        {sessions.length === 0 ? (
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', padding: 20, textAlign: 'center' }}>
+            No agent sessions yet. Use Data Chat or Research Chat in agent mode.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sessions.map(s => (
+              <div key={s.session_id} style={{
+                padding: '10px 14px', background: 'var(--bg-deep)',
+                border: '1px solid var(--border)', borderRadius: 6,
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{
+                  padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  background: s.agent_name === 'analyst' ? 'rgba(201,168,76,0.15)' : s.agent_name === 'compliance_monitor' ? 'rgba(45,212,191,0.15)' : 'rgba(91,141,239,0.15)',
+                  color: s.agent_name === 'analyst' ? 'var(--accent-gold)' : s.agent_name === 'compliance_monitor' ? 'var(--teal)' : 'var(--blue)',
+                }}>
+                  {s.agent_name}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-primary)', flex: 1 }}>
+                  {s.metadata?.company}/{s.metadata?.product}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                  {s.turn_count} turns
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                  {(s.total_tokens || 0).toLocaleString()} tok
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--text-faint)' }}>
+                  {s.session_id.slice(0, 6)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

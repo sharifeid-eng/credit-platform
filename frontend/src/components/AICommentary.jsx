@@ -16,7 +16,7 @@ export default function AICommentary({ company, product, snapshot, currency, cac
     setLoading(true)
     setError(null)
     try {
-      const data = await getAICommentary(company, product, snapshot, currency, undefined, { refresh })
+      const data = await getAICommentary(company, product, snapshot, currency, undefined, { refresh, mode: 'agent' })
       setFromCache(!!data.cached && !refresh)
       onCache?.(data.commentary)
     } catch (e) {

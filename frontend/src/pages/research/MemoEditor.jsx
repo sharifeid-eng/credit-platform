@@ -113,7 +113,7 @@ export default function MemoEditor() {
     if (!company || !product || !memoId || isFinal) return
     setRegenerating(sectionKey)
     try {
-      const result = await regenerateSection(company, product, memoId, sectionKey)
+      const result = await regenerateSection(company, product, memoId, sectionKey, { mode: 'agent' })
       setMemo(prev => {
         if (!prev) return prev
         const updated = { ...prev }

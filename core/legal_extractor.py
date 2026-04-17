@@ -608,7 +608,11 @@ def _call_claude(context: str, prompt: str, model: str = None) -> tuple[str, tup
     response = client.messages.create(
         model=used_model,
         max_tokens=4096,
-        system="You are a legal document analysis expert specializing in private credit and asset-backed lending facilities. Extract information precisely from the provided document text. Return only valid JSON — no markdown fences, no explanatory text outside the JSON.",
+        system=[{
+            "type": "text",
+            "text": "You are a legal document analysis expert specializing in private credit and asset-backed lending facilities. Extract information precisely from the provided document text. Return only valid JSON — no markdown fences, no explanatory text outside the JSON.",
+            "cache_control": {"type": "ephemeral"},
+        }],
         messages=[{
             "role": "user",
             "content": f"{context}\n\n---\n\n{prompt}",

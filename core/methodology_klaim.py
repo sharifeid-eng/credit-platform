@@ -30,7 +30,7 @@ def register_klaim_methodology():
         compute_owner_breakdown, compute_collections_timing,
         compute_underwriting_drift, compute_segment_analysis,
         compute_seasonality, compute_cdr_ccr, compute_methodology_log,
-        compute_hhi,
+        compute_hhi, compute_facility_pd,
     )
 
     SECTIONS = [
@@ -454,7 +454,76 @@ def register_klaim_methodology():
                 {'title': 'Seasonality', 'prose': 'Groups monthly deployment by calendar month across years for year-over-year comparison. Computes a seasonal index (month average / overall average) to quantify seasonal patterns. Index > 1.0 indicates above-average origination months.', 'metrics': [], 'tables': [], 'notes': []},
             ],
         },
-        # ── 15. Data Quality Validation ──
+        # ── 15. CDR / CCR (L3) ──
+        {
+            'function': 'compute_cdr_ccr',
+            'section': 'CDR / CCR',
+            'title': 'Conditional Rates',
+            'level': 3,
+            'tab': 'cdr-ccr',
+            'analysis_type': 'klaim',
+            'order': 15,
+            'required_columns': ['Deal date', 'Purchase value', 'Collected till date'],
+            'optional_columns': ['Denied by insurance'],
+            'denominator': 'total',
+            'confidence': 'A',
+            'prose': 'Conditional Default Rate (CDR) and Conditional Collection Rate (CCR) annualize cumulative rates by vintage age so that cohorts of different maturities are directly comparable on a monthly basis. This strips out the age effect: a 6-month vintage with 5% cumulative defaults has CDR = 10%, higher than a 12-month vintage at 8% (CDR = 8%).',
+            'metrics': [
+                {'name': 'CDR (Conditional Default Rate)', 'formula': 'CDR = (Total Denied / Originated) / months_outstanding * 12', 'rationale': 'Annualized default intensity per vintage. Enables apples-to-apples comparison across vintages of different ages. For Klaim, "default" is measured by insurance denial amount.'},
+                {'name': 'CCR (Conditional Collection Rate)', 'formula': 'CCR = (Total Collected / Originated) / months_outstanding * 12', 'rationale': 'Annualized collection intensity per vintage. A declining CCR across recent vintages signals deteriorating collection velocity independent of maturity.'},
+                {'name': 'Net Spread', 'formula': 'Net Spread = CCR - CDR', 'rationale': 'The net annualized rate at which the portfolio generates value. A narrowing spread (rising CDR, stable CCR) is an early warning of deterioration.'},
+            ],
+            'tables': [
+                {'title': 'Seasoning Filter', 'headers': ['Rule', 'Threshold', 'Rationale'], 'rows': [
+                    ['Minimum vintage age', '3 months', 'Vintages younger than 3 months are excluded because annualizing a small cumulative rate over a short period produces misleadingly large numbers.'],
+                ]},
+            ],
+            'notes': [
+                'Portfolio-level CDR and CCR use a volume-weighted average vintage age for annualization, not a simple average of per-vintage rates.',
+                'All rates are expressed as annualized percentages. A CDR of 10% means that at the current run-rate, 10% of originated value would be denied per year.',
+            ],
+            'subsections': [],
+        },
+        # ── 16. Facility-Mode PD (L5) ──
+        {
+            'function': 'compute_facility_pd',
+            'section': 'Facility-Mode PD',
+            'title': 'Markov Chain PD',
+            'level': 5,
+            'tab': 'facility-pd',
+            'analysis_type': 'klaim',
+            'order': 16,
+            'required_columns': ['Deal date', 'Status', 'Purchase value'],
+            'optional_columns': ['Expected collection days', 'Expected till date', 'Collected till date', 'Denied by insurance'],
+            'denominator': 'active',
+            'confidence': 'B',
+            'prose': 'Facility-mode PD measures the probability that a receivable ages from its current DPD bucket into default. Uses a Markov chain approach: observe the default rate of completed deals at each DPD depth, then weight by the current active portfolio distribution to derive a facility-level forward PD.',
+            'metrics': [
+                {'name': 'Facility PD', 'formula': 'PD = Sum(weight_i * default_rate_i) across DPD buckets, where weight_i = active deals in bucket / total active', 'rationale': 'Weighted-average probability of default for the active portfolio based on its current DPD distribution. A higher PD indicates more deals are sitting in deeper delinquency buckets with historically worse outcomes.'},
+                {'name': 'Transition-to-Default Rate', 'formula': 'For each DPD bucket: completed deals with denial > 50% PV / total completed deals at that depth', 'rationale': 'Calibrated from historical outcomes of completed deals. Shows how default probability escalates with DPD depth -- critical for setting ineligibility thresholds.'},
+            ],
+            'tables': [
+                {'title': 'DPD Buckets', 'headers': ['Bucket', 'DPD Range', 'Interpretation'], 'rows': [
+                    ['Current', '0 days', 'On schedule -- no estimated delinquency'],
+                    ['1-30', '1-30 days past due', 'Early stage -- may self-cure'],
+                    ['31-60', '31-60 days past due', 'Watch list territory'],
+                    ['61-90', '61-90 days past due', 'Approaching ineligibility threshold'],
+                    ['91-120', '91-120 days past due', 'High risk of default'],
+                    ['120+', '>120 days past due', 'Likely default -- aligns with facility ineligibility cut-off'],
+                ]},
+                {'title': 'DPD Computation Methods', 'headers': ['Method', 'When Used', 'Grade'], 'rows': [
+                    ['Direct', 'Expected collection days column available (Apr 2026+ tapes)', 'B -- DPD = max(0, deal_age - expected_collection_days)'],
+                    ['Proxy', 'Only Expected till date or Purchase value available', 'C -- Estimated from shortfall ratio applied to deal age'],
+                ]},
+            ],
+            'notes': [
+                'Default is defined as denial exceeding 50% of purchase value, consistent with the Loss Waterfall definition.',
+                'Without multi-snapshot transition data, the matrix is estimated from completed deal outcomes at each DPD depth rather than observed bucket-to-bucket movements.',
+                'This endpoint has a backend computation but no dedicated frontend tab component yet. The methodology is documented for completeness and future rendering.',
+            ],
+            'subsections': [],
+        },
+        # ── 17. Data Quality Validation ──
         {
             'function': 'compute_methodology_log',
             'section': 'Data Quality Validation',
@@ -462,7 +531,7 @@ def register_klaim_methodology():
             'level': None,
             'tab': 'data-integrity',
             'analysis_type': 'klaim',
-            'order': 15,
+            'order': 17,
             'required_columns': [],
             'denominator': None,
             'confidence': None,
@@ -483,11 +552,11 @@ def register_klaim_methodology():
         fn_name = sec.pop('function')
         METRIC_REGISTRY.append(sec)
 
-    # ── 16. Currency Conversion (static section) ──
+    # ── 18. Currency Conversion (static section) ──
     register_static_section(
         section='Currency Conversion',
         analysis_type='klaim',
-        order=16,
+        order=18,
         prose='Each portfolio company reports data in a local currency configured via config.json. All monetary values can be toggled between the reported currency and USD.',
         tables=[
             {'title': 'Supported Currencies', 'headers': ['Currency', 'USD Rate', 'Notes'], 'rows': [

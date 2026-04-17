@@ -1,0 +1,14 @@
+{
+  "model": "claude-opus-4-6",
+  "tools": [
+    "analytics.*",
+    "dataroom.*",
+    "mind.*",
+    "portfolio.*",
+    "computation.*"
+  ],
+  "max_turns": 15,
+  "max_tokens_per_response": 2000,
+  "max_budget_tokens": 100000,
+  "temperature": 0.3
+}
