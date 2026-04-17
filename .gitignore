@@ -8,11 +8,14 @@ alembic/versions/__pycache__/
 .claude/
 !.claude/commands/
 
-# Data room artifacts (regenerated on ingest, not source data)
-**/dataroom/chunks/
-**/dataroom/index.pkl
-**/dataroom/analytics/
-# Note: registry.json IS tracked (lightweight metadata)
+# Data room contents (raw source files + derived chunks/index/analytics).
+# Confidential and large — synced to prod separately via scripts/sync-data.ps1.
+# EXCEPT: registry.json — lightweight catalog, IS tracked so re-ingest is idempotent.
+data/*/dataroom/*
+!data/*/dataroom/registry.json
+
+# Agent session state (regenerated at runtime, per-machine)
+data/_agent_sessions/
 
 # Living Mind JSONL files (accumulate over time, machine-specific)
 data/_master_mind/
