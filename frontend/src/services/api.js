@@ -29,6 +29,7 @@ export default api;
 export const getFramework       = () => api.get('/framework').then(r => r.data.content);
 export const getMethodology     = (analysisType) => api.get(`/methodology/${analysisType}`).then(r => r.data);
 export const getAggregateStats  = ()  => api.get('/aggregate-stats').then(r => r.data);
+export const getPlatformStats   = ()  => api.get('/api/platform-stats').then(r => r.data);
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 export const getCompanies     = () => api.get('/companies').then(r => r.data);

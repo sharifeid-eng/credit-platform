@@ -1258,6 +1258,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `GET /framework` endpoint serves markdown content
   - `Framework.jsx` — full-page markdown renderer with sticky TOC, accessed via Navbar link
   - Resources section on Home page with Framework card (teal accent)
+- ✅ **Resources section revamp — live cards + Architecture page (Commit 1a):**
+  - OperatorCard + FrameworkCard now fetch live vitals from `/api/operator/status` and `/api/platform-stats` (gaps, follow-ups, stale tapes, framework section count + "+N new since last visit" badge via localStorage)
+  - New ArchitectureCard (violet accent, `⚙`) on the landing page → `/architecture` page with live platform capability stats (endpoints, DB tables, mind entries, dataroom docs, legal docs, tests, memos, framework sections) and inline SVG system architecture diagram following the Cocoon-AI architecture-diagram-generator skill guide (JetBrains Mono, dashed platform boundary, users-left/services-right, legend, bottom summary strip with 3 columns). Stats refresh on every visit — no manual regeneration.
+  - New backend endpoint `GET /api/platform-stats` — live counts: companies, products, snapshots, routes (total + grouped by prefix), DB tables (from SQLAlchemy metadata), mind entries (master + per-company JSONL row counts), framework sections, methodology pages, dataroom docs, legal docs, tests, memos, AI tiers, framework last-modified timestamp.
+  - Route added: `/architecture` in App.jsx. Three Resources cards now: Operator, Framework, Architecture.
+  - **Deferred to 1b:** Rewrite the Architecture page diagram as a feedback-loops view (Ingestion / Learning / Intelligence loops instead of static component boxes) — the current page ships a component diagram with live stats. Acceptable intermediate state; the loops-first redesign is tracked as the next commit.
+  - **Deferred to Commit 2:** External Intelligence system (Claude `web_search` tool wiring, Asset Class Mind new top-level store, pending-review queue, Layer 2.5 AI context injection). See "Known Gaps & Next Steps" for the full four-layer plan.
 - ✅ **PAR (Portfolio at Risk) KPIs:**
   - `compute_par()` with 3 methods: primary (Expected till date shortfall-based estimated DPD), Option C (empirical benchmarks from 50+ completed deals, labeled "Derived"), fallback (`available: False`)
   - `_build_empirical_benchmark()` helper builds collection timing benchmarks from completed deal pool

@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Framework from './pages/Framework';
+import Architecture from './pages/Architecture';
 import CompanyLayout from './layouts/CompanyLayout';
 import TapeAnalytics from './pages/TapeAnalytics';
 import PortfolioAnalytics from './pages/PortfolioAnalytics';
@@ -36,6 +37,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/framework" element={<Framework />} />
+        <Route path="/architecture" element={<Architecture />} />
         <Route path="/operator" element={<OperatorCenter />} />
         <Route path="/onboard" element={<Onboarding />} />
         <Route path="/admin/users" element={
