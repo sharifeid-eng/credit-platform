@@ -211,6 +211,100 @@ class TestGenerateFullMemo:
         assert "section_done" in event_types
         assert "pipeline_done" in event_types
 
+    def test_parallel_failure_does_not_truncate_pipeline(self, mock_bridge,
+                                                          mock_dataroom, monkeypatch):
+        """Regression: a BaseException escaping a Stage 2 worker must not
+        short-circuit the pipeline (2026-04-18 bug where ~9 of 12 sections
+        were missing and downstream stages silently skipped). The defensive
+        layer catches the exception, backfills the slot with an error
+        placeholder, and lets citation audit + polish run on the rest.
+
+        We simulate the production failure mode by making one section's
+        `generate_section` raise `SystemExit` — a BaseException that bypasses
+        the inner `except Exception` in `_worker`, reaches `fut.result()`,
+        and is caught by the new `except BaseException` in the `as_completed`
+        loop.
+        """
+        monkeypatch.setattr("core.memo.generator.AnalyticsBridge", lambda: mock_bridge)
+        monkeypatch.setattr("core.dataroom.DataRoomEngine", lambda: mock_dataroom)
+        monkeypatch.setattr("core.mind.build_mind_context",
+                            lambda **kw: MagicMock(
+                                is_empty=True, formatted="", total_entries=0))
+
+        # Normal complete() for everything that does get called
+        def _fake_complete(*, tier, system, messages, max_tokens, **kwargs):
+            if tier == "polish":
+                return _fake_claude_response({
+                    "sections": [
+                        {"key": s["key"], "content": f"polished {s['key']}"}
+                        for s in MEMO_TEMPLATES["credit_memo"]["sections"]
+                    ],
+                })
+            return _fake_claude_response({
+                "content": "Section body text.",
+                "metrics": [], "citations": [],
+            })
+        monkeypatch.setattr("core.ai_client.complete", _fake_complete)
+
+        from core.memo import agent_research
+        monkeypatch.setattr(agent_research, "generate_research_pack",
+                            lambda **kw: dict(agent_research.EMPTY_PACK))
+
+        target_key = "portfolio_analytics"
+
+        gen = MemoGenerator()
+
+        # Wrap generate_section so calls for the target key raise SystemExit,
+        # which bypasses the `except Exception` inside _worker.
+        real_generate_section = gen.generate_section
+        def _flaky_generate_section(*args, **kwargs):
+            if kwargs.get("section_key") == target_key:
+                raise SystemExit(f"simulated worker kill on {target_key}")
+            return real_generate_section(*args, **kwargs)
+        monkeypatch.setattr(gen, "generate_section", _flaky_generate_section)
+
+        events = []
+        def cb(event_type, payload):
+            events.append((event_type, payload))
+
+        memo = gen.generate_full_memo(
+            company="TestCo", product="KSA",
+            template_key="credit_memo",
+            polish=True,
+            progress_cb=cb,
+        )
+
+        # All 12 sections present in template order — no silent truncation
+        expected_keys = [s["key"] for s in MEMO_TEMPLATES["credit_memo"]["sections"]]
+        assert [s["key"] for s in memo["sections"]] == expected_keys
+
+        # The targeted section is a backfilled error placeholder.
+        # Note: polish appends "+polished" to generated_by, so match by prefix.
+        error_section_keys = {s["key"] for s in memo["sections"]
+                              if (s.get("generated_by") or "").startswith("error")}
+        assert target_key in error_section_keys
+
+        # Every other section has real content
+        good_sections = [s for s in memo["sections"]
+                         if not (s.get("generated_by") or "").startswith("error")]
+        assert len(good_sections) >= 10
+        assert all(s.get("content") for s in good_sections)
+
+        # Downstream stages still ran — polish applied despite the error
+        assert memo["polished"] is True, \
+            "Polish must run as long as SOME section has content"
+
+        # Errors recorded with stage attribution
+        assert len(memo["errors"]) >= 1
+        error_stages = {e.get("stage") for e in memo["errors"]}
+        assert error_stages & {"parallel_future", "parallel_backfill"}, \
+            f"Expected parallel_future or parallel_backfill stage; got {error_stages}"
+
+        # section_error SSE event emitted for the backfilled slot
+        event_types = [e[0] for e in events]
+        assert "section_error" in event_types, \
+            f"Expected section_error event; got unique: {set(event_types)}"
+
     def test_section_order_matches_template(self, mock_bridge, mock_dataroom, monkeypatch):
         """Parallel fan-out must not scramble section order."""
         monkeypatch.setattr("core.memo.generator.AnalyticsBridge", lambda: mock_bridge)

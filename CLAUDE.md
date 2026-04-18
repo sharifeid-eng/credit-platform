@@ -572,20 +572,20 @@ Key columns in loan tape files:
 |`PATCH /companies/{co}/products/{p}/memos/{id}/status`       |Change status                      |
 |`POST /companies/{co}/products/{p}/memos/{id}/export-pdf`    |Export memo as PDF                 |
 
-**Operator Command Center endpoints:**
-|Endpoint                               |Method |Description                              |
-|---------------------------------------|-------|-----------------------------------------|
-|`/operator/status`                     |GET    |Aggregate health, commands, gaps, activity|
-|`/operator/todo`                       |GET    |List operator follow-up items            |
-|`/operator/todo`                       |POST   |Create follow-up item                    |
-|`/operator/todo/{id}`                  |PATCH  |Update follow-up (toggle complete, edit) |
-|`/operator/todo/{id}`                  |DELETE |Delete follow-up item                    |
-|`/operator/mind`                       |GET    |Browse all mind entries (master + company)|
-|`/operator/mind/{id}`                  |PATCH  |Promote/archive a mind entry             |
-|`/operator/digest`                     |POST   |Generate weekly digest (Slack or JSON)   |
-|`/operator/briefing`                   |GET    |Morning briefing (priority actions, thesis alerts, recommendations)|
-|`/operator/learning`                   |GET    |Corrections, auto-rules, codification candidates|
-|`/operator/learning/rules`             |GET    |All active learning rules across companies|
+**Operator Command Center endpoints:** (moved under `/api/operator/` 2026-04-18 to avoid colliding with the SPA route `/operator`)
+|Endpoint                                   |Method |Description                              |
+|-------------------------------------------|-------|-----------------------------------------|
+|`/api/operator/status`                     |GET    |Aggregate health, commands, gaps, activity|
+|`/api/operator/todo`                       |GET    |List operator follow-up items            |
+|`/api/operator/todo`                       |POST   |Create follow-up item                    |
+|`/api/operator/todo/{id}`                  |PATCH  |Update follow-up (toggle complete, edit) |
+|`/api/operator/todo/{id}`                  |DELETE |Delete follow-up item                    |
+|`/api/operator/mind`                       |GET    |Browse all mind entries (master + company)|
+|`/api/operator/mind/{id}`                  |PATCH  |Promote/archive a mind entry             |
+|`/api/operator/digest`                     |POST   |Generate weekly digest (Slack or JSON)   |
+|`/api/operator/briefing`                   |GET    |Morning briefing (priority actions, thesis alerts, recommendations)|
+|`/api/operator/learning`                   |GET    |Corrections, auto-rules, codification candidates|
+|`/api/operator/learning/rules`             |GET    |All active learning rules across companies|
 
 **Intelligence System endpoints:**
 |Endpoint                                                     |Method |Description                        |
@@ -885,9 +885,13 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **Cloudflare Access JWT auth** — Platform authentication delegated to Cloudflare Access (team: `amwalcp`). Backend reads `CF_Authorization` cookie or `Cf-Access-Jwt-Assertion` header, verifies RS256 JWT against public keys from `amwalcp.cloudflareaccess.com/cdn-cgi/access/certs` (cached 1hr). User table maps email → role (admin/viewer). Auto-provisions users on first login. `ADMIN_EMAIL` env var bootstraps first admin. Auth middleware skips `/auth/*`, `/api/integration/*`, OPTIONS. When `CF_TEAM` not set (local dev), middleware passes all requests through — zero friction for development. Existing X-API-Key integration auth completely untouched.
 - **docker-compose env var precedence** — `environment` section overrides `env_file` values. Auth vars (`CF_TEAM`, `CF_APP_AUD`, `ADMIN_EMAIL`) must only be in `.env.production` via `env_file`, NOT in the `environment` section (which reads from host shell and gets empty strings).
 - **Production data sync pipeline** — Raw dataroom files (PDFs, xlsx, docx) are not in git. `scripts/sync-data.ps1` pushes them from laptop to server via scp (excludes chunks/analytics/index.pkl). `deploy.sh` auto-ingests any dataroom with registry.json but no chunks/ directory, calling `DataRoomEngine.ingest()` directly via Python import (bypasses HTTP auth). Deploy also auto-detects backend/core code changes and forces `--no-cache` rebuild. Data volume is read-write (`./data:/app/data`) to allow chunk creation. `/health` endpoint added for unauthenticated health checks.
-- **Operator Command Center** — `/operator/status` reads from existing files only (config.json, registry.json, mind/*.jsonl, legal/*_extracted.json, reports/ai_cache/). No new data infrastructure. Gap detection uses heuristic rules. Personal follow-ups stored in `tasks/operator_todo.json` (separate from Claude's `tasks/todo.md`). Frontend at `/operator` with 5 tabs: Health Matrix, Commands, Follow-ups, Activity Log, Mind Review. `/ops` slash command provides terminal briefing.
+- **Operator Command Center** — `/api/operator/status` reads from existing files only (config.json, registry.json, mind/*.jsonl, legal/*_extracted.json, reports/ai_cache/). No new data infrastructure. Gap detection uses heuristic rules. Personal follow-ups stored in `tasks/operator_todo.json` (separate from Claude's `tasks/todo.md`). Backend router at `/api/operator/*` (moved 2026-04-18 from `/operator/*` to avoid collision with the SPA route). Frontend at `/operator` with 8 tabs: Health Matrix, Commands, Follow-ups, Activity Log, Mind Review, Briefing, Learning, Data Rooms. `/ops` slash command provides terminal briefing.
 - **Activity logging** — `core/activity_log.py` appends to `reports/activity_log.jsonl`. Imported by 14 endpoints (AI, reports, legal, data room, memos, mind, alerts). Log_activity() calls placed before return statements. Only logs fresh operations (not cache hits for AI endpoints).
 - **Weekend Deep Work protocol** — `WEEKEND_DEEP_WORK.md` defines 7 analytical modes for long Claude Code sessions. State-save via `reports/deep-work/progress.json`. Two-pass file analysis (core engines before UI). Self-audit validation pass. Tiered frequency schedule (weekly Red Team → quarterly Full Combo).
+- **Memo pipeline BaseException discipline** — `_generate_parallel` in `core/memo/generator.py` catches `BaseException` (not just `Exception`) around `fut.result()` so `GeneratorExit`/`SystemExit` from SSE client disconnect can't tear down the `as_completed` loop. Null-slot backfill synthesizes error placeholders so template order is preserved. Downstream stages (citation audit, polish) now run whenever `any(s.get("content") for s in sections)` rather than being blocked by ANY earlier error — prevents single-section failures from silently truncating the memo.
+- **All backend API routes under `/api/*`** — `/api/integration/*`, `/api/operator/*`, `/api/onboarding/*`. Bare prefixes like `/operator` collided with the SPA's React Router route of the same name (reverse proxy prefix-matched to backend, 404'd on direct URL / browser refresh). Rule: any new `APIRouter(prefix=...)` or bare `@app.get(...)` must start with `/api/` unless justified. Auth middleware's `_SKIP_PREFIXES` is a documented exception list.
+- **`core.ai_client` strips `temperature` kwarg for Opus-routed tiers** — `_STRIPS_TEMPERATURE_TIERS = {"polish", "judgment"}` in `complete()`. Opus 4.7 deprecated `temperature`; rather than hunt call sites across backend/core on every future deprecation, the tier router quietly drops the kwarg for tiers whose models reject it. Callers can keep passing it; Sonnet-routed tiers (structured/research/auto) preserve it.
+- **Bidirectional orphan sweep in dataroom pipeline** — `DataRoomEngine.prune()` deletes chunk files whose doc_id isn't in registry. Complements the existing registry-orphan eviction (registry entries whose chunks file is missing). Both directions are now checked on every `ingest()` and `refresh()`. Because `doc_id = uuid4()`, forced re-ingests leave old chunk files behind — sha256 dedup keeps registry clean but filesystem leaks without prune.
 -----
 ## Design System — Dark Theme ✅
 Full dark theme with ACP-aligned navy base and Framer Motion animations. See color palette:
@@ -960,6 +964,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Post-Session-24 rollout bugfix patch (session 25 — 2026-04-18):**
+  - **Bidirectional orphan eviction + `prune` subcommand** (`core/dataroom/engine.py`, `scripts/dataroom_ctl.py`) — session 24 handled registry→chunks-missing eviction but not the reverse (chunks→registry-missing). Because `doc_id` is uuid4, every forced re-ingest leaves old chunk files behind; registry stays clean via sha256 dedup, but filesystem leaks. New `DataRoomEngine.prune()` sweeps orphan chunk files; auto-called at top of `ingest()` and `refresh()`; `orphan_chunks_deleted` surfaces in result dict + `ingest_log.jsonl` extras. CLI: `dataroom_ctl prune [--company X] [--product Y]`.
+  - **CLI output ordering hygiene** (`scripts/dataroom_ctl.py`) — `_emit()` flushes stderr before stdout, guaranteeing human summary lands before JSON in merged pipes (`2>&1 | head -1`).
+  - **Polish `temperature` deprecation fix** (`core/memo/generator.py`, `core/ai_client.py`) — Stage 6 polish was 400ing (Opus 4.7 rejects `temperature`); memos saved un-polished, contradictions unresolved. Dropped `temperature=0.3` from polish call + added tier-aware filter in `ai_client.complete()` (`_STRIPS_TEMPERATURE_TIERS = {"polish", "judgment"}`) so the router quietly drops the kwarg for tiers routing to Opus 4.7-era models. Sonnet citation audit `temperature=0.1` left intact (Sonnet still accepts).
+  - **Memo pipeline short-circuit protection** (`core/memo/generator.py`) — **the critical fix.** Production symptom: 3-of-12 sections saved, no Haiku/Opus in `models_used`, no sidecars, `total_elapsed_s=39.86s`. Investigation: storage.py writes sections verbatim (confirmed no save-layer filter), so upstream truncation. Defensive changes: (1) `_generate_parallel` catches `BaseException` around `fut.result()` so `GeneratorExit`/`SystemExit` from progress_cb during SSE client disconnect can't tear down the `as_completed` loop; (2) null-slot backfill — if `results[idx]` is None at loop end, synthesize an error placeholder so template order is preserved; (3) `_generate_parallel` returns `(sections, errors)` tuple with stage attribution (`parallel_worker`/`parallel_future`/`parallel_backfill`); (4) `_generate_judgment_sections` wraps synthesis in try/except so one Opus failure doesn't block subsequent judgment sections, returns third `errors` list element; (5) **error gate inverted** — Stage 5.5 (citation audit) and Stage 6 (polish) now run whenever `any(s.get("content") for s in memo["sections"])` rather than being blocked by ANY earlier error. New SSE event types: `section_error`, `pipeline_error`. New regression test: `test_parallel_failure_does_not_truncate_pipeline`.
+  - **`/operator/*` → `/api/operator/*` route rename** (`backend/operator.py`, `backend/intelligence.py`, `frontend/src/services/api.js`, CLAUDE.md endpoints table) — bare `/operator` SPA route collided with `APIRouter(prefix="/operator")`; reverse proxy prefix-matched `/operator` to backend which 404'd (no exact-match route there). In-app navigation worked; direct URL / browser refresh failed. Moved all backend operator endpoints under `/api/operator/*` (matches existing `/api/integration/*` convention). Auth middleware verified: `/api/operator/*` doesn't accidentally match the `/api/integration/` skip prefix.
+  - **Tests:** 420 passing (was 268+ baseline). Added 3 ai_client tier-filter tests + 1 memo pipeline failure-injection regression test.
 - ✅ **Data Room Pipeline Hardening (session 24 — prevents silent degradation):**
   - **Orphan-eviction dedup** — `engine.ingest()` + `engine.refresh()` verify `chunks/{doc_id}.json` exists on disk before trusting registry sha256 keys. Missing chunks → evict the registry entry so the file re-ingests. Kills the "0 new, 40 skipped" failure mode caused by pushing a pre-populated registry to a server without chunks. Result field `orphans_dropped` surfaces the count.
   - **Startup dependency probe** (`backend/main.py` lifespan) — imports 5 optional deps (pdfplumber, docx, sklearn, pymupdf4llm, pymupdf) at app start, logs ERROR for each missing, writes `data/_platform_health.json` with `missing[]` + `present[]`. Makes silent dep rot impossible.
@@ -1451,6 +1462,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `classifier_llm.py` cache is sha256-keyed cross-company — re-running `classify --only-other` is free on a re-ingest.
 -----
 ## Known Gaps & Next Steps
+
+**Post-Session-24 Rollout Bugfix Patch ✅ COMPLETE (session 25 — 2026-04-18):**
+- [x] Fix 1: Bidirectional orphan eviction — `DataRoomEngine.prune()` + auto-call in `ingest()`/`refresh()` + `dataroom_ctl prune` subcommand
+- [x] Fix 2: CLI output ordering — `sys.stderr.flush()` in `_emit()` guarantees human summary before JSON in merged pipes
+- [x] Fix 3: Polish `temperature` deprecation — dropped from Stage 6 call + tier-aware filter in `ai_client.complete()` (`_STRIPS_TEMPERATURE_TIERS`)
+- [x] Fix 4: Memo pipeline short-circuit protection — `BaseException` catch around `fut.result()`, null-slot backfill, content-presence gate replaces error-count gate, new `section_error`/`pipeline_error` SSE events, regression test
+- [x] Fix 5: `/operator` → `/api/operator` route rename — backend router prefix + 3 intelligence routes + 10 frontend callers + CLAUDE.md endpoints table
+- [x] Fix 6: Dockerfile `COPY scripts/` — already landed as `286cf18` on 2026-04-17
 
 **Data Room Pipeline Hardening ✅ COMPLETE (session 24):**
 - [x] Tier 1.1: Orphan-eviction dedup in `engine.ingest()` + `engine.refresh()`

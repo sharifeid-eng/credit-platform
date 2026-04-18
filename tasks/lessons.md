@@ -3,6 +3,72 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-18 — `except Exception` in a thread-pool worker does not catch `BaseException`
+
+**Problem:** `core/memo/generator.py` production memo generation truncated at 3/12 sections with no trace in `errors[]`. The `_worker` function inside `_generate_parallel` had `try: ... except Exception: ...` around `self.generate_section(...)`, and the outer loop iterated `as_completed(futures)` calling `fut.result()` un-wrapped. Suspected root cause: an SSE client disconnect raises `GeneratorExit` inside a `progress_cb` call — `GeneratorExit` inherits from `BaseException`, not `Exception`, so it bypasses the worker's catch, propagates through the future, and `fut.result()` re-raises it. The unhandled exception tears down the `as_completed` loop before subsequent futures can be drained.
+
+**Rule:** In ThreadPoolExecutor code, both the worker body AND the result-collection loop must catch `BaseException` — not just `Exception` — when the worker touches anything that can legitimately raise `SystemExit`/`GeneratorExit`/`KeyboardInterrupt`. SSE callbacks, subprocess signals, and async-context cleanup all fall in this category. Pair it with explicit backfill: if `results[idx]` is still `None` after the loop, synthesize an error placeholder so downstream code sees a complete list.
+
+**Why:** `except Exception` was written defensively but misses exactly the failure mode that matters in a long-running SSE server: client disconnect mid-request. Recording the error with stage attribution makes it visible in `memo["errors"]` so the user can see what went wrong.
+
+**How to apply:** Anywhere you use ThreadPoolExecutor with per-task `try/except`, make the outer `fut.result()` catch `BaseException` and continue the loop (log with `exc_info=True`, append to an error sink). Pattern now lives in `core/memo/generator.py::_generate_parallel`.
+
+---
+
+## 2026-04-18 — When a pipeline truncates, read the save layer before chasing upstream filters
+
+**Problem:** Observed production symptom: memo v1.json had 3 sections instead of 12. First instinct was to look for a filter in the generator. Checking the save layer first (`core/memo/storage.py`) confirmed it does *not* filter sections — `memo["sections"]` is written verbatim. That single read eliminated an entire hypothesis space and focused the investigation on the 6-stage pipeline upstream.
+
+**Rule:** Before debugging a "missing data" bug, verify where the data is last seen intact. Read the save/serialize layer and confirm whether it can drop or filter records. If it can't, you know the loss happened earlier; if it can, that's your fix point.
+
+**Why:** Saved ~30 min of hunting imaginary filters. The file was 400 lines and the answer was a 2-minute read.
+
+**How to apply:** For any data-loss bug, pull up the save path first. `git log -p` on the storage file also tells you whether any recent change added filtering.
+
+---
+
+## 2026-04-18 — Pipeline error gates should check content presence, not error count
+
+**Problem:** `generate_full_memo` had `if not errors: run_citation_audit()` and `if polish and not errors: run_polish()`. A single `generated_by=="error"` section anywhere in the 12 would short-circuit BOTH downstream stages, producing a memo with partial body content but no polish applied and no citation audit. This was the actual 2026-04-18 production bug shape — one Stage 2 failure would skip Stages 5.5/6 entirely.
+
+**Rule:** Pipeline continuation gates should ask "do I have enough usable input to make progress?" not "were there any errors?" Error count is noisy — a memo with 11 good sections and 1 failed one should still get polished.
+
+**How to apply:** Replace `if not errors:` with content-presence checks like `if any(s.get("content") for s in memo["sections"]):`. Still collect errors into `memo["errors"]` for transparency, but don't let them block partial success.
+
+---
+
+## 2026-04-18 — SPA route and backend API path must not share a prefix
+
+**Problem:** React Router had `/operator` as an SPA route. Backend had `APIRouter(prefix="/operator")` plus three intelligence routes starting with `/operator/`. Reverse proxy prefix-matched `/operator` to the backend. In-app navigation worked (React Router handled it client-side), but direct URL / browser refresh hit the server, which 404'd because there was no exact `/operator` route — only subroutes.
+
+**Rule:** All backend API endpoints go under `/api/*`. SPA routes own the bare namespace. This is already the convention for `/api/integration/*` — extend it uniformly. When you see a new backend route that doesn't start with `/api/`, ask: could this collide with a current or future frontend route?
+
+**How to apply:** Audit `APIRouter(prefix=...)` and bare `@app.get(...)` decorators in any new file. If the prefix isn't `/api/`, justify why in the PR description.
+
+---
+
+## 2026-04-18 — `temperature` is model-specific — tier-aware kwarg filtering beats per-call-site edits
+
+**Problem:** Opus 4.7 deprecated `temperature`. One call site (`memo/generator.py:858` polish pass) hit a 400 error. The fix could have been a one-line `temperature=` removal at that site, but the same pattern is risk-eligible anywhere else a caller routes to Opus 4.7. Instead of hunting call sites on every future model deprecation, centralize the filter at the tier boundary.
+
+**Rule:** When a model-specific kwarg deprecation hits one call site, centralize the fix at the tier router (here: `core.ai_client.complete()`) with a `_STRIPS_TEMPERATURE_TIERS` set. Callers can keep passing the kwarg; the router quietly drops it for tiers whose models reject it.
+
+**Why:** Anthropic adds/removes kwargs on major model families periodically. Each deprecation otherwise becomes a whack-a-mole across backend/core/memo files.
+
+**How to apply:** Any tiered API wrapper (ai_client, email sender, feature-flagged service) should handle tier-specific kwarg filtering in the wrapper, not at call sites.
+
+---
+
+## 2026-04-18 — Explicit `sys.stderr.flush()` before final stdout emit fixes CLI ordering races
+
+**Problem:** `scripts/dataroom_ctl.py audit` in a shell `for` loop with `2>&1 | head -1` sometimes printed the JSON payload before the human summary line. The per-command handlers correctly called `_err()` (stderr) first and `_emit()` (stdout) last, but when both streams are merged via redirect, block-buffered stdout can race with line-buffered stderr at process exit depending on OS scheduling.
+
+**Rule:** For CLIs that mix stderr and stdout and document an ordering convention, add explicit flushes in the emission helpers. `sys.stderr.flush()` before the final stdout `print()` is all it takes.
+
+**How to apply:** Any CLI where stderr-first / stdout-last ordering matters (common for scrape-friendly tools that put human summary on stderr and machine-readable JSON on stdout) needs explicit flush discipline.
+
+---
+
 ## 2026-04-18 — SHA-256 dedup must verify the artifact, not just the key
 
 **Problem:** `DataRoomEngine.ingest()` built `existing_hashes = {doc["sha256"]: doc_id for ...}` from the registry, then skipped any file whose hash was already keyed. If the registry was pushed to a fresh server without the matching `chunks/` directory (as `sync-data.ps1` was doing), every file got reported "skipped" — even though no chunks existed to serve searches or memos. Live symptom: server showed "0 new, 40 skipped" on the SILQ dataroom while chunks/ was empty and search returned nothing.

@@ -243,6 +243,11 @@ class DataRoomEngine:
 
         registry = self._load_registry(company, product)
 
+        # Sweep orphan chunk files (chunks with no matching registry entry).
+        # Keeps filesystem in sync with registry on every ingest. See prune().
+        prune_result = self.prune(company, product)
+        orphan_chunks_deleted = prune_result.get("deleted", 0)
+
         # Build hash lookup for existing docs, but ONLY for entries whose chunks
         # file actually exists on disk. Orphan registry entries (chunks missing)
         # are evicted so their source files re-ingest. Fixes the dedup-skip bug:
@@ -277,6 +282,7 @@ class DataRoomEngine:
             "ingested": 0,
             "skipped": 0,
             "orphans_dropped": len(orphans),
+            "orphan_chunks_deleted": orphan_chunks_deleted,
             "errors": [],
             "documents": [],
         }
@@ -325,6 +331,7 @@ class DataRoomEngine:
                 "index_status": status.get("index_status", "unknown"),
                 "index_size_bytes": status.get("index_size_bytes"),
                 "registry_count": len(registry),
+                "orphan_chunks_deleted": orphan_chunks_deleted,
             },
         )
 
@@ -400,6 +407,10 @@ class DataRoomEngine:
 
         registry = self._load_registry(company, product)
 
+        # Sweep orphan chunk files (chunks with no matching registry entry).
+        prune_result = self.prune(company, product)
+        orphan_chunks_deleted = prune_result.get("deleted", 0)
+
         # Map current registry: normalized filepath -> (doc_id, hash).
         # Orphan entries (chunks file missing) are evicted so the file
         # re-ingests cleanly on this pass.
@@ -429,7 +440,8 @@ class DataRoomEngine:
                 if _is_supported(fpath):
                     disk_files[fpath] = _file_sha256(fpath)
 
-        result = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0, "errors": []}
+        result = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0,
+                  "orphan_chunks_deleted": orphan_chunks_deleted, "errors": []}
 
         # Detect new and changed files
         for fpath, file_hash in disk_files.items():
@@ -486,6 +498,7 @@ class DataRoomEngine:
                 "index_size_bytes": status.get("index_size_bytes"),
                 "registry_count": len(registry),
                 "orphans_dropped": len(orphans),
+                "orphan_chunks_deleted": orphan_chunks_deleted,
             },
         )
 
@@ -658,6 +671,48 @@ class DataRoomEngine:
             removed["index"], removed["meta"],
         )
         return removed
+
+    def prune(self, company: str, product: str) -> dict:
+        """Delete chunk files on disk whose doc_id is not in the registry.
+
+        Complement to the existing orphan-registry eviction in `ingest()` and
+        `refresh()` (which drop registry entries whose chunks file is missing).
+        This handles the reverse leak: because `doc_id` is a random uuid4, every
+        forced re-ingest writes new chunk files alongside the old ones. Sha256
+        dedup keeps the registry clean; the filesystem leaks without prune().
+
+        Returns {"deleted": int, "kept": int, "chunk_dir_missing": bool}.
+        Idempotent; safe when chunks/ doesn't exist.
+        """
+        registry = self._load_registry(company, product)
+        chunks_dir = self._chunks_dir(company, product)
+
+        if not chunks_dir.exists():
+            return {"deleted": 0, "kept": 0, "chunk_dir_missing": True}
+
+        registered_ids = set(registry.keys())
+        deleted = 0
+        kept = 0
+        for p in chunks_dir.glob("*.json"):
+            if p.stem in registered_ids:
+                kept += 1
+                continue
+            try:
+                p.unlink()
+                deleted += 1
+                logger.warning(
+                    "[dataroom.prune] Deleted orphan chunk %s for %s/%s — no matching registry entry",
+                    p.name, company, product,
+                )
+            except OSError as e:
+                logger.warning("[dataroom.prune] Failed to delete %s: %s", p, e)
+
+        if deleted or kept:
+            logger.info(
+                "[dataroom.prune] %s/%s: deleted=%d kept=%d",
+                company, product, deleted, kept,
+            )
+        return {"deleted": deleted, "kept": kept, "chunk_dir_missing": False}
 
     def audit(self, company: str, product: str = "") -> dict:
         """Full health audit for a company/product data room.

@@ -323,21 +323,23 @@ export const getLegalAmendmentDiff      = (co, prod, oldFile, newFile) =>
   api.get(`/companies/${co}/products/${prod}/legal/amendment-diff`, { params: { filename_old: oldFile, filename_new: newFile } }).then(r => r.data);
 
 // ── Operator Command Center ──────────────────────────────────────────────────
-export const getOperatorStatus       = () => api.get('/operator/status').then(r => r.data);
-export const getOperatorTodos        = () => api.get('/operator/todo').then(r => r.data);
-export const createOperatorTodo      = (item) => api.post('/operator/todo', item).then(r => r.data);
-export const updateOperatorTodo      = (id, update) => api.patch(`/operator/todo/${id}`, update).then(r => r.data);
-export const deleteOperatorTodo      = (id) => api.delete(`/operator/todo/${id}`).then(r => r.data);
+// NB: endpoints live under /api/operator/* to avoid colliding with the SPA
+// route /operator (reverse proxy prefix-matches /operator otherwise).
+export const getOperatorStatus       = () => api.get('/api/operator/status').then(r => r.data);
+export const getOperatorTodos        = () => api.get('/api/operator/todo').then(r => r.data);
+export const createOperatorTodo      = (item) => api.post('/api/operator/todo', item).then(r => r.data);
+export const updateOperatorTodo      = (id, update) => api.patch(`/api/operator/todo/${id}`, update).then(r => r.data);
+export const deleteOperatorTodo      = (id) => api.delete(`/api/operator/todo/${id}`).then(r => r.data);
 export const getOperatorMind         = (company = null, category = null) =>
-  api.get('/operator/mind', { params: { ...(company ? { company } : {}), ...(category ? { category } : {}) } }).then(r => r.data);
-export const updateOperatorMindEntry = (id, update) => api.patch(`/operator/mind/${id}`, update).then(r => r.data);
+  api.get('/api/operator/mind', { params: { ...(company ? { company } : {}), ...(category ? { category } : {}) } }).then(r => r.data);
+export const updateOperatorMindEntry = (id, update) => api.patch(`/api/operator/mind/${id}`, update).then(r => r.data);
 export const sendOperatorDigest      = (webhookUrl = null) =>
-  api.post('/operator/digest', null, { params: webhookUrl ? { webhook_url: webhookUrl } : {} }).then(r => r.data);
+  api.post('/api/operator/digest', null, { params: webhookUrl ? { webhook_url: webhookUrl } : {} }).then(r => r.data);
 
 // ── Intelligence System ────────────────────────────────────────────────────
-export const getOperatorBriefing     = () => api.get('/operator/briefing').then(r => r.data);
-export const getOperatorLearning     = () => api.get('/operator/learning').then(r => r.data);
-export const getOperatorLearningRules = () => api.get('/operator/learning/rules').then(r => r.data);
+export const getOperatorBriefing     = () => api.get('/api/operator/briefing').then(r => r.data);
+export const getOperatorLearning     = () => api.get('/api/operator/learning').then(r => r.data);
+export const getOperatorLearningRules = () => api.get('/api/operator/learning/rules').then(r => r.data);
 export const getDataroomHealthAll    = () => api.get('/dataroom/health').then(r => r.data);
 export const getDataroomHealthOne    = (co, prod) =>
   api.get(`/companies/${co}/products/${prod}/dataroom/health`).then(r => r.data);

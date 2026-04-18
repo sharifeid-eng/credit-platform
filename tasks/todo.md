@@ -24,6 +24,51 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-18 (session 25: Post-Session-24 rollout bugfix patch)
+
+Follow-up patch after the session-24 rollout surfaced five production bugs on the Hetzner VPS.
+
+### Fix 1 — Bidirectional orphan eviction + `prune` subcommand
+- [x] **`DataRoomEngine.prune()` method** — sweeps chunk files on disk whose doc_id is not in registry. Returns `{"deleted", "kept", "chunk_dir_missing"}`. Idempotent.
+- [x] **Auto-prune on `ingest()` and `refresh()`** — both call `prune()` right after registry load; `orphan_chunks_deleted` surfaces in result dict and `ingest_log.jsonl` extras.
+- [x] **`dataroom_ctl prune [--company X] [--product Y]` subcommand** — iterates all companies if `--company` omitted. Exit codes: 0 success, 3 engine error.
+
+### Fix 2 — CLI output ordering hygiene
+- [x] **`_emit()` flushes stderr before and stdout after** — guarantees human summary lines (stderr) land before the JSON payload (stdout) when merged via `2>&1 | head -1`. Centralised fix applies to every subcommand.
+
+### Fix 3 — Polish `temperature` deprecation (URGENT: degraded memo quality)
+- [x] **Removed `temperature=0.3` from Stage 6 polish call** in `core/memo/generator.py:858` (Opus 4.7 rejects it with HTTP 400; memos were saved un-polished).
+- [x] **Added tier-aware filter in `core/ai_client.complete()`** — `_STRIPS_TEMPERATURE_TIERS = {"polish", "judgment"}` silently drops the kwarg for tiers routing to Opus 4.7-era models. Belt-and-suspenders against future recurrences.
+- [x] **Citation audit `temperature=0.1` left as-is** — it routes to Sonnet 4.6 which still accepts temperature; preserves explicit determinism. (User-confirmed scope.)
+- [x] **Three new tests in `test_ai_client.py`** — asserts strip for polish/judgment, no-strip for structured.
+
+### Fix 4 — Memo pipeline short-circuits after Stage 2 batch 1 (MOST CRITICAL)
+Production evidence: `e2bc4a3f-d68` Klaim memo had 3/12 sections, no Haiku/Opus in `models_used`, no `research_packs.json`/`citation_issues.json` sidecars, `total_elapsed_s=39.86s` (too short for Stages 4+5 to have run).
+- [x] **`_generate_parallel` catches `BaseException`** around `fut.result()` — SystemExit/GeneratorExit (plausible source: SSE client disconnect) no longer tears down the as_completed loop.
+- [x] **Backfill of null slots** — sections whose future never returned a result get explicit error-object placeholders so template order is preserved and downstream stages always see a full list.
+- [x] **`_generate_parallel` returns `(sections, errors)` tuple** — errors are attributed with `stage: parallel_worker | parallel_future | parallel_backfill`.
+- [x] **`_generate_judgment_sections` wraps synthesis in per-section try/except** — one Opus failure doesn't block subsequent judgment sections. Returns additional `errors` list.
+- [x] **Error-gate logic inverted** — Stage 5.5 (citation audit) and Stage 6 (polish) now run whenever `any(s.content for s in sections)` rather than being blocked by ANY earlier error. Critical behavior change that directly fixes the production symptom.
+- [x] **Terminal-error path** — if all sections fail, memo saved with `status="error"`; `pipeline_error` SSE event emitted for UI.
+- [x] **New SSE event types** — `section_error` (per-section failures with stage attribution), `pipeline_error` (all sections failed).
+- [x] **Regression test `test_parallel_failure_does_not_truncate_pipeline`** — injects SystemExit in one worker, asserts 12 sections present, polish ran, error recorded with stage attribution, `section_error` event emitted.
+
+### Fix 5 — `/operator` backend route collision with SPA route
+- [x] **Backend router prefix renamed** — `backend/operator.py` `/operator` → `/api/operator`.
+- [x] **Three intelligence routes moved** — `backend/intelligence.py` `/operator/briefing`, `/operator/learning`, `/operator/learning/rules` → `/api/operator/*`.
+- [x] **Frontend API callers updated** — all 10 `/operator/*` references in `frontend/src/services/api.js` → `/api/operator/*`.
+- [x] **CLAUDE.md endpoints table updated** — with note explaining why the rename happened.
+- [x] **Auth middleware verified** — `/api/operator/*` doesn't accidentally match `/api/integration/*` skip prefix.
+
+### Fix 6 — Dockerfile `COPY scripts/`
+- [x] Already landed as commit `286cf18` on 2026-04-17 — no action this session.
+
+### Verification
+- [x] Full test suite: **420 passed, 0 failed** (baseline was 268+). Added 4 new tests (3 for ai_client, 1 for memo pipeline).
+- [x] Fix 1 + Fix 2 verified locally via dataroom_ctl CLI (orphan created, detected, pruned, idempotent).
+
+---
+
 ## Completed — 2026-04-18 (session 24: Data Room Pipeline Hardening & Quality Overhaul)
 
 ### Tier 1 — Root-cause fixes (eliminate this session's hurdles)

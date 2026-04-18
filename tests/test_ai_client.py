@@ -189,6 +189,50 @@ class TestComplete:
         second_model = fake_client.messages.create.call_args_list[1].kwargs["model"]
         assert first_model != second_model
 
+    def test_strips_temperature_for_polish_tier(self):
+        """Polish tier routes to Opus 4.7 which rejects `temperature`; strip silently."""
+        fake_client = MagicMock()
+        fake_client.messages.create.return_value = self._fake_response()
+        with patch("core.ai_client.get_client", return_value=fake_client):
+            ai_client.complete(
+                tier="polish", system="",
+                messages=[{"role": "user", "content": "hi"}],
+                max_tokens=100,
+                temperature=0.5,
+            )
+        kwargs = fake_client.messages.create.call_args.kwargs
+        assert "temperature" not in kwargs, (
+            "Polish tier must not pass `temperature` — Opus 4.7 rejects it"
+        )
+
+    def test_strips_temperature_for_judgment_tier(self):
+        """Judgment tier uses the same Opus chain as polish."""
+        fake_client = MagicMock()
+        fake_client.messages.create.return_value = self._fake_response()
+        with patch("core.ai_client.get_client", return_value=fake_client):
+            ai_client.complete(
+                tier="judgment", system="",
+                messages=[{"role": "user", "content": "hi"}],
+                max_tokens=100,
+                temperature=0.5,
+            )
+        kwargs = fake_client.messages.create.call_args.kwargs
+        assert "temperature" not in kwargs
+
+    def test_keeps_temperature_for_structured_tier(self):
+        """Sonnet still accepts temperature — don't strip it."""
+        fake_client = MagicMock()
+        fake_client.messages.create.return_value = self._fake_response()
+        with patch("core.ai_client.get_client", return_value=fake_client):
+            ai_client.complete(
+                tier="structured", system="",
+                messages=[{"role": "user", "content": "hi"}],
+                max_tokens=100,
+                temperature=0.1,
+            )
+        kwargs = fake_client.messages.create.call_args.kwargs
+        assert kwargs.get("temperature") == 0.1
+
     def test_attaches_metadata(self):
         fake_client = MagicMock()
         fake_client.messages.create.return_value = self._fake_response(

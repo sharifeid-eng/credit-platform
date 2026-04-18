@@ -106,7 +106,7 @@ def get_thesis_log(company: str, product: str, limit: int = Query(50, ge=1, le=2
 
 # ── Briefing Endpoint ─────────────────────────────────────────────────────────
 
-@router.get("/operator/briefing")
+@router.get("/api/operator/briefing")
 def get_morning_briefing():
     """Generate a morning briefing — no AI calls, pure file I/O."""
     from core.mind.briefing import generate_morning_briefing
@@ -149,7 +149,7 @@ def search_knowledge(
 
 # ── Learning Endpoints ────────────────────────────────────────────────────────
 
-@router.get("/operator/learning")
+@router.get("/api/operator/learning")
 def get_learning_summary():
     """List recent corrections, auto-rules, and codification candidates."""
     from core.mind.learning import LearningEngine
@@ -219,7 +219,7 @@ def get_learning_summary():
     }
 
 
-@router.get("/operator/learning/rules")
+@router.get("/api/operator/learning/rules")
 def get_learning_rules():
     """List all active learning rules across all companies."""
     import json

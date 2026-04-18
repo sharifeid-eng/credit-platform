@@ -454,16 +454,35 @@ class MemoGenerator:
     def _generate_parallel(self, company: str, product: str, template_key: str,
                            sections: List[Dict[str, Any]],
                            snapshot: Optional[str], currency: Optional[str],
-                           progress_cb: Optional[callable] = None) -> List[Dict[str, Any]]:
+                           progress_cb: Optional[callable] = None
+                           ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Fan out structured + auto sections across a thread pool.
 
-        Returns sections in the SAME ORDER as input (not completion order).
+        Returns `(sections, errors)` where `sections` is always len(input)
+        (error placeholders fill any slot whose future failed or never
+        returned), and `errors` is a list of per-section failure records.
+
+        Defensive against the Stage 2 truncation bug observed 2026-04-18:
+        - catches BaseException (SystemExit/GeneratorExit) from any future
+          so one bad task can't tear down the as_completed loop
+        - backfills None slots with explicit error objects so downstream
+          stages always see a full section list in template order
         """
         if not sections:
-            return []
+            return [], []
 
         max_workers = min(_PARALLEL_CAP, len(sections))
         results: List[Optional[Dict[str, Any]]] = [None] * len(sections)
+        parallel_errors: List[Dict[str, Any]] = []
+
+        def _emit_section_error(key: str, err: str, stage: str) -> None:
+            """Emit section_error SSE event so UI can render failures."""
+            if progress_cb:
+                try:
+                    progress_cb("section_error",
+                                {"key": key, "error": err, "stage": stage})
+                except Exception:
+                    pass
 
         def _worker(idx: int, sect: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
             tier = classify_section(sect)
@@ -487,7 +506,9 @@ class MemoGenerator:
                     "content": f"[Section generation failed: {e}]",
                     "metrics": [], "citations": [],
                     "generated_by": "error", "source": sect.get("source"),
+                    "error_detail": str(e), "error_stage": "parallel_worker",
                 }
+                _emit_section_error(sect["key"], str(e), "parallel_worker")
             if progress_cb:
                 try:
                     progress_cb("section_done", {"key": sect["key"], "tier": tier})
@@ -498,10 +519,48 @@ class MemoGenerator:
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(_worker, i, s) for i, s in enumerate(sections)]
             for fut in concurrent.futures.as_completed(futures):
-                idx, section = fut.result()
-                results[idx] = section
+                try:
+                    idx, section = fut.result()
+                    results[idx] = section
+                except BaseException as e:
+                    # Includes SystemExit / GeneratorExit which can leak from
+                    # progress_cb when an SSE client disconnects mid-flight.
+                    # Log with full traceback; loop continues so remaining
+                    # futures still get drained.
+                    logger.error(
+                        "Future propagated %s in parallel dispatch: %s",
+                        type(e).__name__, e, exc_info=True,
+                    )
+                    parallel_errors.append({
+                        "error": str(e),
+                        "type": type(e).__name__,
+                        "stage": "parallel_future",
+                    })
 
-        return [r for r in results if r is not None]
+        # Backfill any slots that never got a result (future crashed before
+        # returning). Each becomes an explicit error-object section so the
+        # memo has a full 12-entry section list and downstream stages can
+        # still run citation audit + polish on the sections that succeeded.
+        for idx, slot in enumerate(results):
+            if slot is None:
+                sect = sections[idx]
+                results[idx] = {
+                    "key": sect["key"], "title": sect["title"],
+                    "content": "[Section failed in parallel dispatch — see memo errors]",
+                    "metrics": [], "citations": [],
+                    "generated_by": "error", "source": sect.get("source"),
+                    "error_detail": "no_result_from_pool",
+                    "error_stage": "parallel_backfill",
+                }
+                parallel_errors.append({
+                    "section": sect["key"],
+                    "error": "no_result_from_pool",
+                    "stage": "parallel_backfill",
+                })
+                _emit_section_error(sect["key"], "no_result_from_pool",
+                                    "parallel_backfill")
+
+        return results, parallel_errors
 
     # ── Stage 4+5: judgment sections with research packs ────────────────────
 
@@ -510,21 +569,31 @@ class MemoGenerator:
                                     body_sections: List[Dict[str, Any]],
                                     snapshot: Optional[str], currency: Optional[str],
                                     progress_cb: Optional[callable] = None
-                                    ) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+                                    ) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
         """Sequential generation of ai_guided sections with preceding body context.
 
         Each judgment section gets a research pack first, then an Opus synthesis call.
         Sequential order preserves coherence — each sees prior judgment sections too.
 
         Returns:
-            (sections_list, packs_by_key) — the synthesized sections AND the raw
-            research packs keyed by section_key. Packs are used by the polish pass
-            (contradictions) and saved as sidecar metadata.
+            (sections_list, packs_by_key, errors) — the synthesized sections,
+            the raw research packs keyed by section_key, and a list of
+            per-section failure records. One section failing must not block
+            subsequent judgment sections.
         """
         from core.memo.agent_research import generate_research_pack
 
         out: List[Dict[str, Any]] = []
         packs_by_key: Dict[str, Dict[str, Any]] = {}
+        errors: List[Dict[str, Any]] = []
+
+        def _emit_section_error(key: str, err: str, stage: str) -> None:
+            if progress_cb:
+                try:
+                    progress_cb("section_error",
+                                {"key": key, "error": err, "stage": stage})
+                except Exception:
+                    pass
 
         for sect in judgment_sections:
             if progress_cb:
@@ -552,6 +621,8 @@ class MemoGenerator:
             except Exception as e:
                 logger.warning("Research pack failed for '%s': %s", sect["key"], e)
                 pack = None
+                errors.append({"section": sect["key"], "error": str(e),
+                               "stage": "research_pack"})
 
             if pack:
                 packs_by_key[sect["key"]] = pack
@@ -564,15 +635,31 @@ class MemoGenerator:
                 except Exception:
                     pass
 
-            # Synthesis — judgment tier (Opus) sees body + prior judgment sections
-            section = self.generate_section(
-                company=company, product=product,
-                template_key=template_key, section_key=sect["key"],
-                tier="judgment",
-                prior_sections=body_sections + out,
-                research_pack=pack,
-                snapshot=snapshot, currency=currency,
-            )
+            # Synthesis — judgment tier (Opus) sees body + prior judgment sections.
+            # Wrap in try/except so one synthesis failure doesn't block the rest.
+            try:
+                section = self.generate_section(
+                    company=company, product=product,
+                    template_key=template_key, section_key=sect["key"],
+                    tier="judgment",
+                    prior_sections=body_sections + out,
+                    research_pack=pack,
+                    snapshot=snapshot, currency=currency,
+                )
+            except Exception as e:
+                logger.error("Judgment synthesis failed for '%s': %s",
+                             sect["key"], e, exc_info=True)
+                section = {
+                    "key": sect["key"], "title": sect["title"],
+                    "content": f"[Judgment synthesis failed: {e}]",
+                    "metrics": [], "citations": [],
+                    "generated_by": "error", "source": sect.get("source"),
+                    "error_detail": str(e), "error_stage": "judgment_synthesis",
+                }
+                errors.append({"section": sect["key"], "error": str(e),
+                               "stage": "judgment_synthesis"})
+                _emit_section_error(sect["key"], str(e), "judgment_synthesis")
+
             out.append(section)
 
             if progress_cb:
@@ -581,7 +668,7 @@ class MemoGenerator:
                 except Exception:
                     pass
 
-        return out, packs_by_key
+        return out, packs_by_key, errors
 
     # ── Stage 5.5: citation validation ──────────────────────────────────────
 
@@ -855,7 +942,6 @@ class MemoGenerator:
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
                 max_tokens=_MAX_TOKENS_POLISH,
-                temperature=0.3,
                 log_prefix=f"memo.polish.{company}",
             )
         except Exception as e:
@@ -953,8 +1039,10 @@ class MemoGenerator:
             except Exception:
                 pass
 
-        # Stages 2 + 3 — parallel structured + auto
-        body_sections = self._generate_parallel(
+        # Stages 2 + 3 — parallel structured + auto.
+        # Returns (sections, errors). Errors are collected for transparency;
+        # downstream stages still run on whatever succeeded.
+        body_sections, parallel_errors = self._generate_parallel(
             company, product, template_key, non_judgment,
             snapshot, currency, progress_cb=progress_cb,
         )
@@ -974,7 +1062,9 @@ class MemoGenerator:
 
         # Stages 4 + 5 — judgment sections (sequential). Also collect raw
         # research packs for use by contradiction-aware polish + sidecar save.
-        judgment_results, research_packs = self._generate_judgment_sections(
+        # Per-section failures are captured in judgment_errors; one failing
+        # section does not block the rest.
+        judgment_results, research_packs, judgment_errors = self._generate_judgment_sections(
             company, product, template_key, judgment, body_sections,
             snapshot, currency, progress_cb=progress_cb,
         )
@@ -988,7 +1078,28 @@ class MemoGenerator:
         if product:
             title += f" {product}"
 
-        errors = [s for s in final_sections if s.get("generated_by") == "error"]
+        # Collect ALL error sources for the memo record:
+        #   1. sections with generated_by=="error" (synthesized error objects)
+        #   2. parallel_errors (pool-level failures, e.g. GeneratorExit)
+        #   3. judgment_errors (research-pack or synthesis failures)
+        error_sections = [s for s in final_sections if s.get("generated_by") == "error"]
+        all_errors: List[Dict[str, Any]] = []
+        for s in error_sections:
+            all_errors.append({
+                "section": s["key"],
+                "error": s.get("error_detail", "generation_failed"),
+                "stage": s.get("error_stage", "unknown"),
+            })
+        all_errors.extend(parallel_errors)
+        all_errors.extend(judgment_errors)
+
+        # True only when the whole pipeline produced no usable content — used
+        # to mark the memo as status=error and skip polish.
+        has_any_content = any(
+            (s.get("content") or "").strip()
+            and s.get("generated_by") not in ("error", None)
+            for s in final_sections
+        )
 
         # Aggregate generation metadata across all sections
         models_used: Dict[str, int] = {}
@@ -1011,9 +1122,9 @@ class MemoGenerator:
             "template": template_key,
             "template_name": template["name"],
             "title": title,
-            "status": "draft",
+            "status": "error" if not has_any_content else "draft",
             "sections": final_sections,
-            "errors": [{"section": s["key"], "error": "generation_failed"} for s in errors],
+            "errors": all_errors,
             "version": 1,
             "created_at": datetime.utcnow().isoformat(),
             "snapshot": snapshot,
@@ -1032,8 +1143,10 @@ class MemoGenerator:
             "_research_packs": research_packs,
         }
 
-        # Stage 5.5 — citation validation (always runs; cheap + grounds the polish)
-        if not errors:
+        # Stage 5.5 — citation validation. Runs as long as there's some content
+        # to audit; no longer short-circuited by any earlier section failure
+        # (that was the 2026-04-18 bug: one Stage 2 error blocked 5.5 + 6).
+        if has_any_content:
             if progress_cb:
                 try:
                     progress_cb("citation_audit_start", {"memo_id": memo_id})
@@ -1055,8 +1168,8 @@ class MemoGenerator:
                 except Exception:
                     pass
 
-        # Stage 6 — polish
-        if polish and not errors:
+        # Stage 6 — polish. Same gate: any content → run polish.
+        if polish and has_any_content:
             if progress_cb:
                 try:
                     progress_cb("polish_start", {"memo_id": memo_id})
@@ -1069,6 +1182,17 @@ class MemoGenerator:
                                                  "polished": memo.get("polished")})
                 except Exception:
                     pass
+
+        # Terminal-error emit — memo was saved but has no usable content.
+        if not has_any_content and progress_cb:
+            try:
+                progress_cb("pipeline_error", {
+                    "memo_id": memo_id,
+                    "reason": "all_sections_failed",
+                    "error_count": len(all_errors),
+                })
+            except Exception:
+                pass
 
         memo["generation_meta"]["total_elapsed_s"] = round(time.time() - t0, 2)
 

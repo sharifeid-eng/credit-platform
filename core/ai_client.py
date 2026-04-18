@@ -55,6 +55,11 @@ _TIER_ENV_VARS = {
 # Resolved model IDs cached after first successful use per tier
 _RESOLVED_MODELS: Dict[str, str] = {}
 
+# Tiers whose underlying models reject the `temperature` kwarg (Opus 4.7-era
+# models deprecated it). `complete()` silently strips temperature for these
+# tiers so callers can keep passing it without hitting 400 errors.
+_STRIPS_TEMPERATURE_TIERS = {"polish", "judgment"}
+
 
 def get_model(tier: str) -> str:
     """Resolve a tier name to an actual model ID.
@@ -216,9 +221,15 @@ def complete(
     kwargs: Dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
-        "temperature": temperature,
         "messages": messages,
     }
+    # Some tiers route to models that reject `temperature` (Opus 4.7-era).
+    # Strip silently rather than 400ing — deterministic output isn't meaningful
+    # on those models anyway. Preserves legacy callers that always pass it.
+    if tier.lower() in _STRIPS_TEMPERATURE_TIERS:
+        logger.debug("Stripping temperature kwarg for tier '%s' (model rejects it)", tier)
+    else:
+        kwargs["temperature"] = temperature
     if isinstance(system, str):
         if system.strip():
             kwargs["system"] = system_with_cache(system)

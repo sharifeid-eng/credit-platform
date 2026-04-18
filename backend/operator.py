@@ -26,7 +26,7 @@ from core.loader import get_companies, get_products, get_snapshots, DATA_DIR
 from core.config import load_config
 from core.activity_log import read_activity_log
 
-router = APIRouter(prefix="/operator", tags=["operator"])
+router = APIRouter(prefix="/api/operator", tags=["operator"])
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _TODO_PATH = _PROJECT_ROOT / "tasks" / "operator_todo.json"

@@ -15,6 +15,8 @@ Commands
                                  Incremental refresh (DataRoomEngine.refresh)
     rebuild-index --company X [--product P]
                                  Rebuild TF-IDF index from existing chunks
+    prune [--company X] [--product P]
+                                 Delete orphan chunk files (no registry entry)
     wipe --company X [--product P] [--yes]
                                  Delete registry/chunks/index/meta (prompts)
     classify --company X [--product P] [--only-other]
@@ -50,8 +52,16 @@ def _err(msg: str) -> None:
 
 
 def _emit(payload: dict) -> None:
-    """Print structured JSON result on stdout."""
+    """Print structured JSON result on stdout.
+
+    Flushes stderr first so the human-readable summary lines emitted via
+    `_err()` land BEFORE the JSON payload when the two streams are merged
+    (e.g. `dataroom_ctl.py audit 2>&1 | head -1`). Without this, block-buffered
+    stdout in a pipe can overtake line-buffered stderr at process exit.
+    """
+    sys.stderr.flush()
     print(json.dumps(payload, default=str))
+    sys.stdout.flush()
 
 
 def _resolve_product(engine: DataRoomEngine, company: str, product: str | None) -> str:
@@ -185,6 +195,43 @@ def cmd_rebuild_index(args: argparse.Namespace) -> int:
     )
     _emit({"command": "rebuild-index", "company": args.company, "product": product, **result})
     return 0
+
+
+def cmd_prune(args: argparse.Namespace) -> int:
+    """Delete orphan chunk files (present on disk but not in registry).
+
+    Complement to the registry-orphan eviction already wired into ingest()/
+    refresh(). Useful for operators cleaning up after a wipe+re-ingest where
+    new uuid4 doc_ids leave old chunk files behind.
+    """
+    engine = DataRoomEngine()
+    companies = [args.company] if args.company else get_companies()
+
+    reports = []
+    any_failure = False
+    for co in companies:
+        dr_dir = _REPO_ROOT / "data" / co / "dataroom"
+        if not dr_dir.is_dir():
+            continue
+        product = _resolve_product(engine, co, args.product if args.company else None)
+        try:
+            result = engine.prune(co, product)
+        except Exception as e:
+            any_failure = True
+            result = {"error": str(e)}
+        reports.append({"company": co, "product": product, **result})
+
+        if result.get("error"):
+            _err(f"[{co}] ERROR: {result['error']}")
+        else:
+            _err(
+                f"[{co}/{product or '-'}] pruned: deleted={result.get('deleted', 0)} "
+                f"kept={result.get('kept', 0)} "
+                f"chunk_dir_missing={result.get('chunk_dir_missing', False)}"
+            )
+
+    _emit({"command": "prune", "reports": reports})
+    return 3 if any_failure else 0
 
 
 def cmd_wipe(args: argparse.Namespace) -> int:
@@ -321,6 +368,11 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--company", required=True)
     sp.add_argument("--product")
     sp.set_defaults(func=cmd_rebuild_index)
+
+    sp = sub.add_parser("prune", help="Delete orphan chunk files (no matching registry entry)")
+    sp.add_argument("--company", help="Prune only this company (default: all)")
+    sp.add_argument("--product", help="Product key (autodetected if omitted)")
+    sp.set_defaults(func=cmd_prune)
 
     sp = sub.add_parser("wipe", help="Delete registry/chunks/index/meta (source files preserved)")
     sp.add_argument("--company", required=True)
