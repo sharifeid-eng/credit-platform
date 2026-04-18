@@ -47,6 +47,24 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-18 — Directory-layout migrations must grep EVERY caller, not just the primary consumers
+
+**Problem:** Session 17 moved datarooms from product-level (`data/{company}/{product}/dataroom/`) to company-level (`data/{company}/dataroom/`). The primary consumer (`DataRoomEngine`) was updated. Legal and Mind paths in `backend/operator.py` were already at company-level. But line 102 of `operator.py` — the Health tab's dataroom probe — was missed and kept pointing at the old path. Six months later, production Health tab showed "Data room not ingested" for every company with a populated dataroom. Caught only during a smoke test of an unrelated fix.
+
+**Root cause:** Session 17's migration PR updated the primary consumer and the two paths that shared the file with dataroom. The ancillary code (operator health matrix) was in a different file and accessed the path via a slightly different pattern (`product_path / "dataroom" / ...` instead of a constant), so the migration grep didn't find it.
+
+**Rule:** When reorganizing a shared directory layout, grep for every string containing the directory name — not just well-known consumers. Use multiple patterns:
+  - `"dataroom"` — plain string
+  - `/ "dataroom"` — pathlib composition
+  - `/dataroom/` — embedded in paths
+  - `product_path.*dataroom` — product-level accessors that need to move
+
+Cross-reference against a list of every file that touches the data layer. Health dashboards, operator tools, diagnostic scripts, and periodic audit jobs all read the same paths but are easy to forget.
+
+**How to apply:** Any migration PR should include a "grep verification" checklist in the commit message listing every pattern searched and every file touched. If the migration is incomplete, latent bugs surface months later in places no one remembers to look.
+
+---
+
 ## 2026-04-18 — Renaming a backend route prefix is incomplete without auditing the reverse proxy config
 
 **Problem:** Session 25 moved backend operator endpoints from `/operator/*` to `/api/operator/*` and updated all Python + frontend callers. Full test suite green. Deployed. User visited `laithanalytics.ai/operator` and STILL got `{"detail":"Not Found"}` — the exact bug we thought we'd fixed. Root cause: `docker/nginx.conf` had an explicit `location /operator { proxy_pass http://backend:8000 }` block that continued forwarding `/operator` to the backend regardless of what Python routes existed. Backend now had no handler at `/operator` (only at `/api/operator/*`), so it returned FastAPI's 404 JSON instead of the SPA falling through.

@@ -67,6 +67,11 @@ Production evidence: `e2bc4a3f-d68` Klaim memo had 3/12 sections, no Haiku/Opus 
 - [x] Full test suite: **420 passed, 0 failed** (baseline was 268+). Added 4 new tests (3 for ai_client, 1 for memo pipeline).
 - [x] Fix 1 + Fix 2 verified locally via dataroom_ctl CLI (orphan created, detected, pruned, idempotent).
 
+### Post-eod follow-up commits (surfaced during production smoke test)
+- [x] **Fix 5b: Remove nginx `/operator` proxy block** (`docker/nginx.conf`, commit `7ea5ea6`) — the Python route rename was not enough. `docker/nginx.conf` had an explicit `location /operator { proxy_pass http://backend:8000 }` block baked into the frontend image at build time, forwarding `/operator` to backend regardless of what Python routes existed. Backend returned FastAPI's `{"detail":"Not Found"}` instead of the SPA falling through. Deleted the block so the existing `try_files $uri $uri/ /index.html` SPA fallback catches `/operator`. `/api/operator/*` still routes via the `/api/` proxy block.
+- [x] **Lesson captured: route-rename must audit reverse proxy config** (`tasks/lessons.md`, commit `418c54c`) — three-layer checklist: (1) Python route decorators, (2) frontend callers, (3) reverse proxy config. Missing any one leaves the bug live.
+- [x] **Fix: OperatorCenter Health tab stale dataroom path** (`backend/operator.py`, commit `d0863ea`) — line 102 still referenced `data/{company}/{product}/dataroom/registry.json` (pre-session-17 path). Session 17 moved datarooms to company-level; legal and mind paths were updated but the operator health-matrix dataroom probe was missed. Symptom: every company showed "— DOCS" and "Data room not ingested" info chip in the Health tab. One-line fix using `Path(DATA_DIR) / company / "dataroom"` to match the rest of the file.
+
 ---
 
 ## Completed — 2026-04-18 (session 24: Data Room Pipeline Hardening & Quality Overhaul)
