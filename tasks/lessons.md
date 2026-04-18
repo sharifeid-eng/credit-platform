@@ -47,6 +47,24 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-18 — Renaming a backend route prefix is incomplete without auditing the reverse proxy config
+
+**Problem:** Session 25 moved backend operator endpoints from `/operator/*` to `/api/operator/*` and updated all Python + frontend callers. Full test suite green. Deployed. User visited `laithanalytics.ai/operator` and STILL got `{"detail":"Not Found"}` — the exact bug we thought we'd fixed. Root cause: `docker/nginx.conf` had an explicit `location /operator { proxy_pass http://backend:8000 }` block that continued forwarding `/operator` to the backend regardless of what Python routes existed. Backend now had no handler at `/operator` (only at `/api/operator/*`), so it returned FastAPI's 404 JSON instead of the SPA falling through.
+
+**Rule:** When renaming a backend route prefix (especially one that collided with an SPA route), the fix has three layers, not one: (1) Python route decorators, (2) frontend callers, (3) reverse proxy config. Miss any one and the bug persists. For this codebase, proxy config lives at `docker/nginx.conf` and is baked into the frontend image at build time — changes don't ship until redeploy.
+
+**Why:** The original spec (Option 1 vs Option 2) flagged this risk — "Option 2 (proxy-only, cheapest): Edit the reverse proxy config on the Hetzner box." I chose Option 1 (rename Python routes) and assumed the proxy auto-fell through when backend had no match. It does not when there's an explicit `location` block.
+
+**How to apply:** Route-rename checklist:
+1. `grep -rn "APIRouter(prefix=" backend/` — find all backend prefixes
+2. `grep -rn "['\"]/<prefix>" frontend/src/` — find all frontend callers
+3. `grep -rn "location /<prefix>" docker/ nginx/ *.conf` — find proxy blocks
+4. Bonus: check `backend/cf_auth.py` `_SKIP_PREFIXES` for auth middleware exclusions
+
+Only after all three layers are consistent can the rename be considered complete.
+
+---
+
 ## 2026-04-18 — `temperature` is model-specific — tier-aware kwarg filtering beats per-call-site edits
 
 **Problem:** Opus 4.7 deprecated `temperature`. One call site (`memo/generator.py:858` polish pass) hit a 400 error. The fix could have been a one-line `temperature=` removal at that site, but the same pattern is risk-eligible anywhere else a caller routes to Opus 4.7. Instead of hunting call sites on every future model deprecation, centralize the filter at the tier boundary.
