@@ -39,12 +39,20 @@ def _run_agent_sync(agent_name: str, prompt: str, metadata: dict, max_turns: int
     session = AgentSession.create(agent_name, metadata=metadata)
     runner = AgentRunner(config)
 
-    # Run the async agent in a sync context
-    loop = None
+    # Run the async agent in a sync context.
+    # On Python 3.12+, asyncio.get_event_loop() raises RuntimeError in non-main
+    # threads with no loop set. The memo pipeline runs research packs in a
+    # ThreadPoolExecutor, so we must handle the missing-loop case explicitly.
     try:
         loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    try:
         if loop.is_running():
-            # We're inside an async context (FastAPI) — use run_coroutine_threadsafe
+            # We're inside an async context (FastAPI) — run in a separate pool
+            # thread with its own fresh loop via asyncio.run().
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, runner.run(prompt, session))
@@ -52,7 +60,7 @@ def _run_agent_sync(agent_name: str, prompt: str, metadata: dict, max_turns: int
         else:
             result = loop.run_until_complete(runner.run(prompt, session))
     except RuntimeError:
-        # No event loop — create one
+        # Fallback: spin up a fresh run (e.g. loop closed mid-call)
         result = asyncio.run(runner.run(prompt, session))
 
     # Clean up session (internal invocations don't need persistence)

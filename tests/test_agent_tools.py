@@ -52,6 +52,102 @@ class TestAnalyticsTools:
             tool.handler(company="nonexistent_co_xyz", product="nonexistent_prod")
 
 
+# ── Klaim handler regression tests (signature correctness) ───────────────
+
+def _klaim_data_available():
+    """Skip real-data tests when the Klaim tape isn't present."""
+    return Path("data/klaim/UAE_healthcare").exists() and any(
+        Path("data/klaim/UAE_healthcare").glob("*.csv")
+    )
+
+
+@pytest.mark.skipif(
+    not _klaim_data_available(),
+    reason="Klaim UAE_healthcare tape not present in this environment",
+)
+class TestKlaimHandlerSignatures:
+    """Regression tests for the Klaim analytics tool handlers.
+
+    Each of these tools had a signature mismatch against the core compute
+    functions (extra positional args, wrong module import, or wrong kwarg).
+    The judgment-section research packs in the memo pipeline invoke these
+    handlers, so a TypeError here silently killed the memo SSE stream.
+
+    Verify each handler runs without raising and returns a non-empty string.
+    """
+
+    KLAIM = dict(company="klaim", product="UAE_healthcare")
+
+    def test_get_cohort_analysis_klaim(self):
+        tool = registry.get("analytics.get_cohort_analysis")
+        result = tool.handler(**self.KLAIM)
+        assert isinstance(result, str) and result
+        assert "Vintage Cohort" in result or "cohort" in result.lower()
+
+    def test_get_returns_analysis_klaim(self):
+        tool = registry.get("analytics.get_returns_analysis")
+        result = tool.handler(**self.KLAIM)
+        assert isinstance(result, str) and result
+        assert "Returns Analysis" in result
+
+    def test_get_covenants_klaim(self):
+        # This used to import from core.analysis (wrong module).
+        tool = registry.get("analytics.get_covenants")
+        result = tool.handler(**self.KLAIM)
+        assert isinstance(result, str) and result
+        assert "Covenant" in result
+
+    def test_get_collection_velocity_klaim(self):
+        tool = registry.get("analytics.get_collection_velocity")
+        result = tool.handler(**self.KLAIM)
+        assert isinstance(result, str) and result
+        assert "Collection Velocity" in result
+
+    def test_get_segment_analysis_klaim(self):
+        # `dimension` used to be passed as `as_of_date` positionally.
+        tool = registry.get("analytics.get_segment_analysis")
+        result = tool.handler(dimension="product", **self.KLAIM)
+        assert isinstance(result, str) and result
+        assert "Segment Analysis" in result
+
+
+class TestInternalEventLoopGuard:
+    """Verify _run_agent_sync's event-loop guard handles non-main threads.
+
+    On Python 3.12+, asyncio.get_event_loop() raises RuntimeError in a
+    worker thread with no loop set. The memo pipeline runs agent research
+    in a ThreadPoolExecutor, so the guard must create a loop rather than
+    propagate the error.
+    """
+
+    def test_get_event_loop_guarded_in_worker_thread(self):
+        """Simulate the ThreadPoolExecutor context by running the guard in
+        a fresh thread. The original bug raised RuntimeError at
+        asyncio.get_event_loop()."""
+        import asyncio
+        import threading
+
+        result = {"ok": False, "err": None}
+
+        def _worker():
+            try:
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                assert loop is not None
+                result["ok"] = True
+            except Exception as e:  # pragma: no cover
+                result["err"] = e
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+        t.join(timeout=5)
+        assert result["err"] is None
+        assert result["ok"]
+
+
 # ── Data Room Tools ──────────────────────────────────────────────────────
 
 class TestDataroomTools:

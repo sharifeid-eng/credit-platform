@@ -169,7 +169,8 @@ def _get_cohort_analysis(
         df, sel = load_tape(company, product, snapshot, as_of_date)
         _, disp, mult = get_currency(company, product, currency)
         from core.analysis import compute_cohorts
-        result = compute_cohorts(df, mult, sel.get("date", ""), as_of_date)
+        # Klaim's compute_cohorts returns a bare list; other branches return dicts
+        result = {"cohorts": compute_cohorts(df, mult)}
 
     cohorts = result.get("cohorts", [])
     if not cohorts:
@@ -177,8 +178,9 @@ def _get_cohort_analysis(
 
     lines = [f"Vintage Cohort Analysis — {company}/{product} ({len(cohorts)} vintages)"]
     for c in cohorts[:12]:  # Show up to 12 vintages
-        vintage = c.get("vintage", c.get("Vintage", "?"))
-        deals = c.get("deals", c.get("Deals", 0))
+        # Klaim uses 'month'/'total_deals'; SILQ/Aajil use 'vintage'/'deals' or 'Vintage'/'Deals'
+        vintage = c.get("vintage", c.get("Vintage", c.get("month", "?")))
+        deals = c.get("deals", c.get("Deals", c.get("total_deals", 0)))
         coll_rate = format_number(c.get("collection_rate", c.get("Collection Rate")), is_pct=True)
         denial_rate = format_number(c.get("denial_rate", c.get("Denial Rate")), is_pct=True)
         lines.append(f"  {vintage}: {deals} deals, collection {coll_rate}, denial {denial_rate}")
@@ -276,7 +278,7 @@ def _get_returns_analysis(
     _, disp, mult = get_currency(company, product, currency)
 
     from core.analysis import compute_returns_analysis
-    result = compute_returns_analysis(df, mult, sel.get("date", ""), as_of_date)
+    result = compute_returns_analysis(df, mult)
 
     s = result.get("summary", {})
     lines = [f"Returns Analysis — {company}/{product}"]
@@ -319,7 +321,7 @@ def _get_collection_velocity(
         df, sel = load_tape(company, product, snapshot, as_of_date)
         _, disp, mult = get_currency(company, product, currency)
         from core.analysis import compute_collection_velocity
-        result = compute_collection_velocity(df, mult, sel.get("date", ""), as_of_date)
+        result = compute_collection_velocity(df, mult, as_of_date=as_of_date or sel.get("date"))
 
     monthly = result.get("monthly", [])
     lines = [f"Collection Velocity — {company}/{product}"]
@@ -351,8 +353,8 @@ def _get_covenants(
     elif at == "klaim":
         df, sel = load_tape(company, product, snapshot, as_of_date)
         config, disp, mult = get_currency(company, product, currency)
-        from core.analysis import compute_klaim_covenants
-        result = compute_klaim_covenants(df, mult, config, sel.get("date", ""), as_of_date)
+        from core.portfolio import compute_klaim_covenants
+        result = compute_klaim_covenants(df, mult, ref_date=as_of_date or sel.get("date"))
     elif at == "aajil":
         df, sel, _ = load_aajil_tape(company, product, snapshot, as_of_date)
         _, disp, mult = get_currency(company, product, currency)
@@ -467,7 +469,7 @@ def _get_segment_analysis(
     _, disp, mult = get_currency(company, product, currency)
 
     from core.analysis import compute_segment_analysis
-    result = compute_segment_analysis(df, mult, dimension)
+    result = compute_segment_analysis(df, mult, segment_by=dimension)
 
     segments = result.get("segments", [])
     lines = [f"Segment Analysis ({dimension}) — {company}/{product}"]
