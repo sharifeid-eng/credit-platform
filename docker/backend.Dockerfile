@@ -20,6 +20,7 @@ RUN playwright install chromium
 # Copy application code (context is project root)
 COPY core/ /app/core/
 COPY backend/ /app/backend/
+COPY scripts/ /app/scripts/
 COPY generate_report.py /app/generate_report.py
 COPY alembic/ /app/alembic/
 COPY alembic.ini /app/alembic.ini
