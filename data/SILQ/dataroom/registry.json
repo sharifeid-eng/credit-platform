@@ -1,0 +1,729 @@
+{
+  "9866582f-ad6": {
+    "doc_id": "9866582f-ad6",
+    "filename": "20260203_SILQ Financial Model vSent.xlsx",
+    "filepath": "data/SILQ/dataroom/20260203_SILQ Financial Model vSent.xlsx",
+    "document_type": "financial_model",
+    "sha256": "2bb269eda4850e49692375045742d523ea30626eeba3227c7ce1baae65f8dca4",
+    "page_count": 12,
+    "chunk_count": 12,
+    "text_length": 128746,
+    "table_count": 12,
+    "parser_metadata": {
+      "filename": "20260203_SILQ Financial Model vSent.xlsx",
+      "sheets": [
+        {
+          "name": "Model Structure Note",
+          "rows": 4,
+          "cols": 2
+        },
+        {
+          "name": "SILQ Consol Summary",
+          "rows": 266,
+          "cols": 77
+        },
+        {
+          "name": "KSA Case Selector",
+          "rows": 59,
+          "cols": 77
+        },
+        {
+          "name": "SPV Level Fund Flow",
+          "rows": 38,
+          "cols": 11
+        },
+        {
+          "name": "KSA FS",
+          "rows": 491,
+          "cols": 77
+        },
+        {
+          "name": "KSA UE",
+          "rows": 31,
+          "cols": 77
+        },
+        {
+          "name": "KSA Financing Assumptions",
+          "rows": 352,
+          "cols": 74
+        },
+        {
+          "name": "BD FS",
+          "rows": 168,
+          "cols": 77
+        },
+        {
+          "name": "BD UE",
+          "rows": 30,
+          "cols": 77
+        },
+        {
+          "name": "BD Assumptions",
+          "rows": 288,
+          "cols": 71
+        },
+        {
+          "name": "Group Level Assumptions",
+          "rows": 122,
+          "cols": 71
+        },
+        {
+          "name": "Debt Schedule",
+          "rows": 48,
+          "cols": 53
+        }
+      ],
+      "total_sheets": 12
+    },
+    "ingested_at": "2026-04-17T21:17:30"
+  },
+  "bfce9ff6-3ef": {
+    "doc_id": "bfce9ff6-3ef",
+    "filename": "251126 SILQ - Current Capitalization Table.xlsx",
+    "filepath": "data/SILQ/dataroom/251126 SILQ - Current Capitalization Table.xlsx",
+    "document_type": "other",
+    "sha256": "631dfac995cbcba8c8e546fa03115c377c929b2c5dd5797ed4974a677dafa7a4",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 4790,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "251126 SILQ - Current Capitalization Table.xlsx",
+      "sheets": [
+        {
+          "name": "1. Summary",
+          "rows": 61,
+          "cols": 19
+        },
+        {
+          "name": "By Rounds",
+          "rows": 13,
+          "cols": 6
+        }
+      ],
+      "total_sheets": 2
+    },
+    "ingested_at": "2026-04-17T21:17:30"
+  },
+  "ce991e75-97e": {
+    "doc_id": "ce991e75-97e",
+    "filename": "Debt Schedule - Dec 25A.xlsx",
+    "filepath": "data/SILQ/dataroom/Debt Schedule - Dec 25A.xlsx",
+    "document_type": "other",
+    "sha256": "a355bbedeec64692b9c661ed2f3f0664d0ed2d6dcbe19e74d4f539668d30be11",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 5868,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "Debt Schedule - Dec 25A.xlsx",
+      "sheets": [
+        {
+          "name": "Debt Schedule",
+          "rows": 47,
+          "cols": 32
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-17T21:17:30"
+  },
+  "d72a98c4-e6f": {
+    "doc_id": "d72a98c4-e6f",
+    "filename": "HSBC - KPI.xlsx",
+    "filepath": "data/SILQ/dataroom/HSBC - KPI.xlsx",
+    "document_type": "investor_report",
+    "sha256": "2e3428246f939a28e4f323f1fd1aac6cc27842bdf0c2149ac2513ced9e93d338",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 641,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "HSBC - KPI.xlsx",
+      "sheets": [
+        {
+          "name": "KPIs",
+          "rows": 5,
+          "cols": 11
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-17T21:17:30"
+  },
+  "470273fe-c48": {
+    "doc_id": "470273fe-c48",
+    "filename": "HSBC - P&L Answers vSent.pdf",
+    "filepath": "data/SILQ/dataroom/HSBC - P&L Answers vSent.pdf",
+    "document_type": "investor_report",
+    "sha256": "1ad1a40951f0518aa4aaff97215663cbea4b8941dac51f0ffbddeb88795dc817",
+    "page_count": 2,
+    "chunk_count": 3,
+    "text_length": 3625,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "HSBC - P&L Answers vSent.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:31"
+  },
+  "44a08d98-79e": {
+    "doc_id": "44a08d98-79e",
+    "filename": "SILQ Sharif Memo.docx",
+    "filepath": "data/SILQ/dataroom/SILQ Sharif Memo.docx",
+    "document_type": "investor_report",
+    "sha256": "bfd588caa3a4d34a8273e4c8c8985b87c61249117bcaedfda4cf6bf6bac73679",
+    "page_count": 7,
+    "chunk_count": 30,
+    "text_length": 40241,
+    "table_count": 13,
+    "parser_metadata": {
+      "filename": "SILQ Sharif Memo.docx",
+      "author": "Samer Sarraf",
+      "created": "2024-11-16",
+      "modified": "2025-12-17"
+    },
+    "ingested_at": "2026-04-17T21:17:32"
+  },
+  "112de9b8-764": {
+    "doc_id": "112de9b8-764",
+    "filename": "Symbiotics_Redacted.pdf",
+    "filepath": "data/SILQ/dataroom/Symbiotics_Redacted.pdf",
+    "document_type": "facility_agreement",
+    "sha256": "e54060fd8da7817ed753d7ebcef54ab0a8c1f289576e85fd5b468083f99638db",
+    "page_count": 5,
+    "chunk_count": 9,
+    "text_length": 8161,
+    "table_count": 4,
+    "parser_metadata": {
+      "filename": "Symbiotics_Redacted.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:32"
+  },
+  "5fe1d9d5-9d2": {
+    "doc_id": "5fe1d9d5-9d2",
+    "filename": "UW deck SilqFi.pdf",
+    "filepath": "data/SILQ/dataroom/UW deck SilqFi.pdf",
+    "document_type": "company_presentation",
+    "sha256": "52b4b8ec456f9631c635573e544d49938ede6a020922c00aff199ed3228702f0",
+    "page_count": 22,
+    "chunk_count": 35,
+    "text_length": 14181,
+    "table_count": 13,
+    "parser_metadata": {
+      "filename": "UW deck SilqFi.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:34"
+  },
+  "019708dc-111": {
+    "doc_id": "019708dc-111",
+    "filename": "2_5 - 202510_SILQ Post Merger Investor Update Deck (May to Oct 2025) VSent.pdf",
+    "filepath": "data/SILQ/dataroom/2_5 - Investor Reporting Deck (Post Merger - May 2025)/2_5 - 202510_SILQ Post Merger Investor Update Deck (May to Oct 2025) VSent.pdf",
+    "document_type": "investor_report",
+    "sha256": "be85bae2763ca99d1591111fa3f389f6e012492d2d79fed015a1851ecc0e0a02",
+    "page_count": 11,
+    "chunk_count": 13,
+    "text_length": 4254,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "2_5 - 202510_SILQ Post Merger Investor Update Deck (May to Oct 2025) VSent.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:34"
+  },
+  "4a536215-da3": {
+    "doc_id": "4a536215-da3",
+    "filename": "2_6 - KSA-Origination-Financing.xlsx",
+    "filepath": "data/SILQ/dataroom/2_6 - KPIs/2_6 - KSA-Origination-Financing.xlsx",
+    "document_type": "portfolio_tape",
+    "sha256": "e87b22486f1240891db8f8dd30f96d5d1e6c503a2af69b5357fb59e68dae70ba",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 2636,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2_6 - KSA-Origination-Financing.xlsx",
+      "sheets": [
+        {
+          "name": "KPIs",
+          "rows": 23,
+          "cols": 10
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-17T21:17:34"
+  },
+  "2ff1706d-75d": {
+    "doc_id": "2ff1706d-75d",
+    "filename": "2_8 - Product Unit Economics.xlsx",
+    "filepath": "data/SILQ/dataroom/2_8 - Product Unit Economics/2_8 - Product Unit Economics.xlsx",
+    "document_type": "other",
+    "sha256": "9ad33ff772ef426dbc407416d3386eebd51a3883cc79411fcafb8c43f0c17a65",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 497,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2_8 - Product Unit Economics.xlsx",
+      "sheets": [
+        {
+          "name": "UE",
+          "rows": 12,
+          "cols": 3
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-17T21:17:34"
+  },
+  "74b6d44e-b6b": {
+    "doc_id": "74b6d44e-b6b",
+    "filename": "3_1 - SILQFi Value Proposition.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_1 - SILQFi Value Proposition/3_1 - SILQFi Value Proposition.pdf",
+    "document_type": "other",
+    "sha256": "390ef51a162a946bf9c85b17eee3418ac84a3da40691fa7a77711c5670a342ad",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2665,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_1 - SILQFi Value Proposition.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:35"
+  },
+  "5267f34f-f8a": {
+    "doc_id": "5267f34f-f8a",
+    "filename": "3_10 - Competitive Positioning of Products in Saudi Arabia.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_10 - Competitive Positioning of Products in Saudi Arabia/3_10 - Competitive Positioning of Products in Saudi Arabia.pdf",
+    "document_type": "other",
+    "sha256": "197babcda1ca34f77b40b766c6537a0240f35de0b102649948b0764e6965303f",
+    "page_count": 2,
+    "chunk_count": 4,
+    "text_length": 3134,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "3_10 - Competitive Positioning of Products in Saudi Arabia.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:35"
+  },
+  "f24f1d49-d4a": {
+    "doc_id": "f24f1d49-d4a",
+    "filename": "3_3 - Legal Form & Structure - Receivables.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_3 - Legal Form & Structure - Receivables/3_3 - Legal Form & Structure - Receivables.pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "5ff1733066578b7df59307451acc34f6ca46ae350076243b1ff4d74884e0ba31",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 2453,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_3 - Legal Form & Structure - Receivables.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:35"
+  },
+  "76943b37-33b": {
+    "doc_id": "76943b37-33b",
+    "filename": "3_4_1 - Product Features.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_4 - Product Architecture & Features/3_4_1 - Product Features.pdf",
+    "document_type": "other",
+    "sha256": "c558a04a10b2447a327dba908dae5a686da72540416cfa197fab9f61634f7dee",
+    "page_count": 4,
+    "chunk_count": 4,
+    "text_length": 4067,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_4_1 - Product Features.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:36"
+  },
+  "dbf0c9fc-054": {
+    "doc_id": "dbf0c9fc-054",
+    "filename": "3_4_2 - Product Comparison - Target Merchant Profile.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_4 - Product Architecture & Features/3_4_2 - Product Comparison - Target Merchant Profile.pdf",
+    "document_type": "other",
+    "sha256": "fd1564f70b34b28d6b44ca4571c89c2ff71c9d2036d2ec3da1c18c788b82c815",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 1608,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "3_4_2 - Product Comparison - Target Merchant Profile.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:36"
+  },
+  "6acdb940-225": {
+    "doc_id": "6acdb940-225",
+    "filename": "3_4_3 - Customer Persona for RBF.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_4 - Product Architecture & Features/3_4_3 - Customer Persona for RBF.pdf",
+    "document_type": "other",
+    "sha256": "13585c57f612e7b3a4cf02f4b587282b5b4484aef53e7d56a153e3e51e034045",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1771,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_4_3 - Customer Persona for RBF.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:36"
+  },
+  "1475e64e-7fc": {
+    "doc_id": "1475e64e-7fc",
+    "filename": "3_5 - Historical Approval & Decline Rates.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_5 - Historical Approval & Decline Rates/3_5 - Historical Approval & Decline Rates.pdf",
+    "document_type": "other",
+    "sha256": "cfccbef735c7ca7a8684c64f8aef47036ccd9b32a52a6fb80bc54b4423848227",
+    "page_count": 1,
+    "chunk_count": 3,
+    "text_length": 640,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "3_5 - Historical Approval & Decline Rates.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:36"
+  },
+  "77c41eda-b36": {
+    "doc_id": "77c41eda-b36",
+    "filename": "3_6 - Write-Off Policy.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_6 - Write-Off Policy/3_6 - Write-Off Policy.pdf",
+    "document_type": "other",
+    "sha256": "e9495ce85d2923da5fc61ce574ce86f720a434da554a34de771d5fb6e94c1b62",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 3227,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_6 - Write-Off Policy.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:37"
+  },
+  "e1d77f76-48a": {
+    "doc_id": "e1d77f76-48a",
+    "filename": "3_7 - Commercial Proposal from Insurance.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_7 - Credit Insurance/3_7 - Commercial Proposal from Insurance.pdf",
+    "document_type": "other",
+    "sha256": "64b23a2e93f859551d5bf482d2504dddccfeac1b358f077bf03a9d2dbd75d32c",
+    "page_count": 8,
+    "chunk_count": 27,
+    "text_length": 14524,
+    "table_count": 15,
+    "parser_metadata": {
+      "filename": "3_7 - Commercial Proposal from Insurance.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:38"
+  },
+  "7ce7afe5-e3e": {
+    "doc_id": "7ce7afe5-e3e",
+    "filename": "3_7 - Note on Credit Insurance.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_7 - Credit Insurance/3_7 - Note on Credit Insurance.pdf",
+    "document_type": "other",
+    "sha256": "63ae5230e97515be00f3e6594c39ec722a44fba471821e1af6e189655a99c6b0",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 468,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_7 - Note on Credit Insurance.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:38"
+  },
+  "dc11cc09-2b7": {
+    "doc_id": "dc11cc09-2b7",
+    "filename": "3_8 - Promissory Notes & Personal Guarantees.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_8 - Promissory Notes & Personal Guarantees/3_8 - Promissory Notes & Personal Guarantees.pdf",
+    "document_type": "other",
+    "sha256": "309640b3877a6aa0da37271f0c12611cc85dd6781c2c74a385efb42326b050cb",
+    "page_count": 2,
+    "chunk_count": 3,
+    "text_length": 2936,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "3_8 - Promissory Notes & Personal Guarantees.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:38"
+  },
+  "42c6d2bd-0fb": {
+    "doc_id": "42c6d2bd-0fb",
+    "filename": "3_9 - Team Structure.pdf",
+    "filepath": "data/SILQ/dataroom/3_ Credit Portfolio and Performance/3_9 - Team Structure/3_9 - Team Structure.pdf",
+    "document_type": "other",
+    "sha256": "a376305571bc412124ff06f7971cdbe617d3d2239ef08be8b5d9f317bb9a93f2",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 2121,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "3_9 - Team Structure.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:38"
+  },
+  "f90f2629-1f6": {
+    "doc_id": "f90f2629-1f6",
+    "filename": "4_1 - Underwriting Policies.pdf",
+    "filepath": "data/SILQ/dataroom/4_ Operations - Underwriting and Collections/4_1 - Underwriting Policies/4_1 - Underwriting Policies.pdf",
+    "document_type": "credit_policy",
+    "sha256": "662852d792205804d741d8194449bfc128c377eed2834ec58133db090eee8368",
+    "page_count": 2,
+    "chunk_count": 2,
+    "text_length": 3781,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "4_1 - Underwriting Policies.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:39"
+  },
+  "b8f52821-c80": {
+    "doc_id": "b8f52821-c80",
+    "filename": "4_3 to 4_7 - Servicing & Collections Architecture.pdf",
+    "filepath": "data/SILQ/dataroom/4_ Operations - Underwriting and Collections/4_3 to 4_7 - Servicing & Collections Architecture/4_3 to 4_7 - Servicing & Collections Architecture.pdf",
+    "document_type": "other",
+    "sha256": "4fe5cfda5421aa286d379009d1b3ae1a15bb3437ad95da12228013f2cb5f3577",
+    "page_count": 3,
+    "chunk_count": 3,
+    "text_length": 3545,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "4_3 to 4_7 - Servicing & Collections Architecture.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:39"
+  },
+  "95c35c06-f75": {
+    "doc_id": "95c35c06-f75",
+    "filename": "4_8 - Recovery Strategy & Enforcement.pdf",
+    "filepath": "data/SILQ/dataroom/4_ Operations - Underwriting and Collections/4_8 - Recovery Strategy & Enforcement/4_8 - Recovery Strategy & Enforcement.pdf",
+    "document_type": "legal_document",
+    "sha256": "253c465cc9c28038d4af86452c05b0e4b8c00f049bda9b11b142f3d757e80c1d",
+    "page_count": 4,
+    "chunk_count": 7,
+    "text_length": 4850,
+    "table_count": 3,
+    "parser_metadata": {
+      "filename": "4_8 - Recovery Strategy & Enforcement.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:40"
+  },
+  "520f537d-d24": {
+    "doc_id": "520f537d-d24",
+    "filename": "5_1 - SILQ Tech Architecture.pdf",
+    "filepath": "data/SILQ/dataroom/5_ Technology and Data Infrastructure/5_1 - SILQ Tech Architecture/5_1 - SILQ Tech Architecture.pdf",
+    "document_type": "other",
+    "sha256": "ab17cd32e3a57bddea8cdcbd6050a3f63278d1b87617dfa1b026429937a0b096",
+    "page_count": 16,
+    "chunk_count": 42,
+    "text_length": 5359,
+    "table_count": 26,
+    "parser_metadata": {
+      "filename": "5_1 - SILQ Tech Architecture.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:41"
+  },
+  "44f2b43f-a52": {
+    "doc_id": "44f2b43f-a52",
+    "filename": "5_2, 5_3 & 5_4 - Audit Trails, Data Security, Access Control, Disaster Recovery.pdf",
+    "filepath": "data/SILQ/dataroom/5_ Technology and Data Infrastructure/5_2, 5_3 & 5_4 -  Audit Trails, Data Security, Disaster Recovery/5_2, 5_3 & 5_4 - Audit Trails, Data Security, Access Control, Disaster Recovery.pdf",
+    "document_type": "other",
+    "sha256": "9508a1d8575184ac29aa2bdf35df9f49c7bead7d3b7480dff1da8c4471bb5b33",
+    "page_count": 7,
+    "chunk_count": 9,
+    "text_length": 13603,
+    "table_count": 2,
+    "parser_metadata": {
+      "filename": "5_2, 5_3 & 5_4 - Audit Trails, Data Security, Access Control, Disaster Recovery.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:42"
+  },
+  "6fb9f90f-885": {
+    "doc_id": "6fb9f90f-885",
+    "filename": "5_5- Third Party Systems & Vendors.xlsx",
+    "filepath": "data/SILQ/dataroom/5_ Technology and Data Infrastructure/5_5 - Third Party Systems & Vendors/5_5- Third Party Systems & Vendors.xlsx",
+    "document_type": "other",
+    "sha256": "729e186effc3d1a1763e2f6dee8b4e4373682c5c6f170026f71631ccab531132",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 2106,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "5_5- Third Party Systems & Vendors.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet1",
+          "rows": 16,
+          "cols": 6
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-17T21:17:43"
+  },
+  "7a3fb8dd-669": {
+    "doc_id": "7a3fb8dd-669",
+    "filename": "5_6 - SILQ Unified Techology.pdf",
+    "filepath": "data/SILQ/dataroom/5_ Technology and Data Infrastructure/5_6 - SILQ Unified Techology/5_6 - SILQ Unified Techology.pdf",
+    "document_type": "other",
+    "sha256": "ababcccf8c6659e913ed87a577cbd6d12ee42b53326bb09de913657a7b62ce38",
+    "page_count": 3,
+    "chunk_count": 3,
+    "text_length": 4328,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "5_6 - SILQ Unified Techology.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:43"
+  },
+  "10a13900-a0b": {
+    "doc_id": "10a13900-a0b",
+    "filename": "5_7 - Data Sharing & Cross Platform Synergies.pdf",
+    "filepath": "data/SILQ/dataroom/5_ Technology and Data Infrastructure/5_7 - Data Sharing & Cross Platform Synergies/5_7 - Data Sharing & Cross Platform Synergies.pdf",
+    "document_type": "other",
+    "sha256": "3f240031e1e7254b78e21687cc7e0819a02b716c820cb88fc07eca399050619b",
+    "page_count": 3,
+    "chunk_count": 3,
+    "text_length": 3755,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "5_7 - Data Sharing & Cross Platform Synergies.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:44"
+  },
+  "ae381859-bdf": {
+    "doc_id": "ae381859-bdf",
+    "filename": "1 - Market & Opportunity Sizing.pdf",
+    "filepath": "data/SILQ/dataroom/Business Info/1 - Market & Opportunity Sizing.pdf",
+    "document_type": "other",
+    "sha256": "f4b01100ce0d99dff75253ad468fb5939bc71e92f567d609b2200119b8d31b54",
+    "page_count": 5,
+    "chunk_count": 6,
+    "text_length": 1783,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "1 - Market & Opportunity Sizing.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:44"
+  },
+  "88dfda15-5d5": {
+    "doc_id": "88dfda15-5d5",
+    "filename": "2 - Competition Analysis.pdf",
+    "filepath": "data/SILQ/dataroom/Business Info/2 - Competition Analysis.pdf",
+    "document_type": "other",
+    "sha256": "1d2c9d1b976a9e66425f70fa0417fa49baec128d9f37d868796dcea34da76ba6",
+    "page_count": 1,
+    "chunk_count": 2,
+    "text_length": 135,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "2 - Competition Analysis.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:44"
+  },
+  "f80f06d5-ae8": {
+    "doc_id": "f80f06d5-ae8",
+    "filename": "202506_SILQ_Corporate Structure.pdf",
+    "filepath": "data/SILQ/dataroom/Business Info/1.1 Corporate Info/202506_SILQ_Corporate Structure.pdf",
+    "document_type": "other",
+    "sha256": "cf5e762f01fd4f41faca62d0e4c8f5688927b537afdb072dc51be10a52e2d758",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 1167,
+    "table_count": 0,
+    "parser_metadata": {
+      "filename": "202506_SILQ_Corporate Structure.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:44"
+  },
+  "88b452a6-890": {
+    "doc_id": "88b452a6-890",
+    "filename": "202508_PF Cap Table (Summary Sheet 34mn) vF.xlsx",
+    "filepath": "data/SILQ/dataroom/Business Info/1.1 Corporate Info/202508_PF Cap Table (Summary Sheet 34mn) vF.xlsx",
+    "document_type": "other",
+    "sha256": "ad1a2e24149ed10ab8a355674ba7716f5306fda5fe5842eaa9ea823f5f972a7e",
+    "page_count": 1,
+    "chunk_count": 1,
+    "text_length": 3824,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "202508_PF Cap Table (Summary Sheet 34mn) vF.xlsx",
+      "sheets": [
+        {
+          "name": "Sheet1",
+          "rows": 66,
+          "cols": 23
+        }
+      ],
+      "total_sheets": 1
+    },
+    "ingested_at": "2026-04-17T21:17:44"
+  },
+  "fc9fd547-703": {
+    "doc_id": "fc9fd547-703",
+    "filename": "202508_Teaser - SILQ (with Financials).pdf",
+    "filepath": "data/SILQ/dataroom/Business Info/1.1 Corporate Info/202508_Teaser - SILQ (with Financials).pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "916bb5f2917839009d8e49daf34630ef4dc18d69b6d1134e0d904e41ae61cca7",
+    "page_count": 29,
+    "chunk_count": 35,
+    "text_length": 17488,
+    "table_count": 7,
+    "parser_metadata": {
+      "filename": "202508_Teaser - SILQ (with Financials).pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:47"
+  },
+  "fb563fc3-aeb": {
+    "doc_id": "fb563fc3-aeb",
+    "filename": "202508_Teaser - SILQ (without Financials).pdf",
+    "filepath": "data/SILQ/dataroom/Business Info/1.1 Corporate Info/202508_Teaser - SILQ (without Financials).pdf",
+    "document_type": "portfolio_tape",
+    "sha256": "0dbe7831b0c8fa9958848ae6dfdf346d82ad291181be746a49ff85b32cf20232",
+    "page_count": 21,
+    "chunk_count": 26,
+    "text_length": 12629,
+    "table_count": 6,
+    "parser_metadata": {
+      "filename": "202508_Teaser - SILQ (without Financials).pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:48"
+  },
+  "04cb3829-49d": {
+    "doc_id": "04cb3829-49d",
+    "filename": "20251204_SILQ Teaser (Series C 2nd close).pdf",
+    "filepath": "data/SILQ/dataroom/Business Info/1.1 Corporate Info/20251204_SILQ Teaser (Series C 2nd close).pdf",
+    "document_type": "other",
+    "sha256": "5f663505717b10e5a702239b0e09feb91e2c4520098ade068faa9870d7a744e9",
+    "page_count": 16,
+    "chunk_count": 23,
+    "text_length": 8804,
+    "table_count": 8,
+    "parser_metadata": {
+      "filename": "20251204_SILQ Teaser (Series C 2nd close).pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:49"
+  },
+  "7cc55727-1ce": {
+    "doc_id": "7cc55727-1ce",
+    "filename": "FINA- Credit Solution Overview.pdf",
+    "filepath": "data/SILQ/dataroom/Products/FINA- Credit Solution Overview.pdf",
+    "document_type": "other",
+    "sha256": "2b710ec20151a9a7144f7922df6273133b453b41bf96065810dbf4fb92dbce40",
+    "page_count": 15,
+    "chunk_count": 16,
+    "text_length": 20282,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "FINA- Credit Solution Overview.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:52"
+  },
+  "12225a6e-d7a": {
+    "doc_id": "12225a6e-d7a",
+    "filename": "SIQLFi Profile.pdf",
+    "filepath": "data/SILQ/dataroom/Products/SIQLFi Profile.pdf",
+    "document_type": "other",
+    "sha256": "772f4af6978b245d179a3f288a4357c9ca0a02387c869ee8fd9dbafa08feff8f",
+    "page_count": 15,
+    "chunk_count": 1,
+    "text_length": 308,
+    "table_count": 1,
+    "parser_metadata": {
+      "filename": "SIQLFi Profile.pdf"
+    },
+    "ingested_at": "2026-04-17T21:17:52"
+  }
+}

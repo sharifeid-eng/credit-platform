@@ -24,6 +24,44 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-19 (session 26: Data Room Pipeline Hardening — production acceptance close-out)
+
+Session closing out the full Data Room Pipeline Hardening & Quality Overhaul initiative via end-to-end Klaim Credit Memo acceptance checks on the Hetzner VPS.
+
+### Acceptance Checks A / B / C
+- [x] **Check A — backend shape** — `GET /memo-templates` returns `credit_memo` with 12 sections, `due_diligence=9`, `monitoring_update=6`, `amendment_memo=9`, `quarterly_review=5`.
+- [x] **Check B — browser visual** — `/company/klaim/UAE_healthcare/research/memos/new` MemoBuilder step 2 renders 12 section toggles for Credit Memo after template-key drift fix (commit `a111667`).
+- [x] **Check C — end-to-end memo smoke test** — memo `c1686e76-841` persisted to production with 12 sections, hybrid-v1 pipeline, Opus 4.7 + Sonnet 4.6 in `models_used`, both sidecars present (`research_packs.json` 2 entries, `citation_issues.json` 16 entries), $0.71 cost, 33K tokens. **Conditional pass** — `polished: false` due to a pre-existing (non-initiative) Stage 6 JSON truncation bug.
+
+### Agent tool signature fixes (commit `0e82f35`)
+Browser `POST /agents/.../memo/generate` returned "network error" because three `compute_*` functions were called with drifted signatures inside `core/agents/tools/analytics.py`. Patched via a fresh session given a detailed brief; fixed + tested + deployed.
+- [x] **4 original TypeError/ImportError bugs fixed**:
+  - `compute_cohorts(df, mult, date, as_of_date)` → `compute_cohorts(df, mult)` + result wrapped as `{"cohorts": [...]}`
+  - `compute_returns_analysis(df, mult, date, as_of_date)` → `(df, mult)`
+  - `compute_klaim_covenants` wrong module (`core.analysis` → `core.portfolio`) + signature `(df, mult, ref_date=...)`
+  - `asyncio.get_event_loop()` raising in ThreadPoolExecutor thread on Python 3.12 → try/except new loop
+- [x] **2 silent-correctness bugs found during audit**:
+  - `compute_collection_velocity(df, mult, date, as_of_date)` — date routed through wrong slot
+  - `compute_segment_analysis(df, mult, dimension)` — dimension routed through `as_of_date` positional (ignored silently)
+- [x] **6 new tests added** — `tests/test_agent_tools.py` (5 Klaim handler smoke tests + 1 event-loop guard). **426 tests passing**.
+- [x] **Deployed to Hetzner** — `a111667..0e82f35` fast-forward merge, backend rebuilt `--no-cache`, in-container smoke test confirmed cohort/returns/covenants tools return real data.
+
+### Cloudflare SSE transport (partial)
+Browser memo-generate progress stream failed with `ERR_QUIC_PROTOCOL_ERROR` then `ERR_HTTP2_PROTOCOL_ERROR` — Cloudflare edge + SSE bug.
+- [x] **Disabled HTTP/3 at Cloudflare** — eliminates QUIC+SSE incompatibility.
+- [x] **Verified backend completes independently** — memo `c1686e76-841` persisted end-to-end on server despite browser SSE disconnect. Victory conditions verified directly from `v1.json` + `meta.json` + sidecars.
+- [ ] **Follow-up: HTTP/2 + SSE through Cloudflare still broken** — three options: (A) legacy non-SSE endpoint (frontend patch), (B) Cloudflare Configuration Rule bypassing buffering for `/agents/*`, (C) Cloudflare Tunnel. Not blocking — backend persists memos regardless.
+
+### Follow-ups spawned (not blocking initiative close)
+- [ ] **Memo Stage 6 polish JSON truncation** — spawned side-task. Opus 4.7 response cut mid-string when asked for all-12-sections JSON (~40K chars). Reproduces across recent memos. Recommended fix: per-section polish loop instead of one-shot JSON. Same pattern affects Stage 5.5 citation audit on large memos.
+- [ ] **Cloudflare HTTP/2 + SSE transport fix** (see above).
+- [ ] **Route-rename reverse-proxy checklist** — add nginx.conf audit to the three-layer rule.
+
+### Initiative close-out — Data Room Pipeline Hardening & Quality Overhaul ✅
+All three tiers shipped (session 24), rollout bugs patched (session 25), acceptance checks passed (session 26). Dataroom pipeline is self-diagnosing (audit, health endpoint, OperatorCenter tab), self-healing (prune, orphan eviction on ingest/refresh), and usefully classified (Haiku fallback with cross-company cache). Memo pipeline resilient to parallel-worker BaseException and template drift. Nginx reverse-proxy + React Router namespaces disambiguated (`/api/operator/*` vs SPA `/operator`).
+
+---
+
 ## Completed — 2026-04-18 (session 25: Post-Session-24 rollout bugfix patch)
 
 Follow-up patch after the session-24 rollout surfaced five production bugs on the Hetzner VPS.

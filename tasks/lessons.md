@@ -3,6 +3,54 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-19 — When Compute fn signatures change, audit every tool dispatch table too
+
+**Problem:** `core/agents/tools/analytics.py` had six handlers calling `compute_*` functions in `core/analysis.py` + `core/portfolio.py` with drifted signatures. Three caused hard TypeError/ImportError at runtime (memo pipeline died with "network error" in browser). Two more were **silent correctness bugs** — `compute_segment_analysis(df, mult, dimension)` was routing `dimension` through the 3rd positional (`as_of_date`), which silently ignored it and returned segments for the wrong dimension. Bug had been live for weeks with no symptoms because the handler was rarely invoked and output looked plausible.
+
+**Rule:** Any time you refactor the signature of a compute function in `core/analysis.py`, `core/analysis_*.py`, `core/portfolio.py`, etc., `grep -n "compute_fn_name(" core/agents/` and inspect each call site. Agent tool dispatch tables are easy to miss because they're in a separate layer from the analytical code and the type checker (or lack thereof) won't catch it.
+
+**Why:** The agent tools layer is a shadow contract — it mirrors analytical functions but in a loose dict-routing pattern, not direct calls. Signature drift doesn't surface until the agent actually tries to invoke the tool, which might happen only during memo generation or deep research. The silent ones are worse than the loud ones.
+
+**How to apply:** Add a lightweight smoke test per handler (`tests/test_agent_tools.py` has 6 such tests now covering Klaim). Run before any agent-layer change. Better yet: refactor dispatch tables to import the function references directly so a signature change is a syntax error at import time, not a runtime KeyError after minutes of pipeline.
+
+---
+
+## 2026-04-19 — Cloudflare HTTP/2 and HTTP/3 both proxy-break SSE
+
+**Problem:** Browser memo-generate progress stream failed with `net::ERR_QUIC_PROTOCOL_ERROR` (with HTTP/3 on) and `net::ERR_HTTP2_PROTOCOL_ERROR` (after HTTP/3 disabled at edge). Backend `POST /agents/.../memo/generate` returned 200 OK and pipeline completed; browser never saw the stream. Cloudflare's edge proxy buffers/cuts long-lived SSE under both QUIC and HTTP/2, independent of origin config.
+
+**Rule:** Any new long-running SSE endpoint behind Cloudflare needs a transport-plan decision up front: (1) Configuration Rule bypassing buffering on the path, (2) Cloudflare Tunnel, (3) grey-cloud subdomain, or (4) non-SSE polling fallback. Don't ship SSE + Cloudflare orange-cloud + hope.
+
+**Why:** The "works locally" trap. In dev the stream is direct to uvicorn; in prod a silent 60-120s proxy edge cut produces `ERR_HTTP2_PROTOCOL_ERROR` with no signal to the backend, and the backend returns 200 OK in logs. Debugging this from stderr alone is impossible — you have to correlate browser DevTools with cf-ray headers.
+
+**How to apply:** For every streaming endpoint, verify end-to-end from a browser behind Cloudflare before claiming done. Add a non-SSE fallback endpoint as belt-and-suspenders when the UX requires completion guarantees. Memo pipeline already persists to disk regardless of SSE, so the data is recoverable — but the UX is broken.
+
+---
+
+## 2026-04-19 — Verify victory conditions from persisted artifacts, not the request that created them
+
+**Problem:** Browser SSE died mid-flight. First instinct: "the generate call failed, retry." Actual state: backend fully completed, memo persisted with all 12 sections + both sidecars + meta.json — only the browser progress stream died. Inspected `/app/reports/memos/klaim_UAE_healthcare/c1686e76-841/v1.json` directly and Check C passed.
+
+**Rule:** When a long-running write operation's transport fails, check the target storage before re-running. SSE, WebSocket, long-polling — all can drop while the underlying work finishes successfully on the server. Especially true for pipelines that call `storage.save()` before emitting the final "done" event.
+
+**Why:** Re-running a 3-minute $1+ pipeline because the browser gave up is wasteful. The filesystem is the source of truth, not the HTTP response.
+
+**How to apply:** After any "network error" / "connection dropped" / "stream closed" symptom on a write operation, first command should be `ls -lt {target_dir}/ | head` + inspect the newest artifact before replanning.
+
+---
+
+## 2026-04-19 — Meta schema drift: always fetch actual keys before asserting on meta
+
+**Problem:** Wrote a verification script using `meta.get('memo_id')` and `meta.get('template_key')` — actual meta schema uses `id` and `template`. Output showed `None` for both, led to 30s of "the save path must be broken" panic before I inspected `meta.keys()` and saw the right fields were there under different names.
+
+**Rule:** Before running assertions on meta/config/result dicts, print the sorted key list once. Takes 5 seconds, saves 30 minutes of false alarms.
+
+**Why:** Schema drift across generator/save layers is invisible until you query an expected field and get `None`. The `None` is ambiguous — did the field fail to populate, or did I query the wrong name?
+
+**How to apply:** Standard verification block pattern is `print('KEYS:', sorted(d.keys()))` followed by the specific assertions. If a required key is missing, the keys list will show it; if a key exists under a different name, likewise.
+
+---
+
 ## 2026-04-18 — `except Exception` in a thread-pool worker does not catch `BaseException`
 
 **Problem:** `core/memo/generator.py` production memo generation truncated at 3/12 sections with no trace in `errors[]`. The `_worker` function inside `_generate_parallel` had `try: ... except Exception: ...` around `self.generate_section(...)`, and the outer loop iterated `as_completed(futures)` calling `fut.result()` un-wrapped. Suspected root cause: an SSE client disconnect raises `GeneratorExit` inside a `progress_cb` call — `GeneratorExit` inherits from `BaseException`, not `Exception`, so it bypasses the worker's catch, propagates through the future, and `fut.result()` re-raises it. The unhandled exception tears down the `as_completed` loop before subsequent futures can be drained.
