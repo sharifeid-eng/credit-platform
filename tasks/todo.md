@@ -60,6 +60,14 @@ Browser memo-generate progress stream failed with `ERR_QUIC_PROTOCOL_ERROR` then
 ### Initiative close-out — Data Room Pipeline Hardening & Quality Overhaul ✅
 All three tiers shipped (session 24), rollout bugs patched (session 25), acceptance checks passed (session 26). Dataroom pipeline is self-diagnosing (audit, health endpoint, OperatorCenter tab), self-healing (prune, orphan eviction on ingest/refresh), and usefully classified (Haiku fallback with cross-company cache). Memo pipeline resilient to parallel-worker BaseException and template drift. Nginx reverse-proxy + React Router namespaces disambiguated (`/api/operator/*` vs SPA `/operator`).
 
+### Post-EOD addendum: `.gitignore` registry.json negation removal (commits `5844c92` + `fc66e7c`)
+The session-26 EOD commit (`8f8209e`) inadvertently staged `data/SILQ/dataroom/registry.json` — which collided with the server's untracked authoritative registry on `git pull` (`untracked working tree files would be overwritten by merge`). Root cause: `.gitignore` had `!data/*/dataroom/registry.json` that defeated session-24 Tier 1.2's intent of "server is authoritative registry owner".
+- [x] **Server-side recovery on VPS** — backed up authoritative registry, reset to HEAD for merge, pulled, restored from backup. Audit confirmed all 4 companies aligned (SILQ 40/40, klaim 153/153, Tamara 271/271, Aajil 29/29).
+- [x] **Root-cause fix: untrack 4 registries from git** — `git rm --cached` on SILQ, klaim, Tamara, Aajil registries (commit `5844c92`).
+- [x] **Root-cause fix: drop `!data/*/dataroom/registry.json` negation from `.gitignore`** (commit `fc66e7c`). `check-ignore` confirms all 4 registries now match `data/*/dataroom/*` with zero negations.
+- [x] **Collision pattern now structurally impossible** — sync-data.ps1 already excluded registry.json from push (Tier 1.2); .gitignore now excludes it from git entirely. Laptop pushes code. Server owns dataroom state.
+- [ ] **Remaining known unclassified**: SILQ 3, klaim 5, Tamara 1, Aajil 3 (12 total). One-shot cleanup next session: `dataroom_ctl classify --company <co> --only-other --use-llm` (~$0.012 total).
+
 ---
 
 ## Completed — 2026-04-18 (session 25: Post-Session-24 rollout bugfix patch)

@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-19 — `.gitignore` negations for server-local state are a collision trap
+
+**Problem:** `.gitignore` had `!data/*/dataroom/registry.json` negating the broader `data/*/dataroom/*` ignore, intended to keep the "lightweight catalog" in version control for re-ingest idempotence. But `registry.json` contains doc_id UUIDs generated per-ingest on whichever machine ran the last `ingest` — **server-local state, not portable**. Session 24 Tier 1.2 codified "server is authoritative registry owner" in `sync-data.ps1` (excluded registry.json from push) but left the git-tracking path open. Session 26 EOD commit inadvertently staged SILQ's registry; the VPS `git pull` then died with `untracked working tree files would be overwritten by merge` because the server had its own authoritative copy with different UUIDs.
+
+**Rule:** If a file is per-machine state (UUIDs, cache keys, derived doc_ids, any identifier generated at runtime that differs across independent runs of the same logical operation), it must not be tracked in git. A `.gitignore` negation that overrides a blanket ignore for such files is a smell — it means you've picked one machine as the "canonical" owner but the VCS can't tell which, so any other machine that independently generates that file will collide on pull.
+
+**Why:** The "server is authoritative" rule has to hold on **both** rails — the sync pipeline AND the git pipeline. Closing one leaves the other wide open to recreate the problem. Worse: you only find out at the next deploy, after everything looks green locally.
+
+**How to apply:** Before negating an ignore pattern for any file in `data/`, `reports/`, or runtime-derived directories, ask: "could two machines running the same code generate different contents for this file?" If yes, never track it. If multiple machines need coordinated state, use a real sync mechanism (scp, rsync, object store), not git. For this repo: `git rm --cached` + remove the negation + commit. The authoritative file stays on the authoritative machine; other machines are free to generate and hold their own copies untouched by version control.
+
+---
+
 ## 2026-04-19 — When Compute fn signatures change, audit every tool dispatch table too
 
 **Problem:** `core/agents/tools/analytics.py` had six handlers calling `compute_*` functions in `core/analysis.py` + `core/portfolio.py` with drifted signatures. Three caused hard TypeError/ImportError at runtime (memo pipeline died with "network error" in browser). Two more were **silent correctness bugs** — `compute_segment_analysis(df, mult, dimension)` was routing `dimension` through the 3rd positional (`as_of_date`), which silently ignored it and returned segments for the wrong dimension. Bug had been live for weeks with no symptoms because the handler was rarely invoked and output looked plausible.
