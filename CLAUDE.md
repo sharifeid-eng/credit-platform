@@ -225,10 +225,12 @@ credit-platform/
 │   ├── legal_extractor.py  # Multi-pass Claude extraction engine (5 passes, cached)
 │   ├── legal_compliance.py # Compliance comparison: doc terms vs live portfolio metrics
 │   ├── dataroom/              # Data room ingestion engine
-│   │   ├── engine.py          # Main orchestrator: ingest, catalog, search, refresh
+│   │   ├── engine.py          # Main orchestrator: ingest, catalog, search, refresh, audit, wipe, rebuild_index_only
 │   │   ├── analytics_snapshot.py  # Snapshot tape/portfolio/AI outputs as research sources
 │   │   ├── chunker.py         # Document chunking for search (800-token chunks)
-│   │   ├── classifier.py      # Document type classification (16 types)
+│   │   ├── classifier.py      # Rule-based document type classification (21 types: 16 original + 5 new)
+│   │   ├── classifier_llm.py  # Haiku LLM fallback for OTHER (sha256-keyed cache)
+│   │   ├── ingest_log.py      # Append-only JSONL manifest per ingest/refresh
 │   │   └── parsers/           # Pluggable parsers: PDF, Excel, CSV, JSON, DOCX, ODS
 │   ├── research/              # Research intelligence layer
 │   │   ├── query_engine.py    # Claude RAG: retrieve + synthesize with citations
@@ -413,6 +415,7 @@ credit-platform/
 │   ├── sync_framework_registry.py  # Auto-generate Section 12 in ANALYSIS_FRAMEWORK.md from metric registry
 │   ├── prepare_tamara_data.py  # Data room ETL: reads ~100 source files → structured JSON snapshots for Tamara
 │   ├── prepare_aajil_data.py   # Investor deck extraction → structured JSON snapshot for Aajil
+│   ├── dataroom_ctl.py         # Unified dataroom operator CLI (audit/ingest/refresh/rebuild-index/wipe/classify)
 │   └── seed_master_mind.py     # Seeds master mind from ANALYSIS_FRAMEWORK.md + CLAUDE.md lessons
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
@@ -957,6 +960,20 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Data Room Pipeline Hardening (session 24 — prevents silent degradation):**
+  - **Orphan-eviction dedup** — `engine.ingest()` + `engine.refresh()` verify `chunks/{doc_id}.json` exists on disk before trusting registry sha256 keys. Missing chunks → evict the registry entry so the file re-ingests. Kills the "0 new, 40 skipped" failure mode caused by pushing a pre-populated registry to a server without chunks. Result field `orphans_dropped` surfaces the count.
+  - **Startup dependency probe** (`backend/main.py` lifespan) — imports 5 optional deps (pdfplumber, docx, sklearn, pymupdf4llm, pymupdf) at app start, logs ERROR for each missing, writes `data/_platform_health.json` with `missing[]` + `present[]`. Makes silent dep rot impossible.
+  - **`index_status` in meta.json** — `_build_index()`/`_search_tfidf()` log WARNING on ImportError and set `index_status: "degraded_no_sklearn"`. Surfaced via `/dataroom/health` endpoint so operators see degradation without reading logs.
+  - **`engine.audit(company, product)`** — returns `{registry_count, chunk_count, aligned, missing_chunks[], orphan_chunks[], unclassified_count, index_status, index_age_seconds, last_ingest}` — detects both directions of registry-vs-chunks misalignment plus classification gaps.
+  - **`engine.wipe()` + `engine.rebuild_index_only()`** — operator-level repair primitives. wipe() deletes registry/chunks/index/meta (source files preserved); rebuild_index_only() reruns TF-IDF from existing chunks without re-parsing.
+  - **`/dataroom/health` endpoint** — `GET /dataroom/health` (all companies) + `GET /companies/{co}/products/{p}/dataroom/health`. Powers OperatorCenter Data Rooms tab.
+  - **`scripts/dataroom_ctl.py` unified CLI** — 6 subcommands (audit, ingest, refresh, rebuild-index, wipe, classify). JSON on stdout (deploy.sh/CI-scrapeable) + human text on stderr. Semantic exit codes (0=ok, 1=misalignment, 2=usage, 3=failed, 4=aborted). `--only-other --use-llm` for retroactive classification without re-parse.
+  - **`core/dataroom/ingest_log.py`** — append-only JSONL manifest at `data/{co}/dataroom/ingest_log.jsonl`. One line per ingest/refresh with duration, counts, errors, index status. Consumed by audit() for `last_ingest` field.
+  - **deploy.sh alignment check** — replaced fragile "chunks dir non-empty → skip" heuristic with `registry_count == chunk_count` check. Catches first-time setup, post-sync, partial failures, orphans. Invokes `dataroom_ctl ingest` (not inline Python). `git stash` removed (was silently eating server-side state).
+  - **sync-data.ps1 fixes** — excludes `registry.json` from push (server is authoritative registry owner). Adds `-o ServerAliveInterval=30 -o ServerAliveCountMax=20` to every ssh/scp call for long ingests.
+  - **Classifier expansion** — 5 new DocumentType enum values (BANK_STATEMENT, AUDIT_REPORT, CAP_TABLE, BOARD_PACK, KYC_COMPLIANCE), UNKNOWN distinct from OTHER. New filename rules (zakat, kpmg_, ey_, cap.?table, board.?pack, kyc, credit.?policy). New content rules (opening balance, audit opinion, fully diluted, board of directors). New `_SHEET_RULES` for Excel tab-name inspection — vintage/covenant/cap table/P&L patterns.
+  - **`core/dataroom/classifier_llm.py`** — Haiku fallback invoked only when rule classifier returns OTHER. SHA-256 keyed cache at `data/{co}/dataroom/.classification_cache.json` (same file never triggers a second LLM call, cross-company). Strict JSON parsing with ```json fence tolerance. Confidence < 0.6 → DocumentType.UNKNOWN. Lazy import of core.ai_client (rule classifier works standalone). ~$0.001/doc, ~$0.04 for all 40 SILQ files.
+  - **OperatorCenter "Data Rooms" tab (8th tab)** — per-company cards showing Registry/Chunks/Missing/Orphans/Unclassified/Index stats + last_ingest timestamp. Colored borders (teal=aligned, gold=misaligned, red=error). Repair command hint per card.
 - ✅ **Hybrid 6-stage memo pipeline (`core/memo/generator.py`, `core/ai_client.py`, `core/memo/agent_research.py`):**
   - Stage 1: Context assembly — analytics + data-room chunks + 5-layer mind context
   - Stage 2: 9 structured sections generated in **parallel** via ThreadPoolExecutor (`LAITH_PARALLEL_SECTIONS=3` cap) — Sonnet 4.6
@@ -1423,8 +1440,36 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `compute_dso()`: DSO Operational = `true_dso - Expected collection days` per deal (was crude `median_term * 0.5` proxy)
   - `compute_klaim_covenants()` Paid vs Due: temporal filtering — only counts deals with expected payment date in period (was all deals with Deal date in period)
   - April 15 tape loaded: 8,080 deals (full portfolio), 65 columns, 5 new incl Expected collection days. Direct DPD working. PAR30 covenant breached (36.6% vs 7% threshold).
+- ✅ **Data Room Pipeline Hardening (session 24):**
+  - Dedup contract now: sha256 key + artifact presence. `engine.ingest()`/`refresh()` verify `chunks/{doc_id}.json` exists before trusting registry entries; missing chunks evict the orphan so the file re-ingests. `orphans_dropped` returned from ingest result.
+  - Server is authoritative registry owner. `sync-data.ps1` excludes `registry.json` from push. Laptop is pure file transport.
+  - All ImportError paths log WARNING + write machine-readable status. `backend/main.py` lifespan probes 5 optional deps on startup (pdfplumber/docx/sklearn/pymupdf/pymupdf4llm), writes `data/_platform_health.json`. Engine `_build_index`/`_search_tfidf` set `index_status` in `meta.json` so audit surfaces degradation.
+  - `engine.audit()` returns structured health (registry_count, chunk_count, aligned, missing_chunks, orphan_chunks, unclassified_count, index_status, last_ingest). Detects both directions of misalignment. Powers `/dataroom/health` endpoint + OperatorCenter Data Rooms tab.
+  - `scripts/dataroom_ctl.py` is the single CLI entry for all dataroom ops. JSON stdout (scrapeable), human stderr, semantic exit codes. deploy.sh invokes it instead of inline `python -c`. Destructive `wipe` requires `--yes` gate.
+  - `git stash` removed from deploy.sh — server should have zero local edits; pull failures now stop deploy explicitly.
+  - Classifier now has UNKNOWN distinct from OTHER: rule-based first pass returns OTHER for no-match, LLM fallback returns UNKNOWN when confidence < 0.6. `audit()` reports `unclassified_count` as the union.
+  - `classifier_llm.py` cache is sha256-keyed cross-company — re-running `classify --only-other` is free on a re-ingest.
 -----
 ## Known Gaps & Next Steps
+
+**Data Room Pipeline Hardening ✅ COMPLETE (session 24):**
+- [x] Tier 1.1: Orphan-eviction dedup in `engine.ingest()` + `engine.refresh()`
+- [x] Tier 1.2: Exclude `registry.json` from `sync-data.ps1` push
+- [x] Tier 1.3: `deploy.sh` registry-vs-chunks alignment check (replaces fragile non-empty heuristic)
+- [x] Tier 1.4: Remove `git stash` trap from `deploy.sh`
+- [x] Tier 1.5: Startup dependency probe → `data/_platform_health.json`
+- [x] Tier 1.6: WARNING-log + `index_status` flag for sklearn/pdfplumber ImportError paths
+- [x] Tier 1.7: SSH keepalive (`-o ServerAliveInterval=30`) on every ssh/scp in sync-data.ps1
+- [x] Tier 2.1: `scripts/dataroom_ctl.py` unified CLI (6 subcommands, JSON stdout, semantic exit codes)
+- [x] Tier 2.2: `engine.audit()` + `GET /dataroom/health` endpoint (all + per-company)
+- [x] Tier 2.3: `core/dataroom/ingest_log.py` append-only JSONL manifest
+- [x] Tier 2.4: `deploy.sh` invokes `dataroom_ctl ingest` (not inline Python)
+- [x] Tier 2.5: OperatorCenter "Data Rooms" tab (8th tab)
+- [x] `engine.wipe()` + `engine.rebuild_index_only()` repair primitives
+- [x] Tier 3.1: 5 new DocumentType enum values + UNKNOWN distinct from OTHER; filename/content/sheet rules
+- [x] Tier 3.2: `classifier_llm.py` Haiku fallback with sha256-keyed cross-company cache
+- [x] Tier 3.3: LLM fallback wired into `engine._ingest_single_file()` + `dataroom_ctl classify --only-other --use-llm`
+
 
 **Memo Pipeline ✅ COMPLETE (session 23):**
 - [x] Hybrid 6-stage memo pipeline — parallel structured + short-burst agent research + Opus 4.7 polish

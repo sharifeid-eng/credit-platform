@@ -7,6 +7,7 @@ import {
   updateOperatorTodo, deleteOperatorTodo, getOperatorMind,
   updateOperatorMindEntry, getOperatorBriefing, getOperatorLearning,
   getThesis, saveThesis, getThesisDrift, getThesisLog,
+  getDataroomHealthAll,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -491,6 +492,7 @@ export default function OperatorCenter() {
   const [thesisLog, setThesisLog] = useState(null)
   const [thesisCompany, setThesisCompany] = useState(null)
   const [thesisEditing, setThesisEditing] = useState(false)
+  const [datarooms, setDatarooms] = useState(null)
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -535,6 +537,11 @@ export default function OperatorCenter() {
     }
     if (activeTab === 'thesis' && thesisCompany && !thesis) {
       loadThesis(thesisCompany)
+    }
+    if (activeTab === 'datarooms' && !datarooms) {
+      getDataroomHealthAll()
+        .then(d => setDatarooms(d.datarooms || []))
+        .catch(e => console.error('Dataroom health load failed:', e))
     }
   }, [activeTab, mindFilter, thesisCompany])
 
@@ -679,6 +686,12 @@ export default function OperatorCenter() {
           <TabButton label="Learning" active={activeTab === 'learning'} onClick={() => setActiveTab('learning')} count={learning?.total_rules || null} />
           <TabButton label="Thesis" active={activeTab === 'thesis'} onClick={() => setActiveTab('thesis')} />
           <TabButton label="Agents" active={activeTab === 'agents'} onClick={() => setActiveTab('agents')} />
+          <TabButton
+            label="Data Rooms"
+            active={activeTab === 'datarooms'}
+            onClick={() => setActiveTab('datarooms')}
+            count={datarooms ? datarooms.filter(d => !d.aligned && !d.error).length || null : null}
+          />
         </div>
 
         {/* Tab content */}
@@ -1271,6 +1284,16 @@ export default function OperatorCenter() {
               <AgentsTab companies={status?.companies || []} />
             )}
 
+            {/* ── Data Rooms Tab ── */}
+            {activeTab === 'datarooms' && (
+              <DataroomsTab datarooms={datarooms} onRefresh={() => {
+                setDatarooms(null)
+                getDataroomHealthAll()
+                  .then(d => setDatarooms(d.datarooms || []))
+                  .catch(e => console.error('Dataroom health reload failed:', e))
+              }} />
+            )}
+
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1442,6 +1465,141 @@ function AgentsTab({ companies }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ── Data Rooms Tab Component ── */
+function DataroomsTab({ datarooms, onRefresh }) {
+  if (datarooms === null) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading data room health…</div>
+  }
+  if (datarooms.length === 0) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No data rooms found on disk.</div>
+  }
+
+  const misaligned = datarooms.filter(d => !d.aligned && !d.error).length
+  const errored = datarooms.filter(d => d.error).length
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <SectionLabel
+          text={`Data Rooms · ${datarooms.length} companies`}
+          accent={misaligned || errored ? '#F06060' : '#2DD4BF'}
+        />
+        <button
+          onClick={onRefresh}
+          style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            background: 'var(--bg-deep)', color: 'var(--text-muted)',
+            border: '1px solid var(--border)', padding: '6px 12px',
+            borderRadius: 4, cursor: 'pointer',
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+        gap: 14,
+      }}>
+        {datarooms.map(dr => {
+          const aligned = dr.aligned && !dr.error
+          const statusColor = dr.error ? '#F06060' : aligned ? '#2DD4BF' : 'var(--gold)'
+          const statusText = dr.error ? 'ERROR' : aligned ? 'ALIGNED' : 'MISALIGNED'
+          const idxColor = dr.index_status === 'ok' ? '#2DD4BF'
+            : dr.index_status && dr.index_status.startsWith('degraded') ? '#F06060'
+            : 'var(--text-muted)'
+
+          return (
+            <div key={dr.company} style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 6, padding: 16,
+              borderLeft: `3px solid ${statusColor}`,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {dr.company}
+                </div>
+                <div style={{
+                  fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                  color: statusColor, letterSpacing: '0.08em',
+                }}>
+                  {statusText}
+                </div>
+              </div>
+
+              {dr.error ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{dr.error}</div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11, marginBottom: 10 }}>
+                    <Row label="Registry" value={dr.registry_count} />
+                    <Row label="Chunks" value={dr.chunk_count} />
+                    <Row label="Missing" value={dr.missing_chunks_total || 0}
+                      danger={(dr.missing_chunks_total || 0) > 0} />
+                    <Row label="Orphans" value={dr.orphan_chunks_total || 0}
+                      danger={(dr.orphan_chunks_total || 0) > 0} />
+                    <Row label="Unclassified" value={dr.unclassified_count || 0}
+                      warn={(dr.unclassified_count || 0) > 0} />
+                    <Row label="Index" value={dr.index_status || 'unknown'}
+                      valueColor={idxColor} />
+                  </div>
+
+                  {dr.last_ingest && (
+                    <div style={{
+                      fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+                      paddingTop: 8, borderTop: '1px solid var(--border)',
+                    }}>
+                      Last clean ingest: {dr.last_ingest.ts}
+                      {' · '}
+                      added {dr.last_ingest.added}, {dr.last_ingest.duration_s}s
+                    </div>
+                  )}
+
+                  {dr.missing_chunks && dr.missing_chunks.length > 0 && (
+                    <details style={{ marginTop: 10, fontSize: 11 }}>
+                      <summary style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>
+                        {dr.missing_chunks.length} missing chunk file(s)
+                      </summary>
+                      <ul style={{ margin: '6px 0 0 16px', color: 'var(--text-muted)' }}>
+                        {dr.missing_chunks.map(m => (
+                          <li key={m.doc_id}>{m.filename}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{
+        marginTop: 18, padding: 12, borderRadius: 6,
+        background: 'var(--bg-deep)', border: '1px solid var(--border)',
+        fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+      }}>
+        To repair a misaligned data room run:{' '}
+        <code style={{ color: 'var(--gold)' }}>
+          docker compose exec backend python scripts/dataroom_ctl.py ingest --company &lt;name&gt;
+        </code>
+      </div>
+    </div>
+  )
+}
+
+function Row({ label, value, danger, warn, valueColor }) {
+  const color = danger ? '#F06060' : warn ? 'var(--gold)' : (valueColor || 'var(--text-primary)')
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ color, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{value}</span>
     </div>
   )
 }

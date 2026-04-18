@@ -24,6 +24,52 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-18 (session 24: Data Room Pipeline Hardening & Quality Overhaul)
+
+### Tier 1 — Root-cause fixes (eliminate this session's hurdles)
+- [x] **Tier 1.1: engine.ingest() dedup-skip fix** — verify chunks file exists on disk before trusting registry; evict orphan registry entries so the file re-ingests. Same fix applied to `refresh()`. Result field `orphans_dropped` reports count. Kills the "0 new, 40 skipped" bug.
+- [x] **Tier 1.2: Stop syncing registry.json from laptop** — `scripts/sync-data.ps1` `$rootFiles` filter excludes `registry.json`. Server becomes authoritative registry owner.
+- [x] **Tier 1.3: deploy.sh alignment check** — replaced "chunks dir non-empty → skip" with registry-vs-chunks alignment (`registry_count == chunk_count`). Catches first-time setup, post-sync, partial failures, orphans.
+- [x] **Tier 1.4: deploy.sh git stash removed** — silently eating ingest artifacts. Now git-pull failures stop the deploy (explicit).
+- [x] **Tier 1.5: Startup dependency probe** — `backend/main.py` lifespan imports 5 optional deps (pdfplumber, docx, sklearn, pymupdf4llm, pymupdf), writes `data/_platform_health.json`, logs ERROR for missing.
+- [x] **Tier 1.6: Surface silent import failures** — `_build_index`/`_search_tfidf` now log WARNING and set `index_status` flag in `meta.json` instead of bare `except ImportError: return`.
+- [x] **Tier 1.7: SSH keepalive** — `sync-data.ps1` sets `-o ServerAliveInterval=30 -o ServerAliveCountMax=20` on every ssh/scp invocation.
+
+### Tier 2 — Operational tooling
+- [x] **Tier 2.1: scripts/dataroom_ctl.py unified CLI** — 6 subcommands (audit, ingest, refresh, rebuild-index, wipe, classify). JSON on stdout, human text on stderr. Exit codes 0/1/2/3/4 for automation. Wraps existing DataRoomEngine methods.
+- [x] **Tier 2.2: engine.audit() + /dataroom/health endpoint** — returns structured health per company (registry_count, chunk_count, aligned, missing_chunks, orphan_chunks, unclassified_count, index_status, index_age_seconds, last_ingest). Two endpoints: `/dataroom/health` (all companies) + `/companies/{co}/products/{p}/dataroom/health`.
+- [x] **Tier 2.3: ingest_log.py manifest writer** — structured JSONL at `data/{co}/dataroom/ingest_log.jsonl`. Records duration, counts, errors, index status, classifier fallback use. Append-only audit trail.
+- [x] **Tier 2.4: deploy.sh uses dataroom_ctl** — replaced inline `python -c "..."` ingest with `docker compose exec -T backend python scripts/dataroom_ctl.py ingest --company X`.
+- [x] **Tier 2.5: OperatorCenter Data Rooms tab** — 8th tab in `/operator` with per-company cards showing Registry/Chunks/Missing/Orphans/Unclassified/Index stats. Colored borders (teal=aligned, gold=misaligned, red=error). Repair command hint per card.
+- [x] **Engine methods: rebuild_index_only() + wipe()** — rebuild_index_only() re-runs TF-IDF from existing chunks without re-parsing; wipe() deletes registry/chunks/index/meta (source files preserved); returns counts.
+
+### Tier 3 — Classification quality
+- [x] **Tier 3.1: Expanded rule-based classifier** — 5 new DocumentType enum values (BANK_STATEMENT, AUDIT_REPORT, CAP_TABLE, BOARD_PACK, KYC_COMPLIANCE), UNKNOWN distinct from OTHER. New filename rules (bank statement, EY/KPMG audit, cap table, board pack, KYC, zakat). New content rules (opening balance, audit opinion, fully diluted, board minutes). New `_SHEET_RULES` for Excel tab-name inspection (vintage/covenant/cap table/P&L).
+- [x] **Tier 3.2: classifier_llm.py Haiku fallback** — invoked only when rules return OTHER. SHA-256 keyed cache at `data/{co}/dataroom/.classification_cache.json` (same file never triggers a second LLM call, even cross-company). Strict JSON parsing with fence tolerance, confidence < 0.6 → UNKNOWN. Lazy import of `core.ai_client` so rule classifier works without AI client.
+- [x] **Tier 3.3: LLM wired into ingest + --only-other CLI flag** — `engine._ingest_single_file()` calls Haiku fallback when rule result is OTHER, confidence threshold 0.6, low-confidence → UNKNOWN. `dataroom_ctl classify --only-other --use-llm` re-classifies without re-parsing for retroactive fixes.
+
+### Verification
+- [x] **416 tests passing** (0 new failures)
+- [x] **Classifier spot-check** — 10 test cases including new patterns (bank_statement, audit_report, cap_table, board_pack, kyc_compliance, tax_filing via zakat), sheet-name rules (vintage_cohort via sheets), opaque filenames falling through to OTHER for LLM fallback
+- [x] **Orphan eviction smoke test** — synthetic registry with 1 orphan; `audit` flagged `missing=1`; `ingest` logged eviction + reported `orphans_dropped=1`; registry correctly rewritten
+- [x] **Local audit CLI** — detected real post-sync state (registries present, chunks absent), exit code 1
+
+### Files added
+- `core/dataroom/classifier_llm.py` (190 lines) — Haiku LLM fallback with cache
+- `core/dataroom/ingest_log.py` (146 lines) — structured manifest writer
+- `scripts/dataroom_ctl.py` (361 lines) — unified operator CLI
+
+### Files modified
+- `core/dataroom/engine.py` — orphan eviction in ingest()/refresh(), `audit()`, `wipe()`, `rebuild_index_only()`, `_meta_status()`, logger-instrumented import failures
+- `core/dataroom/classifier.py` — 5 new enum values, new filename/content/sheet rules
+- `backend/main.py` — `/dataroom/health` endpoints + startup dep probe
+- `deploy.sh` — alignment check, git stash removed, dataroom_ctl invocation
+- `scripts/sync-data.ps1` — exclude registry.json, SSH keepalive
+- `frontend/src/pages/OperatorCenter.jsx` — Data Rooms tab
+- `frontend/src/services/api.js` — `getDataroomHealthAll/One`
+
+---
+
 ## Completed — 2026-04-17 (session 23: Hybrid Memo Pipeline + 5 Quality Enhancements)
 
 ### Platform-wide content improvements (morning)

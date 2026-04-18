@@ -3,6 +3,53 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-18 — SHA-256 dedup must verify the artifact, not just the key
+
+**Problem:** `DataRoomEngine.ingest()` built `existing_hashes = {doc["sha256"]: doc_id for ...}` from the registry, then skipped any file whose hash was already keyed. If the registry was pushed to a fresh server without the matching `chunks/` directory (as `sync-data.ps1` was doing), every file got reported "skipped" — even though no chunks existed to serve searches or memos. Live symptom: server showed "0 new, 40 skipped" on the SILQ dataroom while chunks/ was empty and search returned nothing.
+
+**Root cause:** The dedup key (sha256) is a hash of the **source file**, but the dedup contract is really "I already have the processed artifact (chunks)". If the artifact is missing but the key is present, skipping is wrong — the correct action is to evict the stale key and re-ingest.
+
+**Fix:** Before populating `existing_hashes`, check `chunks/{doc_id}.json` exists on disk. If missing, `registry.pop(doc_id)` and log an eviction warning. Same fix applied to `refresh()`. Result field `orphans_dropped` surfaces the count so operators see what happened.
+
+**Rule:** Any dedup check that references a downstream artifact (chunks, index, cached output) must verify the artifact exists before trusting the key. "File already processed" ≠ "processed output exists". Bonus: structure the registry so an audit function can detect both directions of misalignment (missing chunks for a registry entry, and orphan chunks with no registry entry) — surfacing either direction is a symptom that something went wrong upstream.
+
+---
+
+## 2026-04-18 — Bare `except ImportError: return` silently disables features
+
+**Problem:** Production container shipped without `sklearn`, `pdfplumber`, `python-docx`, `pymupdf`, `pymupdf4llm`. Each was wrapped in a bare `try: import X; except ImportError: return` block at the top of the consumer function. Net effect: PDFs produced no text (pdfplumber missing), `index.pkl` was 0 bytes (sklearn missing), searches silently fell back to word-frequency scoring. Nobody noticed for weeks because there was zero logging.
+
+**Root cause:** `except ImportError: return` is a convenience for graceful degradation, but without a WARNING/ERROR log and a status flag readable by an audit endpoint, the degradation is silent and permanent.
+
+**Fix:** Three layers of defense:
+1. **Startup probe** (`backend/main.py` lifespan) — imports each optional dep, writes ERROR log + `data/_platform_health.json` with `missing[]` + `present[]`.
+2. **Call-time warning** — `_build_index()` and `_search_tfidf()` log WARNING when the import fails and set `index_status: "degraded_no_sklearn"` in `meta.json`.
+3. **Audit surfaces it** — `engine.audit()` reads `meta.json` and reports `index_status` in the `/dataroom/health` endpoint. Deploy.sh / CI can curl this and fail loudly if status isn't `ok`.
+
+**Rule:** An `ImportError` for an optional dep must always (a) log at WARNING or ERROR, (b) write a machine-readable status flag to a location an audit endpoint can read. "Feature disabled because dep missing" should always be observable without reading logs.
+
+---
+
+## 2026-04-18 — `git stash` before deploy silently eats server-side state
+
+**Problem:** `deploy.sh` ran `git stash -q` before `git pull` to avoid merge conflicts on local server edits, but never called `git stash pop`. Any server-side modifications were silently discarded every deploy.
+
+**Fix:** Remove `git stash` entirely. The server should have zero local edits; if `git pull` fails, we *want* deploy to stop, not silently wipe state.
+
+**Rule:** Never use `git stash` in an automated deploy script. If the server is authoritative for any state, that state lives in `data/` (gitignored) or a database, not in tracked files. If `git pull` fails on the server, that's a signal to investigate — don't paper over it.
+
+---
+
+## 2026-04-18 — CLI design for deploy.sh consumers: JSON stdout, human stderr
+
+**Problem:** `deploy.sh` invoking `python -c "from core.dataroom.engine import ..."` made it impossible to scrape structured results (exit codes ambiguous, output interleaved, no machine-readable summary).
+
+**Fix:** `scripts/dataroom_ctl.py` prints structured single-line JSON on stdout (scrapeable by deploy.sh / CI) and human-friendly progress on stderr. Exit codes carry semantic meaning: `0=ok, 1=audit misalignment, 2=usage error, 3=op failed, 4=user aborted destructive op`.
+
+**Rule:** Any CLI that will be consumed by a deploy script or CI pipeline must separate machine output (stdout JSON) from human output (stderr text), and use meaningful exit codes (not 0/1 for everything). Destructive operations need a `--yes` confirmation gate.
+
+---
+
 ## 2026-04-17 — CSS tokens: grep before using a variable name
 
 **Problem:** 142 references to `var(--accent-gold)` across 30 frontend files were all rendering as transparent. The CSS token defined in `tokens.css` is `--gold` (short form); the long form `--accent-gold` was used everywhere but **never defined**. CSS silently fell through to transparent. The Continue, Generate, and New Memo buttons in MemoBuilder all appeared invisible on the dark navy background.

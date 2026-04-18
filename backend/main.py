@@ -90,8 +90,75 @@ import logging
 logger = logging.getLogger("laith")
 
 
+# Optional runtime dependencies whose absence causes SILENT feature degradation.
+# When any of these is missing, the platform still starts — but a feature
+# (PDF text, DOCX parsing, TF-IDF search, legal extraction) becomes a no-op
+# with only a deep-in-the-call-stack fallback. The probe below fails LOUDLY at
+# startup and persists the result to data/_platform_health.json so the operator
+# center and /dataroom/health can surface it without requiring a restart.
+_OPTIONAL_DEPS = [
+    ("pdfplumber", "Data room PDF text + table extraction"),
+    ("docx", "Data room DOCX parsing (python-docx)"),
+    ("sklearn.feature_extraction.text", "TF-IDF search index (scikit-learn)"),
+    ("pymupdf4llm", "Legal PDF → markdown conversion"),
+    ("fitz", "Legal PDF page extraction (pymupdf)"),
+]
+
+
+def _probe_optional_deps() -> dict:
+    """Import-check every optional runtime dependency, log + persist result.
+
+    Returns the health dict (also written to data/_platform_health.json).
+    """
+    import importlib
+    from pathlib import Path as _Path
+
+    present: list[dict] = []
+    missing: list[dict] = []
+    for mod_name, purpose in _OPTIONAL_DEPS:
+        try:
+            importlib.import_module(mod_name)
+            present.append({"module": mod_name, "purpose": purpose})
+        except ImportError as e:
+            logger.error(
+                "[startup] MISSING OPTIONAL DEPENDENCY: %s — %s (feature will silently degrade). ImportError: %s",
+                mod_name, purpose, e,
+            )
+            missing.append({"module": mod_name, "purpose": purpose, "error": str(e)})
+
+    health = {
+        "checked_at": datetime.now().isoformat()[:19],
+        "present": present,
+        "missing": missing,
+        "status": "ok" if not missing else "degraded",
+    }
+
+    try:
+        data_root = _Path(__file__).resolve().parent.parent / "data"
+        data_root.mkdir(parents=True, exist_ok=True)
+        with open(data_root / "_platform_health.json", "w", encoding="utf-8") as f:
+            json.dump(health, f, indent=2)
+    except OSError as e:
+        logger.warning("[startup] Could not write _platform_health.json: %s", e)
+
+    if missing:
+        logger.error(
+            "[startup] %d optional dependency/dependencies missing — feature loss. "
+            "Install via `pip install -r backend/requirements.txt` inside the backend container.",
+            len(missing),
+        )
+    else:
+        logger.info("[startup] All %d optional runtime dependencies present.", len(present))
+
+    return health
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Probe optional runtime dependencies FIRST so missing packages are loud
+    # in the startup log even if DB/listener/tool registration fails later.
+    _probe_optional_deps()
+
     if engine:
         try:
             from sqlalchemy import text as sa_text
@@ -3992,6 +4059,47 @@ def dataroom_search(company: str, product: str, q: str, top_k: int = 10):
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
     return _dataroom_engine.search(company, product, q.strip(), top_k=min(top_k, 50))
+
+
+@app.get("/companies/{company}/products/{product}/dataroom/health")
+def dataroom_health_one(company: str, product: str):
+    """Per-company dataroom health audit (Tier 2.2).
+
+    Surfaces orphan registry entries, missing chunks, index status, last
+    ingest timestamp and unclassified docs. Drives the OperatorCenter
+    Data Rooms card and `dataroom_ctl audit`.
+    """
+    return _dataroom_engine.audit(company, product)
+
+
+@app.get("/dataroom/health")
+def dataroom_health_all():
+    """Global dataroom health across every onboarded company.
+
+    Iterates all companies with a dataroom/ folder and audits the first
+    available product (dataroom is company-level; product is just the
+    event-bus key). Returns a list so the OperatorCenter can render a
+    health matrix in one fetch.
+    """
+    reports = []
+    for co in get_companies():
+        # Only audit companies that actually have a dataroom folder on disk.
+        co_dr = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..', 'data', co, 'dataroom'
+        )
+        if not os.path.isdir(co_dr):
+            continue
+        prods = get_products(co)
+        prod = prods[0] if prods else ""
+        try:
+            reports.append(_dataroom_engine.audit(co, prod))
+        except Exception as e:
+            reports.append({
+                "company": co,
+                "product": prod,
+                "error": str(e),
+            })
+    return {"datarooms": reports}
 
 
 # ── Research Intelligence endpoints ──────────────────────────────────────────
