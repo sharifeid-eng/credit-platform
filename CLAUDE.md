@@ -1514,7 +1514,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] Graph-aware scoring activated (`query_text` passed to `build_mind_context()` from chat endpoints)
 - [x] `entities.jsonl` added to CompanyMind `_FILES` + `_TASK_RELEVANCE`
 - [x] Entity extractor overhauled — ~80 patterns across all 7 types (11 entities from real text vs ~1 before)
-- [x] Mind seeded for all 5 companies — 98 total entries (from 40). Master Mind 7→26.
+- [x] Mind seeded for Klaim (18 entries, from legal analysis findings) + Tamara (11 entries, from data room entity extraction). Master Mind 7→26. **Known gap:** SILQ/Aajil/Ejari mind directories not yet created — Health tab flags "Company Mind not populated" (AI context on those companies will be limited until seeded via `/thesis <co>` or a data room ingest).
 
 **Documentation ✅ COMPLETE (session 23):**
 - [x] ANALYSIS_FRAMEWORK.md Section 21 (Intelligence System) added
