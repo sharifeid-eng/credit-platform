@@ -138,7 +138,7 @@ def classify_with_llm(
 
     try:
         response = complete(
-            tier="haiku",
+            tier="auto",
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
             max_tokens=200,
