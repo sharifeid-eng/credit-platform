@@ -5,76 +5,25 @@ import { useCompany } from '../../contexts/CompanyContext'
 import useBreakpoint from '../../hooks/useBreakpoint'
 import { getMemoTemplates, generateMemo, AGENT_MEMO_URL } from '../../services/api'
 
-// ── Template definitions (fallback if backend not yet wired) ────────────────
-const FALLBACK_TEMPLATES = [
-  {
-    key: 'credit_memo',
-    title: 'Credit Memo',
-    description: 'Initial investment recommendation for IC approval',
-    icon: 'doc',
-    sections: [
-      { key: 'executive_summary',    title: 'Executive Summary',          required: true,  source: 'Analytics' },
-      { key: 'company_overview',     title: 'Company Overview',           required: true,  source: 'Data Room' },
-      { key: 'facility_structure',   title: 'Facility Structure',         required: true,  source: 'Data Room' },
-      { key: 'portfolio_analytics',  title: 'Portfolio Analytics',        required: true,  source: 'Analytics' },
-      { key: 'vintage_performance',  title: 'Vintage Performance',        required: true,  source: 'Analytics' },
-      { key: 'covenant_compliance',  title: 'Covenant Compliance',        required: true,  source: 'Analytics' },
-      { key: 'risk_assessment',      title: 'Risk Assessment',            required: true,  source: 'Mixed' },
-      { key: 'concentration_analysis', title: 'Concentration Analysis',   required: false, source: 'Analytics' },
-      { key: 'dpd_analysis',         title: 'DPD / Delinquency Analysis', required: false, source: 'Analytics' },
-      { key: 'financial_overview',   title: 'Financial Overview',         required: false, source: 'Data Room' },
-      { key: 'recommendation',       title: 'Recommendation',            required: true,  source: 'Mixed' },
-    ],
-  },
-  {
-    key: 'monitoring_update',
-    title: 'Monthly Monitoring Update',
-    description: 'Periodic portfolio health check',
-    icon: 'pulse',
-    sections: [
-      { key: 'summary',            title: 'Summary & Key Changes',    required: true,  source: 'Analytics' },
-      { key: 'portfolio_metrics',  title: 'Portfolio Metrics',         required: true,  source: 'Analytics' },
-      { key: 'covenant_status',    title: 'Covenant Status',           required: true,  source: 'Analytics' },
-      { key: 'collection_update',  title: 'Collection Performance',    required: true,  source: 'Analytics' },
-      { key: 'risk_flags',         title: 'Risk Flags & Watchlist',    required: true,  source: 'Analytics' },
-      { key: 'concentration_update', title: 'Concentration Update',    required: false, source: 'Analytics' },
-      { key: 'action_items',       title: 'Action Items',              required: false, source: 'Mixed' },
-    ],
-  },
-  {
-    key: 'due_diligence',
-    title: 'Due Diligence Report',
-    description: 'Deep-dive on a new prospective company',
-    icon: 'search',
-    sections: [
-      { key: 'executive_summary',   title: 'Executive Summary',         required: true,  source: 'Mixed' },
-      { key: 'business_model',      title: 'Business Model Analysis',   required: true,  source: 'Data Room' },
-      { key: 'market_position',     title: 'Market Position',           required: true,  source: 'Data Room' },
-      { key: 'portfolio_quality',   title: 'Portfolio Quality',         required: true,  source: 'Analytics' },
-      { key: 'financial_analysis',  title: 'Financial Analysis',        required: true,  source: 'Data Room' },
-      { key: 'management_team',     title: 'Management & Governance',   required: false, source: 'Data Room' },
-      { key: 'legal_review',        title: 'Legal & Regulatory',        required: false, source: 'Data Room' },
-      { key: 'technology_platform', title: 'Technology Platform',       required: false, source: 'Data Room' },
-      { key: 'risk_factors',        title: 'Risk Factors',              required: true,  source: 'Mixed' },
-      { key: 'recommendation',      title: 'Recommendation',            required: true,  source: 'Mixed' },
-    ],
-  },
-  {
-    key: 'quarterly_review',
-    title: 'Quarterly Review',
-    description: 'Fund-level portfolio performance',
-    icon: 'grid',
-    sections: [
-      { key: 'fund_overview',       title: 'Fund Overview',             required: true,  source: 'Analytics' },
-      { key: 'portfolio_summary',   title: 'Portfolio Summary',         required: true,  source: 'Analytics' },
-      { key: 'company_updates',     title: 'Company-by-Company Updates', required: true, source: 'Analytics' },
-      { key: 'exposure_analysis',   title: 'Exposure & Concentration',  required: true,  source: 'Analytics' },
-      { key: 'covenant_overview',   title: 'Covenant Overview',         required: true,  source: 'Analytics' },
-      { key: 'market_conditions',   title: 'Market Conditions',         required: false, source: 'Data Room' },
-      { key: 'outlook',             title: 'Outlook & Strategy',        required: true,  source: 'Mixed' },
-    ],
-  },
-]
+// Icon chosen from template key (backend doesn't supply an icon field).
+const ICON_BY_KEY = {
+  credit_memo: 'doc',
+  monitoring_update: 'pulse',
+  due_diligence: 'search',
+  quarterly_review: 'grid',
+  amendment_memo: 'doc',
+}
+
+// Backend returns lowercase source identifiers (SourceLayer enum values).
+// Map to human-readable labels used in the SOURCE_BADGES lookup.
+const SOURCE_LABELS = {
+  analytics: 'Analytics',
+  dataroom: 'Data Room',
+  mixed: 'Mixed',
+  auto: 'Auto',
+  ai_narrative: 'AI Narrative',
+  manual: 'Manual',
+}
 
 const ICONS = {
   doc: (
@@ -108,9 +57,12 @@ const ICONS = {
 }
 
 const SOURCE_BADGES = {
-  Analytics:  { bg: 'rgba(45,212,191,0.12)',  color: '#2DD4BF' },
-  'Data Room': { bg: 'rgba(91,141,239,0.12)', color: '#5B8DEF' },
-  Mixed:      { bg: 'rgba(201,168,76,0.12)',  color: '#C9A84C' },
+  Analytics:    { bg: 'rgba(45,212,191,0.12)',  color: '#2DD4BF' },
+  'Data Room':  { bg: 'rgba(91,141,239,0.12)', color: '#5B8DEF' },
+  Mixed:        { bg: 'rgba(201,168,76,0.12)',  color: '#C9A84C' },
+  Auto:         { bg: 'rgba(132,148,167,0.12)', color: '#8494A7' },
+  'AI Narrative': { bg: 'rgba(201,168,76,0.12)', color: '#C9A84C' },
+  Manual:       { bg: 'rgba(132,148,167,0.12)', color: '#8494A7' },
 }
 
 export default function MemoBuilder() {
@@ -119,7 +71,8 @@ export default function MemoBuilder() {
   const navigate = useNavigate()
 
   const [step, setStep] = useState(0)
-  const [templates, setTemplates] = useState(FALLBACK_TEMPLATES)
+  const [templates, setTemplates] = useState([])
+  const [templatesError, setTemplatesError] = useState(null)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [sectionToggles, setSectionToggles] = useState({})
   const [generating, setGenerating] = useState(false)
@@ -129,23 +82,29 @@ export default function MemoBuilder() {
   const [error, setError] = useState(null)
   const abortRef = useRef(null)
 
-  // Try to load templates from backend (fall back to hardcoded)
-  // Backend returns only metadata (key, name, description, section_count) —
-  // merge with FALLBACK_TEMPLATES to hydrate the `sections` array needed for rendering.
+  // Load templates from backend. The backend is the single source of truth
+  // for section keys, titles, and source layers — any fallback would drift
+  // the moment the template definition changes in core/memo/templates.py.
+  // If the fetch fails, surface an error rather than serving a stale list.
   useEffect(() => {
-    getMemoTemplates().then(data => {
-      if (!data || !Array.isArray(data) || data.length === 0) return
-      const merged = data.map(backendTmpl => {
-        const fallback = FALLBACK_TEMPLATES.find(f => f.key === backendTmpl.key)
-        return {
-          ...backendTmpl,
-          title: backendTmpl.title || backendTmpl.name || fallback?.title,
-          icon: backendTmpl.icon || fallback?.icon || 'doc',
-          sections: backendTmpl.sections || fallback?.sections || [],
+    getMemoTemplates()
+      .then(data => {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+          setTemplatesError('No memo templates returned by backend.')
+          return
         }
+        const hydrated = data.map(tmpl => ({
+          ...tmpl,
+          title: tmpl.title || tmpl.name,
+          icon: tmpl.icon || ICON_BY_KEY[tmpl.key] || 'doc',
+          sections: tmpl.sections || [],
+        }))
+        setTemplates(hydrated)
+        setTemplatesError(null)
       })
-      setTemplates(merged)
-    }).catch(() => { /* use fallback */ })
+      .catch(err => {
+        setTemplatesError(err?.message || 'Failed to load memo templates.')
+      })
   }, [])
 
   // Initialize section toggles when template selected
@@ -363,22 +322,49 @@ export default function MemoBuilder() {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.25 }}
           >
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-              gap: 16,
-              marginTop: 24,
-            }}>
-              {templates.map((tmpl, i) => (
-                <TemplateCard
-                  key={tmpl.key}
-                  template={tmpl}
-                  index={i}
-                  selected={selectedTemplate?.key === tmpl.key}
-                  onSelect={() => selectTemplate(tmpl)}
-                />
-              ))}
-            </div>
+            {templatesError ? (
+              <div style={{
+                marginTop: 24,
+                padding: '16px 20px',
+                borderRadius: 8,
+                background: 'rgba(240,96,96,0.08)',
+                border: '1px solid rgba(240,96,96,0.2)',
+                color: '#F06060',
+                fontSize: 13,
+                fontWeight: 500,
+              }}>
+                Unable to load memo templates: {templatesError}
+              </div>
+            ) : templates.length === 0 ? (
+              <div style={{
+                marginTop: 24,
+                padding: '16px 20px',
+                borderRadius: 8,
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-muted)',
+                fontSize: 13,
+              }}>
+                Loading memo templates…
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                gap: 16,
+                marginTop: 24,
+              }}>
+                {templates.map((tmpl, i) => (
+                  <TemplateCard
+                    key={tmpl.key}
+                    template={tmpl}
+                    index={i}
+                    selected={selectedTemplate?.key === tmpl.key}
+                    onSelect={() => selectTemplate(tmpl)}
+                  />
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -419,7 +405,8 @@ export default function MemoBuilder() {
               {/* Section list */}
               {selectedTemplate.sections.map((sec, i) => {
                 const on = sectionToggles[sec.key]
-                const srcBadge = SOURCE_BADGES[sec.source] || SOURCE_BADGES.Mixed
+                const sourceLabel = SOURCE_LABELS[sec.source] || sec.source || 'Mixed'
+                const srcBadge = SOURCE_BADGES[sourceLabel] || SOURCE_BADGES.Mixed
                 return (
                   <motion.div
                     key={sec.key}
@@ -478,7 +465,7 @@ export default function MemoBuilder() {
                       background: srcBadge.bg, color: srcBadge.color,
                       whiteSpace: 'nowrap', flexShrink: 0,
                     }}>
-                      {sec.source}
+                      {sourceLabel}
                     </span>
                   </motion.div>
                 )

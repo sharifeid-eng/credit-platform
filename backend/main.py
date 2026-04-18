@@ -77,7 +77,7 @@ from core.dataroom.engine import DataRoomEngine
 from core.dataroom.analytics_snapshot import AnalyticsSnapshotEngine
 from core.mind import MasterMind, CompanyMind, build_mind_context
 from core.research.dual_engine import DualResearchEngine
-from core.memo.templates import get_template, list_templates
+from core.memo.templates import MEMO_TEMPLATES, get_template, list_templates
 from core.memo.generator import MemoGenerator
 from core.memo.storage import MemoStorage
 from core.memo.pdf_export import export_memo_pdf
@@ -4247,8 +4247,34 @@ def master_mind_record(category: str, content: str,
 
 @app.get("/memo-templates")
 def get_memo_templates():
-    """List all available IC memo templates."""
-    return list_templates()
+    """List all available IC memo templates with full section definitions.
+
+    Returns full shape expected by frontend: each template includes its
+    ordered sections array ({key, title, required, source}). The frontend
+    relies on these keys to drive section toggles and must match the
+    backend's authoritative section keys to avoid silent drops during
+    generation.
+    """
+    result = []
+    for key, tmpl in MEMO_TEMPLATES.items():
+        sections = [
+            {
+                "key": s["key"],
+                "title": s["title"],
+                "required": s.get("required", False),
+                "source": s.get("source", "mixed"),
+            }
+            for s in tmpl["sections"]
+        ]
+        result.append({
+            "key": key,
+            "name": tmpl["name"],
+            "description": tmpl["description"],
+            "section_count": len(sections),
+            "required_sections": sum(1 for s in sections if s["required"]),
+            "sections": sections,
+        })
+    return result
 
 
 @app.get("/companies/{company}/products/{product}/memos")
