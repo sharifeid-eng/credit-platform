@@ -338,6 +338,9 @@ export const sendOperatorDigest      = (webhookUrl = null) =>
 export const getOperatorBriefing     = () => api.get('/operator/briefing').then(r => r.data);
 export const getOperatorLearning     = () => api.get('/operator/learning').then(r => r.data);
 export const getOperatorLearningRules = () => api.get('/operator/learning/rules').then(r => r.data);
+export const getDataroomHealthAll    = () => api.get('/dataroom/health').then(r => r.data);
+export const getDataroomHealthOne    = (co, prod) =>
+  api.get(`/companies/${co}/products/${prod}/dataroom/health`).then(r => r.data);
 export const getThesis               = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis`).then(r => r.data);
 export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
 export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);

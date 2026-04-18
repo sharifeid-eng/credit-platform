@@ -5,8 +5,9 @@ set -e
 
 echo "=== Laith Deploy ==="
 
-# Stash any local changes from dataroom ingests (registry.json, chunks metadata)
-git stash -q 2>/dev/null || true
+# NOTE: `git stash` was removed here — it was silently discarding any local edits
+# on every deploy (e.g. server-side enrichment of registry.json). The server
+# should have zero local edits; if `git pull` hits a conflict, we WANT to stop.
 
 # Pull latest code — record what changed
 echo "Pulling latest code..."
@@ -28,28 +29,37 @@ echo "Running migrations..."
 docker compose exec backend alembic upgrade head
 
 # Rebuild dataroom search indexes if needed (bypasses HTTP auth by calling Python directly)
+#
+# Heuristic: compare the registry entry count with the chunk file count. Any
+# misalignment (0 chunks, fewer chunks than registry entries, zero registry
+# entries with stale chunk files) triggers a full ingest. The OLD heuristic —
+# "chunks dir non-empty → skip" — was fooled by single stray chunks from
+# previous failed ingests, leaving Klaim/Tamara stuck with 1 chunk each.
 echo "Checking dataroom indexes..."
 for registry in data/*/dataroom/registry.json; do
     if [ -f "$registry" ]; then
         company_dir=$(dirname $(dirname "$registry"))
         company=$(basename "$company_dir")
         chunks_dir="$(dirname "$registry")/chunks"
-        if [ ! -d "$chunks_dir" ] || [ -z "$(ls -A "$chunks_dir" 2>/dev/null)" ]; then
-            # Find product from config.json
-            for config in data/$company/*/config.json; do
-                product=$(basename $(dirname "$config"))
-                if [ "$product" != "dataroom" ]; then
-                    echo "  Ingesting dataroom for $company/$product..."
-                    docker compose exec -T backend python -c "
-from core.dataroom.engine import DataRoomEngine
-engine = DataRoomEngine()
-result = engine.ingest('$company', '$product', 'data/$company/dataroom')
-print(f\"    Done: {result.get('total_files', '?')} files, {result.get('ingested', '?')} new, {result.get('skipped', '?')} skipped\")
-" 2>&1 || echo "    Failed"
-                fi
-            done
+
+        # Count registry entries (docs) and chunk files on disk
+        registry_count=$(python3 -c "import json; print(len(json.load(open('$registry'))))" 2>/dev/null || echo "0")
+        if [ -d "$chunks_dir" ]; then
+            chunk_count=$(ls -1 "$chunks_dir"/*.json 2>/dev/null | wc -l | tr -d ' ')
         else
-            echo "  $company: chunks exist, skipping ingest"
+            chunk_count=0
+        fi
+
+        if [ "$registry_count" -gt 0 ] && [ "$registry_count" = "$chunk_count" ]; then
+            echo "  $company: registry aligned ($registry_count docs) — skipping ingest"
+        else
+            echo "  $company: misalignment (registry=$registry_count, chunks=$chunk_count) — ingesting via dataroom_ctl..."
+            # Unified CLI (scripts/dataroom_ctl.py) auto-resolves the product,
+            # writes a structured manifest entry, and returns a non-zero exit
+            # code on failure. Human-readable summary on stderr; JSON on stdout.
+            docker compose exec -T backend \
+                python scripts/dataroom_ctl.py ingest --company "$company" \
+                || echo "    Failed (exit=$?)"
         fi
     fi
 done

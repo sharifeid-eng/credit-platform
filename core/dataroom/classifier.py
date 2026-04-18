@@ -33,7 +33,16 @@ class DocumentType(Enum):
     ANALYTICS_REPORT = "analytics_report"
     MEMO_DRAFT = "memo_draft"
     MEMO_FINAL = "memo_final"
+    # Tier 3.1 additions — common private-credit data room document types.
+    BANK_STATEMENT = "bank_statement"
+    AUDIT_REPORT = "audit_report"
+    CAP_TABLE = "cap_table"
+    BOARD_PACK = "board_pack"
+    KYC_COMPLIANCE = "kyc_compliance"
+    # "other" = rule-based classifier had no confident match.
+    # "unknown" = LLM fallback ran and was also unconfident (confidence < 0.6).
     OTHER = "other"
+    UNKNOWN = "unknown"
 
 
 # ── Filename keyword rules ────────────────────────────────────────────────────
@@ -80,6 +89,18 @@ _FILENAME_RULES = [
     (re.compile(r"(analytics.?portfolio|portfolio.?analytics)"), DocumentType.ANALYTICS_PORTFOLIO),
     (re.compile(r"(ai.?summary|executive.?summary|ai.?commentary)"), DocumentType.ANALYTICS_AI_SUMMARY),
     (re.compile(r"(research.?report|compliance.?cert|integrity.?report)"), DocumentType.ANALYTICS_REPORT),
+    # Tier 3.1 — bank statements / transactions
+    (re.compile(r"(bank.?statement|account.?statement|transactions?\b|\bledger\b)"), DocumentType.BANK_STATEMENT),
+    # Tier 3.1 — auditor reports (non-Deloitte firms already covered above under FDD,
+    # but standalone audit reports — especially ISAE / management letter / internal audit —
+    # deserve a distinct bucket).
+    (re.compile(r"(audit.?report|management.?letter|isae|internal.?audit|auditor.?opinion)"), DocumentType.AUDIT_REPORT),
+    # Tier 3.1 — cap table / shareholder / equity structure
+    (re.compile(r"(cap.?table|shareholder|captable|share.?register|equity.?structure|ownership.?structure)"), DocumentType.CAP_TABLE),
+    # Tier 3.1 — board materials
+    (re.compile(r"(board.?pack|board.?deck|board.?meeting|board.?minutes|board.?resolution)"), DocumentType.BOARD_PACK),
+    # Tier 3.1 — KYC / compliance
+    (re.compile(r"(\bkyc\b|know.?your.?customer|compliance.?pack|aml|sanctions|beneficial.?owner)"), DocumentType.KYC_COMPLIANCE),
 ]
 
 # ── Text preview rules (checked if filename rules don't match) ────────────────
@@ -95,21 +116,49 @@ _TEXT_RULES = [
     (re.compile(r"(business\s+plan|revenue\s+projection|5.year\s+plan|growth\s+strategy)", re.IGNORECASE), DocumentType.BUSINESS_PLAN),
     # Portfolio / loan tapes (CSV/Excel with loan-related column headers)
     (re.compile(r"(loan.?id|principal.?amount|disburs|days.?past.?due|collection.?rate|outstanding.?balance|maturity.?date|dpd|purchase.?value|collected.?till)", re.IGNORECASE), DocumentType.PORTFOLIO_TAPE),
+    # Tier 3.1 — content-based rules for new types
+    (re.compile(r"(opening\s+balance|closing\s+balance|transaction\s+date|account\s+number|iban|swift)", re.IGNORECASE), DocumentType.BANK_STATEMENT),
+    (re.compile(r"(independent\s+auditor|going\s+concern|audit\s+opinion|audited\s+financial|emphasis\s+of\s+matter)", re.IGNORECASE), DocumentType.AUDIT_REPORT),
+    (re.compile(r"(fully\s+diluted|preferred\s+shares|ordinary\s+shares|option\s+pool|vesting\s+schedule|waterfall\s+analysis)", re.IGNORECASE), DocumentType.CAP_TABLE),
+    (re.compile(r"(board\s+of\s+directors|resolutions?\s+of\s+the\s+board|minutes\s+of\s+the\s+board)", re.IGNORECASE), DocumentType.BOARD_PACK),
+    (re.compile(r"(know\s+your\s+customer|beneficial\s+owner|politically\s+exposed|anti.?money\s+laundering)", re.IGNORECASE), DocumentType.KYC_COMPLIANCE),
+    (re.compile(r"(credit\s+policy|underwriting\s+criteria|lending\s+guidelines|credit\s+committee)", re.IGNORECASE), DocumentType.CREDIT_POLICY),
+]
+
+# ── Sheet-name rules (Excel only) ─────────────────────────────────────────────
+# Applied when filename + text previews are inconclusive. Spreadsheet authors
+# encode intent in tab names ("Covenant Test", "Vintage Analysis") far more
+# consistently than in file names.
+_SHEET_RULES = [
+    (re.compile(r"(vintage|cohort|loss.?curve|dpd.?bucket|roll.?rate)", re.IGNORECASE), DocumentType.VINTAGE_COHORT),
+    (re.compile(r"(covenant|trigger|waterfall|borrowing.?base)", re.IGNORECASE), DocumentType.FACILITY_AGREEMENT),
+    (re.compile(r"(cap.?table|shareholder|equity)", re.IGNORECASE), DocumentType.CAP_TABLE),
+    (re.compile(r"(p&?l|income.?statement|balance.?sheet|cashflow|cash.?flow)", re.IGNORECASE), DocumentType.FINANCIAL_STATEMENT),
+    (re.compile(r"(assumption|projection|forecast|scenario)", re.IGNORECASE), DocumentType.FINANCIAL_MODEL),
+    (re.compile(r"(bank|transaction|ledger)", re.IGNORECASE), DocumentType.BANK_STATEMENT),
 ]
 
 
-def classify_document(filepath: str, text_preview: str = None) -> DocumentType:
-    """Classify a document by filename patterns and optional text preview.
+def classify_document(
+    filepath: str,
+    text_preview: str = None,
+    sheet_names: list = None,
+) -> DocumentType:
+    """Classify a document by filename patterns, text preview, and sheet names.
 
     Classification strategy:
     1. Check filename + parent directory names against keyword rules
     2. If no match and text_preview provided, check text content rules
-    3. Fall back to DocumentType.OTHER
+    3. If still no match and sheet_names provided (Excel), check sheet-name rules
+    4. Fall back to DocumentType.OTHER (caller may invoke LLM fallback)
 
     Args:
         filepath: Full path to the document file.
-        text_preview: Optional first ~500 characters of extracted text for
+        text_preview: Optional first ~2000 characters of extracted text for
                       content-based classification.
+        sheet_names: Optional list of Excel sheet names (tab labels) — used
+                     as a third classification signal. Only effective for
+                     parse_result.metadata["sheets"] passed by the Excel parser.
 
     Returns:
         The detected DocumentType enum value.
@@ -127,6 +176,15 @@ def classify_document(filepath: str, text_preview: str = None) -> DocumentType:
         preview = text_preview[:2000]  # Cap to prevent regex on huge strings
         for pattern, doc_type in _TEXT_RULES:
             if pattern.search(preview):
+                return doc_type
+
+    # Phase 3: Excel sheet-name rules. Tab names are author-intended labels
+    # ("Covenant Test", "Vintage Analysis") and discriminate better than
+    # generic filenames for spreadsheet-heavy data rooms.
+    if sheet_names:
+        joined = " | ".join(str(s) for s in sheet_names if s)
+        for pattern, doc_type in _SHEET_RULES:
+            if pattern.search(joined):
                 return doc_type
 
     return DocumentType.OTHER

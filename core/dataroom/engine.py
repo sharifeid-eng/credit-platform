@@ -14,6 +14,7 @@ Storage layout:
 
 import hashlib
 import json
+import logging
 import os
 import pickle
 import uuid
@@ -22,7 +23,10 @@ from pathlib import Path
 
 from .classifier import DocumentType, classify_document
 from .chunker import chunk_document
+from .ingest_log import record_ingest, read_manifest, last_ingest
 from .parsers import get_parser
+
+logger = logging.getLogger("laith.dataroom")
 
 
 # ── JSON serialization helper ─────────────────────────────────────────────────
@@ -169,6 +173,30 @@ class DataRoomEngine:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(chunks, f, indent=2, default=str)
 
+    def _meta_path(self, company: str, product: str) -> Path:
+        """Path to per-dataroom meta/status file (index build state, etc.)."""
+        return self._dataroom_dir(company, product) / "meta.json"
+
+    def _meta_status(self, company: str, product: str) -> dict:
+        """Load dataroom meta/status dict (returns {} if missing or invalid)."""
+        path = self._meta_path(company, product)
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return {}
+        return {}
+
+    def _save_meta_status(self, company: str, product: str, status: dict):
+        """Persist dataroom meta/status dict."""
+        path = self._meta_path(company, product)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(status, f, indent=2, default=str)
+        except OSError as e:
+            logger.warning("[dataroom] Failed to write meta.json: %s", e)
+
     def _load_chunks(self, company: str, product: str, doc_id: str) -> list:
         """Load chunks for a document from disk."""
         path = self._chunks_dir(company, product) / f"{doc_id}.json"
@@ -202,6 +230,7 @@ class DataRoomEngine:
             - errors: list of {file, error} dicts
             - documents: list of ingested doc_id strings
         """
+        started_at = datetime.now()
         source = Path(source_dir)
         if not source.exists():
             return {
@@ -214,10 +243,26 @@ class DataRoomEngine:
 
         registry = self._load_registry(company, product)
 
-        # Build hash lookup for existing docs (filepath -> doc_id)
+        # Build hash lookup for existing docs, but ONLY for entries whose chunks
+        # file actually exists on disk. Orphan registry entries (chunks missing)
+        # are evicted so their source files re-ingest. Fixes the dedup-skip bug:
+        # if a synced registry.json arrives on a server with no chunks/, every
+        # file would otherwise be skipped silently.
+        chunks_root = self._chunks_dir(company, product)
         existing_hashes = {}
-        for doc_id, doc in registry.items():
-            existing_hashes[doc.get("sha256")] = doc_id
+        orphans = []
+        for doc_id, doc in list(registry.items()):
+            if (chunks_root / f"{doc_id}.json").exists():
+                existing_hashes[doc.get("sha256")] = doc_id
+            else:
+                orphans.append((doc_id, doc.get("filename", "?")))
+
+        for doc_id, fname in orphans:
+            registry.pop(doc_id, None)
+            logger.warning(
+                "[dataroom] Dropped orphan registry entry %s (%s) — chunks file missing; will re-ingest",
+                doc_id, fname,
+            )
 
         # Find all supported files
         files = []
@@ -231,6 +276,7 @@ class DataRoomEngine:
             "total_files": len(files),
             "ingested": 0,
             "skipped": 0,
+            "orphans_dropped": len(orphans),
             "errors": [],
             "documents": [],
         }
@@ -267,6 +313,20 @@ class DataRoomEngine:
 
         # Rebuild search index
         self._build_index(company, product, registry)
+
+        # Append to ingest manifest so audit/health endpoints can report
+        status = self._meta_status(company, product)
+        record_ingest(
+            self._data_root, company, product,
+            action="ingest",
+            started_at=started_at,
+            result=result,
+            extras={
+                "index_status": status.get("index_status", "unknown"),
+                "index_size_bytes": status.get("index_size_bytes"),
+                "registry_count": len(registry),
+            },
+        )
 
         return result
 
@@ -333,18 +393,33 @@ class DataRoomEngine:
         Returns:
             RefreshResult dict with counts of added, updated, removed, unchanged.
         """
+        started_at = datetime.now()
         source = Path(source_dir)
         if not source.exists():
             return {"error": f"Directory not found: {source_dir}"}
 
         registry = self._load_registry(company, product)
 
-        # Map current registry: normalized filepath -> (doc_id, hash)
+        # Map current registry: normalized filepath -> (doc_id, hash).
+        # Orphan entries (chunks file missing) are evicted so the file
+        # re-ingests cleanly on this pass.
+        chunks_root = self._chunks_dir(company, product)
         current_files = {}
-        for doc_id, doc in registry.items():
+        orphans = []
+        for doc_id, doc in list(registry.items()):
+            if not (chunks_root / f"{doc_id}.json").exists():
+                orphans.append((doc_id, doc.get("filename", "?")))
+                continue
             fp = doc.get("filepath")
             if fp:
                 current_files[_normalize_filepath(fp)] = (doc_id, doc.get("sha256"))
+
+        for doc_id, fname in orphans:
+            registry.pop(doc_id, None)
+            logger.warning(
+                "[dataroom.refresh] Dropped orphan registry entry %s (%s) — chunks file missing",
+                doc_id, fname,
+            )
 
         # Scan source directory
         disk_files = {}
@@ -399,6 +474,21 @@ class DataRoomEngine:
         self._save_registry(company, product, registry)
         self._build_index(company, product, registry)
 
+        # Append structured manifest entry (Tier 2.3 — ingest_log).
+        status = self._meta_status(company, product)
+        record_ingest(
+            self._data_root, company, product,
+            action="refresh",
+            started_at=started_at,
+            result=result,
+            extras={
+                "index_status": status.get("index_status", "unknown"),
+                "index_size_bytes": status.get("index_size_bytes"),
+                "registry_count": len(registry),
+                "orphans_dropped": len(orphans),
+            },
+        )
+
         return result
 
     def get_document(self, company: str, product: str, doc_id: str) -> dict:
@@ -446,8 +536,17 @@ class DataRoomEngine:
                 results = self._search_tfidf(company, product, query, top_k)
                 if results is not None:
                     return results
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "[dataroom.search] TF-IDF search failed for %s/%s: %s — "
+                    "falling back to word-frequency search",
+                    company, product, e,
+                )
+        else:
+            logger.info(
+                "[dataroom.search] No index.pkl for %s/%s — using word-frequency fallback",
+                company, product,
+            )
 
         # Fallback: simple word-frequency search
         return self._search_simple(company, product, query, top_k)
@@ -489,15 +588,160 @@ class DataRoomEngine:
             total_chunks += chunk_count
             total_pages += doc.get("page_count", 0)
 
+        status = self._meta_status(company, product)
         return {
             "total_documents": len(registry),
             "total_chunks": total_chunks,
             "total_pages": total_pages,
             "by_type": by_type,
             "has_index": self._index_path(company, product).exists(),
+            "index_status": status.get("index_status", "unknown"),
+            "index_built_at": status.get("index_built_at"),
+            "index_size_bytes": status.get("index_size_bytes"),
         }
 
-    # ── Internal helpers ──────────────────────────────────────────────────────
+    def rebuild_index_only(self, company: str, product: str) -> dict:
+        """Rebuild the TF-IDF index from existing chunks without re-parsing source files.
+
+        Used by `dataroom_ctl rebuild-index` after:
+          - sklearn install fixes a degraded_no_sklearn state
+          - an index.pkl file is corrupted or deleted
+          - chunks were manually edited
+
+        Returns {status, registry_count, index_status, duration_s}.
+        """
+        started_at = datetime.now()
+        registry = self._load_registry(company, product)
+        self._build_index(company, product, registry)
+        status = self._meta_status(company, product)
+        return {
+            "status": "ok",
+            "registry_count": len(registry),
+            "index_status": status.get("index_status", "unknown"),
+            "index_size_bytes": status.get("index_size_bytes"),
+            "duration_s": round((datetime.now() - started_at).total_seconds(), 2),
+        }
+
+    def wipe(self, company: str, product: str) -> dict:
+        """Delete registry, chunks, index, and meta for a dataroom.
+
+        Destructive -- dataroom_ctl wipe prompts for confirmation before
+        calling this. Source files under dataroom/ are not touched.
+        """
+        import shutil
+        dr_dir = self._dataroom_dir(company, product)
+        removed = {"registry": False, "chunks": 0, "index": False, "meta": False}
+
+        reg = dr_dir / "registry.json"
+        if reg.exists():
+            reg.unlink()
+            removed["registry"] = True
+
+        chunks_dir = self._chunks_dir(company, product)
+        if chunks_dir.exists():
+            removed["chunks"] = len(list(chunks_dir.glob("*.json")))
+            shutil.rmtree(chunks_dir, ignore_errors=True)
+
+        idx = self._index_path(company, product)
+        if idx.exists():
+            idx.unlink()
+            removed["index"] = True
+
+        meta = self._meta_path(company, product)
+        if meta.exists():
+            meta.unlink()
+            removed["meta"] = True
+
+        logger.warning(
+            "[dataroom.wipe] Wiped %s/%s: registry=%s chunks=%d index=%s meta=%s",
+            company, product, removed["registry"], removed["chunks"],
+            removed["index"], removed["meta"],
+        )
+        return removed
+
+    def audit(self, company: str, product: str = "") -> dict:
+        """Full health audit for a company/product data room.
+
+        Surfaces misalignments that deploy.sh and /dataroom/health both care about:
+          - registry_count vs chunk_count (orphan registry entries or stray chunks)
+          - missing_chunks -- registry entries whose chunks file isn't on disk
+          - orphan_chunks -- chunk files with no matching registry entry
+          - index_status -- ok / degraded_no_sklearn / empty_no_chunks / unknown
+          - last_ingest -- most recent clean entry from ingest_log.jsonl
+          - unclassified_count -- docs classified as 'other' or 'unknown'
+
+        Args:
+            company: Company identifier.
+            product: Product identifier (optional for company-level datarooms).
+
+        Returns:
+            Structured dict consumed by /dataroom/health and dataroom_ctl audit.
+        """
+        registry = self._load_registry(company, product)
+        chunks_root = self._chunks_dir(company, product)
+
+        # Per-doc chunk alignment
+        missing_chunks = []
+        registered_ids = set()
+        unclassified_count = 0
+        for doc_id, doc in registry.items():
+            registered_ids.add(doc_id)
+            if not (chunks_root / f"{doc_id}.json").exists():
+                missing_chunks.append({
+                    "doc_id": doc_id,
+                    "filename": doc.get("filename", "?"),
+                })
+            if doc.get("document_type") in ("other", "unknown", None):
+                unclassified_count += 1
+
+        # Orphan chunks (chunk files with no registry entry)
+        orphan_chunks = []
+        chunk_count = 0
+        if chunks_root.exists():
+            for p in chunks_root.glob("*.json"):
+                chunk_count += 1
+                if p.stem not in registered_ids:
+                    orphan_chunks.append(p.name)
+
+        status = self._meta_status(company, product)
+        idx_path = self._index_path(company, product)
+        index_age_seconds = None
+        if idx_path.exists():
+            try:
+                index_age_seconds = int(
+                    (datetime.now().timestamp() - idx_path.stat().st_mtime)
+                )
+            except OSError:
+                pass
+
+        last = last_ingest(self._data_root, company)
+
+        aligned = (
+            len(registry) > 0
+            and len(registry) == chunk_count
+            and not missing_chunks
+            and not orphan_chunks
+        )
+
+        return {
+            "company": company,
+            "product": product or "",
+            "registry_count": len(registry),
+            "chunk_count": chunk_count,
+            "aligned": aligned,
+            "missing_chunks": missing_chunks[:20],  # cap for payload size
+            "missing_chunks_total": len(missing_chunks),
+            "orphan_chunks": orphan_chunks[:20],
+            "orphan_chunks_total": len(orphan_chunks),
+            "unclassified_count": unclassified_count,
+            "index_status": status.get("index_status", "unknown"),
+            "index_built_at": status.get("index_built_at"),
+            "index_size_bytes": status.get("index_size_bytes"),
+            "index_age_seconds": index_age_seconds,
+            "last_ingest": last,
+        }
+
+    # -- Internal helpers --------------------------------------------------
 
     def _ingest_single_file(
         self, company: str, product: str, filepath: str, file_hash: str, registry: dict
@@ -518,9 +762,42 @@ class DataRoomEngine:
         if parse_result.error and not parse_result.text and not parse_result.tables:
             return {"error": parse_result.error}
 
-        # Classify
+        # Classify — rule-based first (filename → text → sheet-names),
+        # with optional LLM fallback (Tier 3.2) only when rules return 'other'.
         text_preview = parse_result.text[:2000] if parse_result.text else None
-        doc_type = classify_document(str(path), text_preview)
+        sheet_names = parse_result.metadata.get("sheets") if parse_result.metadata else None
+        doc_type = classify_document(str(path), text_preview, sheet_names=sheet_names)
+
+        if doc_type == DocumentType.OTHER:
+            try:
+                from .classifier_llm import classify_with_llm
+                llm_result = classify_with_llm(
+                    filepath=str(path),
+                    text_preview=text_preview or "",
+                    sheet_names=sheet_names or [],
+                    sha256=file_hash,
+                    data_root=str(self._data_root),
+                    company=company,
+                )
+                if llm_result and llm_result.get("doc_type"):
+                    # Promote only if model is confident; otherwise mark unknown.
+                    confidence = llm_result.get("confidence", 0.0)
+                    if confidence >= 0.6:
+                        try:
+                            doc_type = DocumentType(llm_result["doc_type"])
+                        except ValueError:
+                            # Model returned a type we don't recognize — keep as unknown
+                            doc_type = DocumentType.UNKNOWN
+                    else:
+                        doc_type = DocumentType.UNKNOWN
+            except ImportError:
+                # classifier_llm not installed — silently keep 'other'
+                pass
+            except Exception as e:
+                logger.warning(
+                    "[dataroom] LLM classifier fallback failed for %s: %s",
+                    path.name, e,
+                )
 
         # Chunk
         chunks = chunk_document(
@@ -572,8 +849,14 @@ class DataRoomEngine:
                 "document_type": doc_type.value,
                 "filename": path.name,
             })
-        except Exception:
-            pass
+        except Exception as e:
+            # Non-fatal: event bus / listener failure must not block ingest.
+            # Logged so operator can see if entity extraction / thesis drift
+            # are silently skipping.
+            logger.info(
+                "[dataroom] DOCUMENT_INGESTED event dispatch failed for %s: %s",
+                doc_id, e,
+            )
 
         return doc_record
 
@@ -595,12 +878,24 @@ class DataRoomEngine:
         Index is stored as a pickle file containing the vectorizer,
         the TF-IDF matrix, and chunk references (doc_id + chunk_index).
 
-        Silently skips if sklearn is not available.
+        Logs a clear warning if sklearn is unavailable and records the
+        degraded state in the registry meta so health checks can surface it.
         """
+        status = self._meta_status(company, product)
+
         try:
             from sklearn.feature_extraction.text import TfidfVectorizer
         except ImportError:
-            return  # No sklearn, search will use simple fallback
+            logger.warning(
+                "[dataroom.index] sklearn not installed — TF-IDF index NOT built "
+                "for %s/%s. Search will fall back to word-frequency scoring. "
+                "Install scikit-learn to enable semantic search.",
+                company, product,
+            )
+            status["index_status"] = "degraded_no_sklearn"
+            status["index_built_at"] = datetime.now().isoformat()[:19]
+            self._save_meta_status(company, product, status)
+            return
 
         all_texts = []
         all_refs = []
@@ -619,6 +914,14 @@ class DataRoomEngine:
                     })
 
         if not all_texts:
+            logger.warning(
+                "[dataroom.index] No chunks to index for %s/%s (registry has %d docs "
+                "but zero non-empty chunks). Leaving index.pkl untouched.",
+                company, product, len(registry),
+            )
+            status["index_status"] = "empty_no_chunks"
+            status["index_built_at"] = datetime.now().isoformat()[:19]
+            self._save_meta_status(company, product, status)
             return
 
         vectorizer = TfidfVectorizer(
@@ -639,6 +942,16 @@ class DataRoomEngine:
         index_path = self._index_path(company, product)
         with open(index_path, "wb") as f:
             pickle.dump(index_data, f)
+
+        logger.info(
+            "[dataroom.index] Built TF-IDF index for %s/%s: %d chunks, %d bytes",
+            company, product, len(all_texts), index_path.stat().st_size,
+        )
+        status["index_status"] = "ok"
+        status["index_built_at"] = datetime.now().isoformat()[:19]
+        status["index_chunk_count"] = len(all_texts)
+        status["index_size_bytes"] = index_path.stat().st_size
+        self._save_meta_status(company, product, status)
 
     def _search_tfidf(
         self, company: str, product: str, query: str, top_k: int
