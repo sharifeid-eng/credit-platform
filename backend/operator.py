@@ -98,8 +98,8 @@ def _compute_company_health(company: str, product: str, config: dict) -> dict:
         legal_docs = [f for f in os.listdir(legal_dir) if f.endswith(".pdf")]
         legal_extracted = any(f.endswith("_extracted.json") for f in os.listdir(legal_dir))
 
-    # Data room
-    registry_path = product_path / "dataroom" / "registry.json"
+    # Data room (company-level, not product-level — moved in session 17)
+    registry_path = Path(DATA_DIR) / company / "dataroom" / "registry.json"
     dataroom_docs = 0
     if registry_path.exists():
         try:
