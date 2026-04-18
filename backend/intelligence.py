@@ -119,6 +119,37 @@ def get_morning_briefing():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Cross-Company Patterns ────────────────────────────────────────────────────
+
+@router.get("/operator/cross-company-patterns")
+def get_cross_company_patterns(
+    lookback_days: int = Query(30, ge=1, le=365),
+    refresh: bool = Query(False),
+):
+    """Detect patterns across 2+ companies (metric trends, risk convergence,
+    covenant pressure). Surfaces the output of IntelligenceEngine which is
+    already computed by event listeners but wasn't exposed in the UI.
+    """
+    from core.mind.intelligence import IntelligenceEngine
+
+    engine = IntelligenceEngine()
+    if refresh:
+        patterns = engine.detect_cross_company_patterns(lookback_days=lookback_days)
+        engine.save_patterns(patterns)
+    else:
+        patterns = engine.load_patterns()
+        if not patterns:
+            # First run — compute live
+            patterns = engine.detect_cross_company_patterns(lookback_days=lookback_days)
+            engine.save_patterns(patterns)
+
+    return {
+        "patterns": [p.to_dict() for p in patterns],
+        "total": len(patterns),
+        "lookback_days": lookback_days,
+    }
+
+
 # ── Knowledge Search ──────────────────────────────────────────────────────────
 
 @router.get("/knowledge/search")

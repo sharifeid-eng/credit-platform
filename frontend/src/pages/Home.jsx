@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link }                        from 'react-router-dom'
 import { motion }                                   from 'framer-motion'
-import { getCompanies, getSummary, getSnapshots }   from '../services/api'
+import { getCompanies, getSummary, getSnapshots, getOperatorStatus, getPlatformStats } from '../services/api'
 import PortfolioStatsHero                           from '../components/PortfolioStatsHero'
 import useBreakpoint                                from '../hooks/useBreakpoint'
 
@@ -221,6 +221,7 @@ export default function Home() {
           }}>
             <OperatorCard />
             <FrameworkCard />
+            <ArchitectureCard />
           </div>
         </div>
       </div>
@@ -514,6 +515,20 @@ function CompanyCard({ company, summary, productSummaries = [], index, onClick, 
 // ── Operator resource card ───────────────────────────────────────────────────
 function OperatorCard() {
   const [hovered, setHovered] = useState(false)
+  const [vitals,  setVitals]  = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getOperatorStatus().then(data => {
+      if (cancelled) return
+      const gaps     = (data.companies || []).reduce((acc, c) => acc + (c.gaps?.length || 0), 0)
+      const openTodos = (data.todos || []).filter(t => !t.completed).length
+      const freshnessStale = (data.companies || []).filter(c => c.tape_freshness?.status === 'stale' || c.tape_freshness?.status === 'outdated').length
+      setVitals({ gaps, openTodos, freshnessStale, companies: data.companies?.length || 0 })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   return (
     <Link
       to="/operator"
@@ -566,14 +581,21 @@ function OperatorCard() {
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: '0 0 16px' }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: '0 0 14px' }}>
         Platform health, data gaps, follow-ups, operations menu,
         and institutional memory — your cockpit for running the fund.
       </p>
 
+      <VitalsRow items={vitals ? [
+        { label: 'Gaps',       value: vitals.gaps,          accent: vitals.gaps > 0 ? '#F06060' : 'var(--text-primary)' },
+        { label: 'Follow-ups', value: vitals.openTodos,     accent: vitals.openTodos > 0 ? 'var(--gold)' : 'var(--text-primary)' },
+        { label: 'Stale',      value: vitals.freshnessStale, accent: vitals.freshnessStale > 0 ? 'var(--gold)' : 'var(--text-primary)' },
+      ] : null} loading={!vitals} />
+
       <div style={{
-        paddingTop: 14, borderTop: '1px solid var(--border)',
+        paddingTop: 12, borderTop: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginTop: 12,
       }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Open Command Center</span>
         <span style={{
@@ -587,12 +609,78 @@ function OperatorCard() {
   )
 }
 
+// Small shared vitals row for Resources cards (3 stat tiles)
+function VitalsRow({ items, loading }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: 8, marginBottom: 4,
+    }}>
+      {(items || [{}, {}, {}]).map((it, i) => (
+        <div key={i} style={{
+          background: 'var(--bg-deep)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: '8px 6px', textAlign: 'center',
+          minHeight: 42,
+        }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+            lineHeight: 1, color: loading ? 'var(--text-faint)' : (it.accent || 'var(--text-primary)'),
+          }}>
+            {loading ? '—' : (it.value ?? '—')}
+          </div>
+          <div style={{
+            fontSize: 7, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.12em', color: 'var(--text-faint)', marginTop: 5,
+          }}>
+            {it.label || '\u00A0'}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Framework resource card ──────────────────────────────────────────────────
+// localStorage key for tracking the user's last visit → "N new" badge
+const FRAMEWORK_SEEN_KEY = 'laith.framework.lastSeenSections'
+
 function FrameworkCard() {
   const [hovered, setHovered] = useState(false)
+  const [stats,   setStats]   = useState(null)  // { sections, lastModified, newSinceSeen }
+
+  useEffect(() => {
+    let cancelled = false
+    // Pull platform stats for section count + last-modified
+    getPlatformStats().then(data => {
+      if (cancelled) return
+      const sections = data?.totals?.framework_sections ?? null
+      const lastModified = data?.framework_last_modified ?? null
+      // "N new since last visit" — compare current section count to the count we saved last time
+      let newSinceSeen = 0
+      try {
+        const seen = parseInt(localStorage.getItem(FRAMEWORK_SEEN_KEY) || '0', 10)
+        if (sections != null && seen > 0 && sections > seen) newSinceSeen = sections - seen
+      } catch (e) { /* ignore */ }
+      setStats({ sections, lastModified, newSinceSeen })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const handleClick = () => {
+    // Save the current section count as "seen" on click
+    if (stats?.sections != null) {
+      try { localStorage.setItem(FRAMEWORK_SEEN_KEY, String(stats.sections)) } catch (e) { /* ignore */ }
+    }
+  }
+
+  const modifiedLabel = stats?.lastModified
+    ? new Date(stats.lastModified).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+    : '—'
+
   return (
     <Link
       to="/framework"
+      onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -629,9 +717,20 @@ function FrameworkCard() {
         }}>
           📐
         </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            Analysis Framework
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Analysis Framework
+            </div>
+            {stats?.newSinceSeen > 0 && (
+              <span style={{
+                fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 10,
+                background: 'rgba(45,212,191,0.15)', color: 'var(--teal)',
+                border: '1px solid rgba(45,212,191,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em',
+              }}>
+                +{stats.newSinceSeen} new
+              </span>
+            )}
           </div>
           <div style={{
             fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
@@ -642,18 +741,119 @@ function FrameworkCard() {
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: '0 0 16px' }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: '0 0 14px' }}>
         The 5-level analytical hierarchy, metric definitions, and philosophy
         guiding every dashboard, chart, and AI insight in Laith.
       </p>
 
+      <VitalsRow items={stats ? [
+        { label: 'Sections', value: stats.sections ?? '—', accent: 'var(--teal)' },
+        { label: 'Updated',  value: modifiedLabel,          accent: 'var(--text-primary)' },
+        { label: 'Levels',   value: 'L1–L5',                 accent: 'var(--text-primary)' },
+      ] : null} loading={!stats} />
+
       <div style={{
-        paddingTop: 14, borderTop: '1px solid var(--border)',
+        paddingTop: 12, borderTop: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginTop: 12,
       }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Read Framework</span>
         <span style={{
           color: hovered ? 'var(--teal)' : 'var(--text-faint)',
+          transition: 'color 0.15s, transform 0.15s',
+          transform: hovered ? 'translateX(3px)' : 'translateX(0)',
+          display: 'inline-block', fontSize: 15,
+        }}>→</span>
+      </div>
+    </Link>
+  )
+}
+
+// ── Architecture resource card ───────────────────────────────────────────────
+function ArchitectureCard() {
+  const [hovered, setHovered] = useState(false)
+  const [stats,   setStats]   = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getPlatformStats().then(data => {
+      if (cancelled) return
+      setStats(data?.totals || null)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  return (
+    <Link
+      to="/architecture"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        textDecoration: 'none', display: 'block',
+        background:    'var(--bg-surface)',
+        border:        `1px solid ${hovered ? 'rgba(167,139,250,0.4)' : 'var(--border)'}`,
+        borderRadius:  'var(--radius-md)',
+        padding:       '22px 22px 18px',
+        cursor:        'pointer',
+        position:      'relative', overflow: 'hidden',
+        transition:    'border-color 0.2s, box-shadow 0.2s, transform 0.18s',
+        boxShadow:     hovered ? '0 0 20px rgba(167,139,250,0.1)' : 'none',
+        transform:     hovered ? 'translateY(-2px)' : 'translateY(0)',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 0, left: 0, height: 2, right: 0,
+        background: hovered ? 'linear-gradient(90deg, #a78bfa, transparent)' : 'transparent',
+        transition: 'background 0.2s',
+      }} />
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: '#a78bfa', borderRadius: '10px 0 0 10px',
+        opacity: hovered ? 1 : 0.35, transition: 'opacity 0.2s',
+      }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div style={{
+          width: 38, height: 38,
+          background: 'linear-gradient(135deg, #a78bfa, rgba(167,139,250,0.4))',
+          borderRadius: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, flexShrink: 0, color: 'var(--bg-base)',
+        }}>
+          ⚙
+        </div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Architecture
+          </div>
+          <div style={{
+            fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
+            letterSpacing: '0.1em', color: '#a78bfa', marginTop: 3,
+          }}>
+            Platform Capabilities
+          </div>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: '0 0 14px' }}>
+        Live technical overview — what the platform does, how the layers
+        connect, and the scale it operates at. Diagram regenerates automatically.
+      </p>
+
+      <VitalsRow items={stats ? [
+        { label: 'Endpoints', value: stats.routes ?? '—',       accent: '#a78bfa' },
+        { label: 'Mind',      value: stats.mind_entries ?? '—', accent: 'var(--text-primary)' },
+        { label: 'Tests',     value: stats.tests ?? '—',        accent: 'var(--text-primary)' },
+      ] : null} loading={!stats} />
+
+      <div style={{
+        paddingTop: 12, borderTop: '1px solid var(--border)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginTop: 12,
+      }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>View Architecture</span>
+        <span style={{
+          color: hovered ? '#a78bfa' : 'var(--text-faint)',
           transition: 'color 0.15s, transform 0.15s',
           transform: hovered ? 'translateX(3px)' : 'translateX(0)',
           display: 'inline-block', fontSize: 15,

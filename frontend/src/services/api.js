@@ -29,6 +29,7 @@ export default api;
 export const getFramework       = () => api.get('/framework').then(r => r.data.content);
 export const getMethodology     = (analysisType) => api.get(`/methodology/${analysisType}`).then(r => r.data);
 export const getAggregateStats  = ()  => api.get('/aggregate-stats').then(r => r.data);
+export const getPlatformStats   = ()  => api.get('/platform-stats').then(r => r.data);
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 export const getCompanies     = () => api.get('/companies').then(r => r.data);
@@ -338,6 +339,14 @@ export const sendOperatorDigest      = (webhookUrl = null) =>
 export const getOperatorBriefing     = () => api.get('/operator/briefing').then(r => r.data);
 export const getOperatorLearning     = () => api.get('/operator/learning').then(r => r.data);
 export const getOperatorLearningRules = () => api.get('/operator/learning/rules').then(r => r.data);
+export const getCrossCompanyPatterns  = ({ lookbackDays = 30, refresh = false } = {}) =>
+  api.get('/operator/cross-company-patterns', {
+    params: { lookback_days: lookbackDays, ...(refresh ? { refresh: true } : {}) },
+  }).then(r => r.data);
+export const searchKnowledge          = (q, { company = null, maxResults = 20 } = {}) =>
+  api.get('/knowledge/search', {
+    params: { q, max_results: maxResults, ...(company ? { company } : {}) },
+  }).then(r => r.data);
 export const getThesis               = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis`).then(r => r.data);
 export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
 export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);

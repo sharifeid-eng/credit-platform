@@ -583,6 +583,200 @@ def get_aggregate_stats():
     }))
     return stats
 
+
+@app.get("/platform-stats")
+def get_platform_stats():
+    """
+    Live platform capability stats for the /architecture page and Resources cards.
+
+    Everything is computed on request — no caching — so numbers are always
+    current. If this grows expensive we can add fingerprint-based caching like
+    /aggregate-stats, but the counts here are cheap (directory/route walks).
+    """
+    from pathlib import Path
+    import re
+
+    project_root = Path(__file__).resolve().parent.parent
+
+    # ── Routes (endpoint count by prefix) ──────────────────────────────────
+    route_groups = {
+        'tape': 0, 'portfolio': 0, 'legal': 0, 'research': 0,
+        'memo': 0, 'intelligence': 0, 'integration': 0, 'operator': 0,
+        'auth': 0, 'agents': 0, 'dataroom': 0, 'other': 0,
+    }
+    total_routes = 0
+    for route in app.routes:
+        path = getattr(route, 'path', '')
+        if not path or path.startswith('/openapi') or path == '/docs' or path == '/redoc':
+            continue
+        total_routes += 1
+        if '/legal' in path:
+            route_groups['legal'] += 1
+        elif '/portfolio' in path:
+            route_groups['portfolio'] += 1
+        elif '/memos' in path or '/memo-templates' in path:
+            route_groups['memo'] += 1
+        elif '/api/integration' in path:
+            route_groups['integration'] += 1
+        elif '/operator' in path:
+            route_groups['operator'] += 1
+        elif '/auth' in path:
+            route_groups['auth'] += 1
+        elif '/agents' in path:
+            route_groups['agents'] += 1
+        elif '/dataroom' in path:
+            route_groups['dataroom'] += 1
+        elif '/research' in path:
+            route_groups['research'] += 1
+        elif '/thesis' in path or '/knowledge' in path or '/mind' in path:
+            route_groups['intelligence'] += 1
+        elif '/charts/' in path or '/summary' in path or '/ai-' in path or '/companies/' in path:
+            route_groups['tape'] += 1
+        else:
+            route_groups['other'] += 1
+
+    # ── Companies & products ───────────────────────────────────────────────
+    companies_list = []
+    total_products = 0
+    total_snapshots_all = 0
+    total_dataroom_docs = 0
+    total_legal_docs = 0
+    for co in get_companies():
+        if co.startswith('_'):
+            continue
+        prods = get_products(co)
+        total_products += len(prods)
+        snaps_co = 0
+        for p in prods:
+            snaps_co += len(get_snapshots(co, p))
+        total_snapshots_all += snaps_co
+
+        legal_dir = project_root / 'data' / co / 'legal'
+        legal_count = 0
+        if legal_dir.is_dir():
+            legal_count = len([f for f in os.listdir(legal_dir) if f.lower().endswith('.pdf')])
+            total_legal_docs += legal_count
+
+        dataroom_registry = project_root / 'data' / co / 'dataroom' / 'registry.json'
+        dataroom_count = 0
+        if dataroom_registry.exists():
+            try:
+                with open(dataroom_registry) as f:
+                    reg = json.load(f)
+                dataroom_count = len(reg) if isinstance(reg, (dict, list)) else 0
+                total_dataroom_docs += dataroom_count
+            except Exception:
+                pass
+
+        cfg = load_config(co, prods[0]) if prods else {}
+        companies_list.append({
+            'name': co,
+            'products': prods,
+            'analysis_type': cfg.get('analysis_type') if cfg else None,
+            'snapshots': snaps_co,
+            'legal_docs': legal_count,
+            'dataroom_docs': dataroom_count,
+        })
+
+    # ── Mind / Knowledge ───────────────────────────────────────────────────
+    mind_entries = 0
+    master_mind_dir = project_root / 'data' / '_master_mind'
+    if master_mind_dir.is_dir():
+        for jf in master_mind_dir.glob('*.jsonl'):
+            try:
+                mind_entries += sum(1 for line in open(jf) if line.strip())
+            except Exception:
+                pass
+    for co_entry in companies_list:
+        co_mind = project_root / 'data' / co_entry['name'] / 'mind'
+        if co_mind.is_dir():
+            for jf in co_mind.glob('*.jsonl'):
+                try:
+                    mind_entries += sum(1 for line in open(jf) if line.strip())
+                except Exception:
+                    pass
+
+    # ── Framework sections ─────────────────────────────────────────────────
+    framework_path = project_root / 'core' / 'ANALYSIS_FRAMEWORK.md'
+    framework_sections = 0
+    framework_mtime = None
+    if framework_path.exists():
+        try:
+            content = framework_path.read_text(encoding='utf-8')
+            framework_sections = len(re.findall(r'^## \d+\.', content, re.MULTILINE))
+            framework_mtime = datetime.fromtimestamp(framework_path.stat().st_mtime).isoformat()
+        except Exception:
+            pass
+
+    # ── Methodology pages (registered analysis types + static files) ──────
+    methodology_count = 0
+    try:
+        reg = get_registry()
+        methodology_count += len(reg)  # one page per analysis_type with registered metrics
+    except Exception:
+        pass
+    # Static methodology files
+    for static_path in [
+        project_root / 'data' / 'Ejari' / 'RNPL' / 'methodology.json',
+    ]:
+        if static_path.exists():
+            methodology_count += 1
+
+    # ── Tests & source files ───────────────────────────────────────────────
+    tests_count = 0
+    tests_dir = project_root / 'tests'
+    if tests_dir.is_dir():
+        for pyf in tests_dir.rglob('test_*.py'):
+            try:
+                content = pyf.read_text(encoding='utf-8', errors='ignore')
+                tests_count += len(re.findall(r'^def test_', content, re.MULTILINE))
+            except Exception:
+                pass
+
+    # ── Memos ──────────────────────────────────────────────────────────────
+    memo_count = 0
+    memos_dir = project_root / 'reports' / 'memos'
+    if memos_dir.is_dir():
+        for memo_sub in memos_dir.iterdir():
+            if memo_sub.is_dir():
+                # Count distinct memos (folders with meta.json)
+                if (memo_sub / 'meta.json').exists():
+                    memo_count += 1
+
+    # ── DB tables (7 known — introspect for live count) ────────────────────
+    db_tables = 0
+    try:
+        from core.models import Base as ModelBase
+        db_tables = len(ModelBase.metadata.tables)
+    except Exception:
+        pass
+
+    # ── AI tiers (from ai_client) ──────────────────────────────────────────
+    ai_tiers = ['structured', 'research', 'judgment', 'polish', 'auto']
+
+    return {
+        'generated_at': datetime.now().isoformat(),
+        'companies': companies_list,
+        'totals': {
+            'companies': len(companies_list),
+            'products': total_products,
+            'snapshots': total_snapshots_all,
+            'routes': total_routes,
+            'db_tables': db_tables,
+            'mind_entries': mind_entries,
+            'framework_sections': framework_sections,
+            'methodology_pages': methodology_count,
+            'dataroom_docs': total_dataroom_docs,
+            'legal_docs': total_legal_docs,
+            'tests': tests_count,
+            'memos': memo_count,
+            'ai_tiers': len(ai_tiers),
+        },
+        'routes_by_group': route_groups,
+        'framework_last_modified': framework_mtime,
+    }
+
+
 # ── Company / Product / Snapshot endpoints ────────────────────────────────────
 
 @app.get("/companies")

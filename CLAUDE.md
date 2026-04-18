@@ -1216,6 +1216,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `GET /framework` endpoint serves markdown content
   - `Framework.jsx` — full-page markdown renderer with sticky TOC, accessed via Navbar link
   - Resources section on Home page with Framework card (teal accent)
+- ✅ **Resources section revamp — live cards + Architecture page + Cross-Co tab:**
+  - OperatorCard + FrameworkCard now fetch live vitals from `/operator/status` and `/platform-stats` (gaps, follow-ups, stale tapes, framework section count + "+N new since last visit" badge via localStorage)
+  - New ArchitectureCard (violet accent, `⚙`) on the landing page → `/architecture` page with live platform capability stats (endpoints, DB tables, mind entries, dataroom docs, legal docs, tests, memos, framework sections) and inline SVG system architecture diagram following the Cocoon-AI architecture-diagram-generator skill guide (JetBrains Mono, dashed platform boundary, users-left/services-right, legend, bottom summary strip with 3 columns). Stats refresh on every visit — no manual regeneration.
+  - New backend endpoint `GET /platform-stats` — live counts: companies, products, snapshots, routes (total + grouped by prefix), DB tables (from SQLAlchemy metadata), mind entries (master + per-company JSONL row counts), framework sections, methodology pages, dataroom docs, legal docs, tests, memos, AI tiers, framework last-modified timestamp.
+  - New backend endpoint `GET /operator/cross-company-patterns` — surfaces `IntelligenceEngine.detect_cross_company_patterns()` which was previously only available to agents via tools. Cache hits from `patterns.json`; `?refresh=true` forces re-detection.
+  - New OperatorCenter "Cross-Co" tab — displays detected patterns (metric trend, risk convergence, covenant pressure) with severity badges, affected-company chips (click to navigate), and a KB search UI backed by `/knowledge/search`. Fund-level intelligence lens distinct from per-company tabs.
+  - Route added: `/architecture` in App.jsx. Three Resources cards now: Operator, Framework, Architecture.
 - ✅ **PAR (Portfolio at Risk) KPIs:**
   - `compute_par()` with 3 methods: primary (Expected till date shortfall-based estimated DPD), Option C (empirical benchmarks from 50+ completed deals, labeled "Derived"), fallback (`available: False`)
   - `_build_empirical_benchmark()` helper builds collection timing benchmarks from completed deal pool

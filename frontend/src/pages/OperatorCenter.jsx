@@ -7,6 +7,7 @@ import {
   updateOperatorTodo, deleteOperatorTodo, getOperatorMind,
   updateOperatorMindEntry, getOperatorBriefing, getOperatorLearning,
   getThesis, saveThesis, getThesisDrift, getThesisLog,
+  getCrossCompanyPatterns, searchKnowledge,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -491,6 +492,10 @@ export default function OperatorCenter() {
   const [thesisLog, setThesisLog] = useState(null)
   const [thesisCompany, setThesisCompany] = useState(null)
   const [thesisEditing, setThesisEditing] = useState(false)
+  const [crossPatterns, setCrossPatterns] = useState(null)
+  const [kbQuery,  setKbQuery]  = useState('')
+  const [kbResults, setKbResults] = useState(null)
+  const [kbSearching, setKbSearching] = useState(false)
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -536,7 +541,27 @@ export default function OperatorCenter() {
     if (activeTab === 'thesis' && thesisCompany && !thesis) {
       loadThesis(thesisCompany)
     }
+    if (activeTab === 'crossco' && crossPatterns === null) {
+      getCrossCompanyPatterns().then(d => setCrossPatterns(d)).catch(e => {
+        console.error('Cross-company patterns load failed:', e)
+        setCrossPatterns({ patterns: [], error: 'Failed to load patterns' })
+      })
+    }
   }, [activeTab, mindFilter, thesisCompany])
+
+  const runKbSearch = async () => {
+    const q = kbQuery.trim()
+    if (!q) return
+    setKbSearching(true)
+    try {
+      const r = await searchKnowledge(q, { maxResults: 20 })
+      setKbResults(r)
+    } catch (e) {
+      console.error('KB search failed:', e)
+      setKbResults({ results: [], total: 0, error: 'Search failed' })
+    }
+    setKbSearching(false)
+  }
 
   const loadThesis = async (companyInfo) => {
     if (!companyInfo) return
@@ -679,6 +704,7 @@ export default function OperatorCenter() {
           <TabButton label="Learning" active={activeTab === 'learning'} onClick={() => setActiveTab('learning')} count={learning?.total_rules || null} />
           <TabButton label="Thesis" active={activeTab === 'thesis'} onClick={() => setActiveTab('thesis')} />
           <TabButton label="Agents" active={activeTab === 'agents'} onClick={() => setActiveTab('agents')} />
+          <TabButton label="Cross-Co" active={activeTab === 'crossco'} onClick={() => setActiveTab('crossco')} count={crossPatterns?.patterns?.length || null} />
         </div>
 
         {/* Tab content */}
@@ -1271,6 +1297,25 @@ export default function OperatorCenter() {
               <AgentsTab companies={status?.companies || []} />
             )}
 
+            {/* ── Cross-Company Tab ── */}
+            {activeTab === 'crossco' && (
+              <CrossCompanyTab
+                data={crossPatterns}
+                onRefresh={() => {
+                  setCrossPatterns(null)
+                  getCrossCompanyPatterns({ refresh: true })
+                    .then(setCrossPatterns)
+                    .catch(() => setCrossPatterns({ patterns: [], error: 'Refresh failed' }))
+                }}
+                kbQuery={kbQuery}
+                setKbQuery={setKbQuery}
+                kbResults={kbResults}
+                kbSearching={kbSearching}
+                onKbSearch={runKbSearch}
+                onNavCompany={(co, prod) => navigate(`/company/${co}/${prod || ''}/tape/overview`)}
+              />
+            )}
+
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1442,6 +1487,221 @@ function AgentsTab({ companies }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ── Cross-Company Tab ── */
+function CrossCompanyTab({ data, onRefresh, kbQuery, setKbQuery, kbResults, kbSearching, onKbSearch, onNavCompany }) {
+  const patterns = data?.patterns || []
+  const sevColor = (s) => s === 'critical' ? '#F06060' : s === 'warning' ? 'var(--gold)' : 'var(--blue)'
+  const typeLabel = (t) => ({
+    metric_trend: 'Metric trend',
+    risk_convergence: 'Risk convergence',
+    covenant_pressure: 'Covenant pressure',
+  }[t] || t)
+
+  return (
+    <div>
+      <SectionLabel text="Cross-Company Patterns" accent="#A78BFA" />
+      <p style={{
+        fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px',
+        maxWidth: 760, lineHeight: 1.55,
+      }}>
+        Patterns the Intelligence Engine detected across 2+ companies — same metric
+        trending the same way, same risk flag repeating, or the same covenant under
+        pressure. Updates every time a tape is ingested or a document is parsed.
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button
+          onClick={onRefresh}
+          style={{
+            fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.1em', padding: '7px 12px', borderRadius: 6,
+            background: 'transparent', border: '1px solid #A78BFA',
+            color: '#A78BFA', cursor: 'pointer',
+          }}
+        >
+          Re-detect patterns
+        </button>
+      </div>
+
+      {data === null && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading patterns…</div>
+      )}
+
+      {data && patterns.length === 0 && !data.error && (
+        <div style={{
+          padding: 16, background: 'var(--bg-deep)',
+          border: '1px dashed var(--border)', borderRadius: 8,
+          fontSize: 12, color: 'var(--text-muted)',
+        }}>
+          No cross-company patterns detected in the lookback window.
+          Patterns appear as the Intelligence Engine compiles entities from new tapes and documents.
+        </div>
+      )}
+
+      {data?.error && (
+        <div style={{
+          padding: 12, background: 'rgba(240,96,96,0.12)',
+          border: '1px solid rgba(240,96,96,0.3)', borderRadius: 6,
+          color: '#F06060', fontSize: 12,
+        }}>
+          {data.error}
+        </div>
+      )}
+
+      {patterns.length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: 14, marginBottom: 32,
+        }}>
+          {patterns.map((p, i) => (
+            <div key={i} style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              borderLeft: `3px solid ${sevColor(p.severity)}`,
+              borderRadius: 8, padding: 16,
+            }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', marginBottom: 8, gap: 8,
+              }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.12em', color: '#A78BFA',
+                }}>
+                  {typeLabel(p.pattern_type)}
+                </span>
+                <SeverityBadge severity={p.severity} />
+              </div>
+              <div style={{
+                fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5,
+                marginBottom: 10,
+              }}>
+                {p.description}
+              </div>
+              {p.companies_affected?.length > 0 && (
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 6,
+                  paddingTop: 10, borderTop: '1px solid var(--border)',
+                }}>
+                  {p.companies_affected.map((ck, idx) => {
+                    const [co, prod] = ck.split('/')
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => onNavCompany(co, prod)}
+                        style={{
+                          fontSize: 10, fontWeight: 600, padding: '3px 8px',
+                          borderRadius: 4, background: 'var(--bg-deep)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-primary)', cursor: 'pointer',
+                        }}
+                      >
+                        {co}{prod ? `/${prod}` : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {p.metric_key && (
+                <div style={{
+                  fontSize: 10, color: 'var(--text-faint)',
+                  fontFamily: 'var(--font-mono)', marginTop: 8,
+                }}>
+                  key: {p.metric_key}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <SectionLabel text="Knowledge Base Search" accent="#A78BFA" />
+      <p style={{
+        fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px',
+        maxWidth: 760, lineHeight: 1.55,
+      }}>
+        Unified search across mind entries, lessons, decisions, and entities —
+        the /knowledge/search endpoint, surfaced in the UI.
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input
+          type="text"
+          value={kbQuery}
+          onChange={e => setKbQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onKbSearch() }}
+          placeholder="e.g. PAR denominator, covenant, denial"
+          style={{
+            flex: 1, background: 'var(--bg-deep)',
+            border: '1px solid var(--border)', borderRadius: 6,
+            padding: '9px 12px', fontSize: 13, color: 'var(--text-primary)',
+            fontFamily: 'var(--font-ui)',
+          }}
+        />
+        <button
+          onClick={onKbSearch}
+          disabled={kbSearching || !kbQuery.trim()}
+          style={{
+            fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.1em', padding: '7px 16px', borderRadius: 6,
+            background: '#A78BFA', border: 'none', color: '#0A1119',
+            cursor: kbSearching || !kbQuery.trim() ? 'not-allowed' : 'pointer',
+            opacity: kbSearching || !kbQuery.trim() ? 0.5 : 1,
+          }}
+        >
+          {kbSearching ? 'Searching…' : 'Search'}
+        </button>
+      </div>
+
+      {kbResults?.results?.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {kbResults.results.map((r, i) => (
+            <div key={i} style={{
+              padding: 12, background: 'var(--bg-surface)',
+              border: '1px solid var(--border)', borderRadius: 6,
+            }}>
+              <div style={{
+                display: 'flex', gap: 8, alignItems: 'center',
+                marginBottom: 6, flexWrap: 'wrap',
+              }}>
+                {r.node_type && (
+                  <span style={{
+                    fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3,
+                    background: 'rgba(167,139,250,0.15)', color: '#A78BFA',
+                    textTransform: 'uppercase', letterSpacing: '0.08em',
+                  }}>
+                    {r.node_type}
+                  </span>
+                )}
+                {r.source && (
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                    {r.source}
+                  </span>
+                )}
+                {r.score != null && (
+                  <span style={{ fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto' }}>
+                    score {Number(r.score).toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                {r.content || r.text || r.title || JSON.stringify(r)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {kbResults && kbResults.results?.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          No results for "{kbResults.query || kbQuery}".
+        </div>
+      )}
     </div>
   )
 }
