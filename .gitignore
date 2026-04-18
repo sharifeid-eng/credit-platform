@@ -10,9 +10,10 @@ alembic/versions/__pycache__/
 
 # Data room contents (raw source files + derived chunks/index/analytics).
 # Confidential and large — synced to prod separately via scripts/sync-data.ps1.
-# EXCEPT: registry.json — lightweight catalog, IS tracked so re-ingest is idempotent.
+# registry.json is server-local state (doc_ids are UUIDs generated per-ingest,
+# not portable across machines). Server is authoritative owner — never tracked.
+# See session 24 Tier 1.2 + session 26 deploy-collision root cause.
 data/*/dataroom/*
-!data/*/dataroom/registry.json
 
 # Agent session state (regenerated at runtime, per-machine)
 data/_agent_sessions/
