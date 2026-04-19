@@ -53,7 +53,7 @@ def validate_tape(df):
 
     # ── 2. Date sanity checks ──
     if 'Deal date' in df.columns:
-        dates = pd.to_datetime(df['Deal date'], errors='coerce')
+        dates = pd.to_datetime(df['Deal date'], errors='coerce', format='mixed')
         null_dates = dates.isna().sum()
         if null_dates > 0:
             warnings.append({

@@ -40,7 +40,7 @@ def filter_by_date(df, as_of_date=None):
     """
     if 'Deal date' in df.columns:
         df = df.copy()
-        df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
+        df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce', format='mixed')
         if as_of_date:
             df = df[df['Deal date'] <= pd.to_datetime(as_of_date)]
     return df
@@ -1047,7 +1047,7 @@ def _compute_pv_adjusted_lgd(completed, mult, has_prov, annual_rate=0.08):
 
     # Estimate time-to-recovery in years from deal origination to "now" (snapshot)
     # For completed deals, Deal date → last activity approximated by deal age
-    deal_dates = pd.to_datetime(completed.loc[defaulted_mask, 'Deal date'], errors='coerce')
+    deal_dates = pd.to_datetime(completed.loc[defaulted_mask, 'Deal date'], errors='coerce', format='mixed')
     snapshot_date = deal_dates.max()  # latest deal date as proxy for snapshot
     if pd.isna(snapshot_date):
         return None
@@ -1162,7 +1162,7 @@ def compute_facility_pd(df, mult, as_of_date=None):
 
     # Compute DPD per deal
     has_expected = 'Expected collection days' in df.columns
-    deal_dates = pd.to_datetime(df['Deal date'], errors='coerce')
+    deal_dates = pd.to_datetime(df['Deal date'], errors='coerce', format='mixed')
 
     if has_expected:
         exp_days = pd.to_numeric(df['Expected collection days'], errors='coerce').fillna(0)

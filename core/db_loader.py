@@ -140,7 +140,7 @@ def load_klaim_from_db(db, company: str, product: str) -> pd.DataFrame:
         })
 
     df = pd.DataFrame(rows)
-    df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
+    df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce', format='mixed')
     return df
 
 

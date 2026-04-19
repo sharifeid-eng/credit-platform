@@ -100,7 +100,7 @@ def load_snapshot(filepath):
 
     # Parse date columns if they exist (column-agnostic)
     if 'Deal date' in df.columns:
-        df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
+        df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce', format='mixed')
     if 'Disbursement_Date' in df.columns:
         df['Disbursement_Date'] = pd.to_datetime(df['Disbursement_Date'], errors='coerce')
     if 'Repayment_Deadline' in df.columns:

@@ -76,13 +76,13 @@ def compute_roll_rates(old_df, new_df, as_of_old, as_of_new):
     # Compute aging bucket for each deal in each snapshot (copy first to avoid mutating inputs)
     old = old_df.copy()
     if 'Deal date' in old.columns:
-        old['Deal date'] = pd.to_datetime(old['Deal date'], errors='coerce')
+        old['Deal date'] = pd.to_datetime(old['Deal date'], errors='coerce', format='mixed')
     old['days_old'] = (old_date - old['Deal date']).dt.days
     old['bucket_old'] = old.apply(lambda r: _assign_bucket(r['days_old'], r['Status']), axis=1)
 
     new = new_df.copy()
     if 'Deal date' in new.columns:
-        new['Deal date'] = pd.to_datetime(new['Deal date'], errors='coerce')
+        new['Deal date'] = pd.to_datetime(new['Deal date'], errors='coerce', format='mixed')
     new['days_new'] = (new_date - new['Deal date']).dt.days
     new['bucket_new'] = new.apply(lambda r: _assign_bucket(r['days_new'], r['Status']), axis=1)
 
