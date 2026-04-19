@@ -3,6 +3,18 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-19 — `rm -rf` on a non-existent path exits 0 silently, masking wrong-path bugs
+
+**Problem:** Ran `docker compose exec -T backend rm -rf reports/memos/klaim/UAE_healthcare/ad7cc868-a64` to delete a verification memo. The command exited cleanly. A follow-up `ls` on the parent returned "No such file or directory" — read as "dir auto-pruned on empty, clean deletion ✅". Actually the path had **never existed**: the memo archive uses a flat `{company}_{product}` directory convention (`reports/memos/klaim_UAE_healthcare/`), not nested (`reports/memos/klaim/UAE_healthcare/`). The memo was still live on the website; user had to report it before we found the real path.
+
+**Rule:** Before running any destructive filesystem command against a derived path, verify the path exists with a read-only `ls` or `find` first. Treat "silent success" from `rm -rf` as evidence of nothing — it means either (a) the deletion worked, or (b) the path didn't exist. You cannot tell them apart from exit code alone. Always follow with a positive-evidence check: `ls` the *parent* directory and confirm the target is absent from a list that contains other expected entries.
+
+**Why:** Path conventions in this codebase are not self-documenting. `reports/memos/` uses `{co}_{prod}` flat; `data/` uses `{co}/dataroom/` nested; some tools use hyphens, others underscores. Assuming the layout from memory is a recipe for deleting nothing and thinking you deleted something, or (worse, in another codebase) deleting everything and thinking you deleted one thing.
+
+**How to apply:** For any cleanup command, the verification pattern is `find <parent> -name "<target_pattern>"` **before** and **after** the delete. Before should list the target(s); after should list nothing. If "before" is empty, stop — you have the wrong path. Applies equally to `docker compose exec rm`, `Remove-Item -Recurse`, `git clean`, and any `--force` flag.
+
+---
+
 ## 2026-04-19 — `.gitignore` negations for server-local state are a collision trap
 
 **Problem:** `.gitignore` had `!data/*/dataroom/registry.json` negating the broader `data/*/dataroom/*` ignore, intended to keep the "lightweight catalog" in version control for re-ingest idempotence. But `registry.json` contains doc_id UUIDs generated per-ingest on whichever machine ran the last `ingest` — **server-local state, not portable**. Session 24 Tier 1.2 codified "server is authoritative registry owner" in `sync-data.ps1` (excluded registry.json from push) but left the git-tracking path open. Session 26 EOD commit inadvertently staged SILQ's registry; the VPS `git pull` then died with `untracked working tree files would be overwritten by merge` because the server had its own authoritative copy with different UUIDs.
