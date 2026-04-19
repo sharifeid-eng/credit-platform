@@ -100,7 +100,7 @@ The session-26 EOD commit (`8f8209e`) inadvertently staged `data/SILQ/dataroom/r
 - [x] **Root-cause fix: untrack 4 registries from git** — `git rm --cached` on SILQ, klaim, Tamara, Aajil registries (commit `5844c92`).
 - [x] **Root-cause fix: drop `!data/*/dataroom/registry.json` negation from `.gitignore`** (commit `fc66e7c`). `check-ignore` confirms all 4 registries now match `data/*/dataroom/*` with zero negations.
 - [x] **Collision pattern now structurally impossible** — sync-data.ps1 already excluded registry.json from push (Tier 1.2); .gitignore now excludes it from git entirely. Laptop pushes code. Server owns dataroom state.
-- [ ] **Remaining known unclassified**: SILQ 3, klaim 5, Tamara 1, Aajil 3 (12 total). One-shot cleanup next session: `dataroom_ctl classify --company <co> --only-other --use-llm` (~$0.012 total).
+- [x] **Remaining unclassified confirmed terminal (session 26.2)** — VPS audit shows exactly the post-LLM residual: SILQ 3, klaim 5, Tamara 1, Aajil 3 (12 total, 2.4% of 493 docs). Counts match session 26.1 addendum — LLM classify pass already ran; these are genuine `unknown` verdicts (Haiku confidence <0.6) on genuinely ambiguous docs. Re-running `classify --only-other --use-llm` cache-hits and returns same verdicts. Nothing further to fix.
 
 ---
 
