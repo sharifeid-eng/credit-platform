@@ -114,28 +114,73 @@ def _check_rate_limits(request: Request):
 # ── SSE streaming helper ────────────────────────────────────────────────
 
 async def _stream_agent(agent_name: str, message: str, session, request: Request = None):
-    """Generator that yields SSE events from an agent stream."""
+    """Generator that yields SSE events from an agent stream.
+
+    Drains the agent's async-generator output into an asyncio.Queue via a
+    background producer task so the consumer loop can wake every 500ms even
+    when the agent is blocked inside a long tool call. A `: keepalive\\n\\n`
+    SSE comment is emitted after 20s of idle to keep Cloudflare's edge proxy
+    from cutting the connection mid-stream (~100s idle-proxy cap on Free tier).
+    Comment lines are spec-ignored by clients. Mirrors the heartbeat pattern
+    in memo_generate_stream. See tasks/lessons.md 2026-04-19 entry.
+    """
     from core.agents.rate_limit import rate_limiter
 
     if request:
         rate_limiter.stream_started(request)
 
-    try:
-        agent = _load_agent(agent_name)
+    queue: asyncio.Queue = asyncio.Queue()
+    _SENTINEL = object()
 
-        async for event in agent.stream(message, session):
-            # Check if client disconnected
+    async def _producer():
+        try:
+            agent = _load_agent(agent_name)
+            async for event in agent.stream(message, session):
+                await queue.put(event)
+        except Exception as e:
+            await queue.put(("__error__", e))
+        finally:
+            await queue.put(_SENTINEL)
+
+    producer_task = asyncio.create_task(_producer())
+    HEARTBEAT_INTERVAL_S = 20
+    last_yield = time.monotonic()
+
+    try:
+        while True:
             if request and await request.is_disconnected():
                 session.save()
+                producer_task.cancel()
                 return
 
-            # Track token usage from done events
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=0.5)
+            except asyncio.TimeoutError:
+                if time.monotonic() - last_yield >= HEARTBEAT_INTERVAL_S:
+                    # SSE comment line — ignored by clients, keeps CF edge alive
+                    yield ": keepalive\n\n"
+                    last_yield = time.monotonic()
+                continue
+
+            if event is _SENTINEL:
+                break
+
+            if isinstance(event, tuple) and len(event) == 2 and event[0] == "__error__":
+                raise event[1]
+
             if event.type == "done" and request:
                 total = event.data.get("total_input_tokens", 0) + event.data.get("total_output_tokens", 0)
                 rate_limiter.record_tokens(request, total)
 
             yield event.to_sse()
+            last_yield = time.monotonic()
     finally:
+        if not producer_task.done():
+            producer_task.cancel()
+        try:
+            await producer_task
+        except (asyncio.CancelledError, Exception):
+            pass
         if request:
             rate_limiter.stream_ended(request)
 
