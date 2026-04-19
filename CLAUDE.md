@@ -1502,7 +1502,7 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] **Acceptance Checks A/B/C (session 26)** — Klaim Credit Memo end-to-end smoke test on Hetzner VPS. Memo `c1686e76-841` persisted with 12/12 sections + sidecars; $0.71 cost; 33K tokens.
 - [x] **Agent tool signature audit (session 26, commit `0e82f35`)** — 4 hard errors (TypeError/ImportError in `core/agents/tools/analytics.py`) + 2 silent-correctness bugs fixed; 6 smoke tests added.
 - [x] **Cloudflare HTTP/3 disabled** — eliminates QUIC+SSE incompatibility causing browser "network error" during memo generate.
-- [ ] **Follow-up: Cloudflare HTTP/2 + SSE transport** — browser stream still breaks at edge even after HTTP/3 off. Backend persists memo regardless. Options: legacy non-SSE fallback endpoint, Cloudflare Configuration Rule, or Cloudflare Tunnel.
+- [x] **Cloudflare HTTP/2 + SSE transport** — resolved via 20s SSE heartbeat in `memo_generate_stream` (commit `f5d2a7b`, session 26.2). Comment-line `:`-prefixed keepalive keeps byte flow alive under CF Free's ~100s idle-proxy cap during long pipeline stages (research, polish). Verified end-to-end with fresh memo `13a852f9-4ba` — 2m35s wall-clock, $5.27, polished=True, browser UX fully green. No Cloudflare Tunnel needed.
 - [ ] **Follow-up: Memo Stage 6 polish JSON truncation** — Opus 4.7 response cut mid-string when asked for all-12-sections JSON (~40K chars). Reproduces across recent memos. Graceful-degrades to `polished: false`. Fix: per-section polish loop.
 
 

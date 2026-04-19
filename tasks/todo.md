@@ -46,15 +46,15 @@ Browser `POST /agents/.../memo/generate` returned "network error" because three 
 - [x] **6 new tests added** — `tests/test_agent_tools.py` (5 Klaim handler smoke tests + 1 event-loop guard). **426 tests passing**.
 - [x] **Deployed to Hetzner** — `a111667..0e82f35` fast-forward merge, backend rebuilt `--no-cache`, in-container smoke test confirmed cohort/returns/covenants tools return real data.
 
-### Cloudflare SSE transport (partial)
+### Cloudflare SSE transport ✅ RESOLVED (session 26.2, commit `f5d2a7b`)
 Browser memo-generate progress stream failed with `ERR_QUIC_PROTOCOL_ERROR` then `ERR_HTTP2_PROTOCOL_ERROR` — Cloudflare edge + SSE bug.
 - [x] **Disabled HTTP/3 at Cloudflare** — eliminates QUIC+SSE incompatibility.
 - [x] **Verified backend completes independently** — memo `c1686e76-841` persisted end-to-end on server despite browser SSE disconnect. Victory conditions verified directly from `v1.json` + `meta.json` + sidecars.
-- [ ] **Follow-up: HTTP/2 + SSE through Cloudflare still broken** — three options: (A) legacy non-SSE endpoint (frontend patch), (B) Cloudflare Configuration Rule bypassing buffering for `/agents/*`, (C) Cloudflare Tunnel. Not blocking — backend persists memos regardless.
+- [x] **HTTP/2 + SSE fixed via 20s heartbeat** — `backend/agents.py` `memo_generate_stream` emits `: keepalive\n\n` comment lines when the event queue is idle ≥20s, keeping byte flow alive under CF Free's ~100s idle-proxy cap. SSE comment lines are spec-ignored by clients, including the existing MemoBuilder manual-parser (falls through `event:`/`data:` check). 15-line patch, no frontend change, zero infra. Verified end-to-end: fresh Klaim memo `13a852f9-4ba` completed in 2m35s, $5.27 cost, polished=True, browser UX fully green — no error toast, smooth progress bar, auto-redirect to memo view. Path C (Cloudflare Tunnel) held in reserve if future SSE endpoints hit HTTP/2 protocol-cut failure modes distinct from idle-timeout.
 
 ### Follow-ups spawned (not blocking initiative close)
 - [ ] **Memo Stage 6 polish JSON truncation** — spawned side-task. Opus 4.7 response cut mid-string when asked for all-12-sections JSON (~40K chars). Reproduces across recent memos. Recommended fix: per-section polish loop instead of one-shot JSON. Same pattern affects Stage 5.5 citation audit on large memos.
-- [ ] **Cloudflare HTTP/2 + SSE transport fix** (see above).
+- [x] **Cloudflare HTTP/2 + SSE transport fix** — resolved via heartbeat patch (commit `f5d2a7b`, session 26.2). See section above.
 - [ ] **Route-rename reverse-proxy checklist** — add nginx.conf audit to the three-layer rule.
 
 ### Initiative close-out — Data Room Pipeline Hardening & Quality Overhaul ✅

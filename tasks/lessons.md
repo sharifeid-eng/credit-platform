@@ -49,6 +49,8 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 **How to apply:** For every streaming endpoint, verify end-to-end from a browser behind Cloudflare before claiming done. Add a non-SSE fallback endpoint as belt-and-suspenders when the UX requires completion guarantees. Memo pipeline already persists to disk regardless of SSE, so the data is recoverable — but the UX is broken.
 
+**Resolution (session 26.2, commit `f5d2a7b`):** 20s SSE heartbeat in `backend/agents.py` `memo_generate_stream` — `: keepalive\n\n` comment line emitted when event queue is idle ≥20s. Keeps byte flow alive under CF Free's ~100s idle-proxy cap during long pipeline stages (research, polish can each run 60-90s silently). Comment lines are ignored per SSE spec and by the frontend's manual parser. 15-line backend patch, zero frontend change, zero infra. Verified end-to-end: fresh Klaim memo `13a852f9-4ba` completed 2m35s, $5.27, polished=True, fully green browser UX. **Pattern to reuse:** for any future SSE endpoint with inter-event gaps >20s, emit a heartbeat — cheaper than Tunnel and sufficient for the idle-timeout failure mode. If the failure mode is HTTP/2 protocol-cut (distinct from idle-timeout), heartbeat won't help and Cloudflare Tunnel is the next step.
+
 ---
 
 ## 2026-04-19 — Verify victory conditions from persisted artifacts, not the request that created them
