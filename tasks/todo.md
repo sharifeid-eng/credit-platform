@@ -24,6 +24,40 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-19 (session 26.2: Stage 6 polish fix + CF SSE heartbeat + registry collision close-out)
+
+Session picked up from session 26 summary context; executed three meaningful ship items and corresponding doc/ops cleanup.
+
+### Ship items
+
+- [x] **Stage 6 polish JSON truncation fixed via per-section parallelization (commit `163cba6`)** — `_polish_memo` and `_validate_citations` in `core/memo/generator.py` rewritten to per-section parallel loop at `LAITH_PARALLEL_SECTIONS` cap, `_MAX_TOKENS_POLISH_SECTION = 4000`, per-section `generation_meta["polish"]` block (attempted/polished/failed tallies). `polished=True` only when all polishable sections succeed; partial failures retain pre-polish content with error attribution. **428 tests passing** (added `test_polish_runs_per_section`, `test_partial_polish_failure_preserves_memo`). Backfill script `scripts/backfill_polish.py` created; 5 historical Klaim memos healed to v2 with `polished=True`.
+
+- [x] **Cloudflare HTTP/2 + SSE transport resolved via 20s heartbeat (commit `f5d2a7b`)** — `backend/agents.py` `memo_generate_stream` emits `: keepalive\n\n` SSE comment lines when the event queue is idle ≥20s, keeping byte flow alive under CF Free's ~100s idle-proxy cap during long pipeline stages (research, polish each 60-90s). SSE comment lines are spec-ignored by clients and by the existing MemoBuilder manual-parser. 15-line patch, zero frontend change, zero infra. Verified end-to-end: fresh Klaim memo `13a852f9-4ba` completed in 2m35s, $5.27, polished=True, fully green browser UX. Path C (Cloudflare Tunnel) not needed.
+
+- [x] **Registry.json git-tracking eliminated (commits `5844c92` + `fc66e7c`)** — dropped `!data/*/dataroom/registry.json` negation from `.gitignore`; untracked 4 per-machine registry files; server becomes authoritative on both rails (sync-data.ps1 AND git). Collision pattern from session 26 EOD structurally impossible going forward.
+
+### Docs/ops hygiene
+
+- [x] **CLAUDE.md cost estimate updated (commit `68d1bde`)** — `~$1.50-2.50` → `~$3.50-6.00` per full Credit Memo, with explanatory note on per-section fan-out's ~11× input-token trade-off.
+- [x] **CLAUDE.md Stage 5.5/6 descriptions updated** — reflect per-section parallel semantics and partial-failure preservation.
+- [x] **`tasks/lessons.md` — three new durable lessons recorded**: (1) `.gitignore` negations for server-local state are a collision trap, (2) `rm -rf` on non-existent path exits 0 silently (masking wrong-path bugs), (3) CF HTTP/2/3 SSE proxy-break with **Resolution footer** on (3) capturing the heartbeat pattern.
+- [x] **Session 26 addendum commit (commit `86e964f`)** — post-EOD close-out documenting the registry collision recovery for future reference.
+- [x] **Fresh verification memo `ad7cc868-a64` deleted from VPS** — was a disposable artifact from the Stage 6 verification; path convention drama surfaced (flat `klaim_UAE_healthcare/` not nested `klaim/UAE_healthcare/`) and captured as a lesson.
+- [x] **Stale plan file `indexed-singing-whisper.md` removed** from `.claude/plans/`.
+
+### Non-blocking carry-overs
+
+- [ ] **Stale `blissful-albattani` worktree directory** — git admin record removed, filesystem directory held by an unknown Windows process (not this Claude session, not any process with the path in its command line). Harmless, ~100MB. Will delete on next reboot.
+- [ ] **`pd.to_datetime` "Deal date" log spam** — cosmetic noise in backend logs during dataroom parsing. Add `format='mixed'` or suppress the warning. Not urgent.
+- [ ] **Second heartbeat sweep for `_stream_agent`** — currently unnecessary (natural token-stream cadence), but cheap insurance for future SSE endpoints. Consider when adding any new long-lived SSE endpoint.
+
+### Verification
+
+- Tests: **428 passed, 0 failed** (39.55s), zero regressions from per-section polish rewrite.
+- Production: `laithanalytics.ai` live, all 4 dataroom audits aligned (493 docs total), backend healthy, memo generation fully green end-to-end.
+
+---
+
 ## Completed — 2026-04-19 (session 26: Data Room Pipeline Hardening — production acceptance close-out)
 
 Session closing out the full Data Room Pipeline Hardening & Quality Overhaul initiative via end-to-end Klaim Credit Memo acceptance checks on the Hetzner VPS.
