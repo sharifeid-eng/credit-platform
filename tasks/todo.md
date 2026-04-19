@@ -55,9 +55,9 @@ Reviewed two saved prompts from prior sessions to confirm their work had been ab
 
 ### Non-blocking carry-overs
 
-- [ ] **Stale `blissful-albattani` worktree directory** — git admin record removed, filesystem directory held by an unknown Windows process (not this Claude session, not any process with the path in its command line). Harmless, ~100MB. Will delete on next reboot.
-- [ ] **`pd.to_datetime` "Deal date" log spam** — cosmetic noise in backend logs during dataroom parsing. Add `format='mixed'` or suppress the warning. Not urgent.
-- [ ] **Second heartbeat sweep for `_stream_agent`** — currently unnecessary (natural token-stream cadence), but cheap insurance for future SSE endpoints. Consider when adding any new long-lived SSE endpoint.
+- [ ] **Stale `blissful-albattani` worktree directory** — git admin record removed, filesystem directory held by an unknown Windows process. Session 26.3 re-attempted `rm -rf` and rename — both still returned `Device or resource busy`, confirming the lock persists across sessions. Harmless, ~100MB. Will delete on next reboot.
+- [x] **`pd.to_datetime` "Deal date" log spam** — closed in session 26.3, commit `ea6aa99`. Root cause: pandas `UserWarning: Could not infer format, so each element will be parsed individually, falling back to dateutil`; Python's default warning formatter prints the source line along with the warning text, which is why backend logs showed the literal code. Added `format='mixed'` to 7 runtime "Deal date" call sites (`core/analysis.py` ×3, `core/loader.py`, `core/migration.py` ×2, `core/validation.py`, `core/db_loader.py`); `scripts/seed_db.py` left alone (not in request path). Verified identical output on mixed formats / NaN / empty / already-datetime series; no warning under `simplefilter('error')`.
+- [x] **Second heartbeat sweep for `_stream_agent`** — closed in session 26.3, commit `328d503` (Approach A, belt-and-suspenders). `_stream_agent` refactored to mirror `memo_generate_stream`: background producer task drains `agent.stream()` into an `asyncio.Queue`; consumer loop wakes every 500ms and emits `: keepalive\n\n` after 20s idle. All 4 SSE endpoints (analyst, memo_regenerate_section, compliance, onboarding) now protected uniformly against CF's ~100s idle-proxy cut during slow tool calls. No frontend change; disconnect handling, token accounting, rate-limiter bookkeeping preserved.
 
 ### Verification
 
