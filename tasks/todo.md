@@ -45,6 +45,14 @@ Session picked up from session 26 summary context; executed three meaningful shi
 - [x] **Fresh verification memo `ad7cc868-a64` deleted from VPS** — was a disposable artifact from the Stage 6 verification; path convention drama surfaced (flat `klaim_UAE_healthcare/` not nested `klaim/UAE_healthcare/`) and captured as a lesson.
 - [x] **Stale plan file `indexed-singing-whisper.md` removed** from `.claude/plans/`.
 
+### Post-EOD addendum (after commit `959df8d`)
+
+Reviewed two saved prompts from prior sessions to confirm their work had been absorbed:
+
+- [x] **Prompt 1 verified: bidirectional orphan prune + CLI flush** — landed in session 25, commit `5025fe3`. `DataRoomEngine.prune()` at `engine.py:675`, auto-called in `ingest()`/`refresh()` with `orphan_chunks_deleted` surfaced in manifests, `prune` subcommand in `dataroom_ctl.py:200`, `_emit()` stderr flush fix at `dataroom_ctl.py:62`. Zero gaps remaining.
+- [x] **Prompt 2 verified: `/operator` route collision** — resolved across `5025fe3` → `7ea5ea6` (nginx block removal) → `418c54c` (lesson captured) → `d0863ea` (Health tab path fix) → `cca4f80` (docs reconciliation). Backend router uses `/api/operator/*`, frontend `api.js:326-342` consumes it, nginx.conf has no `/operator` block. Bookmarked URLs + refresh both work.
+- [x] **Classify residual closeout (commit `af87733`)** — VPS audit confirmed 12 unclassified docs across 4 companies (SILQ 3 / klaim 5 / Tamara 1 / Aajil 3 = 2.4% of 493) match session 26.1 addendum post-LLM residual exactly. Genuine `unknown` verdicts (Haiku confidence <0.6); re-running classify would cache-hit. Flipped the open checkbox to done with terminal-state rationale.
+
 ### Non-blocking carry-overs
 
 - [ ] **Stale `blissful-albattani` worktree directory** — git admin record removed, filesystem directory held by an unknown Windows process (not this Claude session, not any process with the path in its command line). Harmless, ~100MB. Will delete on next reboot.
