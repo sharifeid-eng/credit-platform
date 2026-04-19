@@ -281,13 +281,23 @@ async def memo_generate_stream(company: str, product: str, body: MemoGenerateReq
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         future = executor.submit(_run_pipeline)
 
+        # Heartbeat cadence: CF Free idle-proxy cap is ~100s. Individual pipeline
+        # stages (research, polish) can run 60-90s without emitting progress,
+        # which triggers a silent edge cut and browser sees ERR_HTTP2_PROTOCOL_ERROR
+        # ("network error"). An SSE comment line (`:`-prefixed) is ignored by
+        # clients per spec but keeps byte flow alive through the proxy.
+        # See tasks/lessons.md 2026-04-19 entry on CF HTTP/2 + SSE.
+        HEARTBEAT_INTERVAL_S = 20
+
         # Stream events until the future resolves
+        last_yield = time.monotonic()
         done = False
         while not done:
             try:
                 event_type, payload = await asyncio.wait_for(queue.get(), timeout=0.5)
                 data = json.dumps(payload)
                 yield f"event: {event_type}\ndata: {data}\n\n"
+                last_yield = time.monotonic()
                 if event_type in ("saved", "error"):
                     done = True
             except asyncio.TimeoutError:
@@ -296,7 +306,12 @@ async def memo_generate_stream(company: str, product: str, body: MemoGenerateReq
                     while not queue.empty():
                         event_type, payload = queue.get_nowait()
                         yield f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
+                        last_yield = time.monotonic()
                     done = True
+                elif time.monotonic() - last_yield >= HEARTBEAT_INTERVAL_S:
+                    # SSE comment line — ignored by clients, keeps CF edge alive
+                    yield ": keepalive\n\n"
+                    last_yield = time.monotonic()
                 continue
             if await request.is_disconnected():
                 logger.info("Client disconnected from memo stream")
