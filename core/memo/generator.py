@@ -40,10 +40,16 @@ logger = logging.getLogger(__name__)
 # ── Constants ────────────────────────────────────────────────────────────────
 
 # Output token budgets per tier/section type
-_MAX_TOKENS_STRUCTURED = 2000
-_MAX_TOKENS_AUTO       = 800
-_MAX_TOKENS_JUDGMENT   = 3500
-_MAX_TOKENS_POLISH     = 16000   # polish pass needs the whole memo in output
+_MAX_TOKENS_STRUCTURED     = 2000
+_MAX_TOKENS_AUTO           = 800
+_MAX_TOKENS_JUDGMENT       = 3500
+# Polish is now per-section (see _polish_memo). One section rarely exceeds
+# 3-5K chars of content, so 4000 output tokens is ample. The old one-shot
+# all-sections polish used 16000 and still hit max_tokens truncation on
+# memos ~40K+ chars combined.
+_MAX_TOKENS_POLISH_SECTION = 4000
+# Per-section citation audit issues list is small — 1500 is plenty.
+_MAX_TOKENS_CITATION_AUDIT = 1500
 
 # Maximum concurrent section calls during stage 2 (Sonnet parallel fan-out).
 # Low default keeps peak input-tokens-per-minute under common org caps.
@@ -672,42 +678,64 @@ class MemoGenerator:
 
     # ── Stage 5.5: citation validation ──────────────────────────────────────
 
+    _CITATION_AUDIT_SYSTEM_PROMPT = (
+        "You are a citation auditor for an IC memo. Your job is to flag "
+        "citations whose source document is not present in the data room "
+        "at all, OR whose snippet obviously contradicts the linked source. "
+        "\n\nBE CONSERVATIVE — only flag clear mismatches. When in doubt, "
+        "trust the citation. A citation is valid if:\n"
+        "  - The source name appears in the data room (even approximately)\n"
+        "  - The snippet is consistent with the document type\n"
+        "  - The snippet is a reasonable factual claim the doc might make\n\n"
+        "FLAG a citation only if:\n"
+        "  - The source name is clearly fabricated (no match in data room)\n"
+        "  - The snippet contradicts available excerpts\n"
+        "  - The snippet is suspiciously specific without source-matching content\n"
+    )
+
     def _validate_citations(self, memo: Dict[str, Any],
                             company: str, product: str) -> List[Dict[str, Any]]:
-        """Cross-reference every citation in the memo against the data room.
+        """Per-section citation audit — parallelized Sonnet calls.
 
-        Returns a list of issues where citations cannot be verified. The polish
-        pass uses this to either qualify or remove flagged citations.
+        Splits audit by section so each call sees a bounded set of citations
+        and returns a small JSON list of issues. Fixes the failure mode where
+        memos with many citations produced truncated JSON (one combined list
+        exceeded max_tokens and failed to parse).
+
+        Source excerpts are fetched once and shared across per-section calls
+        so dataroom search cost does not scale with section count.
 
         An "issue" record looks like:
-            {section_key, citation_index, source, snippet, reason, severity}
+            {section_key, citation_index, source, reason, severity}
 
-        This is a Sonnet call (cheap, ~5-15s) that operates over citations only —
-        it does NOT rewrite the memo. Skips silently if the data room engine is
-        unavailable.
+        Skips silently if the data room engine is unavailable.
         """
         if self._dataroom is None:
             return []
 
-        # Collect all (section_key, citation_index, citation) triples
-        all_citations: List[Tuple[str, int, Dict[str, Any]]] = []
+        # Group citations by section_key
+        by_section: Dict[str, List[Tuple[int, Dict[str, Any]]]] = {}
         for s in memo.get("sections", []):
+            entries: List[Tuple[int, Dict[str, Any]]] = []
             for i, c in enumerate(s.get("citations") or []):
                 if not isinstance(c, dict):
                     continue
                 if not c.get("source") and not c.get("snippet"):
                     continue
-                all_citations.append((s["key"], i, c))
+                entries.append((i, c))
+            if entries:
+                by_section[s["key"]] = entries
 
-        if not all_citations:
+        if not by_section:
             return []
 
-        # For each unique source document mentioned, pull a small search hit
-        # sample to ground the validator. This prevents the validator from
-        # rejecting genuine citations just because it lacks context.
-        unique_sources = list({c.get("source", "") for _, _, c in all_citations if c.get("source")})
+        # Pre-fetch source excerpts once, shared across all section audits.
+        unique_sources = {c.get("source", "")
+                          for entries in by_section.values()
+                          for _, c in entries
+                          if c.get("source")}
         source_excerpts: Dict[str, str] = {}
-        for src in unique_sources[:20]:  # cap to 20 to keep prompt bounded
+        for src in list(unique_sources)[:30]:  # cap to keep prompt bounded
             try:
                 hits = self._dataroom.search(company, product, src, top_k=2)
                 if hits:
@@ -719,120 +747,137 @@ class MemoGenerator:
             except Exception as e:
                 logger.debug("Citation validation: search failed for '%s': %s", src, e)
 
-        # Build the validation prompt
-        citations_block_lines = []
-        for sk, idx, c in all_citations:
-            citations_block_lines.append(
-                f"[{sk}::{idx}] source='{c.get('source', '')}' "
-                f"snippet='{(c.get('snippet') or '')[:200]}'"
+        def _audit_section(section_key: str,
+                           entries: List[Tuple[int, Dict[str, Any]]]
+                           ) -> List[Dict[str, Any]]:
+            cit_lines = []
+            relevant_sources = set()
+            for idx, c in entries:
+                cit_lines.append(
+                    f"[{section_key}::{idx}] source='{c.get('source', '')}' "
+                    f"snippet='{(c.get('snippet') or '')[:200]}'"
+                )
+                if c.get("source"):
+                    relevant_sources.add(c.get("source"))
+            citations_block = "\n".join(cit_lines)
+
+            excerpts_block = ""
+            if relevant_sources:
+                lines = ["\n--- DATA ROOM EXCERPTS (for grounding) ---"]
+                for src in relevant_sources:
+                    txt = source_excerpts.get(src)
+                    if txt:
+                        lines.append(f"\n## {src}\n{txt[:500]}")
+                excerpts_block = "\n".join(lines)
+
+            user_prompt = (
+                "Review these citations. For each one that is clearly "
+                "unverifiable, emit an issue. Return strict JSON:\n\n"
+                "```json\n"
+                '{"issues": [\n'
+                '  {"section_key": "...", "citation_index": 0, '
+                '"source": "...", "reason": "...", "severity": "low|medium|high"},\n'
+                "  ...\n"
+                "]}\n"
+                "```\n\n"
+                "If NO citations are problematic, return: {\"issues\": []}\n\n"
+                "## Citations to audit:\n\n"
+                f"{citations_block}\n"
+                f"{excerpts_block}"
             )
-        citations_block = "\n".join(citations_block_lines)
 
-        excerpts_block = ""
-        if source_excerpts:
-            excerpts_lines = ["\n--- DATA ROOM EXCERPTS (for grounding) ---"]
-            for src, txt in source_excerpts.items():
-                excerpts_lines.append(f"\n## {src}\n{txt[:500]}")
-            excerpts_block = "\n".join(excerpts_lines)
+            from core.ai_client import complete
+            try:
+                resp = complete(
+                    tier="structured",  # Sonnet — fast, cheap
+                    system=self._CITATION_AUDIT_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    max_tokens=_MAX_TOKENS_CITATION_AUDIT,
+                    temperature=0.1,  # Deterministic: same input → same flags
+                    log_prefix=f"memo.citation_audit.{company}.{section_key}",
+                )
+            except Exception as e:
+                logger.warning("Citation audit failed for section '%s': %s",
+                               section_key, e)
+                return []
 
-        system_prompt = (
-            "You are a citation auditor for an IC memo. Your job is to flag "
-            "citations whose source document is not present in the data room "
-            "at all, OR whose snippet obviously contradicts the linked source. "
-            "\n\nBE CONSERVATIVE — only flag clear mismatches. When in doubt, "
-            "trust the citation. A citation is valid if:\n"
-            "  - The source name appears in the data room (even approximately)\n"
-            "  - The snippet is consistent with the document type\n"
-            "  - The snippet is a reasonable factual claim the doc might make\n\n"
-            "FLAG a citation only if:\n"
-            "  - The source name is clearly fabricated (no match in data room)\n"
-            "  - The snippet contradicts available excerpts\n"
-            "  - The snippet is suspiciously specific without source-matching content\n"
+            text = resp.content[0].text if resp.content else ""
+            if text.strip().startswith("```"):
+                first = text.find("{")
+                last = text.rfind("}")
+                if 0 <= first < last:
+                    text = text[first:last + 1]
+
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                logger.warning("Citation audit JSON parse failed for section "
+                               "'%s' — treating as no issues", section_key)
+                return []
+
+            issues = parsed.get("issues", [])
+            if not isinstance(issues, list):
+                return []
+
+            out: List[Dict[str, Any]] = []
+            for issue in issues:
+                if not isinstance(issue, dict):
+                    continue
+                out.append({
+                    "section_key": str(issue.get("section_key", "") or section_key),
+                    "citation_index": int(issue.get("citation_index", 0)) if str(issue.get("citation_index", "")).isdigit() else 0,
+                    "source": str(issue.get("source", "")),
+                    "reason": str(issue.get("reason", "")),
+                    "severity": str(issue.get("severity", "medium")).lower(),
+                })
+            return out
+
+        # Parallel execution across sections
+        max_workers = min(_PARALLEL_CAP, len(by_section))
+        all_issues: List[Dict[str, Any]] = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_audit_section, sk, entries)
+                       for sk, entries in by_section.items()]
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    all_issues.extend(fut.result())
+                except BaseException as e:
+                    logger.error("Citation audit future crashed: %s",
+                                 e, exc_info=True)
+
+        total_citations = sum(len(v) for v in by_section.values())
+        logger.info(
+            "Citation audit [%s/%s]: %d issues flagged across %d citations "
+            "in %d sections",
+            company, product, len(all_issues), total_citations, len(by_section),
         )
+        return all_issues
 
-        user_prompt = (
-            "Review these citations. For each one that is clearly unverifiable, "
-            "emit an issue. Return strict JSON:\n\n"
-            "```json\n"
-            '{"issues": [\n'
-            '  {"section_key": "...", "citation_index": 0, '
-            '"source": "...", "reason": "...", "severity": "low|medium|high"},\n'
-            "  ...\n"
-            "]}\n"
-            "```\n\n"
-            "If NO citations are problematic, return: {\"issues\": []}\n\n"
-            "## Citations to audit:\n\n"
-            f"{citations_block}\n"
-            f"{excerpts_block}"
-        )
-
-        from core.ai_client import complete
-        try:
-            resp = complete(
-                tier="structured",  # Sonnet — fast, cheap
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-                max_tokens=2000,
-                temperature=0.1,  # Deterministic: same input → same flags
-                log_prefix=f"memo.citation_audit.{company}",
-            )
-        except Exception as e:
-            logger.warning("Citation validation pass failed: %s — skipping", e)
-            return []
-
-        text = resp.content[0].text if resp.content else ""
-        # Strip fences
-        if text.strip().startswith("```"):
-            first = text.find("{")
-            last = text.rfind("}")
-            if 0 <= first < last:
-                text = text[first:last + 1]
-
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            logger.warning("Citation validation JSON parse failed — treating as no issues")
-            return []
-
-        issues = parsed.get("issues", [])
-        if not isinstance(issues, list):
-            return []
-
-        # Normalize
-        out: List[Dict[str, Any]] = []
-        for issue in issues:
-            if not isinstance(issue, dict):
-                continue
-            out.append({
-                "section_key": str(issue.get("section_key", "")),
-                "citation_index": int(issue.get("citation_index", 0)) if str(issue.get("citation_index", "")).isdigit() else 0,
-                "source": str(issue.get("source", "")),
-                "reason": str(issue.get("reason", "")),
-                "severity": str(issue.get("severity", "medium")).lower(),
-            })
-
-        logger.info("Citation audit [%s/%s]: %d issues flagged across %d citations",
-                    company, product, len(out), len(all_citations))
-        return out
-
-    # ── Stage 6: whole-memo polish pass ─────────────────────────────────────
+    # ── Stage 6: per-section polish pass ────────────────────────────────────
 
     def _polish_memo(self, memo: Dict[str, Any]) -> Dict[str, Any]:
-        """Single Opus 4.7 pass over the whole memo for coherence.
+        """Per-section polish — parallelized Opus 4.7 calls.
 
-        Preservation instruction is explicit: metrics, quotes, findings, and
-        per-section assessments must remain. This rewrites PROSE ONLY — the
-        metrics/citations arrays per section are passed through verbatim.
+        Replaces the previous one-shot all-sections JSON (which hit max_tokens
+        truncation on ~40K+ char memos, producing "Unterminated string" parse
+        errors and forcing polished=False). Each section now gets its own small
+        Opus call with the full memo body as context for cross-section coherence.
+        Parallelized at _PARALLEL_CAP concurrency to keep ITPM bounded.
 
-        Contradictions detected by research packs are surfaced to the polish
-        prompt with explicit resolution rules: either resolve (state which
-        source is authoritative) or flag (mark as an open IC question).
+        Preservation invariants unchanged: metrics/citations/assessments pass
+        through verbatim — only prose is rewritten. Contradictions and citation
+        issues are filtered per-section so each call sees only what's relevant.
+
+        memo["polished"] is True only when all polishable sections succeed. On
+        partial failure, successful sections are applied and failed sections
+        preserve their pre-polish content; per-section errors are recorded.
         """
         company = memo.get("company", "")
         product = memo.get("product", "")
         template_name = memo.get("template_name", "")
 
-        # Load mind context once (fund + company level)
+        # Load mind context once (fund + company level) — shared across calls
         mind_ctx = self._get_mind_context(
             company, product, section_key=None,
             query_text="executive summary investment thesis recommendation polish",
@@ -848,40 +893,9 @@ class MemoGenerator:
                     seen_desc.add(desc)
                     contradictions.append(c)
 
-        # Also pull any citation issues flagged by the validation pass (#2)
         citation_issues = memo.get("_citation_issues", [])
 
-        # Render contradictions block for the prompt
-        contradictions_block = ""
-        if contradictions:
-            lines = ["\n## CONTRADICTIONS DETECTED BY RESEARCH PACKS\n",
-                     "You MUST resolve every contradiction below. For each one, pick ONE of:",
-                     "  (A) RESOLVE: state which source is authoritative and why, in the relevant",
-                     "      section. Use this when the evidence clearly favours one side.",
-                     "  (B) FLAG: explicitly mark as an open question for IC discussion. Use this",
-                     "      when evidence is genuinely ambiguous.",
-                     "Never leave a contradiction unaddressed.\n"]
-            for i, c in enumerate(contradictions, 1):
-                sev = (c.get("severity") or "medium").upper()
-                a = c.get("section_a", "?")
-                b = c.get("section_b", "?")
-                lines.append(f"{i}. [{sev}] {c.get('description', '')}")
-                lines.append(f"   Sections involved: *{a}* vs *{b}*")
-            contradictions_block = "\n".join(lines)
-
-        # Render citation issues block (from Stage 5.5 validation — optional)
-        citation_block = ""
-        if citation_issues:
-            lines = ["\n## CITATIONS FLAGGED BY VALIDATION\n",
-                     "The following citations were flagged as unverifiable against the data room.",
-                     "If you preserve them, qualify the claim (e.g., 'based on management commentary',",
-                     "'per analyst notes') or remove the citation marker. Do NOT invent a new source.\n"]
-            for ci in citation_issues[:20]:
-                lines.append(f"- Section *{ci.get('section_key')}* citation #{ci.get('citation_index')}: "
-                             f"{ci.get('source')} — {ci.get('reason', 'not found')}")
-            citation_block = "\n".join(lines)
-
-        # Render full memo body for the polish prompt
+        # Build full memo body once — shared coherence context for every call
         body_parts = []
         for s in memo.get("sections", []):
             body_parts.append(f"## {s.get('title', s.get('key', ''))}\n")
@@ -890,101 +904,230 @@ class MemoGenerator:
             if metrics:
                 body_parts.append("\nMetrics in this section:")
                 for m in metrics:
-                    body_parts.append(f"  - {m.get('label')}: {m.get('value')} [{m.get('assessment', 'neutral')}]")
+                    body_parts.append(
+                        f"  - {m.get('label')}: {m.get('value')} "
+                        f"[{m.get('assessment', 'neutral')}]"
+                    )
             body_parts.append("")
         full_body = "\n".join(body_parts)
 
+        # Eligible sections — skip errored/auto/empty. Note: sections with
+        # generated_by unset (e.g. hand-assembled fixtures) are still eligible;
+        # only explicit "error" placeholders are excluded.
+        polishable = [
+            s for s in memo.get("sections", [])
+            if (s.get("content") or "").strip()
+            and s.get("generated_by") != "error"
+            and s.get("source") != _SOURCE_AUTO
+        ]
+        if not polishable:
+            memo["polished"] = False
+            memo.setdefault("errors", []).append({
+                "section": "polish",
+                "error": "no_polishable_sections",
+            })
+            return memo
+
         system_prompt = (
-            f"You are a senior credit analyst at ACP polishing an IC memo for {company}/{product} "
-            f"({template_name}). Your task is coherence and tone, not fresh analysis.\n\n"
+            f"You are a senior credit analyst at ACP polishing one section of "
+            f"an IC memo for {company}/{product} ({template_name}). Your task "
+            "is coherence and tone, not fresh analysis.\n\n"
             "PRESERVE:\n"
-            "- All specific numbers and metrics mentioned in each section\n"
+            "- All specific numbers and metrics mentioned in this section\n"
             "- All direct quotes from source documents\n"
-            "- All risk flags, findings, and per-metric assessments\n"
-            "- The section order and titles\n\n"
+            "- All risk flags, findings, and per-metric assessments\n\n"
             "IMPROVE:\n"
-            "- Cross-section references (Executive Summary should reference findings in body)\n"
+            "- Cross-section references (this section should align with the rest of the memo)\n"
             "- Tone consistency (institutional, no marketing language)\n"
-            "- Resolve contradictions flagged below — per IC convention, prefer tape data over "
-            "data room narrative when they conflict (tape = live observed state; data room = "
-            "point-in-time management view). When resolving, cite which source is authoritative.\n"
-            "- Ensure Recommendation/Investment Thesis synthesises the body, not restates it\n\n"
+            "- Resolve any contradictions flagged for this section — per IC "
+            "convention, prefer tape data over data room narrative when they "
+            "conflict (tape = live observed state; data room = point-in-time "
+            "management view). Cite which source is authoritative when resolving.\n"
+            "- If this is Executive Summary / Recommendation / Investment Thesis, "
+            "ensure it synthesises the body rather than restating it\n\n"
             "DO NOT:\n"
             "- Introduce new metrics or claims\n"
             "- Remove caveats or data gap acknowledgements\n"
-            "- Reorder sections or merge them\n\n"
+            "- Rename or split the section\n\n"
             f"{mind_ctx}"
         )
 
-        user_prompt = (
-            "Polish the following IC memo. Return strict JSON:\n\n"
-            "```json\n"
-            "{\n"
-            '  "sections": [\n'
-            '    {"key": "section_key", "content": "polished content ..."},\n'
-            "    ...\n"
-            "  ]\n"
-            "}\n"
-            "```\n\n"
-            "Include every section from the input. Only modify `content`. "
-            "Return ONLY the JSON object, no surrounding prose."
-            f"{contradictions_block}"
-            f"{citation_block}"
-            "\n\n## Memo to polish:\n\n"
-            f"{full_body}"
-        )
+        # Shared contradiction block — contradictions name other sections by
+        # title (e.g. "Credit Quality" vs "Executive Summary") rather than by
+        # key, and the per-section polish still needs to resolve them coherently
+        # with the rest of the memo, so we include all contradictions in every
+        # call. They're rare (0-3 per memo) and cheap to inline.
+        contra_block_shared = ""
+        if contradictions:
+            lines = ["\n## CONTRADICTIONS DETECTED\n",
+                     "For each, either RESOLVE (state which source is "
+                     "authoritative and why) or FLAG (mark as open IC "
+                     "question). Never leave unaddressed."]
+            for i, c in enumerate(contradictions, 1):
+                sev = (c.get("severity") or "medium").upper()
+                a = c.get("section_a", "?")
+                b = c.get("section_b", "?")
+                lines.append(f"{i}. [{sev}] {c.get('description', '')}")
+                lines.append(f"   Sections involved: *{a}* vs *{b}*")
+            contra_block_shared = "\n".join(lines)
 
-        from core.ai_client import complete
-        start = time.time()
-        try:
-            resp = complete(
-                tier="polish",
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-                max_tokens=_MAX_TOKENS_POLISH,
-                log_prefix=f"memo.polish.{company}",
+        def _polish_one(section: Dict[str, Any]) -> Dict[str, Any]:
+            """Polish a single section. Returns a result record (never raises)."""
+            key = section.get("key", "")
+            title = section.get("title", key)
+            original = (section.get("content") or "").strip()
+
+            # Citation issues ARE keyed by section_key, so filter per-section
+            section_citation_issues = [
+                ci for ci in citation_issues if ci.get("section_key") == key
+            ]
+
+            contra_block = contra_block_shared
+
+            cit_block = ""
+            if section_citation_issues:
+                lines = ["\n## CITATIONS FLAGGED BY VALIDATION\n",
+                         "If preserving them, qualify the claim (e.g., "
+                         "'per management commentary') or remove the citation "
+                         "marker. Do NOT invent a new source."]
+                for ci in section_citation_issues[:10]:
+                    lines.append(
+                        f"- Citation #{ci.get('citation_index')}: "
+                        f"{ci.get('source')} — {ci.get('reason', 'not found')}"
+                    )
+                cit_block = "\n".join(lines)
+
+            user_prompt = (
+                "Polish the section below. Return strict JSON:\n\n"
+                "```json\n"
+                '{"content": "polished section text ..."}\n'
+                "```\n\n"
+                "Return ONLY the JSON object, no surrounding prose.\n"
+                f"{contra_block}"
+                f"{cit_block}"
+                f"\n\n## Section to polish: {title}\n\n"
+                f"{original}\n\n"
+                "## Full memo body (for coherence — do not restate):\n\n"
+                f"{full_body}"
             )
-        except Exception as e:
-            logger.error("Polish pass failed for %s/%s: %s", company, product, e)
-            memo["polished"] = False
-            memo.setdefault("errors", []).append({"section": "polish", "error": str(e)})
-            return memo
+
+            from core.ai_client import complete
+            t_start = time.time()
+            try:
+                resp = complete(
+                    tier="polish",
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    max_tokens=_MAX_TOKENS_POLISH_SECTION,
+                    log_prefix=f"memo.polish.{company}.{key}",
+                )
+            except Exception as e:
+                logger.warning("Polish call failed for section '%s': %s", key, e)
+                return {"key": key, "content": None, "error": str(e),
+                        "tokens_in": 0, "tokens_out": 0, "cache_read": 0,
+                        "elapsed": time.time() - t_start, "model": None}
+
+            elapsed_one = time.time() - t_start
+            text = resp.content[0].text if resp.content else ""
+            if text.strip().startswith("```"):
+                first_brace = text.find("{")
+                last_brace = text.rfind("}")
+                if 0 <= first_brace < last_brace:
+                    text = text[first_brace:last_brace + 1]
+
+            meta = getattr(resp, "_laith_metadata", {}) or {}
+            tin = resp.usage.input_tokens
+            tout = resp.usage.output_tokens
+            tcache = meta.get("cache_read_tokens", 0) or 0
+            model = meta.get("model")
+
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError as e:
+                logger.warning("Polish JSON parse failed for section '%s': %s",
+                               key, e)
+                return {"key": key, "content": None,
+                        "error": f"JSON parse: {e}",
+                        "tokens_in": tin, "tokens_out": tout,
+                        "cache_read": tcache, "elapsed": elapsed_one,
+                        "model": model}
+
+            new_content = parsed.get("content", "") if isinstance(parsed, dict) else ""
+            if not isinstance(new_content, str) or not new_content.strip():
+                return {"key": key, "content": None,
+                        "error": "empty_content_field",
+                        "tokens_in": tin, "tokens_out": tout,
+                        "cache_read": tcache, "elapsed": elapsed_one,
+                        "model": model}
+
+            return {"key": key, "content": new_content, "error": None,
+                    "tokens_in": tin, "tokens_out": tout,
+                    "cache_read": tcache, "elapsed": elapsed_one,
+                    "model": model}
+
+        # Parallel execution
+        max_workers = min(_PARALLEL_CAP, len(polishable))
+        results: List[Dict[str, Any]] = []
+        start = time.time()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_polish_one, s) for s in polishable]
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    results.append(fut.result())
+                except BaseException as e:
+                    # Defensive: mirror Stage 2's BaseException discipline so
+                    # a SystemExit/GeneratorExit in one future can't tear down
+                    # the loop and silently skip the rest.
+                    logger.error("Polish future crashed: %s", e, exc_info=True)
+                    results.append({"key": "?", "content": None,
+                                    "error": f"future_crash: {e}",
+                                    "tokens_in": 0, "tokens_out": 0,
+                                    "cache_read": 0, "elapsed": 0, "model": None})
 
         elapsed = time.time() - start
-        text = resp.content[0].text if resp.content else ""
-        # Strip possible fences
-        if text.strip().startswith("```"):
-            first_brace = text.find("{")
-            last_brace = text.rfind("}")
-            if 0 <= first_brace < last_brace:
-                text = text[first_brace:last_brace + 1]
-        try:
-            polished = json.loads(text)
-        except json.JSONDecodeError as e:
-            logger.warning("Polish pass JSON parse failed: %s — keeping original content", e)
-            memo["polished"] = False
-            memo.setdefault("errors", []).append({"section": "polish",
-                                                  "error": f"JSON parse: {e}"})
-            return memo
 
-        # Apply polished content to sections — PRESERVE metrics/citations
-        polished_by_key = {s.get("key"): s.get("content", "")
-                           for s in polished.get("sections", []) if isinstance(s, dict)}
+        # Apply polished content — preserve metrics/citations verbatim
+        polished_by_key = {r["key"]: r["content"] for r in results
+                           if r.get("content") and not r.get("error")}
         for section in memo.get("sections", []):
             new_content = polished_by_key.get(section.get("key"))
             if new_content:
                 section["pre_polish_content"] = section.get("content", "")
                 section["content"] = new_content
-                section["generated_by"] = section.get("generated_by", "ai") + "+polished"
+                gb = section.get("generated_by", "ai") or "ai"
+                if "+polished" not in gb:
+                    section["generated_by"] = gb + "+polished"
 
-        meta = getattr(resp, "_laith_metadata", {}) or {}
-        memo["polished"] = True
+        # Aggregate metadata
+        total_in = sum(r.get("tokens_in", 0) for r in results)
+        total_out = sum(r.get("tokens_out", 0) for r in results)
+        total_cache = sum(r.get("cache_read", 0) for r in results)
+        model_used = next((r["model"] for r in results if r.get("model")), None)
+        error_records = [r for r in results if r.get("error")]
+
+        # polished=True iff ALL polishable sections succeeded
+        memo["polished"] = (
+            len(error_records) == 0
+            and len(polished_by_key) == len(polishable)
+        )
+
+        for r in error_records:
+            memo.setdefault("errors", []).append({
+                "section": "polish",
+                "section_key": r.get("key"),
+                "error": r.get("error", "unknown"),
+            })
+
         memo.setdefault("generation_meta", {})["polish"] = {
-            "model_used": meta.get("model"),
-            "tokens_in": resp.usage.input_tokens,
-            "tokens_out": resp.usage.output_tokens,
-            "cache_read_tokens": meta.get("cache_read_tokens", 0),
+            "model_used": model_used,
+            "tokens_in": total_in,
+            "tokens_out": total_out,
+            "cache_read_tokens": total_cache,
             "elapsed_s": round(elapsed, 2),
+            "sections_attempted": len(polishable),
+            "sections_polished": len(polished_by_key),
+            "sections_failed": len(error_records),
         }
         return memo
 

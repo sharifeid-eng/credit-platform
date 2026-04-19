@@ -100,14 +100,14 @@ class TestGenerateFullMemo:
 
         # Patch complete() to return a section-shaped response
         def _fake_complete(*, tier, system, messages, max_tokens, **kwargs):
-            # Polish pass returns different schema
-            if "polish" in (kwargs.get("log_prefix") or "") or tier == "polish":
-                return _fake_claude_response({
-                    "sections": [
-                        {"key": s["key"], "content": f"polished {s['key']}"}
-                        for s in MEMO_TEMPLATES["credit_memo"]["sections"]
-                    ],
-                })
+            log_prefix = kwargs.get("log_prefix") or ""
+            # Per-section polish: returns {"content": "..."} for a single section
+            if tier == "polish" or log_prefix.startswith("memo.polish."):
+                section_key = log_prefix.rsplit(".", 1)[-1] if "." in log_prefix else "unknown"
+                return _fake_claude_response({"content": f"polished {section_key}"})
+            # Per-section citation audit: returns {"issues": []} for a single section
+            if log_prefix.startswith("memo.citation_audit."):
+                return _fake_claude_response({"issues": []})
             return _fake_claude_response({
                 "content": "Section body text with [PAR30: 3%] metric.",
                 "metrics": [{"label": "PAR30", "value": "3%", "assessment": "healthy"}],
@@ -233,13 +233,12 @@ class TestGenerateFullMemo:
 
         # Normal complete() for everything that does get called
         def _fake_complete(*, tier, system, messages, max_tokens, **kwargs):
-            if tier == "polish":
-                return _fake_claude_response({
-                    "sections": [
-                        {"key": s["key"], "content": f"polished {s['key']}"}
-                        for s in MEMO_TEMPLATES["credit_memo"]["sections"]
-                    ],
-                })
+            log_prefix = kwargs.get("log_prefix") or ""
+            if tier == "polish" or log_prefix.startswith("memo.polish."):
+                section_key = log_prefix.rsplit(".", 1)[-1] if "." in log_prefix else "unknown"
+                return _fake_claude_response({"content": f"polished {section_key}"})
+            if log_prefix.startswith("memo.citation_audit."):
+                return _fake_claude_response({"issues": []})
             return _fake_claude_response({
                 "content": "Section body text.",
                 "metrics": [], "citations": [],
@@ -338,3 +337,167 @@ class TestGenerateFullMemo:
         )
         expected_keys = [s["key"] for s in MEMO_TEMPLATES["credit_memo"]["sections"]]
         assert [s["key"] for s in memo["sections"]] == expected_keys
+
+    def test_polish_runs_per_section(self, mock_bridge, mock_dataroom, monkeypatch):
+        """Per-section polish (2026-04-19 fix): each polishable section should
+        receive its own Opus call producing distinct content, pre_polish_content
+        should be recorded, generated_by should end with +polished, and the
+        generation_meta['polish'] block should tally attempted/polished/failed.
+        """
+        monkeypatch.setattr("core.memo.generator.AnalyticsBridge", lambda: mock_bridge)
+        monkeypatch.setattr("core.dataroom.DataRoomEngine", lambda: mock_dataroom)
+        monkeypatch.setattr("core.mind.build_mind_context",
+                            lambda **kw: MagicMock(
+                                is_empty=True, formatted="", total_entries=0))
+
+        polish_calls: list[str] = []
+
+        def _fake_complete(*, tier, system, messages, max_tokens, **kwargs):
+            log_prefix = kwargs.get("log_prefix") or ""
+            if tier == "polish" or log_prefix.startswith("memo.polish."):
+                section_key = log_prefix.rsplit(".", 1)[-1] if "." in log_prefix else "unknown"
+                polish_calls.append(section_key)
+                return _fake_claude_response(
+                    {"content": f"POLISHED_{section_key}_text"}
+                )
+            if log_prefix.startswith("memo.citation_audit."):
+                return _fake_claude_response({"issues": []})
+            return _fake_claude_response({
+                "content": "Raw body with metric [PAR30: 3%].",
+                "metrics": [], "citations": [],
+            })
+
+        monkeypatch.setattr("core.ai_client.complete", _fake_complete)
+
+        from core.memo import agent_research
+        monkeypatch.setattr(agent_research, "generate_research_pack",
+                            lambda **kw: dict(agent_research.EMPTY_PACK))
+
+        gen = MemoGenerator()
+        memo = gen.generate_full_memo(
+            company="TestCo", product="KSA",
+            template_key="credit_memo",
+            polish=True,
+        )
+
+        # Polishable sections = all except those with source="auto" (appendix)
+        polishable_keys = [
+            s["key"] for s in MEMO_TEMPLATES["credit_memo"]["sections"]
+            if s.get("source") != "auto"
+        ]
+
+        # Each polishable key was polished exactly once — distinct calls, not one-shot
+        assert sorted(polish_calls) == sorted(polishable_keys), (
+            f"Expected one polish call per polishable section; "
+            f"got {sorted(polish_calls)} vs {sorted(polishable_keys)}"
+        )
+
+        # Each polishable section has materially different content post-polish,
+        # plus pre_polish_content recorded and +polished flag on generated_by.
+        by_key = {s["key"]: s for s in memo["sections"]}
+        for k in polishable_keys:
+            sect = by_key[k]
+            assert sect["content"] == f"POLISHED_{k}_text", \
+                f"Section {k} content not replaced by polish output"
+            assert sect.get("pre_polish_content"), \
+                f"Section {k} missing pre_polish_content"
+            assert sect["content"] != sect["pre_polish_content"], \
+                f"Section {k} post-polish content matches pre-polish (no-op)"
+            gb = sect.get("generated_by", "")
+            assert "+polished" in gb, \
+                f"Section {k} generated_by missing +polished flag: {gb}"
+
+        # Auto section (appendix) untouched by polish
+        appendix = by_key["appendix"]
+        assert "+polished" not in (appendix.get("generated_by") or ""), \
+            "Auto (appendix) section should not be polished"
+        assert "pre_polish_content" not in appendix
+
+        assert memo["polished"] is True
+        polish_meta = memo["generation_meta"]["polish"]
+        assert polish_meta["sections_attempted"] == len(polishable_keys)
+        assert polish_meta["sections_polished"] == len(polishable_keys)
+        assert polish_meta["sections_failed"] == 0
+
+    def test_partial_polish_failure_preserves_memo(self, mock_bridge, mock_dataroom,
+                                                    monkeypatch):
+        """Partial polish failure (2026-04-19 fix): if one section's polish call
+        fails, the failed section retains pre-polish content, other sections are
+        still polished, memo['polished'] is False, and the error is recorded
+        per-section in generation_meta['polish']['sections_failed'].
+        """
+        monkeypatch.setattr("core.memo.generator.AnalyticsBridge", lambda: mock_bridge)
+        monkeypatch.setattr("core.dataroom.DataRoomEngine", lambda: mock_dataroom)
+        monkeypatch.setattr("core.mind.build_mind_context",
+                            lambda **kw: MagicMock(
+                                is_empty=True, formatted="", total_entries=0))
+
+        failing_key = "credit_quality"
+
+        def _fake_complete(*, tier, system, messages, max_tokens, **kwargs):
+            log_prefix = kwargs.get("log_prefix") or ""
+            if tier == "polish" or log_prefix.startswith("memo.polish."):
+                section_key = log_prefix.rsplit(".", 1)[-1] if "." in log_prefix else "unknown"
+                if section_key == failing_key:
+                    raise RuntimeError(f"simulated polish failure on {failing_key}")
+                return _fake_claude_response(
+                    {"content": f"POLISHED_{section_key}_text"}
+                )
+            if log_prefix.startswith("memo.citation_audit."):
+                return _fake_claude_response({"issues": []})
+            return _fake_claude_response({
+                "content": "Pre-polish body text.",
+                "metrics": [], "citations": [],
+            })
+
+        monkeypatch.setattr("core.ai_client.complete", _fake_complete)
+
+        from core.memo import agent_research
+        monkeypatch.setattr(agent_research, "generate_research_pack",
+                            lambda **kw: dict(agent_research.EMPTY_PACK))
+
+        gen = MemoGenerator()
+        memo = gen.generate_full_memo(
+            company="TestCo", product="KSA",
+            template_key="credit_memo",
+            polish=True,
+        )
+
+        polishable_keys = [
+            s["key"] for s in MEMO_TEMPLATES["credit_memo"]["sections"]
+            if s.get("source") != "auto"
+        ]
+        by_key = {s["key"]: s for s in memo["sections"]}
+
+        # The failing section retains pre-polish content — no +polished flag
+        failed_sect = by_key[failing_key]
+        assert failed_sect["content"] == "Pre-polish body text.", \
+            "Failed section should retain pre-polish content verbatim"
+        assert "+polished" not in (failed_sect.get("generated_by") or ""), \
+            "Failed section should not be flagged +polished"
+        assert "pre_polish_content" not in failed_sect, \
+            "Failed section should not have pre_polish_content set (never replaced)"
+
+        # Every other polishable section succeeded
+        other_keys = [k for k in polishable_keys if k != failing_key]
+        for k in other_keys:
+            sect = by_key[k]
+            assert sect["content"] == f"POLISHED_{k}_text", \
+                f"Section {k} should have been polished despite {failing_key} failure"
+            assert "+polished" in (sect.get("generated_by") or "")
+
+        # polished=False because not ALL polishable sections succeeded
+        assert memo["polished"] is False
+
+        # Error recorded with section_key attribution
+        polish_errors = [e for e in memo.get("errors", [])
+                         if e.get("section") == "polish"]
+        assert len(polish_errors) == 1, \
+            f"Expected exactly 1 polish error; got {polish_errors}"
+        assert polish_errors[0].get("section_key") == failing_key
+
+        # generation_meta tallies
+        polish_meta = memo["generation_meta"]["polish"]
+        assert polish_meta["sections_attempted"] == len(polishable_keys)
+        assert polish_meta["sections_polished"] == len(other_keys)
+        assert polish_meta["sections_failed"] == 1
