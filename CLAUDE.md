@@ -1000,13 +1000,13 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Stage 3: 1 auto section (appendix) — Haiku 4
   - Stage 4: **Short-burst research packs** per judgment section — Sonnet agent, 5-turn hard cap, returns structured JSON (key_metrics, quotes, contradictions, recommended_stance, supporting_evidence)
   - Stage 5: Judgment synthesis — Opus 4.7, sequential (for coherence), consumes research packs
-  - Stage 5.5: **Citation validation** — Sonnet cross-references every citation against data room, flags unverifiable ones
-  - Stage 6: **Polish pass** — single Opus 4.7 call, preserves metrics/citations, explicitly resolves contradictions with resolve/flag rules
+  - Stage 5.5: **Citation validation** — Sonnet per-section parallel calls (at `LAITH_PARALLEL_SECTIONS` cap), skipped for sections with no citations
+  - Stage 6: **Polish pass** — Opus 4.7 per-section parallel calls (at `LAITH_PARALLEL_SECTIONS` cap), preserves metrics/citations, explicitly resolves contradictions with resolve/flag rules. Per-section fan-out fixed the ~40K-char JSON truncation that plagued the original single-blob call. `polished=True` only when all polishable sections succeed; partial failures retain pre-polish content with error attribution in `generation_meta["polish"]`.
   - Post-save: `record_memo_thesis_to_mind()` writes agent-recommended stance to CompanyMind findings (memo_id provenance) — future memos see prior recommendations
   - Sidecar storage: `_research_packs` → `research_packs.json`, `_citation_issues` → `citation_issues.json` (audit trail, immutable on first save, stripped from `v{N}.json`)
   - Rate-limit engineering: SDK retry/backoff via `max_retries=3` (configurable via `LAITH_AI_MAX_RETRIES`), parallel cap prevents ITPM bursts
   - Model routing: 5 tiers (auto/structured/research/judgment/polish), env-overridable via `LAITH_MODEL_*`, fallback chains (Opus 4.7 → 4.6 → 4.20250514) on NotFoundError
-  - Cost: ~$1.50-2.50 per full Credit Memo, ~3-5 min wall-clock
+  - Cost: ~$3.50-6.00 per full Credit Memo, ~3-5 min wall-clock. Higher than the pre-fix ~$1.50-2.50 baseline because per-section polish fan-out ships the full prior-sections context with each of the N parallel Opus calls (~11× input tokens vs a single monolithic call). Trade-off: reliability over token economy — Opus 4.7 single-blob hit a ~40K char output ceiling that truncated polish output mid-string.
   - Memo metadata: `generation_mode: "hybrid-v1"`, `polished: bool`, `models_used: {...}`, `total_tokens_in/out`, `cost_usd_estimate` in meta.json
   - Both save paths use the pipeline: agent SSE endpoint (`/agents/{co}/{prod}/memo/generate`) streams live progress events (`pipeline_start`, `section_start/done`, `research_start/done`, `citation_audit_start/done`, `polish_start/done`, `saved`, `done`) AND saves the memo; legacy endpoint (`/companies/{co}/products/{prod}/memos/generate`) returns JSON after save
 - ✅ **Central Anthropic client (`core/ai_client.py`):**
