@@ -376,6 +376,23 @@ class TestGlobalToolRegistration:
         assert "analytics.get_par_analysis" in tool_names
         assert "mind.record_finding" in tool_names
 
+    def test_memo_writer_has_external_tools(self):
+        """Memo writer should expose external.* so memo drafts can cite web
+        research alongside data-room sources. Locks in D5 from session 27."""
+        from core.agents.tools import register_all_tools, build_tools_for_agent
+        register_all_tools()
+        tools = build_tools_for_agent("memo_writer")
+        tool_names = [t.name for t in tools]
+        assert "external.web_search" in tool_names, (
+            "memo_writer config.json is missing the external.* pattern. "
+            "Without it, the agent can't trigger pending-review web research "
+            "during memo drafts."
+        )
+        # Also covers the other primary tool categories memo_writer relies on
+        assert any(n.startswith("memo.") for n in tool_names)
+        assert any(n.startswith("analytics.") for n in tool_names)
+        assert any(n.startswith("dataroom.") for n in tool_names)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

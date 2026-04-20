@@ -5,7 +5,8 @@
     "dataroom.*",
     "mind.*",
     "memo.*",
-    "portfolio.*"
+    "portfolio.*",
+    "external.*"
   ],
   "max_turns": 30,
   "max_tokens_per_response": 3000,
