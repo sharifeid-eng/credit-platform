@@ -3,6 +3,91 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-20 — After a force-push rebase, local clones need hard-reset, not pull
+
+**Problem:** Session rebased branch `claude/resources-section-discussion-lMMAr` onto main (9 new commits) and force-pushed. User's laptop still had the old pre-rebase commit. `git pull` tried to auto-merge the divergent histories and produced conflicts across 5 files — none of which the user had actually edited locally.
+
+**Rule:** When a branch has been force-pushed (i.e. `git pull` output contains the `+` marker and `(forced update)`), the remote history has been rewritten. `git pull` is the wrong command — it tries to merge the old and new histories. The correct recovery is:
+```
+git merge --abort
+git reset --hard origin/<branch>
+```
+`reset --hard` says "discard local, trust the remote" — safe when all the work is actually on origin (as it is after a rebase + force-push).
+
+**How to apply:** Before giving a user "pull" instructions on a branch you've rebased, warn them that if they had the branch checked out pre-rebase, they'll need the abort + reset sequence. And in commit/PR instructions after a rebase, include the recovery block so they can self-diagnose.
+
+---
+
+## 2026-04-20 — Mock-patching a core module requires importing it FIRST
+
+**Problem:** A verification script used `mock.patch("core.ai_client.complete", ...)` and `mock.patch("core.loader.DATA_DIR", ...)` without importing those modules first. Result: `AttributeError: module 'core' has no attribute 'ai_client'` / `'loader'`. The `core/__init__.py` doesn't re-export submodules, so `getattr(core, 'ai_client')` fails until `import core.ai_client` has actually run.
+
+**Rule:** When using `mock.patch("pkg.module.attr", ...)` — the string form — the target's parent package must have `module` as an attribute. For namespace packages (most of our `core/*`), that means an explicit `import core.module` has to execute before the patch. Two safe patterns:
+1. `import core.ai_client` at the top of the test, then `mock.patch("core.ai_client.complete", ...)` works.
+2. `import core.ai_client; mock.patch.object(core.ai_client, "complete", ...)` — resolves via the module object directly, bypasses the string lookup.
+
+**How to apply:** Default to pattern 2 (`mock.patch.object`) — it's more robust and gets a real NameError if the module doesn't exist, rather than a confusing AttributeError on the package at test time.
+
+---
+
+## 2026-04-20 — Register-all-tools pulls pandas transitively; test in isolation
+
+**Problem:** A test that only cared about a single tool (`external.web_search`) called `register_all_tools()` to populate the registry. That function imports every tool module — including `analytics.py`, which imports `core/agents/tools/_helpers.py`, which imports pandas. The sandbox didn't have pandas; the test errored on what looked like an unrelated import.
+
+**Rule:** If a test only needs ONE tool registered, import that tool module directly — module-level `registry.register(...)` calls fire on import. `register_all_tools()` is for app startup, not for tests that want a narrow surface.
+
+```python
+# Good — minimal footprint:
+from core.agents.tools import registry
+import core.agents.tools.external  # triggers registration of external.*
+
+# Bad — pulls pandas, anthropic, analytics, dataroom, memo, portfolio, ...:
+from core.agents.tools import register_all_tools
+register_all_tools()
+```
+
+**How to apply:** Always prefer targeted imports in tests. Keep fixtures small. If a test needs the whole tool graph, it's probably a smoke test and should live in a suite that runs with the full environment.
+
+---
+
+## 2026-04-20 — React Router preserves scroll position across navigations
+
+**Problem:** User scrolled down the Home page to click the Operator card (in the Resources section near the bottom). `/operator` rendered but the page was already scrolled mid-page — because React Router preserves `window.scrollY` across navigations by default. Looked like a broken layout; was actually correct rendering at the wrong scroll offset.
+
+**Rule:** Add a `ScrollToTopOnNavigate` component once at the top of the router that listens to `useLocation().pathname` and calls `window.scrollTo({top:0, left:0, behavior:'auto'})` on change. Mount it inside `BrowserRouter` so every route transition triggers it.
+
+**Don't use** `behavior:'smooth'` — it fights with the route transition animation and produces a jarring double-motion. Same-path tab changes (e.g. `:tab` URL param swaps on the same pathname) should NOT trigger scroll reset — the effect depends on `pathname` alone, which stays constant for tab switches.
+
+**How to apply:** Whenever adding a new top-level route to a React Router app, confirm the project has a scroll-reset handler. This repo now has `ScrollToTopOnNavigate` in `frontend/src/App.jsx`.
+
+---
+
+## 2026-04-20 — Agent tool registry vs agent config: both must opt in
+
+**Problem:** Shipped a new `external.web_search` agent tool. Registered it correctly in `core/agents/tools/__init__.py register_all_tools()`. Confirmed with a direct lookup: tool was in the registry. But no agent would actually use it — because each agent's `config.json` has a tool-patterns allowlist, and none of them included `external.*`. The tool was in the registry but invisible to all agents.
+
+**Rule:** Adding a new tool module is a TWO-step process:
+1. Register the tool module in `register_all_tools()` (import triggers the module-level `registry.register(...)` call)
+2. Add the module's glob pattern to every agent's `config.json` "tools" array that should be able to use it
+
+**How to apply:** Before declaring a new tool "done," grep every agent config.json for the new pattern and decide which agents actually need it. `analyst` is usually the first target for any user-facing chat tool; `memo_writer` for anything that informs memos; etc.
+
+---
+
+## 2026-04-20 — `def test_` regex must tolerate indentation and `async`
+
+**Problem:** `/api/platform-stats` counted tests with `re.findall(r'^def test_', content, re.MULTILINE)`. Returned 0 for the Architecture page's "Tests" tile despite ~428 tests existing. Cause: regex required `def test_` at column 0, so class-indented tests (`    def test_foo`) and async tests (`async def test_bar`) silently didn't match.
+
+**Rule:** When counting test functions via regex, the tolerant pattern is `^\s*(?:async\s+)?def\s+test_`. Matches:
+- `def test_foo(...)` (top-level)
+- `    def test_foo(...)` (class-indented)
+- `async def test_foo(...)` (async top-level)
+- `    async def test_foo(...)` (async class-indented)
+
+**How to apply:** Any code that counts "tests" or "functions" via regex should assume the code under test uses classes, async, decorators, etc. The repo's test style includes all of these. Cheap to be liberal; expensive to silently return 0.
+
+---
+
 ## 2026-04-19 — `rm -rf` on a non-existent path exits 0 silently, masking wrong-path bugs
 
 **Problem:** Ran `docker compose exec -T backend rm -rf reports/memos/klaim/UAE_healthcare/ad7cc868-a64` to delete a verification memo. The command exited cleanly. A follow-up `ls` on the parent returned "No such file or directory" — read as "dir auto-pruned on empty, clean deletion ✅". Actually the path had **never existed**: the memo archive uses a flat `{company}_{product}` directory convention (`reports/memos/klaim_UAE_healthcare/`), not nested (`reports/memos/klaim/UAE_healthcare/`). The memo was still live on the website; user had to report it before we found the real path.

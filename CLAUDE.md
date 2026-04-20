@@ -212,6 +212,7 @@ credit-platform/
 │   ├── auth_routes.py      # Auth API routes (/auth/me, /auth/users CRUD)
 │   ├── integration.py      # 12 inbound integration API endpoints (invoices/payments/bank statements)
 │   ├── intelligence.py     # Intelligence System endpoints (thesis, briefing, learning, KB search, feedback)
+│   ├── external.py         # External Intelligence endpoints — /api/pending-review, /api/asset-class-mind, /api/mind/promote
 │   ├── onboarding.py       # Self-service org/product/API key provisioning (2 endpoints)
 │   ├── operator.py         # Operator Command Center endpoints (status, todo, mind review, digest)
 │   └── schemas.py          # Pydantic request/response models for integration API
@@ -244,9 +245,14 @@ credit-platform/
 │   │   ├── agent_research.py  # Short-burst agent research packs (5-turn cap, structured JSON, thesis recorder)
 │   │   ├── storage.py         # File-based versioning + sidecar storage (research_packs.json, citation_issues.json)
 │   │   └── pdf_export.py      # Dark-themed PDF export for memos
+│   ├── external/              # External Intelligence — trust-boundary queue
+│   │   ├── __init__.py
+│   │   └── pending_review.py  # File-backed queue: external evidence never auto-writes to Mind
 │   ├── mind/                  # Living Mind + Intelligence System
-│   │   ├── master_mind.py     # Fund-level: preferences, IC norms, cross-company patterns
+│   │   ├── master_mind.py     # Fund-level: preferences, IC norms, cross-company patterns, sector_context
+│   │   ├── asset_class_mind.py # Per-analysis_type: benchmarks, typical_terms, external_research, peer_comparison (NEW — Layer 2.5)
 │   │   ├── company_mind.py    # Per-company: corrections, findings, IC feedback, data quality
+│   │   ├── promotion.py       # Company → Asset Class → Master promotion with full provenance
 │   │   ├── schema.py          # KnowledgeNode + Relation dataclasses (extends MindEntry)
 │   │   ├── relation_index.py  # Bidirectional adjacency list for node relations
 │   │   ├── event_bus.py       # Lightweight sync pub/sub for knowledge events
@@ -285,6 +291,8 @@ credit-platform/
 │   └── reporter.py         # AI-generated PDF data integrity reports (ReportLab)
 ├── data/
 │   ├── _master_mind/          # Fund-level Living Mind (JSONL files)
+│   ├── _asset_class_mind/     # NEW — Per-analysis_type Living Mind (one JSONL per asset class)
+│   ├── _pending_review/       # NEW — External-origin entries awaiting analyst approval (queue.jsonl)
 │   └── {company}/
 │       ├── mind/              # Company-level Living Mind (JSONL files)
 │       ├── legal/             # Legal documents and extraction cache
@@ -313,6 +321,7 @@ credit-platform/
 │   │   │   ├── PortfolioAnalytics.jsx  # 6-tab portfolio view (live data from DB/tape)
 │   │   │   ├── LegalAnalytics.jsx   # 8-tab legal document analysis
 │   │   │   ├── Framework.jsx        # Analysis Framework page (/framework) — analytical philosophy with sticky TOC
+│   │   │   ├── Architecture.jsx     # NEW — Platform architecture (/architecture) — live stats + feedback-loops + component diagrams
 │   │   │   ├── Methodology.jsx      # Definitions, formulas, rationale for all analytics
 │   │   │   ├── ExecutiveSummary.jsx # AI Executive Summary — credit memo narrative + ranked findings
 │   │   │   ├── OperatorCenter.jsx  # Operator Command Center (5-tab: health, commands, follow-ups, activity, mind)
@@ -416,7 +425,8 @@ credit-platform/
 │   ├── prepare_tamara_data.py  # Data room ETL: reads ~100 source files → structured JSON snapshots for Tamara
 │   ├── prepare_aajil_data.py   # Investor deck extraction → structured JSON snapshot for Aajil
 │   ├── dataroom_ctl.py         # Unified dataroom operator CLI (audit/ingest/refresh/rebuild-index/wipe/classify)
-│   └── seed_master_mind.py     # Seeds master mind from ANALYSIS_FRAMEWORK.md + CLAUDE.md lessons
+│   ├── seed_master_mind.py     # Seeds master mind from ANALYSIS_FRAMEWORK.md + CLAUDE.md lessons
+│   └── verify_external_intelligence.py # 16-check harness for AssetClassMind + PendingReviewQueue + promotion + web_search
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
 └── reports/
@@ -1493,6 +1503,23 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `classifier_llm.py` cache is sha256-keyed cross-company — re-running `classify --only-other` is free on a re-ingest.
 -----
 ## Known Gaps & Next Steps
+
+**Session 27 — Resources revamp + External Intelligence ✅ COMPLETE (2026-04-20):**
+- [x] Commit 1a (`20303e9`): `/api/platform-stats` endpoint + live vitals on Operator + Framework cards + new ArchitectureCard + `/architecture` page with component diagram. Rebased onto main after session 24–26.2 divergence; adopted `/api/*` route convention.
+- [x] Commit 1b (`6bc621f`): `LoopsDiagram` SVG — three feedback loops (Ingestion / Learning / Intelligence) with closing arcs above the component diagram. "Self-Improvement Loops" capability card.
+- [x] Commit 2 (`1d17e31`): External Intelligence four-layer system — `AssetClassMind` store, `PendingReviewQueue` (trust boundary), `external.web_search` agent tool, Layer 2.5 in `build_mind_context()` (6 layers now), `/api/pending-review` + `/api/asset-class-mind` endpoints, OperatorCenter 9th tab "Pending", MasterMind `sector_context` category + generic `record()`.
+- [x] Commit 3 (`aa5bed0`): `core/mind/promotion.py` with full provenance (promoted_from / promoted_to chains), `POST /api/mind/promote`, OperatorCenter 10th tab "Asset Classes" with per-class browser + ↑ Promote-to-Master button.
+- [x] Follow-up fixes: analyst agent config exposes `external.*` (`b60d8d3`); platform-stats test counter tolerant regex (`b2c6afe`); Architecture diagram loop-label crowding + arrow overlaps (`3b68f96`); `scripts/verify_external_intelligence.py` 16-check harness — 16/16 pass on user's laptop (`4952ea3`); `ScrollToTopOnNavigate` route-change scroll reset (`0ac4b4d`).
+
+**Session 27 deferred — revisit as usage dictates:**
+- [ ] D1: Company → Asset Class promote button in Mind tab UI (backend endpoint exists)
+- [ ] D2: Memo / Exec Summary / chat citation rendering for Layer 2.5 entries
+- [ ] D3: Unit tests for asset_class_mind, pending_review, promotion, external.web_search, backend/external.py (verification script covers logic but isn't in pytest)
+- [ ] D4: Seed Asset Class Mind with opening entries per analysis_type
+- [ ] D5: Extend other agents (memo_writer, compliance_monitor, onboarding) with `external.*` patterns
+- [ ] D6: Framework codification hook for technical research
+- [ ] D7: Scheduled external pollers (parked — on-demand model preferred)
+- [ ] Real `external.web_search` smoke test via Klaim DataChat (one end-to-end call to confirm Claude's production web_search returns the expected shape)
 
 **Post-Session-24 Rollout Bugfix Patch ✅ COMPLETE (session 25 — 2026-04-18):**
 - [x] Fix 1: Bidirectional orphan eviction — `DataRoomEngine.prune()` + auto-call in `ingest()`/`refresh()` + `dataroom_ctl prune` subcommand
