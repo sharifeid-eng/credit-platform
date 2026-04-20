@@ -1522,11 +1522,17 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] **D5 — memo_writer gets external.*** — one-line config change so memo drafts can trigger pending-review web research mid-draft. Commit `e71d49f`.
 - [x] Test count: 453 passing (was 436 at session start; +16 from D3, +1 D5 test, +8 Finding tests across runtime/tool/asset_class_resolution).
 
-**Session 27/28 deferred — revisit as usage dictates:**
-- [ ] D2: Memo / Exec Summary / chat citation rendering for Layer 2.5 entries (more valuable now that D4 seed + real entries exist to cite)
-- [ ] D6: Framework codification hook for technical research
+**Session 28 follow-up — D2, D6, legacy soft-flag (2026-04-20):**
+- [x] **D2 — Layer 2.5 citation rendering in DataChat** — `MindLayeredContext.asset_class_sources: List[Dict]` populated by `build_mind_context()` from every Asset Class Mind entry's `metadata.citations`, deduped by URL and capped at 50. Chat endpoint (Klaim + SILQ branches) returns `asset_class_sources` in response payload. `DataChat.jsx` renders collapsible "▸ Informed by N asset-class sources" footer with up to 25 clickable titles + `· {category} · {source} · {page_age}` provenance suffixes. Commit `d37c425`. Also fixed 5 latent executive-summary callers that still passed company-shortname as `analysis_type` (same bug as Finding #3, this time in `_build_{klaim,silq,aajil,tamara,ejari}_full_context()`).
+- [x] **D6 — Framework codification hook** — new `core/mind/framework_codification.py` module exposes `get_codification_candidates()`, `mark_codified()`, `codification_counts()` over `data/_master_mind/framework_evolution.jsonl`. Two new endpoints under `/api/framework/`: GET `codification-candidates` (returns `{candidates, counts}`) and POST `codify/{entry_id}` (body `{commit_sha, framework_section, codified_by}` → sets codified audit fields, atomic JSONL rewrite). Intended first consumer is the `/extend-framework` slash command. Backend-half only — no OperatorCenter UI surface this session. Commit `465e0c4`.
+- [x] **Legacy "Promote to Master" soft-flag** — MindEntryRow's existing button called `updateOperatorMindEntry(id, {promoted: true})`, a soft flag that only marked the source entry but never copied content into `data/_master_mind/`. Now wired to real `/api/mind/promote` via inline form matching the D1 pattern: Master-category dropdown (6 values from `_MASTER_FILES`), optional note, shared error/submitting state. State refactor: `activeForm` (`null | 'asset_class' | 'master'`) replaces single `showPromoteForm`; both promotion paths mutually exclusive. Commit `00fccf3`. The legacy PATCH `/api/operator/mind/{id}` endpoint still exists but no UI calls it.
+- [x] Test count: 461 passing (was 453; +3 D2 `TestAssetClassSources` + 5 D6 `TestFrameworkCodification`).
+
+**Still deferred:**
 - [ ] D7: Scheduled external pollers (parked — on-demand model preferred)
-- [ ] Legacy "Promote to Master" button in Mind tab still does a soft flag via `updateOperatorMindEntry(id, {promoted: true})` — should be migrated to `promoteMindEntry()` for real provenance, OR removed in favour of the two-step Company → Asset Class → Master flow. D1 left it alone intentionally; separate session.
+- [ ] D6 UI surface — OperatorCenter "Codification" tab (or Briefing badge) that lists pending `framework_evolution` entries and surfaces the POST endpoint. Waiting for `/extend-framework` command to be the first API consumer.
+- [ ] Legacy PATCH `/api/operator/mind/{id}` soft-flag endpoint itself — no longer called by any UI, safe to remove in a cleanup commit.
+- [ ] D2 broader rollout — citations currently surface only in DataChat. Executive Summary and AI Commentary don't yet render `asset_class_sources` (commentary doesn't inject mind context at all; executive summary would need the helper return type changed from string to a tuple/dataclass). Value-incremental — add if analysts ask.
 
 **Post-Session-24 Rollout Bugfix Patch ✅ COMPLETE (session 25 — 2026-04-18):**
 - [x] Fix 1: Bidirectional orphan eviction — `DataRoomEngine.prune()` + auto-call in `ingest()`/`refresh()` + `dataroom_ctl prune` subcommand
