@@ -473,6 +473,7 @@ class DataRoomEngine:
 
         result = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0,
                   "duplicates_skipped": 0,
+                  "relinked": 0,
                   "orphan_chunks_deleted": orphan_chunks_deleted,
                   "sha_duplicates_removed": dedupe_result["sha_duplicates_removed"],
                   "excluded_entries_removed": dedupe_result["excluded_removed"],
@@ -487,6 +488,11 @@ class DataRoomEngine:
             for doc_id, doc in registry.items()
             if (chunks_root / f"{doc_id}.json").exists() and doc.get("sha256")
         }
+
+        # Track which registry entries were relinked to a new on-disk path
+        # this pass. Any paths mapped here are considered "present on disk"
+        # by the removal sweep below, so relinked entries aren't dropped.
+        relinked_disk_paths: set = set()
 
         # Detect new and changed files
         for fpath, file_hash in disk_files.items():
@@ -511,11 +517,34 @@ class DataRoomEngine:
                     except Exception as e:
                         result["errors"].append({"file": fpath, "error": str(e)})
             else:
-                # Same-bytes dedup: if another file with identical content is
-                # already in the registry (e.g. same PDF in two deal folders),
-                # skip instead of creating a second entry with a new doc_id.
+                # Same-bytes match at a new path. Could be either:
+                #   (a) The ONLY registry entry for this hash, whose recorded
+                #       filepath no longer exists on disk (source was moved) —
+                #       relink to the new path so removal sweep keeps it.
+                #   (b) A genuine second copy of an already-registered file —
+                #       dedup-skip so we don't create a duplicate entry.
+                # The old filepath check distinguishes them: if the registry's
+                # path for this hash is NOT on disk, relink; else dedup.
                 if file_hash in registry_hashes:
-                    result["duplicates_skipped"] += 1
+                    existing_id = registry_hashes[file_hash]
+                    existing_fp = _normalize_filepath(
+                        registry[existing_id].get("filepath", "")
+                    )
+                    existing_on_disk = existing_fp in {
+                        _normalize_filepath(p) for p in disk_files.keys()
+                    }
+                    if not existing_on_disk and existing_fp not in relinked_disk_paths:
+                        # Source file was moved — update registry filepath so
+                        # the removal sweep doesn't drop this entry.
+                        registry[existing_id]["filepath"] = norm_fpath
+                        relinked_disk_paths.add(norm_fpath)
+                        result["relinked"] += 1
+                        logger.info(
+                            "[dataroom.refresh] Relinked %s: %s → %s",
+                            existing_id, existing_fp or "(unknown)", norm_fpath,
+                        )
+                    else:
+                        result["duplicates_skipped"] += 1
                     continue
                 # New file
                 try:
@@ -530,12 +559,20 @@ class DataRoomEngine:
                 except Exception as e:
                     result["errors"].append({"file": fpath, "error": str(e)})
 
-        # Detect removed files (in registry but not on disk)
+        # Detect removed files (in registry but not on disk).
+        # Relinked entries appear in the registry with a new filepath that
+        # isn't in current_files (which was built before the loop), so we
+        # union relinked paths into the "on disk" set.
         disk_paths = {_normalize_filepath(p) for p in disk_files.keys()}
         for fpath, (doc_id, _) in current_files.items():
-            if fpath not in disk_paths:
-                self._remove_doc(company, product, doc_id, registry)
-                result["removed"] += 1
+            if fpath in disk_paths:
+                continue
+            # If this doc was relinked to a new path, skip removal.
+            new_fp = _normalize_filepath(registry.get(doc_id, {}).get("filepath", ""))
+            if new_fp in relinked_disk_paths:
+                continue
+            self._remove_doc(company, product, doc_id, registry)
+            result["removed"] += 1
 
         self._save_registry(company, product, registry)
         self._build_index(company, product, registry)

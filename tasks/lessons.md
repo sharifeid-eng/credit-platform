@@ -3,6 +3,52 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-20 — Dedup maps must update inside the loop, never just at setup
+
+**Problem:** `core/dataroom/engine.py` ingest() built an `existing_hashes` dict once from the prior registry at the top of the function, then loop-checked every on-disk file against it. When two files with identical bytes existed at different paths (same corporate PDF referenced from `Company Overview/` AND `US Opportunity/` — common in data rooms), the first got ingested successfully, **but `existing_hashes` was never updated with the new hash**, so the second file hit `file_hash in existing_hashes == False` and got ingested as a duplicate with a different doc_id. Klaim had 75 such pairs; the UI displayed 153 docs instead of the real ~76. `refresh()` had the exact same shape (keyed on filepath, not hash). Identical root cause.
+
+**Rule:** Any dedup map built from prior state at the start of a processing loop MUST be mutated inside the loop after every successful operation that could produce a new key. If the loop can both (a) add new items and (b) use the map to decide whether to add more — the map must reflect the post-add state, not just the pre-loop state.
+
+**How to apply:**
+- Look for this pattern in any ingest/batch-processing code: `seen = {build_from_prior_state}; for x in items: if x.key in seen: skip; else: process(x)` — check whether `process(x)` updates `seen`. If not, it's buggy.
+- Write a unit test that exercises the multiple-new-items-same-key path specifically (two on-disk files, same bytes, different paths). The single-item test won't catch it.
+- Surface the dedup count in the result payload (`duplicates_skipped`, `relinked`, etc.) — makes the behavior observable in operator tools without requiring new diagnostics code later.
+- See `tests/test_dataroom_pipeline.py::TestWithinPassHashDedup` for the regression pair.
+
+---
+
+## 2026-04-20 — Engine must never ingest files it writes into the source directory
+
+**Problem:** `core/dataroom/classifier_llm.py` writes its SHA-keyed classification cache to `data/{co}/dataroom/.classification_cache.json`. The ingest engine walks the same `data/{co}/dataroom/` directory with `os.walk`. `_is_supported()` only excluded 4 filenames (`config.json`, `methodology.json`, `registry.json`, `index.pkl`) — nothing caught dotfiles, nothing caught `meta.json` or `ingest_log.jsonl` that the engine itself writes. Every ingest picked up the cache, the meta sidecar, and the ingest log as JSON "documents" and indexed them. Combined with the dedup bug above, each also got duplicated.
+
+**Rule:** If an engine writes state files (caches, logs, status sidecars) into a directory it also walks as input, every such filename must be explicitly excluded from the walker. Dotfiles should be unconditionally rejected — anything starting with `.` inside a data directory is metadata by convention, not content. Any time a NEW engine-written file is introduced (a future ingest log, a future sidecar), add it to the exclusion list in the same PR.
+
+**How to apply:**
+- In `core/dataroom/engine.py`, `_EXCLUDE_FILENAMES` + the dotfile prefix check in `_is_supported` form the ingestion firewall. When adding any new sidecar, update both the set and any analogous sets in other pipelines (`core/mind/`, `core/research/`) before merging.
+- Write a regression test that creates a real-looking directory containing a dotfile + a genuine doc, runs ingest, and asserts `len(registry) == 1`.
+- Consider whether the state file should live in a sibling directory instead (`data/_dataroom_state/{co}.json`) — moving state out of the walked tree is the more durable fix. Not worth retrofitting now, but the right default for new engines.
+
+---
+
+## 2026-04-20 — When hash-dedup finds a match but the registered filepath is gone, RELINK — never just skip
+
+**Problem:** After deploying the two fixes above, the user cleaned up a latent `data/klaim/dataroom/dataroom/` full-duplicate directory on the server (leftover from the session-17 product-level → company-level migration). Running `refresh --company klaim` afterwards showed `removed=55 unchanged=21 duplicates_skipped=55` — **55 registry entries silently disappeared in a single command.**
+
+Root cause: during the previous ingest's dedupe, the "winner" registry entry for 55 sha256 groups had a `filepath` pointing INTO the nested directory (because that was the earlier `ingested_at`). When the nested dir was deleted and refresh ran, my within-pass dedup saw each disk file's hash match an existing entry and chose `duplicates_skipped` — but the entry's registered filepath was no longer on disk, so the end-of-function removal sweep deleted the entry. Net: disk file unreferenced, entry gone, next query → 0 hits. Silent data loss.
+
+**Rule:** When a dedup map records a hit, there are TWO distinct situations, and they must be handled differently:
+1. **The registered path IS still on disk** → this is a genuine second copy → dedup-skip is correct.
+2. **The registered path is NOT on disk** → the source file was moved/renamed → the entry's path must be RELINKED to the current disk path before the removal sweep runs. Otherwise the removal sweep drops the now-stale entry and the disk file has no referent.
+
+**How to apply:**
+- In any refresh/reconcile loop that has (a) a hash-keyed map to existing entries AND (b) a trailing "remove entries whose path isn't on disk" sweep, the hash-hit branch must check whether the existing entry's path is in the disk set. If not, mutate the entry's path in place; if yes, treat as duplicate.
+- Add a `relinked` counter to the result payload alongside `duplicates_skipped` so operators can tell the two paths apart from the audit log.
+- Write a regression test: ingest a file at path A, move it to path B without changing bytes, delete path A, run refresh, assert the entry's `filepath` now points to B and `relinked == 1`.
+- See `tests/test_dataroom_pipeline.py::TestRefreshRelink::test_moved_file_is_relinked_not_dropped` for the canonical regression.
+- **Meta-lesson:** when a fix introduces a new branch in a state machine, walk through every OTHER branch in the same function and check whether the new branch's "continue" leaves the other branches in an inconsistent state. My Bug 2 fix added within-pass dedup; Bug 4 was a missed interaction with the pre-existing removal sweep that I should have caught in the same PR.
+
+---
+
 ## 2026-04-20 — Don't trust ANY local view for "did my commit reach GitHub?" — only `git ls-remote` against the real URL
 
 **Problem:** Ran `git push origin main` from a cloud Claude Code sandbox. Output showed `To http://127.0.0.1:<port>/git/sharifeid-eng/credit-platform` — a local proxy URL. Declared work "pushed + shipped." A separate cloud session reported the commit and the file it created "do not exist in git history" on its end. I couldn't tell from inside my sandbox whether my proxy's push had actually propagated to GitHub or if the other session was looking at stale refs. When I finally ran `git ls-remote https://github.com/sharifeid-eng/credit-platform.git main` against the public URL, the commit WAS there — the proxy had propagated correctly, and the other session had simply not fetched. But I had no way to know that without the direct check.

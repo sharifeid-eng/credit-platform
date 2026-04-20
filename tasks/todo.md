@@ -32,6 +32,45 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-20 (session 29: Klaim data-room doubling investigation + 3 fixes)
+
+User reported the Klaim Document Library showing 153 documents, suspected double-counting. Investigation surfaced three independent bugs compounding on top of each other plus a latent filesystem duplicate (full nested `dataroom/dataroom/` directory from the session-17 migration). Ended with Klaim at a healthy 76 documents, aligned registry/chunks, and three regression tests pinning each class of bug so we don't regress.
+
+### Commit `25bb4c3` — initial three-bug fix (dedup + frontend chips)
+
+- **Bug 1 — engine self-pollution via dotfile.** `_EXCLUDE_FILENAMES` in `core/dataroom/engine.py:82` only excluded `config.json`, `methodology.json`, `registry.json`, `index.pkl`. The LLM classifier wrote its cache to `data/{co}/dataroom/.classification_cache.json` — inside the very directory the ingest walker traverses — so every ingest picked it up as a JSON "document." Same story for `meta.json`, `ingest_log.jsonl`, and similar engine-state sidecars.
+  - Fix: added six engine-written filenames to `_EXCLUDE_FILENAMES`, added a dotfile rejection check to `_is_supported` so anything starting with "." is skipped regardless of extension.
+- **Bug 2 — within-pass hash dedup missing (ingest + refresh).** `existing_hashes` in `ingest()` was built once from the prior registry then never updated as new files were processed. Any file whose bytes existed at two paths (common when the same corporate doc is referenced from multiple deal folders — ESOP plans, cap tables, founder bios, audited accounts) produced two registry entries with different doc_ids, identical metadata. `refresh()` had the same shape (keyed on filepath, not hash).
+  - Fix for `ingest()`: `existing_hashes[file_hash] = doc_record["doc_id"]` after every successful ingest; `duplicates_skipped` counter added for observability.
+  - Fix for `refresh()`: new `registry_hashes` dict, updated as we go; second copies dedup-skipped.
+- **Bug 3 — frontend CATEGORY_CONFIG stale.** `frontend/src/pages/research/DocumentLibrary.jsx` only had 9 of the ~28 backend `DocumentType` enum values mapped. Unmapped types fell through to the "Other" fallback — but each type still rendered as its OWN chip (keyed by raw enum value), so the UI showed a row of "Other (2), Other (2), Other (6), Other (14), Other (36)…" each labelled identically.
+  - Fix: extended `CATEGORY_CONFIG` to 28 entries covering every backend enum (investor_report, fdd_report, financial_model, tax_filing, vintage_cohort, bank_statement, audit_report, cap_table, board_pack, kyc_compliance, unknown, …). Also fixed the latent `financial_statement` singular/plural mismatch.
+- **Auto-healing pipeline.** New `dedupe_registry()` method on `DataRoomEngine` — collapses sha256-duplicate registry entries (keeps earliest `ingested_at`, deletes the rest along with their chunk files) and evicts registry entries whose filename is now on the exclusion list. Idempotent. Auto-called at the top of `ingest()` and `refresh()` so state converges on every run without manual intervention. Also exposed as `dataroom_ctl dedupe [--company X]` for explicit cleanup.
+
+### Commit `???????` — refresh filepath-relink fix + regression tests
+
+After the initial fix deployed successfully (Klaim dedup ran: 75 sha-duplicates removed, 2 excluded-filename entries removed, registry 153 → 76), and the user cleaned up a latent `data/klaim/dataroom/dataroom/` full duplicate directory on the server, a **fourth bug** surfaced: running `refresh` afterwards showed `removed=55 unchanged=21 duplicates_skipped=55` — 55 registry entries silently disappeared.
+
+- **Bug 4 — refresh hash-match without filepath relink.** When a disk file's hash matched an existing registry entry but the entry's registered filepath was no longer on disk (because the user moved or deleted the old folder), my new within-pass hash-dedup logic in `refresh()` chose "dedup-skip" instead of "relink". The removal sweep at end-of-pass then dropped the entry because its filepath wasn't on disk. Net: the disk file is still there but no registry entry points to it, and no fresh ingest pulls it in → silent data loss.
+  - Fix: when hash matches but registered filepath is NOT on disk, **update the entry's filepath to the new disk path** (relink). Only dedup-skip when the registered path IS still on disk (genuine second copy). New `relinked` counter in result payload. Removal sweep now honors relinked paths via a `relinked_disk_paths` set.
+  - Recovered prod state by running a fresh `ingest` which re-scanned disk and created new registry entries for the 55 orphaned files. Final state: registry=76, aligned.
+
+### Session 29 — other cleanup
+
+- **qpdf-fixed `1.5.2.3.2 AFS_KT DMCC_2023.pdf`** — PyMuPDF was choking on a malformed xref ("`'L' format requires 0 <= number <= 4294967295`"). Ran `qpdf --linearize` on the server to rewrite the xref; `qpdf --check` passed, but PyMuPDF still failed after the fix (some deeper xref-stream issue qpdf didn't touch). Decided to skip that one doc rather than Chrome-print-roundtrip it. 75 of 76 docs indexed and searchable.
+- **Nested `/opt/credit-platform/data/klaim/dataroom/dataroom/` directory removed.** 128MB leftover from session-17 product-level → company-level migration. `notebooklm_state.json` (only unique file in nested) moved up to parent. Tarball backup taken before `rm -rf`; can delete after a day or two of green UI.
+- **12 new regression tests** in `tests/test_dataroom_pipeline.py` — three classes (`TestExclusions`, `TestWithinPassHashDedup`, `TestRefreshRelink`, `TestDedupeRegistry`) pin each bug class. 473 total tests passing (up from 461).
+- **`.gitignore` check** — `.classification_cache.json`, `meta.json`, `ingest_log.jsonl` were already gitignored via the `data/*/dataroom/*` blanket pattern; no registry-negation leaks.
+
+### Key facts
+
+- **Klaim final state:** registry=76 chunks=76 aligned=true unclassified=3 index=ok. Was 153 at session start.
+- **Dedup heuristics:** keep earliest `ingested_at` per sha256 group; exclusion list now 10 filenames + all dotfiles.
+- **Deploy cadence:** main pushed 3 times this session (25bb4c3 initial fix, this EOD commit, plus the follow-up redeploy to pick up the refresh-relink fix).
+- **Tests:** 461 → 473 (+12 dataroom pipeline tests). All green.
+
+---
+
 ## Completed — 2026-04-20 (session 28 follow-up: Agents representation on Architecture page)
 
 Quick focused follow-up after the main session 28 EOD. User asked whether
