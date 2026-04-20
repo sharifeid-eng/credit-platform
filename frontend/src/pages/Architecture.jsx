@@ -331,6 +331,177 @@ function Diagram({ stats }) {
   )
 }
 
+// ── Feedback Loops diagram ───────────────────────────────────────────────────
+// Three loops show HOW the platform gets smarter. The component diagram above
+// shows WHAT the platform is made of. This view flattens the noise and makes
+// the feedback paths the story.
+const LOOPS = [
+  {
+    id: 'ingestion',
+    number: '①',
+    label: 'Ingestion Loop',
+    color: '#34d399',
+    caption: 'Tape → Mind → Thesis drift → Briefing → Analyst',
+    steps: [
+      { kind: 'external', title: 'Analyst / Portfolio Co.', body: 'Uploads tape' },
+      { kind: 'backend',  title: 'Ingestion',               body: 'Parser · classifier' },
+      { kind: 'bus',      title: 'Mind Compiler',           body: 'Entity extraction' },
+      { kind: 'bus',      title: 'Thesis Tracker',          body: 'Drift check' },
+      { kind: 'backend',  title: 'Morning Briefing',        body: 'Urgency scoring' },
+    ],
+  },
+  {
+    id: 'learning',
+    number: '②',
+    label: 'Learning Loop',
+    color: '#fbbf24',
+    caption: 'Correction → Classify → Rule → AI context → future queries',
+    steps: [
+      { kind: 'external', title: 'Analyst',            body: 'Thumbs-down / edit' },
+      { kind: 'backend',  title: 'Chat Feedback API',  body: 'POST /chat-feedback' },
+      { kind: 'bus',      title: 'Learning Engine',    body: 'Auto-classify' },
+      { kind: 'bus',      title: 'Rule Store',         body: 'KnowledgeNode (rule)' },
+      { kind: 'bus',      title: 'AI Context Builder', body: '5-layer injection' },
+    ],
+  },
+  {
+    id: 'intelligence',
+    number: '③',
+    label: 'Intelligence Loop',
+    color: '#a78bfa',
+    caption: 'Document → Entity → Cross-co pattern → Briefing → Analyst',
+    steps: [
+      { kind: 'database', title: 'Data Room',               body: 'Ingested docs' },
+      { kind: 'bus',      title: 'Entity Extractor',        body: '7 entity types' },
+      { kind: 'bus',      title: 'Intelligence Engine',     body: 'Cross-company scan' },
+      { kind: 'bus',      title: 'Master Mind',             body: 'Pattern store' },
+      { kind: 'backend',  title: 'Briefing / Exec Summary', body: 'Surfaces pattern' },
+    ],
+  },
+]
+
+function LoopStep({ x, y, w, h, step, loopColor }) {
+  const c = PAL[step.kind] || PAL.external
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={6}
+            fill={c.fill} stroke={c.stroke} strokeWidth={1.2} />
+      <text x={x + w / 2} y={y + 17} textAnchor="middle"
+            fill={c.stroke} fontFamily={DIAG_FONT} fontSize={10} fontWeight={600}>
+        {step.title}
+      </text>
+      <text x={x + w / 2} y={y + 32} textAnchor="middle"
+            fill="#cbd5e1" fontFamily={DIAG_FONT} fontSize={8}>
+        {step.body}
+      </text>
+    </g>
+  )
+}
+
+function LoopRow({ y, loop, width = 1360 }) {
+  const stepW = 180
+  const stepH = 46
+  const gap   = (width - 80 - 60 - (LOOPS[0].steps.length * stepW)) / (LOOPS[0].steps.length - 1)
+  const leftPad = 80
+
+  return (
+    <g>
+      {/* Loop header (number + label) */}
+      <circle cx={40 + 18} cy={y + stepH / 2} r={18}
+              fill={loop.color} opacity={0.2} stroke={loop.color} strokeWidth={1.4} />
+      <text x={40 + 18} y={y + stepH / 2 + 6} textAnchor="middle"
+            fill={loop.color} fontFamily={DIAG_FONT} fontSize={18} fontWeight={700}>
+        {loop.number}
+      </text>
+
+      {/* Loop steps */}
+      {loop.steps.map((step, i) => {
+        const x = leftPad + i * (stepW + gap)
+        return <LoopStep key={i} x={x} y={y} w={stepW} h={stepH} step={step} loopColor={loop.color} />
+      })}
+
+      {/* Forward arrows between steps */}
+      {loop.steps.slice(0, -1).map((_, i) => {
+        const x1 = leftPad + i * (stepW + gap) + stepW
+        const x2 = leftPad + (i + 1) * (stepW + gap)
+        const yMid = y + stepH / 2
+        return (
+          <path key={`a${i}`}
+                d={`M ${x1} ${yMid} L ${x2 - 3} ${yMid}`}
+                fill="none" stroke={loop.color} strokeWidth={1.8}
+                markerEnd={`url(#arrow-${loop.id})`} />
+        )
+      })}
+
+      {/* Closing arc — last step returns to first (the "loop" part) */}
+      {(() => {
+        const lastX = leftPad + (loop.steps.length - 1) * (stepW + gap) + stepW / 2
+        const firstX = leftPad + stepW / 2
+        const dipY = y + stepH + 22
+        return (
+          <g>
+            <path d={`M ${lastX} ${y + stepH} Q ${(lastX + firstX) / 2} ${dipY + 16} ${firstX} ${y + stepH}`}
+                  fill="none" stroke={loop.color} strokeWidth={1.4}
+                  strokeDasharray="4 4" opacity={0.7}
+                  markerEnd={`url(#arrow-${loop.id})`} />
+            <text x={(lastX + firstX) / 2} y={dipY + 12} textAnchor="middle"
+                  fill={loop.color} fontFamily={DIAG_FONT} fontSize={9}
+                  opacity={0.85}>
+              closes the loop · {loop.caption}
+            </text>
+          </g>
+        )
+      })()}
+    </g>
+  )
+}
+
+function LoopsDiagram() {
+  const rowGap = 120
+  const topPad = 60
+  const totalH = topPad + LOOPS.length * rowGap + 40
+
+  return (
+    <div style={{
+      background: 'rgba(13, 21, 32, 0.5)',
+      border: '1px solid var(--border)',
+      borderRadius: 10, padding: 18, overflowX: 'auto',
+    }}>
+      <svg viewBox={`0 0 1440 ${totalH}`} style={{ width: '100%', height: 'auto', minWidth: 960 }}>
+        <defs>
+          {LOOPS.map(l => (
+            <marker key={l.id} id={`arrow-${l.id}`} viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill={l.color} />
+            </marker>
+          ))}
+        </defs>
+
+        {/* Title */}
+        <text x={40} y={26} fill="#e8eaf0"
+              fontFamily={DIAG_FONT} fontSize={14} fontWeight={700}>
+          Feedback Loops — how the platform gets smarter
+        </text>
+        <text x={40} y={44} fill="#8494a7"
+              fontFamily={DIAG_FONT} fontSize={9}>
+          Each loop closes back on itself · every analyst action influences future AI output
+        </text>
+
+        {LOOPS.map((loop, i) => (
+          <g key={loop.id}>
+            <text x={80} y={topPad + i * rowGap - 8}
+                  fill={loop.color} fontFamily={DIAG_FONT} fontSize={10} fontWeight={700}
+                  letterSpacing="0.12em">
+              {loop.label.toUpperCase()}
+            </text>
+            <LoopRow y={topPad + i * rowGap} loop={loop} />
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
 // ── Capabilities section (live) ──────────────────────────────────────────────
 function StatTile({ label, value, accent }) {
   return (
@@ -470,7 +641,22 @@ export default function Architecture() {
           <StatTile label="Memos"       value={t.memos}              />
         </div>
 
-        {/* Architecture diagram */}
+        {/* Feedback loops diagram — HOW the platform thinks */}
+        <div style={{ marginBottom: 28 }}>
+          <SectionHeader text="Feedback Loops" />
+          <p style={{
+            margin: '-6px 0 14px', fontSize: 12, color: 'var(--text-muted)',
+            maxWidth: 780, lineHeight: 1.55,
+          }}>
+            Three loops animate the platform. Ingestion turns new tapes into
+            alerts. Learning turns analyst corrections into rules. Intelligence
+            turns documents into cross-company patterns. Each closes back to
+            the analyst — future AI output sees what came before.
+          </p>
+          <LoopsDiagram />
+        </div>
+
+        {/* Architecture diagram — WHAT the platform is made of */}
         <div style={{ marginBottom: 28 }}>
           <SectionHeader text="System Architecture" />
           <Diagram stats={stats} />
@@ -484,6 +670,13 @@ export default function Architecture() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
             gap: 14,
           }}>
+            <CapabilityCard title="Self-Improvement Loops" accent="#34d399" bullets={[
+              'Ingestion: every tape → mind compile → drift check',
+              'Learning: every correction → auto-classified rule',
+              'Intelligence: every doc → cross-company scan',
+              'Rules codify into the Framework via /emerge',
+              'No manual regeneration — loops close on their own',
+            ]} />
             <CapabilityCard title="Tape Analytics" accent="#22d3ee" bullets={[
               '18-tab dashboards per company',
               '5-level analytical hierarchy (L1–L5)',
