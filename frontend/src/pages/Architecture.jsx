@@ -262,6 +262,17 @@ function Diagram({ stats }) {
              title="Integration API"
              sublines={['Invoices · Payments · Stmts']} />
 
+        {/* Agents — orchestration layer: wraps Anthropic calls with tool-use
+            loops, rate limits, session tracking. Orange (bus) semantic because
+            it's an orchestration concept like Mind/Intelligence. */}
+        <Box kind="bus" x={720} y={540} w={220} h={65}
+             title="Agents"
+             sublines={[
+               `${n.agents ?? 4} definitions · ${n.agent_tools ?? '—'} tools`,
+               'analyst · memo_writer',
+               'compliance_monitor · onboarding',
+             ]} />
+
         {/* Data & Intelligence (right inside boundary) */}
         <Box kind="database" x={980} y={130} w={180} h={65}
              title="PostgreSQL"
@@ -642,6 +653,9 @@ export default function Architecture() {
           <StatTile label="Legal Docs"  value={t.legal_docs}         accent="#fb7185" />
           <StatTile label="Tests"       value={t.tests}              />
           <StatTile label="Memos"       value={t.memos}              />
+          <StatTile label="Agents"      value={t.agents}          accent="#fbbf24" />
+          <StatTile label="Agent Tools" value={t.agent_tools}     accent="#fbbf24" />
+          <StatTile label="Sessions"    value={t.agent_sessions}  accent="#fbbf24" />
         </div>
 
         {/* Feedback loops diagram — HOW the platform thinks */}
@@ -707,6 +721,13 @@ export default function Architecture() {
               'Hybrid 6-stage memo pipeline',
               'Research packs + citation audit',
               'Dark-themed PDF export',
+            ]} />
+            <CapabilityCard title="Agents" accent="#fbbf24" bullets={[
+              'analyst — drives DataChat (+ external.web_search)',
+              'memo_writer — hybrid 6-stage memo pipeline',
+              'compliance_monitor — automated covenant runs',
+              'onboarding — self-service company setup',
+              'Session tracking + rate limits in Operator',
             ]} />
             <CapabilityCard title="Living Mind" accent="#fb923c" bullets={[
               'Master Mind (fund-level lessons)',

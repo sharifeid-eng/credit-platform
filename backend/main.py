@@ -826,9 +826,51 @@ def get_platform_stats():
     # ── AI tiers (from ai_client) ──────────────────────────────────────────
     ai_tiers = ['structured', 'research', 'judgment', 'polish', 'auto']
 
+    # ── Agents: definitions + tools + sessions ─────────────────────────────
+    agents_list = []
+    agent_defs_dir = project_root / 'core' / 'agents' / 'definitions'
+    if agent_defs_dir.is_dir():
+        for agent_dir in agent_defs_dir.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            config_path = agent_dir / 'config.json'
+            if not config_path.exists():
+                continue
+            try:
+                with open(config_path) as f:
+                    agent_cfg = json.load(f)
+                agents_list.append({
+                    'name': agent_dir.name,
+                    'model': agent_cfg.get('model', ''),
+                    'tool_patterns': agent_cfg.get('tools', []),
+                    'max_turns': agent_cfg.get('max_turns'),
+                })
+            except Exception:
+                pass
+
+    # Tool count — introspect the registry after register_all_tools() has
+    # fired at app startup. If registration failed, this safely returns 0.
+    tool_count = 0
+    try:
+        from core.agents.tools import registry as _tool_registry
+        tool_count = len(_tool_registry.tool_names())
+    except Exception:
+        pass
+
+    # Session count — JSON files in data/_agent_sessions/ (see
+    # core/agents/session.py). Each file is one multi-turn session.
+    sessions_count = 0
+    sessions_dir = project_root / 'data' / '_agent_sessions'
+    if sessions_dir.is_dir():
+        try:
+            sessions_count = sum(1 for _ in sessions_dir.glob('*.json'))
+        except Exception:
+            pass
+
     return {
         'generated_at': datetime.now().isoformat(),
         'companies': companies_list,
+        'agents': agents_list,
         'totals': {
             'companies': len(companies_list),
             'products': total_products,
@@ -843,6 +885,9 @@ def get_platform_stats():
             'tests': tests_count,
             'memos': memo_count,
             'ai_tiers': len(ai_tiers),
+            'agents': len(agents_list),
+            'agent_tools': tool_count,
+            'agent_sessions': sessions_count,
         },
         'routes_by_group': route_groups,
         'framework_last_modified': framework_mtime,
