@@ -298,6 +298,48 @@ class TestAgentRunner:
         with pytest.raises(BudgetExceededError):
             runner._check_budget(session)
 
+    def test_per_prefix_timeout_override(self):
+        """external.* tools get the extended timeout, everything else the default."""
+        assert AgentRunner._timeout_for_tool("external.web_search") == 180
+        assert AgentRunner._timeout_for_tool("external.anything") == 180
+        assert AgentRunner._timeout_for_tool("analytics.get_par_analysis") == 30
+        assert AgentRunner._timeout_for_tool("memo.generate") == 30
+        assert AgentRunner._timeout_for_tool("noprefix") == 30
+
+    def test_per_prefix_timeout_applied_at_runtime(self):
+        """The resolved per-tool timeout is passed to thread.join, not the default."""
+        import threading
+        from unittest.mock import patch
+
+        # A tool that never finishes — forces the timeout branch.
+        def hangs(**_):
+            import time
+            time.sleep(10)
+            return "never"
+
+        tool = ToolSpec(
+            name="external.hangs",
+            description="always hangs",
+            input_schema={"type": "object", "properties": {}},
+            handler=hangs,
+        )
+        runner = AgentRunner(self._make_config([tool]))
+
+        # Intercept Thread.join and record the timeout it was called with,
+        # then return immediately (pretend the thread is still alive).
+        seen = {}
+        real_join = threading.Thread.join
+
+        def fake_join(self, timeout=None):
+            seen["timeout"] = timeout
+            # Don't actually wait — just return. thread.is_alive() remains True.
+
+        with patch.object(threading.Thread, "join", fake_join):
+            result = runner._execute_tool("external.hangs", {})
+
+        assert seen.get("timeout") == 180, f"Expected 180s timeout, got {seen.get('timeout')}"
+        assert "Timed out after 180s" in result
+
 
 # ── Global tool registration test ────────────────────────────────────────
 

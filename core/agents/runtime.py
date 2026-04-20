@@ -153,6 +153,23 @@ class AgentRunner:
     MAX_TOOL_CALLS_PER_SESSION = 50
     TOOL_TIMEOUT_SECONDS = 30
 
+    # Per-tool-prefix timeout overrides. Tools that make nested Claude calls
+    # (external.web_search hits Anthropic's web_search_20250305 which routinely
+    # takes 40-90s) need more runway than the default 30s or the runtime will
+    # cut them off even though the handler completes successfully on its own
+    # thread.
+    TOOL_TIMEOUT_OVERRIDES_BY_PREFIX = {
+        "external.": 180,
+    }
+
+    @classmethod
+    def _timeout_for_tool(cls, tool_name: str) -> int:
+        """Return the timeout (seconds) for a given tool, honouring prefix overrides."""
+        for prefix, override in cls.TOOL_TIMEOUT_OVERRIDES_BY_PREFIX.items():
+            if tool_name.startswith(prefix):
+                return override
+        return cls.TOOL_TIMEOUT_SECONDS
+
     def __init__(self, config):
         """Initialize with an AgentConfig."""
         from core.agents.config import AgentConfig
@@ -200,13 +217,14 @@ class AgentRunner:
                 except Exception as e:
                     error_container[0] = e
 
+            tool_timeout = self._timeout_for_tool(tool_name)
             thread = threading.Thread(target=_run, daemon=True)
             thread.start()
-            thread.join(timeout=self.TOOL_TIMEOUT_SECONDS)
+            thread.join(timeout=tool_timeout)
 
             if thread.is_alive():
-                logger.warning("Tool %s timed out after %ds", tool_name, self.TOOL_TIMEOUT_SECONDS)
-                return f"Tool error ({tool_name}): Timed out after {self.TOOL_TIMEOUT_SECONDS}s"
+                logger.warning("Tool %s timed out after %ds", tool_name, tool_timeout)
+                return f"Tool error ({tool_name}): Timed out after {tool_timeout}s"
 
             if error_container[0] is not None:
                 raise error_container[0]
