@@ -366,6 +366,7 @@ export const getAssetClassEntries    = (analysisType, { category = null, limit =
   api.get(`/api/asset-class-mind/${analysisType}`, {
     params: { limit, ...(category ? { category } : {}) },
   }).then(r => r.data);
+export const promoteMindEntry        = (body) => api.post('/api/mind/promote', body).then(r => r.data);
 export const getThesis               = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis`).then(r => r.data);
 export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
 export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);

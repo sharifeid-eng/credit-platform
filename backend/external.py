@@ -52,6 +52,17 @@ class AssetClassEntryCreate(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class PromotionRequest(BaseModel):
+    source_scope: str                       # "company" | "asset_class"
+    source_key: str                         # company name | analysis_type
+    source_product: Optional[str] = ""      # only used if source_scope=company
+    entry_id: str
+    target_scope: str                       # "asset_class" | "master"
+    target_key: Optional[str] = None        # analysis_type if target=asset_class
+    target_category: str
+    note: Optional[str] = None
+
+
 # ── Pending Review ───────────────────────────────────────────────────────────
 
 @router.get("/pending-review")
@@ -200,6 +211,50 @@ def list_asset_class_entries(
         "entries": [e.to_dict() for e in entries],
         "total": len(entries),
     }
+
+
+# ── Promotion ────────────────────────────────────────────────────────────────
+
+@router.post("/mind/promote")
+def promote_mind_entry(body: PromotionRequest):
+    """Promote a Company Mind entry to Asset Class Mind, or an Asset Class
+    Mind entry to Master Mind. Source entry is NEVER moved — a copy is
+    written to the target with full provenance (promoted_from chain).
+
+    Typical flows:
+      - Analyst sees a correction/finding on Company Mind that applies to
+        every company with the same analysis_type → promote to asset_class
+        with target_key=<analysis_type>, target_category="methodology_note"
+        or "external_research".
+      - Asset Class Mind entry turns out to be fund-wide truth (regulatory
+        change, universal methodology lesson) → promote to master with
+        target_category="sector_context" or "framework_evolution".
+    """
+    from core.mind.promotion import promote_entry
+
+    try:
+        result = promote_entry(
+            source_scope=body.source_scope,
+            source_key=body.source_key,
+            source_product=body.source_product or "",
+            entry_id=body.entry_id,
+            target_scope=body.target_scope,
+            target_key=body.target_key,
+            target_category=body.target_category,
+            note=body.note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Promotion failed")
+        raise HTTPException(status_code=500, detail=f"Promotion failed: {e}")
+
+    log_activity(
+        "mind_promoted", None, None,
+        f"{body.source_scope}/{body.source_key} -> {body.target_scope}"
+        f"{'/'+body.target_key if body.target_key else ''} · {body.target_category}"
+    )
+    return result
 
 
 @router.post("/asset-class-mind/{analysis_type}/entries")

@@ -4343,13 +4343,15 @@ def mind_profile(company: str, product: str):
 @app.get("/companies/{company}/products/{product}/mind/context")
 def mind_context_preview(company: str, product: str,
                           task_type: str = "executive_summary"):
-    """Preview what the 4-layer mind context looks like for a given task type."""
+    """Preview what the 6-layer mind context looks like for a given task type."""
     ctx = build_mind_context(company, product, task_type)
     return {
         'framework_length': len(ctx.framework),
         'master_mind_length': len(ctx.master_mind),
+        'asset_class_length': len(ctx.asset_class),
         'methodology_length': len(ctx.methodology),
         'company_mind_length': len(ctx.company_mind),
+        'thesis_length': len(ctx.thesis),
         'total_entries': ctx.total_entries,
         'is_empty': ctx.is_empty,
         'formatted_preview': ctx.formatted[:2000] if ctx.formatted else '',
