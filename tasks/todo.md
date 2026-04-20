@@ -22,17 +22,48 @@ Track active work here. Claude updates this as tasks progress.
 ### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
 
-### External Intelligence — Deferred from session 27
-- [ ] **D1** — Company → Asset Class promote button in Mind tab UI (backend exists)
-- [ ] **D2** — Memo / Exec Summary / chat citation rendering for Layer 2.5 entries
-- [ ] **D3** — Unit tests for new modules (asset_class_mind, pending_review, promotion, external.web_search, backend/external.py)
-- [ ] **D4** — Seed Asset Class Mind with opening entries per analysis_type
-- [ ] **D5** — Extend other agents (memo_writer, compliance_monitor, onboarding) with `external.*` patterns
-- [ ] **D6** — Framework codification hook for technical research
-- [ ] **D7** — Scheduled external pollers (parked — on-demand model preferred for now)
+### External Intelligence — remaining after session 28
+- [ ] **D7** — Scheduled external pollers (parked indefinitely — on-demand model preferred)
+- [ ] **D2 for AI Commentary** — commentary currently injects zero mind context; adding citations would require rewriting the prompt to see Layer 2.5. Separate design discussion if analysts ask.
+- [ ] **D5 for compliance_monitor + onboarding agents** — session 28 D5 extended memo_writer only. Add when a specific use case emerges (analyst + memo_writer + web_search is the primary flow for now).
 
-### Session 27 follow-up
-- [ ] **Real web_search smoke** — invoke `external.web_search` from Klaim DataChat, confirm pending entry appears with citations, approve end-to-end
+### Klaim memo refresh (optional)
+- [ ] **Regenerate Klaim Credit Memo** — the existing memo was generated before session-28 Finding #3 landed, so its Layer 2.5 was silently empty. A fresh run would pick up ~14.7K chars of healthcare_receivables content (MENA/GCC denial rates, account-debtor tape-gap methodology note). Not urgent; do when there's a reason to refresh (upcoming IC, new tape, material change). Cost: ~$3.50-6 + 3-5min.
+
+---
+
+## Completed — 2026-04-20 (session 28: Smoke test + Findings #1/#2/#3 + D1/D3/D4/D5 + D6 + D2 + legacy cleanup)
+
+Session executed the real `external.web_search` smoke test the kickoff prompt
+asked for, surfaced 3 bugs, shipped fixes, then cleared D1/D3/D4/D5 → D6 → D2
+broader → legacy endpoint cleanup. 12 commits on `main`, all pushed.
+
+### Part A — Real smoke test + 3 findings fixed
+- `reports/web-search-smoke/smoke-test-results.md` — per-step pass/fail of the 15-step Chrome-driven smoke (Klaim DataChat → 3 pending entries → approve → promote → disk provenance verified). 13/15 clean pass; steps 6, 8, 14 surfaced the 3 findings below.
+- `48809db` — **Finding #1** — `AgentRunner.TOOL_TIMEOUT_OVERRIDES_BY_PREFIX = {"external.": 180}` + `_timeout_for_tool()` classmethod. Default 30s was killing `external.web_search` at 30s even when the handler completed; runtime now gives `external.*` 180s. 2 regression tests.
+- `c30ac17` — **Finding #2 + #3** — **(#3, highest-impact)** new `asset_class` field in every `config.json`; `build_mind_context()` prefers it over `analysis_type`. Before this, Layer 2.5 was silently empty for every company (Klaim's `analysis_type="klaim"` → looked for nonexistent `klaim.jsonl`). Now `healthcare_receivables.jsonl` with 14.7K chars reaches Klaim's AI context. **(#2)** CALL BUDGET clause added to `external.web_search` description so the agent makes ONE comprehensive call per request, not 3. 6 regression tests.
+
+### Deferred items from kickoff — all except D7 landed
+- `ff75f5f` — **D3** — 16 checks from `scripts/verify_external_intelligence.py` ported into `tests/test_external_intelligence.py`, grouped into 5 pytest classes. `isolated_project` fixture preserves the standalone harness's monkeypatch semantics. Standalone script retained.
+- `a3b1ad1` — **D4** — `scripts/seed_asset_class_mind.py` writes 12 platform-docs entries across all 5 asset classes (bnpl, pos_lending, rnpl, sme_trade_credit, healthcare_receivables). Strict sourcing rule: every seed traces to CLAUDE.md or methodology_*.py (zero fabricated benchmarks). Idempotent. `.gitignore` extended for `_asset_class_mind/`, `_pending_review/`, `_platform_health.json` following the `_master_mind/` pattern.
+- `684b66d` — **D1** — MindEntryRow's "Promote to Asset Class" inline form with asset-class dropdown + category dropdown + optional note. Wires to the real `/api/mind/promote` pipeline (provenance chain + promoted_to backlink).
+- `e71d49f` — **D5** — memo_writer's `config.json` adds `external.*` to its tool pattern list. Memo drafts can now trigger pending-review web research mid-draft. Regression test locks it in.
+- `465e0c4` — **D6 backend** — new `core/mind/framework_codification.py` module (`get_codification_candidates`, `mark_codified`, `codification_counts`). 2 new endpoints: `GET /api/framework/codification-candidates`, `POST /api/framework/codify/{entry_id}`. 5 regression tests.
+- `36bd63d` — **D2 broader** — `/ai-executive-summary` response gains `asset_class_sources`; `ExecutiveSummary.jsx` renders `AssetClassSourcesFooter` component between Bottom Line and Key Findings.
+- `d37c425` — **D2** — `/chat` response (Klaim + SILQ branches) gains `asset_class_sources`; `DataChat.jsx` renders collapsible "▸ Informed by N asset-class sources" footer with up to 25 clickable citations. Also fixed 5 latent executive-summary callers that passed company-shortname as `analysis_type` (same Finding #3 bug in a different location).
+
+### Legacy + UI round 2
+- `00fccf3` — **Legacy soft-flag Mind→Master button** replaced with real promotion via inline Master-category form. State refactor: `activeForm` (`null | 'asset_class' | 'master'`) replaces single `showPromoteForm`. Both promotion paths mutually exclusive.
+- `dd0849c` — **Legacy PATCH /operator/mind/{id} endpoint removed** from `backend/operator.py` (the handler, `MindUpdate` model, `_promote_to_master` helper). Corresponding `updateOperatorMindEntry` removed from `api.js`. D6 API client helpers added in the same commit.
+- `1f631db` — **D6 UI — Codification tab** (13th OperatorCenter tab) with stats row, pending/all filter, per-entry mark-codified form (optional commit_sha + framework_section inputs).
+
+### Docs + lessons
+- `0dd50b6` (session 28 round 1 close-out) + `80f4a49` (round 2 close-out) — CLAUDE.md + 5 new lessons across both rounds covering: Layer 2.5 asset_class keying trap, verification-harness blind spots, per-tool timeouts, call-budget clauses in tool descriptions, gitignored-source/tracked-index mismatches, UI buttons that must do what they say, not flattening context early, backwards-compat function-signature decisions, pragmatic scoping vs refactor purity, removing stale endpoints as you rewire.
+
+### Outcome
+- **461 tests passing** (was 436 at session start; +8 from Findings, +16 from D3, +1 D5 test, +5 D6 tests, +3 D2 sources tests).
+- **12 commits on `origin/main`**: `48809db`, `c30ac17`, `ff75f5f`, `e71d49f`, `684b66d`, `a3b1ad1`, `88b1a55` (round-1 docs), `00fccf3`, `d37c425`, `465e0c4`, `0dd50b6` (round-1 close), `dd0849c`, `1f631db`, `36bd63d`, `80f4a49` (round-2 close).
+- **Deferred remaining**: D7 (parked), D2 for AI Commentary (requires prompt rewrite — separate decision), D5 for compliance_monitor/onboarding agents (wait for use case).
 
 ---
 

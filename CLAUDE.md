@@ -267,7 +267,8 @@ credit-platform/
 │   │   ├── analyst.py         # Persistent analyst context store
 │   │   ├── session.py         # Session state tracker for delta briefings
 │   │   ├── kb_decomposer.py   # Decomposes lessons.md + CLAUDE.md into KnowledgeNodes
-│   │   └── kb_query.py        # Unified search across all knowledge stores
+│   │   ├── kb_query.py        # Unified search across all knowledge stores
+│   │   └── framework_codification.py  # Session 28 D6 — surfaces framework_evolution queue + mark_codified flag
 │   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
 │   ├── methodology_klaim.py # Klaim methodology metadata (16 sections, 29 metrics, 13 tables)
 │   ├── methodology_silq.py # SILQ methodology metadata (15 sections, 23 metrics, 2 tables)
@@ -418,6 +419,8 @@ credit-platform/
 │   ├── test_memo_agent_research.py # Research pack parser + format helper (15 tests)
 │   ├── test_memo_pipeline.py       # End-to-end hybrid pipeline (8 tests)
 │   ├── test_memo_enhancements.py   # 5 quality enhancements (19 tests)
+│   ├── test_external_intelligence.py # Session 28 D3 — AssetClassMind + pending-review + promotion + web_search (24 tests)
+│   ├── test_asset_class_resolution.py # Session 28 Finding #3 — Layer 2.5 config field resolution precedence (5 tests)
 ├── scripts/
 │   ├── seed_db.py          # CLI to seed PostgreSQL from existing tape CSV/Excel files
 │   ├── create_api_key.py   # CLI to generate API keys for portfolio companies
@@ -426,7 +429,8 @@ credit-platform/
 │   ├── prepare_aajil_data.py   # Investor deck extraction → structured JSON snapshot for Aajil
 │   ├── dataroom_ctl.py         # Unified dataroom operator CLI (audit/ingest/refresh/rebuild-index/wipe/classify)
 │   ├── seed_master_mind.py     # Seeds master mind from ANALYSIS_FRAMEWORK.md + CLAUDE.md lessons
-│   └── verify_external_intelligence.py # 16-check harness for AssetClassMind + PendingReviewQueue + promotion + web_search
+│   ├── seed_asset_class_mind.py # Seeds Asset Class Mind with platform-docs entries (D4, idempotent)
+│   └── verify_external_intelligence.py # 16-check harness (also ported to tests/test_external_intelligence.py)
 ├── docs/
 │   └── generate_guide.js   # Node.js script to generate Word docs with LAITH branding
 └── reports/
@@ -1285,6 +1289,23 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - **Architectural note:** web search never writes directly to any Mind. This preserves trust — the Mind stays analyst-curated; external evidence goes through a reviewable queue. Same contract scales to future sources (news polling, SEC EDGAR, industry APIs) — they all land in pending-review first.
   - **Promotion pipeline (Commit 3):** `core/mind/promotion.py` — `promote_entry(source_scope, source_key, entry_id, target_scope, target_key, target_category, note)`. Chain: Company → Asset Class → Master. Source entry is never moved — a copy is written to the target with `metadata.promoted_from` chain preserved, and the source's `metadata.promoted_to` list is appended + `promoted=True`. Asset-class entries can only promote to Master (enforced). Backend: `POST /api/mind/promote`. UI: new 10th OperatorCenter tab "Asset Classes" with per-class browser + "↑ Promote to Master" button on each entry. Source retains provenance pointer; destination shows `← from {scope}/{key}` in the browser.
   - **Diagnostic endpoint updated:** `GET /companies/{co}/products/{prod}/mind/context` now reports `asset_class_length` + `thesis_length` alongside the other four layers for full 6-layer observability.
+  - **Session 28 hardening:**
+    - **Per-tool runtime timeout override** — `AgentRunner.TOOL_TIMEOUT_OVERRIDES_BY_PREFIX = {"external.": 180}` + `_timeout_for_tool()` classmethod. Default 30s was cutting off `external.web_search` (nested Claude call routinely takes 40-90s) even when the handler completed successfully on its own thread.
+    - **CALL BUDGET clause in tool description** — `external.web_search` description now explicitly says "make ONE comprehensive call per user request". Pairs with regression test that greps for the phrase so doc drift breaks CI.
+    - **Asset class seeding** — `scripts/seed_asset_class_mind.py` writes 12 conservative platform-docs entries across all 5 asset classes on first install. Strict sourcing rule: every seed traces to CLAUDE.md or methodology_*.py (zero fabricated benchmarks). Idempotent.
+    - **memo_writer agent gets `external.*`** — memo drafts can trigger pending-review web research mid-draft.
+    - **Legacy soft-flag removed** — `PATCH /operator/mind/{id}` endpoint (plus `MindUpdate` model and `_promote_to_master` helper) deleted; UI now uses real `/api/mind/promote` for Company → Master too.
+- ✅ **Framework Codification Hook (session 28 D6):**
+  - `core/mind/framework_codification.py` — `get_codification_candidates()`, `mark_codified()`, `codification_counts()` over `data/_master_mind/framework_evolution.jsonl`. Atomic JSONL rewrite on mark (.tmp + fsync + rename). Entries stay after codification for audit history.
+  - `GET /api/framework/codification-candidates?include_codified=false` — returns `{candidates, counts}` for analyst visibility.
+  - `POST /api/framework/codify/{entry_id}` — body `{commit_sha?, framework_section?, codified_by?}` → sets audit fields on source entry.
+  - OperatorCenter **Codification tab** (13th tab) — stats row (Pending/Codified/Total), pending/all filter, per-entry card with status chip + provenance ("← from asset_class/bnpl") + inline mark-codified form.
+  - Intended first consumer: the `/extend-framework` slash command (reads candidates → proposes Framework updates → calls codify endpoint after PR lands).
+- ✅ **Layer 2.5 citation rendering in AI output (session 28 D2):**
+  - `MindLayeredContext.asset_class_sources: List[Dict]` populated by `build_mind_context()` from every Asset Class Mind entry's `metadata.citations`. Deduped by URL, capped at 50. Each row carries entry category + title + source type + page_age.
+  - **Chat endpoint** (Klaim + SILQ branches) returns `asset_class_sources` in response; `DataChat.jsx` renders collapsible "▸ Informed by N asset-class sources" footer, up to 25 clickable titles with provenance suffixes.
+  - **Executive Summary endpoint** returns `asset_class_sources`; `ExecutiveSummary.jsx` renders matching `AssetClassSourcesFooter` component between Bottom Line and Key Findings.
+  - Framing is "Informed by" (not "citing") because we don't have per-paragraph provenance — the list represents "what was in context during generation", which is honest. AI Commentary deliberately skipped (currently injects zero mind context; adding citations would require rewriting the prompt to include Layer 2.5 first).
 - ✅ **PAR (Portfolio at Risk) KPIs:**
   - `compute_par()` with 3 methods: primary (Expected till date shortfall-based estimated DPD), Option C (empirical benchmarks from 50+ completed deals, labeled "Derived"), fallback (`available: False`)
   - `_build_empirical_benchmark()` helper builds collection timing benchmarks from completed deal pool
