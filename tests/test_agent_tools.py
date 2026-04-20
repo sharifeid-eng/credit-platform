@@ -285,9 +285,17 @@ class TestComputationTool:
 
 class TestToolCounts:
     def test_total_tool_count(self):
-        """Verify tool count (42 after analytics.get_metric_trend addition)."""
-        assert len(registry.tool_names()) == 42, \
-            f"Expected 42 tools, got {len(registry.tool_names())}: {registry.tool_names()}"
+        """Verify total tool count matches expectation.
+
+        Bumped from 42 to 43 in session 27 when external.web_search was added
+        (wraps Anthropic's web_search_20250305 server tool; every result lands
+        in the pending-review queue). Update this number when tools change —
+        use ``>=`` rather than ``==`` if the test becomes too brittle.
+        """
+        expected = 43
+        actual = len(registry.tool_names())
+        assert actual == expected, \
+            f"Expected {expected} tools, got {actual}: {registry.tool_names()}"
 
     def test_all_tools_have_handlers(self):
         """Every registered tool must have a callable handler."""
