@@ -5,7 +5,7 @@ import useBreakpoint from '../hooks/useBreakpoint'
 import {
   getOperatorStatus, getOperatorTodos, createOperatorTodo,
   updateOperatorTodo, deleteOperatorTodo, getOperatorMind,
-  updateOperatorMindEntry, getOperatorBriefing, getOperatorLearning,
+  getOperatorBriefing, getOperatorLearning,
   getThesis, saveThesis, getThesisDrift, getThesisLog,
   getDataroomHealthAll,
   getPendingReview, approvePendingEntry, rejectPendingEntry,
@@ -343,11 +343,22 @@ const _ASSET_CLASS_CATEGORIES = [
   'methodology_note', 'benchmarks', 'typical_terms',
   'external_research', 'sector_context', 'peer_comparison',
 ]
+// Master Mind categories — mirrors core/mind/master_mind.py::_FILES keys.
+// `cross_company` is the default for Company→Master promotions because
+// most insights worth elevating from a single company are cross-company
+// patterns. Analysts can override per entry.
+const _MASTER_CATEGORIES = [
+  'cross_company', 'preferences', 'ic_norms',
+  'writing_style', 'sector_context', 'framework_evolution',
+]
 
-function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
-  const [showPromoteForm, setShowPromoteForm] = useState(false)
+function MindEntryRow({ entry, onPromoteToAssetClass, onPromoteToMaster }) {
+  // Two mutually-exclusive inline forms. Which one (if any) is open is
+  // tracked here; shared submit/error state covers both.
+  const [activeForm, setActiveForm] = useState(null)  // null | 'asset_class' | 'master'
   const [targetAssetClass, setTargetAssetClass] = useState(_ASSET_CLASS_OPTIONS[0].value)
-  const [targetCategory, setTargetCategory] = useState(_ASSET_CLASS_CATEGORIES[0])
+  const [targetAssetCategory, setTargetAssetCategory] = useState(_ASSET_CLASS_CATEGORIES[0])
+  const [targetMasterCategory, setTargetMasterCategory] = useState(_MASTER_CATEGORIES[0])
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [promoteError, setPromoteError] = useState(null)
@@ -356,22 +367,53 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
   const dateStr = ts ? ts.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
   const source = entry._source === 'master' ? 'Master' : `${entry._company}/${entry._product}`
 
-  // promoted_to is a backlink appended by promote_entry(); a non-empty
-  // array means the entry has been copied up-stack at least once.
+  // promoted_to is a backlink appended by promote_entry(); one entry per
+  // scope the source has been copied into.
   const promotedTo = (entry.metadata && entry.metadata.promoted_to) || []
   const alreadyPromotedToAssetClass = promotedTo.some(p => p && p.scope === 'asset_class')
+  const alreadyPromotedToMaster = promotedTo.some(p => p && p.scope === 'master')
 
-  const submitPromote = async () => {
+  const closeForm = () => {
+    setActiveForm(null)
+    setPromoteError(null)
+    setNote('')
+  }
+
+  const toggleForm = (which) => {
+    if (activeForm === which) {
+      closeForm()
+    } else {
+      setActiveForm(which)
+      setPromoteError(null)
+    }
+  }
+
+  const submitAssetClass = async () => {
     setSubmitting(true)
     setPromoteError(null)
     try {
       await onPromoteToAssetClass(entry, {
         targetKey: targetAssetClass,
-        targetCategory,
+        targetCategory: targetAssetCategory,
         note: note.trim() || undefined,
       })
-      setShowPromoteForm(false)
-      setNote('')
+      closeForm()
+    } catch (e) {
+      setPromoteError(e?.response?.data?.detail || e?.message || 'Promotion failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const submitMaster = async () => {
+    setSubmitting(true)
+    setPromoteError(null)
+    try {
+      await onPromoteToMaster(entry, {
+        targetCategory: targetMasterCategory,
+        note: note.trim() || undefined,
+      })
+      closeForm()
     } catch (e) {
       setPromoteError(e?.response?.data?.detail || e?.message || 'Promotion failed')
     } finally {
@@ -409,11 +451,11 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
       </div>
 
       {/* Action row for company entries */}
-      {entry._source === 'company' && !entry.promoted && (
+      {entry._source === 'company' && (
         <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
           {!alreadyPromotedToAssetClass && (
             <button
-              onClick={() => setShowPromoteForm(v => !v)}
+              onClick={() => toggleForm('asset_class')}
               style={{
                 fontSize: 9, fontWeight: 700,
                 background: 'none', border: '1px solid var(--border)',
@@ -422,26 +464,28 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
                 textTransform: 'uppercase',
               }}
             >
-              {showPromoteForm ? 'Cancel' : '↑ Promote to Asset Class'}
+              {activeForm === 'asset_class' ? 'Cancel' : '↑ Promote to Asset Class'}
             </button>
           )}
-          <button
-            onClick={() => onPromote(entry.id)}
-            style={{
-              fontSize: 9, fontWeight: 700,
-              background: 'none', border: '1px solid var(--border)',
-              borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
-              color: 'var(--gold)', letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Promote to Master
-          </button>
+          {!alreadyPromotedToMaster && (
+            <button
+              onClick={() => toggleForm('master')}
+              style={{
+                fontSize: 9, fontWeight: 700,
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
+                color: 'var(--gold)', letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {activeForm === 'master' ? 'Cancel' : '↑ Promote to Master'}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Inline promotion form (Company → Asset Class) */}
-      {showPromoteForm && (
+      {/* Inline promotion form — Company → Asset Class */}
+      {activeForm === 'asset_class' && (
         <div style={{
           marginTop: 8, padding: 10,
           background: 'var(--bg-deep)', border: '1px solid var(--border)', borderRadius: 4,
@@ -467,8 +511,8 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
             <label style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', flexDirection: 'column', gap: 3 }}>
               Category
               <select
-                value={targetCategory}
-                onChange={e => setTargetCategory(e.target.value)}
+                value={targetAssetCategory}
+                onChange={e => setTargetAssetCategory(e.target.value)}
                 style={{
                   fontSize: 11, fontFamily: 'var(--font-mono)',
                   background: 'var(--bg-surface)', border: '1px solid var(--border)',
@@ -498,7 +542,7 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
           )}
           <div style={{ display: 'flex', gap: 6 }}>
             <button
-              onClick={submitPromote}
+              onClick={submitAssetClass}
               disabled={submitting}
               style={{
                 fontSize: 9, fontWeight: 700,
@@ -512,7 +556,7 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
               {submitting ? 'Promoting…' : 'Promote'}
             </button>
             <button
-              onClick={() => { setShowPromoteForm(false); setPromoteError(null); setNote('') }}
+              onClick={closeForm}
               disabled={submitting}
               style={{
                 fontSize: 9, fontWeight: 700,
@@ -528,22 +572,101 @@ function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
         </div>
       )}
 
-      {alreadyPromotedToAssetClass && (
-        <span style={{
-          display: 'inline-block', marginTop: 6, fontSize: 9, fontWeight: 700,
-          color: 'var(--teal)', letterSpacing: '0.06em', textTransform: 'uppercase',
+      {/* Inline promotion form — Company → Master */}
+      {activeForm === 'master' && (
+        <div style={{
+          marginTop: 8, padding: 10,
+          background: 'var(--bg-deep)', border: '1px solid var(--border)', borderRadius: 4,
+          display: 'flex', flexDirection: 'column', gap: 8,
         }}>
-          ↑ Promoted to {(promotedTo.find(p => p.scope === 'asset_class') || {}).key || 'Asset Class'}
-        </span>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            Promote a copy of this entry into <strong style={{ color: 'var(--gold)' }}>Master Mind</strong>.
+            Use <code style={{ color: 'var(--gold)' }}>cross_company</code> for patterns you've observed across multiple companies.
+            Consider promoting to <code style={{ color: 'var(--teal)' }}>Asset Class</code> first if this is a one-asset-class insight.
+          </div>
+          <label style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 240 }}>
+            Target Category
+            <select
+              value={targetMasterCategory}
+              onChange={e => setTargetMasterCategory(e.target.value)}
+              style={{
+                fontSize: 11, fontFamily: 'var(--font-mono)',
+                background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                color: 'var(--text-primary)', padding: '4px 6px', borderRadius: 3,
+              }}
+            >
+              {_MASTER_CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Optional note (why this belongs fund-wide)"
+            rows={2}
+            style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              color: 'var(--text-primary)', padding: 6, borderRadius: 3,
+              resize: 'vertical',
+            }}
+          />
+          {promoteError && (
+            <div style={{ fontSize: 11, color: '#F06060' }}>{promoteError}</div>
+          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={submitMaster}
+              disabled={submitting}
+              style={{
+                fontSize: 9, fontWeight: 700,
+                background: 'var(--gold)', border: 'none',
+                borderRadius: 4, padding: '4px 10px',
+                cursor: submitting ? 'wait' : 'pointer',
+                color: 'var(--bg-base)', letterSpacing: '0.06em',
+                textTransform: 'uppercase', opacity: submitting ? 0.6 : 1,
+              }}
+            >
+              {submitting ? 'Promoting…' : 'Promote to Master'}
+            </button>
+            <button
+              onClick={closeForm}
+              disabled={submitting}
+              style={{
+                fontSize: 9, fontWeight: 700,
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+                color: 'var(--text-muted)', letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
-      {entry.promoted && (
-        <span style={{
-          display: 'inline-block', marginLeft: alreadyPromotedToAssetClass ? 12 : 0, marginTop: 6,
-          fontSize: 9, fontWeight: 700,
-          color: 'var(--gold)', letterSpacing: '0.06em', textTransform: 'uppercase',
-        }}>
-          ↑ Promoted to Master
-        </span>
+
+      {/* Promoted badges (either or both, shown after the forms) */}
+      {(alreadyPromotedToAssetClass || alreadyPromotedToMaster) && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
+          {alreadyPromotedToAssetClass && (
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              color: 'var(--teal)', letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}>
+              ↑ Promoted to {(promotedTo.find(p => p.scope === 'asset_class') || {}).key || 'Asset Class'}
+            </span>
+          )}
+          {alreadyPromotedToMaster && (
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              color: 'var(--gold)', letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}>
+              ↑ Promoted to Master
+            </span>
+          )}
+        </div>
       )}
     </div>
   )
@@ -764,20 +887,10 @@ export default function OperatorCenter() {
     }
   }
 
-  const handlePromoteMind = async (entryId) => {
-    try {
-      await updateOperatorMindEntry(entryId, { promoted: true })
-      loadMind(mindFilter)
-    } catch (e) {
-      console.error('Failed to promote mind entry:', e)
-    }
-  }
-
-  // Real Company→Asset Class promotion (writes to
+  // Company→Asset Class promotion (writes to
   // data/_asset_class_mind/{target_key}.jsonl with a full provenance
-  // chain, AND flags the source entry's promoted_to[]). Unlike the soft
-  // "Promote to Master" flag above, this actually copies the entry so
-  // Layer 2.5 picks it up at the next build_mind_context() call.
+  // chain, AND flags the source entry's promoted_to[]). Layer 2.5 picks
+  // it up at the next build_mind_context() call.
   const handlePromoteToAssetClass = async (entry, { targetKey, targetCategory, note }) => {
     await promoteMindEntry({
       source_scope: 'company',
@@ -786,6 +899,25 @@ export default function OperatorCenter() {
       entry_id: entry.id,
       target_scope: 'asset_class',
       target_key: targetKey,
+      target_category: targetCategory,
+      note,
+    })
+    loadMind(mindFilter)
+  }
+
+  // Company→Master promotion. Replaces the old soft-flag behaviour
+  // (PATCH /api/operator/mind/{id} with {promoted: true}) which only
+  // marked the source entry without ever copying content into
+  // data/_master_mind/. Now goes through the real provenance pipeline,
+  // same as Asset Class. Layer 2 picks it up immediately.
+  const handlePromoteToMaster = async (entry, { targetCategory, note }) => {
+    await promoteMindEntry({
+      source_scope: 'company',
+      source_key: entry._company,
+      source_product: entry._product,
+      entry_id: entry.id,
+      target_scope: 'master',
+      target_key: null,
       target_category: targetCategory,
       note,
     })
@@ -1014,8 +1146,8 @@ export default function OperatorCenter() {
                     <MindEntryRow
                       key={e.id || i}
                       entry={e}
-                      onPromote={handlePromoteMind}
                       onPromoteToAssetClass={handlePromoteToAssetClass}
+                      onPromoteToMaster={handlePromoteToMaster}
                     />
                   ))
                 ) : (
