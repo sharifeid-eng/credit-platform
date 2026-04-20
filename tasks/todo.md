@@ -22,6 +22,61 @@ Track active work here. Claude updates this as tasks progress.
 ### Intelligence System — Remaining
 - [ ] **Create first investment thesis** — `/thesis klaim` to test full pipeline
 
+### External Intelligence — Deferred from session 27
+- [ ] **D1** — Company → Asset Class promote button in Mind tab UI (backend exists)
+- [ ] **D2** — Memo / Exec Summary / chat citation rendering for Layer 2.5 entries
+- [ ] **D3** — Unit tests for new modules (asset_class_mind, pending_review, promotion, external.web_search, backend/external.py)
+- [ ] **D4** — Seed Asset Class Mind with opening entries per analysis_type
+- [ ] **D5** — Extend other agents (memo_writer, compliance_monitor, onboarding) with `external.*` patterns
+- [ ] **D6** — Framework codification hook for technical research
+- [ ] **D7** — Scheduled external pollers (parked — on-demand model preferred for now)
+
+### Session 27 follow-up
+- [ ] **Real web_search smoke** — invoke `external.web_search` from Klaim DataChat, confirm pending entry appears with citations, approve end-to-end
+
+---
+
+## Completed — 2026-04-20 (session 27: Resources revamp + Architecture page + External Intelligence)
+
+Session focused on the landing-page Resources section and grew into a four-layer
+External Intelligence system built on trust-boundary semantics.
+
+### Commit 1a (`20303e9`) — Resources section live cards + Architecture page
+- `GET /api/platform-stats` — live counts (routes, DB tables, mind entries, framework sections, dataroom/legal/memos/tests). Introspected per-request.
+- OperatorCard + FrameworkCard + new ArchitectureCard now pull live vitals instead of static text.
+- `/architecture` page with component diagram per the Cocoon-AI skill guide (JetBrains Mono, dashed platform boundary, legend, bottom summary strip).
+- Rebased onto main; adopted `/api/operator/*` route convention; dropped Cross-Co tab since main's Data Rooms tab shipped in the same slot.
+
+### Commit 1b (`6bc621f`) — Feedback-loops diagram
+- New `LoopsDiagram` SVG above the component diagram showing three loops: Ingestion (tape → Mind → Thesis → Briefing), Learning (correction → classify → rule → AI context), Intelligence (doc → entity → cross-co pattern → Master Mind). Each loop closes back on itself with a dashed arc + caption.
+- Added "Self-Improvement Loops" CapabilityCard as the first card.
+
+### Commit 2 (`1d17e31`) — External Intelligence four-layer system
+- **Asset Class Mind** (new top-level store): `core/mind/asset_class_mind.py`, `data/_asset_class_mind/{analysis_type}.jsonl`. Categories: benchmarks, typical_terms, external_research, sector_context, peer_comparison, methodology_note.
+- **Pending Review Queue**: `core/external/pending_review.py`, `data/_pending_review/queue.jsonl`. Trust boundary — external evidence never auto-writes to any Mind. approve() promotes to target with full citation provenance; reject() retains for audit.
+- **Layer 2.5 in `build_mind_context()`**: AI context is now 6 layers (Framework → Master → Asset Class → Methodology → Company → Thesis). `analysis_type` auto-resolved from company config.
+- **MasterMind extended**: `sector_context` category + generic `record()` method for external-origin fund-level landing.
+- **Agent tool `external.web_search`**: wraps Anthropic's `web_search_20250305`. Every result lands in pending-review.
+- Backend API: 8 endpoints under `/api/pending-review` and `/api/asset-class-mind`.
+- OperatorCenter: new 9th tab "Pending" with approve/reject UI.
+
+### Commit 3 (`aa5bed0`) — Promotion pipeline + Asset Classes browser
+- `core/mind/promotion.py` — `promote_entry()` with full provenance tracking. Source entry is never moved; a copy is written to target with `metadata.promoted_from` chain preserved, and source's `promoted_to` list is appended.
+- `POST /api/mind/promote` endpoint.
+- OperatorCenter: new 10th tab "Asset Classes" with per-class browser + "↑ Promote to Master" button per entry.
+
+### Follow-up fixes (same session)
+- `b60d8d3` — analyst agent config exposes `external.*` tools (caught during smoke-test prep before first try).
+- `b2c6afe` — `/api/platform-stats` test counter: tolerant regex for indented/async `def test_` patterns (was returning 0).
+- `3b68f96` — Architecture diagram: loop-label crowding fix (topPad 60→90, font 10→11px, offset -8→-24) + overlong-arrow label overlaps (LLM/FX shortened to boundary edge; JWT arc raised dy -120→-180 and label dropped).
+- `4952ea3` — `scripts/verify_external_intelligence.py`: 16-check self-contained verification harness. Ran 16/16 on user's laptop.
+- `0ac4b4d` — `ScrollToTopOnNavigate` in App.jsx: React Router preserves scroll across navigations by default, causing pages to land mid-scroll. One-time reset on pathname change.
+
+### Review
+- 9 commits on branch `claude/resources-section-discussion-lMMAr`, all pushed.
+- Verification: 16/16 on backend modules; live UI smoke on cards and Architecture page. Not yet merged to main as of this EOD wrap-up; user will merge then continue live.
+- Deferred items (D1–D7) parked in "Next Session Priorities" above.
+
 ---
 
 ## Completed — 2026-04-19 (session 26.2: Stage 6 polish fix + CF SSE heartbeat + registry collision close-out)
