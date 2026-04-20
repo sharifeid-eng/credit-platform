@@ -3,28 +3,32 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
-## 2026-04-20 — Cloud-sandbox `git push` to `127.0.0.1` proxy is NOT a reliable sync signal
+## 2026-04-20 — Don't trust ANY local view for "did my commit reach GitHub?" — only `git ls-remote` against the real URL
 
-**Problem:** Ran `git push origin main` from a cloud Claude Code sandbox. The push output showed `To http://127.0.0.1:27107/git/sharifeid-eng/credit-platform` with a commit range that looked successful. Declared the work "pushed." A separate cloud session, started later, reported that the commit and the file it created **did not exist on GitHub**. My sandbox's `origin` was a local proxy URL — pushes went to the proxy, not necessarily to the actual GitHub remote. Earlier pushes in the same session had propagated (user pulled them on laptop); the final push did not. User found out when they tried to access the file from a new session.
+**Problem:** Ran `git push origin main` from a cloud Claude Code sandbox. Output showed `To http://127.0.0.1:<port>/git/sharifeid-eng/credit-platform` — a local proxy URL. Declared work "pushed + shipped." A separate cloud session reported the commit and the file it created "do not exist in git history" on its end. I couldn't tell from inside my sandbox whether my proxy's push had actually propagated to GitHub or if the other session was looking at stale refs. When I finally ran `git ls-remote https://github.com/sharifeid-eng/credit-platform.git main` against the public URL, the commit WAS there — the proxy had propagated correctly, and the other session had simply not fetched. But I had no way to know that without the direct check.
 
-**Rule:** Inside a cloud sandbox, the `origin` remote URL may point at a local proxy (`127.0.0.1:<port>/git/...`). A successful `git push` against that proxy indicates the proxy accepted the push — NOT that GitHub has it. Before declaring any commit "shipped":
+**Rule:** Neither side of a sandbox-to-sandbox disagreement about "is this commit on GitHub?" is trustworthy on its own:
+- **Your sandbox's `origin/main`** points at a local proxy; `git log origin/main` shows whatever the proxy has cached, not necessarily GitHub.
+- **Another sandbox's `origin/main`** is a different proxy with its own cache — a commit you pushed may not appear in their view until they fetch, and even their fetch talks to THEIR proxy, which may be stale.
 
-1. Explicitly verify with `git ls-remote https://github.com/<owner>/<repo> main` against the public GitHub URL (not `origin`).
-2. OR ask the user to run `git fetch origin && git log --oneline -3` on their laptop (which talks to real GitHub) and confirm the commit hash is visible.
-3. Do NOT rely on "push exit code 0 + hash appears in output" as durability proof.
+The ONLY authoritative source is GitHub itself, accessed directly:
+```
+git ls-remote https://github.com/<owner>/<repo>.git main
+```
+This bypasses every local `origin` config and every proxy cache. It returns the canonical commit hash for `refs/heads/main` as GitHub has it right now.
 
-**Why:** Cloud sandboxes often use git-proxy middleware to intercept network calls — sometimes the proxy batches / defers / drops pushes based on session lifecycle, scope, or sandbox state. The symptom is totally silent: local commits exist, `git log origin/main` from the sandbox shows them, but the real remote has nothing. A fresh sandbox won't inherit the proxy's buffered state and will correctly report the commit is missing.
-
-**How to apply:** For any commit that MUST land (EOD work, next-session handoff docs, production-destined code), end the push with explicit verification:
+**How to apply:** For any commit that MUST land durably (EOD work, next-session handoff docs, production-destined code), append this verification after the push:
 ```
 git push origin main
-git ls-remote https://github.com/<owner>/<repo>.git main
-# Compare the returned hash to `git rev-parse main`. If they don't match,
-# the push didn't reach GitHub — investigate before moving on.
+EXPECTED=$(git rev-parse main)
+ACTUAL=$(git ls-remote https://github.com/<owner>/<repo>.git main | cut -f1)
+[ "$EXPECTED" = "$ACTUAL" ] && echo "✓ landed on GitHub" || echo "✗ mismatch — investigate"
 ```
-Alternatively: commit locally, then ask the user to `git pull origin main` on their laptop and confirm the new commit is visible before declaring success. This is the single most reliable signal because the laptop's `origin` points at actual github.com, not a sandbox proxy.
+If the hashes don't match, the push failed silently — investigate before moving on.
 
-The cost of the extra check is a single command. The cost of a failed push is a next session that can't find its brief + the user having to manually recreate work + trust erosion.
+**Equally important — when someone else reports "the commit isn't there":** Don't recreate work on their word alone. Run `git ls-remote https://github.com/...` first. If GitHub has it, the other party has a stale fetch; tell them to `git fetch origin && git log origin/main`. If GitHub doesn't have it, THEN recreate.
+
+The cost of the extra check is a single command. The cost of skipping it is either (a) declaring work shipped that isn't, or (b) recreating work that already exists — both produce silent divergence across sessions and trust erosion.
 
 ---
 
