@@ -31,17 +31,21 @@ _FILES = {
     "framework_evolution": "framework_evolution.jsonl",
     "ic_norms": "ic_norms.jsonl",
     "writing_style": "writing_style.jsonl",
+    # External-origin: sector / macro / regulatory knowledge applicable to
+    # the whole fund, distinct from company-specific or single-asset-class info.
+    # Populated primarily via the pending-review queue after analyst approval.
+    "sector_context": "sector_context.jsonl",
 }
 
 # Task-type to category relevance mapping (which categories matter for which tasks)
 _TASK_RELEVANCE: Dict[str, List[str]] = {
-    "commentary": ["preferences", "writing_style", "ic_norms"],
-    "executive_summary": ["preferences", "writing_style", "ic_norms", "cross_company"],
+    "commentary": ["preferences", "writing_style", "ic_norms", "sector_context"],
+    "executive_summary": ["preferences", "writing_style", "ic_norms", "cross_company", "sector_context"],
     "tab_insight": ["preferences", "writing_style"],
-    "chat": ["preferences", "ic_norms"],
+    "chat": ["preferences", "ic_norms", "sector_context"],
     "onboarding": ["cross_company", "framework_evolution", "ic_norms"],
-    "research_report": ["preferences", "writing_style", "ic_norms", "cross_company"],
-    "memo": ["preferences", "writing_style", "ic_norms"],
+    "research_report": ["preferences", "writing_style", "ic_norms", "cross_company", "sector_context"],
+    "memo": ["preferences", "writing_style", "ic_norms", "sector_context"],
     "framework": ["framework_evolution", "preferences"],
     "default": ["preferences", "ic_norms"],
 }
@@ -195,6 +199,24 @@ class MasterMind:
         return entries
 
     # ── Recording methods ──────────────────────────────────────────────
+
+    def record(
+        self,
+        category: str,
+        content: str,
+        metadata: Optional[Dict] = None,
+    ) -> MindEntry:
+        """Generic recorder — primarily for external sources (pending-review
+        approvals) that declare their own category. Validates the category
+        against _FILES and appends via _append_entry.
+        """
+        if category not in _FILES:
+            raise ValueError(
+                f"Unknown category: {category}. Valid: {list(_FILES.keys())}"
+            )
+        entry = _make_entry(category, content, metadata or {})
+        self._append_entry(entry)
+        return entry
 
     def record_analytical_preference(self, preference: str, source: str = "") -> MindEntry:
         """Record a universal analytical rule or preference.

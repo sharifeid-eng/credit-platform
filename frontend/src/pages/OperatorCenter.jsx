@@ -8,6 +8,8 @@ import {
   updateOperatorMindEntry, getOperatorBriefing, getOperatorLearning,
   getThesis, saveThesis, getThesisDrift, getThesisLog,
   getDataroomHealthAll,
+  getPendingReview, approvePendingEntry, rejectPendingEntry,
+  getAssetClasses, getAssetClassEntries, promoteMindEntry,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -493,6 +495,8 @@ export default function OperatorCenter() {
   const [thesisCompany, setThesisCompany] = useState(null)
   const [thesisEditing, setThesisEditing] = useState(false)
   const [datarooms, setDatarooms] = useState(null)
+  const [pending,   setPending]   = useState(null)
+  const [assetClasses, setAssetClasses] = useState(null)
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -542,6 +546,16 @@ export default function OperatorCenter() {
       getDataroomHealthAll()
         .then(d => setDatarooms(d.datarooms || []))
         .catch(e => console.error('Dataroom health load failed:', e))
+    }
+    if (activeTab === 'pending' && pending === null) {
+      getPendingReview({ status: 'pending' })
+        .then(setPending)
+        .catch(e => { console.error('Pending review load failed:', e); setPending({ entries: [], counts: {}, error: 'Load failed' }) })
+    }
+    if (activeTab === 'asset_classes' && assetClasses === null) {
+      getAssetClasses()
+        .then(d => setAssetClasses(d.asset_classes || []))
+        .catch(e => { console.error('Asset classes load failed:', e); setAssetClasses([]) })
     }
   }, [activeTab, mindFilter, thesisCompany])
 
@@ -691,6 +705,18 @@ export default function OperatorCenter() {
             active={activeTab === 'datarooms'}
             onClick={() => setActiveTab('datarooms')}
             count={datarooms ? datarooms.filter(d => !d.aligned && !d.error).length || null : null}
+          />
+          <TabButton
+            label="Pending"
+            active={activeTab === 'pending'}
+            onClick={() => setActiveTab('pending')}
+            count={pending?.counts?.pending ?? null}
+          />
+          <TabButton
+            label="Asset Classes"
+            active={activeTab === 'asset_classes'}
+            onClick={() => setActiveTab('asset_classes')}
+            count={assetClasses?.length || null}
           />
         </div>
 
@@ -1294,6 +1320,28 @@ export default function OperatorCenter() {
               }} />
             )}
 
+            {/* ── Pending Review Tab ── */}
+            {activeTab === 'pending' && (
+              <PendingReviewTab
+                data={pending}
+                onRefresh={() => {
+                  setPending(null)
+                  getPendingReview({ status: 'pending' }).then(setPending).catch(() => setPending({ entries: [], counts: {}, error: 'Reload failed' }))
+                }}
+              />
+            )}
+
+            {/* ── Asset Classes Tab ── */}
+            {activeTab === 'asset_classes' && (
+              <AssetClassesTab
+                classes={assetClasses}
+                onRefresh={() => {
+                  setAssetClasses(null)
+                  getAssetClasses().then(d => setAssetClasses(d.asset_classes || [])).catch(() => setAssetClasses([]))
+                }}
+              />
+            )}
+
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1600,6 +1648,456 @@ function Row({ label, value, danger, warn, valueColor }) {
     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
       <span style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span style={{ color, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{value}</span>
+    </div>
+  )
+}
+
+/* ── Pending Review Tab ── */
+function PendingReviewTab({ data, onRefresh }) {
+  const [acting, setActing] = useState(null)    // {id, action} while mid-API-call
+  const [errorMsg, setErrorMsg] = useState(null)
+  const entries = data?.entries || []
+  const counts = data?.counts || {}
+
+  async function act(id, action) {
+    setActing({ id, action })
+    setErrorMsg(null)
+    try {
+      if (action === 'approve') await approvePendingEntry(id, {})
+      else if (action === 'reject') await rejectPendingEntry(id, {})
+      onRefresh()
+    } catch (e) {
+      setErrorMsg(e?.response?.data?.detail || e?.message || 'Action failed')
+    }
+    setActing(null)
+  }
+
+  return (
+    <div>
+      <SectionLabel text="Pending External Intelligence" accent="#A78BFA" />
+      <p style={{
+        fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px',
+        maxWidth: 760, lineHeight: 1.55,
+      }}>
+        Entries pulled from the web (or other external sources) that need
+        your approval before landing in Company / Asset Class / Master Mind.
+        Approve to promote with full citation provenance; reject to mark
+        read-and-discarded (audit trail retained).
+      </p>
+
+      <div style={{
+        display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap',
+        fontSize: 11, color: 'var(--text-muted)',
+      }}>
+        <span>Pending: <strong style={{ color: 'var(--gold)' }}>{counts.pending ?? 0}</strong></span>
+        <span>Approved: <strong style={{ color: '#34d399' }}>{counts.approved ?? 0}</strong></span>
+        <span>Rejected: <strong style={{ color: 'var(--text-faint)' }}>{counts.rejected ?? 0}</strong></span>
+        <button
+          onClick={onRefresh}
+          style={{
+            marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            padding: '5px 10px', borderRadius: 5,
+            background: 'transparent', border: '1px solid #A78BFA',
+            color: '#A78BFA', cursor: 'pointer',
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {errorMsg && (
+        <div style={{
+          padding: 10, marginBottom: 14, borderRadius: 6,
+          background: 'rgba(240,96,96,0.12)', border: '1px solid rgba(240,96,96,0.3)',
+          color: '#F06060', fontSize: 12,
+        }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {data === null && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading pending entries…</div>
+      )}
+
+      {data && entries.length === 0 && !data.error && (
+        <div style={{
+          padding: 16, background: 'var(--bg-deep)',
+          border: '1px dashed var(--border)', borderRadius: 8,
+          fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6,
+        }}>
+          No pending entries. External intelligence will appear here when
+          an agent uses the <code style={{ color: 'var(--gold)' }}>external.web_search</code> tool,
+          or when a pending entry is created manually via{' '}
+          <code style={{ color: 'var(--gold)' }}>POST /api/pending-review</code>.
+        </div>
+      )}
+
+      {entries.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {entries.map(e => (
+            <div key={e.id} style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              borderLeft: '3px solid #A78BFA',
+              borderRadius: 8, padding: 16,
+            }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'flex-start', gap: 12, marginBottom: 8, flexWrap: 'wrap',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
+                  {e.title || '(untitled)'}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    disabled={acting?.id === e.id}
+                    onClick={() => act(e.id, 'approve')}
+                    style={{
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                      letterSpacing: '0.08em', padding: '5px 12px', borderRadius: 5,
+                      background: '#34d399', border: 'none', color: '#0A1119',
+                      cursor: acting?.id === e.id ? 'not-allowed' : 'pointer',
+                      opacity: acting?.id === e.id ? 0.5 : 1,
+                    }}
+                  >
+                    {acting?.id === e.id && acting?.action === 'approve' ? 'Approving…' : 'Approve'}
+                  </button>
+                  <button
+                    disabled={acting?.id === e.id}
+                    onClick={() => act(e.id, 'reject')}
+                    style={{
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                      letterSpacing: '0.08em', padding: '5px 12px', borderRadius: 5,
+                      background: 'transparent', border: '1px solid var(--text-muted)',
+                      color: 'var(--text-muted)',
+                      cursor: acting?.id === e.id ? 'not-allowed' : 'pointer',
+                      opacity: acting?.id === e.id ? 0.5 : 1,
+                    }}
+                  >
+                    {acting?.id === e.id && acting?.action === 'reject' ? 'Rejecting…' : 'Reject'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex', gap: 10, flexWrap: 'wrap',
+                fontSize: 10, color: 'var(--text-muted)', marginBottom: 10,
+                fontFamily: 'var(--font-mono)',
+              }}>
+                <span style={{
+                  padding: '2px 7px', borderRadius: 3,
+                  background: 'rgba(167,139,250,0.15)', color: '#A78BFA',
+                  fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+                }}>
+                  {e.source}
+                </span>
+                <span>→ {e.target_scope}{e.target_key ? `/${e.target_key}` : ''}</span>
+                <span>· {e.category}</span>
+                {e.timestamp && <span>· {new Date(e.timestamp).toLocaleDateString('en-GB')}</span>}
+              </div>
+
+              {e.query && (
+                <div style={{
+                  fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
+                  fontStyle: 'italic',
+                }}>
+                  Query: "{e.query}"
+                </div>
+              )}
+
+              <div style={{
+                fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.55,
+                marginBottom: 10, whiteSpace: 'pre-wrap',
+              }}>
+                {e.content}
+              </div>
+
+              {e.citations?.length > 0 && (
+                <div style={{
+                  paddingTop: 10, borderTop: '1px solid var(--border)',
+                  fontSize: 11,
+                }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+                    letterSpacing: '0.12em', color: 'var(--text-faint)',
+                    marginBottom: 6,
+                  }}>
+                    Sources ({e.citations.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {e.citations.slice(0, 6).map((c, i) => (
+                      <a
+                        key={i}
+                        href={c.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: 11, color: '#22d3ee', textDecoration: 'none',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {c.title || c.url}
+                      </a>
+                    ))}
+                    {e.citations.length > 6 && (
+                      <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
+                        … and {e.citations.length - 6} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Asset Classes Tab ── */
+function AssetClassesTab({ classes, onRefresh }) {
+  const [selected, setSelected] = useState(null)
+  const [entries, setEntries]   = useState(null)
+  const [promoting, setPromoting] = useState(null)  // entry id mid-promotion
+  const [err,       setErr]       = useState(null)
+
+  useEffect(() => {
+    if (classes && classes.length && !selected) setSelected(classes[0])
+  }, [classes])
+
+  useEffect(() => {
+    if (!selected) return
+    setEntries(null)
+    getAssetClassEntries(selected, { limit: 100 })
+      .then(d => setEntries(d.entries || []))
+      .catch(e => { console.error('Asset class entries load failed:', e); setEntries([]) })
+  }, [selected])
+
+  async function doPromote(entry) {
+    setPromoting(entry.id)
+    setErr(null)
+    try {
+      await promoteMindEntry({
+        source_scope: 'asset_class',
+        source_key: selected,
+        entry_id: entry.id,
+        target_scope: 'master',
+        target_category: 'sector_context',
+        note: null,
+      })
+      // Reload
+      const d = await getAssetClassEntries(selected, { limit: 100 })
+      setEntries(d.entries || [])
+    } catch (e) {
+      setErr(e?.response?.data?.detail || e?.message || 'Promotion failed')
+    }
+    setPromoting(null)
+  }
+
+  return (
+    <div>
+      <SectionLabel text="Asset Class Mind" accent="#A78BFA" />
+      <p style={{
+        fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px',
+        maxWidth: 780, lineHeight: 1.55,
+      }}>
+        Knowledge keyed by <code style={{ color: 'var(--gold)' }}>analysis_type</code>.
+        Every company of that asset class sees these entries as Layer 2.5 in
+        the AI context — between fund-level (Master Mind) and company-level
+        (Company Mind). Populated by analyst-approved pending-review entries,
+        by promotions from Company Mind, or by manual entry via the API.
+      </p>
+
+      {classes === null && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading asset classes…</div>
+      )}
+
+      {classes && classes.length === 0 && (
+        <div style={{
+          padding: 16, background: 'var(--bg-deep)',
+          border: '1px dashed var(--border)', borderRadius: 8,
+          fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6,
+        }}>
+          No asset classes populated yet. Approve a pending-review entry with
+          scope <code style={{ color: 'var(--gold)' }}>asset_class</code> — it
+          will land here.
+        </div>
+      )}
+
+      {classes && classes.length > 0 && (
+        <>
+          <div style={{
+            display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18,
+          }}>
+            {classes.map(ac => (
+              <button
+                key={ac}
+                onClick={() => setSelected(ac)}
+                style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.08em', padding: '6px 12px', borderRadius: 5,
+                  background: selected === ac ? '#A78BFA' : 'transparent',
+                  color:      selected === ac ? '#0A1119' : '#A78BFA',
+                  border: '1px solid #A78BFA', cursor: 'pointer',
+                }}
+              >
+                {ac}
+              </button>
+            ))}
+            <button
+              onClick={onRefresh}
+              style={{
+                marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.1em',
+                padding: '6px 10px', borderRadius: 5,
+                background: 'transparent', border: '1px solid var(--text-muted)',
+                color: 'var(--text-muted)', cursor: 'pointer',
+              }}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {err && (
+            <div style={{
+              padding: 10, marginBottom: 12, borderRadius: 6,
+              background: 'rgba(240,96,96,0.12)', border: '1px solid rgba(240,96,96,0.3)',
+              color: '#F06060', fontSize: 12,
+            }}>
+              {err}
+            </div>
+          )}
+
+          {entries === null && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Loading {selected} entries…
+            </div>
+          )}
+
+          {entries && entries.length === 0 && (
+            <div style={{
+              padding: 16, background: 'var(--bg-deep)',
+              border: '1px dashed var(--border)', borderRadius: 8,
+              fontSize: 12, color: 'var(--text-muted)',
+            }}>
+              No entries for <code style={{ color: 'var(--gold)' }}>{selected}</code> yet.
+            </div>
+          )}
+
+          {entries && entries.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {entries.map(e => {
+                const citations = e.metadata?.citations || []
+                const source = e.metadata?.source || 'manual'
+                const promotedFrom = e.metadata?.promoted_from
+                return (
+                  <div key={e.id} style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    borderLeft: '3px solid #A78BFA',
+                    borderRadius: 8, padding: 14,
+                  }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap',
+                    }}>
+                      <div style={{
+                        display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+                      }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 3,
+                          background: 'rgba(167,139,250,0.15)', color: '#A78BFA',
+                          textTransform: 'uppercase', letterSpacing: '0.08em',
+                        }}>
+                          {e.category}
+                        </span>
+                        <span style={{
+                          fontSize: 10, color: 'var(--text-muted)',
+                          fontFamily: 'var(--font-mono)',
+                        }}>
+                          {source}
+                        </span>
+                        {e.timestamp && (
+                          <span style={{
+                            fontSize: 10, color: 'var(--text-faint)',
+                            fontFamily: 'var(--font-mono)',
+                          }}>
+                            {new Date(e.timestamp).toLocaleDateString('en-GB')}
+                          </span>
+                        )}
+                        {e.promoted && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3,
+                            background: 'rgba(52,211,153,0.15)', color: '#34d399',
+                            textTransform: 'uppercase', letterSpacing: '0.08em',
+                          }}>
+                            Promoted to Master
+                          </span>
+                        )}
+                      </div>
+                      {!e.promoted && (
+                        <button
+                          onClick={() => doPromote(e)}
+                          disabled={promoting === e.id}
+                          style={{
+                            fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                            letterSpacing: '0.08em', padding: '4px 10px', borderRadius: 4,
+                            background: 'transparent', border: '1px solid #34d399',
+                            color: '#34d399',
+                            cursor: promoting === e.id ? 'not-allowed' : 'pointer',
+                            opacity: promoting === e.id ? 0.5 : 1,
+                          }}
+                        >
+                          {promoting === e.id ? 'Promoting…' : '↑ Promote to Master'}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{
+                      fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.55,
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {e.content}
+                    </div>
+                    {promotedFrom && (
+                      <div style={{
+                        marginTop: 8, fontSize: 10, color: 'var(--text-faint)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                        ← from {promotedFrom.scope}/{promotedFrom.key} (original {promotedFrom.original_category})
+                      </div>
+                    )}
+                    {citations.length > 0 && (
+                      <div style={{
+                        marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)',
+                      }}>
+                        <div style={{
+                          fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+                          letterSpacing: '0.12em', color: 'var(--text-faint)', marginBottom: 5,
+                        }}>
+                          Sources ({citations.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {citations.slice(0, 5).map((c, i) => (
+                            <a key={i} href={c.url} target="_blank" rel="noopener noreferrer"
+                               style={{
+                                 fontSize: 11, color: '#22d3ee', textDecoration: 'none',
+                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                               }}>
+                              {c.title || c.url}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

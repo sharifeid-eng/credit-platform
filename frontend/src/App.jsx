@@ -1,10 +1,12 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { MobileMenuProvider } from './contexts/MobileMenuContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Framework from './pages/Framework';
+import Architecture from './pages/Architecture';
 import CompanyLayout from './layouts/CompanyLayout';
 import TapeAnalytics from './pages/TapeAnalytics';
 import PortfolioAnalytics from './pages/PortfolioAnalytics';
@@ -26,16 +28,30 @@ function CompanyRedirect() {
   return <Navigate to="tape/overview" replace />
 }
 
+// React Router preserves scroll position across navigations by default —
+// clicking a link from a scrolled page would land the new page mid-scroll.
+// This component resets window scroll on every pathname change. Tabs that
+// only swap a :tab URL param (same pathname) stay where they are.
+function ScrollToTopOnNavigate() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [pathname])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
       <MobileMenuProvider>
       <ProtectedRoute>
+      <ScrollToTopOnNavigate />
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/framework" element={<Framework />} />
+        <Route path="/architecture" element={<Architecture />} />
         <Route path="/operator" element={<OperatorCenter />} />
         <Route path="/onboard" element={<Onboarding />} />
         <Route path="/admin/users" element={

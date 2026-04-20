@@ -29,6 +29,7 @@ export default api;
 export const getFramework       = () => api.get('/framework').then(r => r.data.content);
 export const getMethodology     = (analysisType) => api.get(`/methodology/${analysisType}`).then(r => r.data);
 export const getAggregateStats  = ()  => api.get('/aggregate-stats').then(r => r.data);
+export const getPlatformStats   = ()  => api.get('/api/platform-stats').then(r => r.data);
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 export const getCompanies     = () => api.get('/companies').then(r => r.data);
@@ -343,6 +344,29 @@ export const getOperatorLearningRules = () => api.get('/api/operator/learning/ru
 export const getDataroomHealthAll    = () => api.get('/dataroom/health').then(r => r.data);
 export const getDataroomHealthOne    = (co, prod) =>
   api.get(`/companies/${co}/products/${prod}/dataroom/health`).then(r => r.data);
+
+// ── External Intelligence: pending review + asset class mind ─────────────
+export const getPendingReview        = ({ status = 'pending', targetScope = null, targetKey = null, limit = null } = {}) =>
+  api.get('/api/pending-review', {
+    params: {
+      status,
+      ...(targetScope ? { target_scope: targetScope } : {}),
+      ...(targetKey ? { target_key: targetKey } : {}),
+      ...(limit ? { limit } : {}),
+    },
+  }).then(r => r.data);
+export const getPendingReviewCounts  = () => api.get('/api/pending-review/counts').then(r => r.data);
+export const approvePendingEntry     = (id, body = {}) =>
+  api.post(`/api/pending-review/${id}/approve`, body).then(r => r.data);
+export const rejectPendingEntry      = (id, body = {}) =>
+  api.post(`/api/pending-review/${id}/reject`, body).then(r => r.data);
+
+export const getAssetClasses         = () => api.get('/api/asset-class-mind').then(r => r.data);
+export const getAssetClassEntries    = (analysisType, { category = null, limit = 50 } = {}) =>
+  api.get(`/api/asset-class-mind/${analysisType}`, {
+    params: { limit, ...(category ? { category } : {}) },
+  }).then(r => r.data);
+export const promoteMindEntry        = (body) => api.post('/api/mind/promote', body).then(r => r.data);
 export const getThesis               = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis`).then(r => r.data);
 export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
 export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);

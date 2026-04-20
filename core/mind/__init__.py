@@ -1,15 +1,21 @@
 """
-Living Mind — Two-tier institutional memory for the Laith credit platform.
+Living Mind — institutional memory for the Laith credit platform.
 
-Master Mind: Fund-level knowledge (analytical preferences, IC norms, cross-company patterns)
-Company Mind: Per-company knowledge (corrections, memo edits, findings, data quality)
+Three stores + one dynamic context assembly:
+  - MasterMind: fund-level knowledge (preferences, IC norms, cross-co patterns,
+                sector_context for fund-level macro/regulatory)
+  - AssetClassMind: keyed by analysis_type (benchmarks, typical terms, external
+                    research, sector_context, peer_comparison)
+  - CompanyMind: per-company knowledge (corrections, memo edits, findings,
+                 data quality, entities)
 
-The build_mind_context() function assembles a 5-layer knowledge context for any AI prompt:
-    Layer 1 -- Framework (codified rules from FRAMEWORK_INDEX.md)
-    Layer 2 -- Master Mind (fund-level lessons)
-    Layer 3 -- Methodology (codified company rules)
-    Layer 4 -- Company Mind (company-level lessons)
-    Layer 5 -- Thesis (investment thesis + drift alerts)
+build_mind_context() assembles a 6-layer knowledge context for any AI prompt:
+    Layer 1   -- Framework (codified rules from FRAMEWORK_INDEX.md)
+    Layer 2   -- Master Mind (fund-level lessons)
+    Layer 2.5 -- Asset Class Mind (per-analysis_type, NEW)
+    Layer 3   -- Methodology (codified company rules)
+    Layer 4   -- Company Mind (company-level lessons)
+    Layer 5   -- Thesis (investment thesis + drift alerts)
 """
 
 from __future__ import annotations
@@ -18,36 +24,48 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from core.mind.asset_class_mind import AssetClassMind
 from core.mind.company_mind import CompanyMind
 from core.mind.master_mind import MasterMind
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["MasterMind", "CompanyMind", "build_mind_context", "MindLayeredContext"]
+__all__ = [
+    "MasterMind", "CompanyMind", "AssetClassMind",
+    "build_mind_context", "MindLayeredContext",
+]
 
 
 @dataclass
 class MindLayeredContext:
-    """The assembled 5-layer context for an AI prompt."""
+    """The assembled 6-layer context for an AI prompt."""
 
-    framework: str       # Layer 1: codified framework principles
-    master_mind: str     # Layer 2: fund-level lessons
-    methodology: str     # Layer 3: codified company methodology
-    company_mind: str    # Layer 4: company-level lessons
-    thesis: str = ""     # Layer 5: investment thesis + drift alerts
-    total_entries: int = 0  # Total mind entries included (L2 + L4)
+    framework: str         # Layer 1:   codified framework principles
+    master_mind: str       # Layer 2:   fund-level lessons
+    asset_class: str = ""  # Layer 2.5: per-analysis_type benchmarks + external research
+    methodology: str = ""  # Layer 3:   codified company methodology
+    company_mind: str = "" # Layer 4:   company-level lessons
+    thesis: str = ""       # Layer 5:   investment thesis + drift alerts
+    total_entries: int = 0 # Total mind entries included (L2 + L2.5 + L4)
 
     @property
     def formatted(self) -> str:
-        """Return the full formatted context block, all 5 layers combined.
+        """Return the full formatted context block, layers combined.
 
         Layers are separated by blank lines. Empty layers are omitted.
+        Order: L1 Framework → L2 Master → L2.5 Asset Class → L3 Methodology
+               → L4 Company → L5 Thesis. Asset Class sits where it does
+        because it generalises Master Mind's fund-level statements and
+        specialises them for the current analysis_type, while still being
+        more general than company methodology.
         """
         parts = []
         if self.framework:
             parts.append(self.framework)
         if self.master_mind:
             parts.append(self.master_mind)
+        if self.asset_class:
+            parts.append(self.asset_class)
         if self.methodology:
             parts.append(self.methodology)
         if self.company_mind:
@@ -59,7 +77,10 @@ class MindLayeredContext:
     @property
     def is_empty(self) -> bool:
         """True if no context was assembled at all."""
-        return not any([self.framework, self.master_mind, self.methodology, self.company_mind, self.thesis])
+        return not any([
+            self.framework, self.master_mind, self.asset_class,
+            self.methodology, self.company_mind, self.thesis,
+        ])
 
 
 def _graph_query_to_formatted(mind_dir, query_text: str, header: str, categories=None, max_results: int = 15) -> tuple:
@@ -152,6 +173,27 @@ def build_mind_context(
         logger.warning("build_mind_context: Layer 2 (master mind) failed: %s", e)
         master_formatted = ""
 
+    # Layer 2.5: Asset Class Mind (per-analysis_type)
+    # Resolved analysis_type is either passed in, or pulled from company config.
+    asset_class_formatted = ""
+    resolved_at = analysis_type
+    if resolved_at is None:
+        try:
+            from core.config import load_config
+            cfg = load_config(company, product) or {}
+            resolved_at = cfg.get("analysis_type")
+        except Exception:
+            resolved_at = None
+    if resolved_at:
+        try:
+            ac_mind = AssetClassMind(resolved_at)
+            ac_ctx = ac_mind.get_context_for_prompt(task_type)
+            asset_class_formatted = ac_ctx.formatted
+            total_entries += ac_ctx.entry_count
+        except Exception as e:
+            logger.warning("build_mind_context: Layer 2.5 (asset class) failed: %s", e)
+            asset_class_formatted = ""
+
     # Layer 3: Methodology (codified company rules)
     try:
         methodology_ctx = master.load_methodology_context(company, product)
@@ -189,6 +231,7 @@ def build_mind_context(
     return MindLayeredContext(
         framework=framework_ctx,
         master_mind=master_formatted,
+        asset_class=asset_class_formatted,
         methodology=methodology_ctx,
         company_mind=company_formatted,
         thesis=thesis_ctx,
