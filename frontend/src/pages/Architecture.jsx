@@ -315,14 +315,15 @@ function Diagram({ stats }) {
         {/* Mind internal: Intelligence ← Mind */}
         <Arrow from={[1070, 395]} to={[1070, 410]} color="#fb923c" />
 
-        {/* Backend → Anthropic */}
-        <Arrow from={[940, 155]} to={[1220, 180]}  label="LLM (5-tier)" curved dy={-80} color="#fbbf24" />
+        {/* Backend → Anthropic (short hop at boundary, keeps label clear) */}
+        <Arrow from={[1180, 180]} to={[1220, 190]}  label="LLM" color="#fbbf24" />
 
-        {/* JWT verify */}
-        <Arrow from={[340, 130]} to={[1220, 295]}  label="Verify JWT" curved dy={-120} color="#fb7185" />
+        {/* JWT verify — Cloudflare JWT (inside) to Cloudflare Access (outside).
+            Route over the top so it doesn't cross the central backend stack. */}
+        <Arrow from={[340, 130]} to={[1220, 295]} curved dy={-180} color="#fb7185" />
 
-        {/* Backend → FX */}
-        <Arrow from={[940, 220]} to={[1220, 405]}  label="FX" curved dy={80} color="#fbbf24" />
+        {/* Backend → FX (short hop at boundary) */}
+        <Arrow from={[1180, 235]} to={[1220, 405]}  label="FX" curved dy={30} color="#fbbf24" />
 
         {/* Summary strip */}
         <SummaryStrip y={870} stats={n} />
@@ -457,8 +458,8 @@ function LoopRow({ y, loop, width = 1360 }) {
 }
 
 function LoopsDiagram() {
-  const rowGap = 120
-  const topPad = 60
+  const rowGap = 150   // was 120 — more breathing room between rows
+  const topPad = 90    // was 60 — room for the first loop's header above its row
   const totalH = topPad + LOOPS.length * rowGap + 40
 
   return (
@@ -489,9 +490,11 @@ function LoopsDiagram() {
 
         {LOOPS.map((loop, i) => (
           <g key={loop.id}>
-            <text x={80} y={topPad + i * rowGap - 8}
-                  fill={loop.color} fontFamily={DIAG_FONT} fontSize={10} fontWeight={700}
-                  letterSpacing="0.12em">
+            {/* Section header — sits 24px above the row so it reads as a
+                chapter title, not crowding the first box */}
+            <text x={80} y={topPad + i * rowGap - 24}
+                  fill={loop.color} fontFamily={DIAG_FONT} fontSize={11} fontWeight={700}
+                  letterSpacing="0.18em" opacity={0.9}>
               {loop.label.toUpperCase()}
             </text>
             <LoopRow y={topPad + i * rowGap} loop={loop} />
