@@ -32,6 +32,30 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-20 (session 28 follow-up: Agents representation on Architecture page)
+
+Quick focused follow-up after the main session 28 EOD. User asked whether
+the Resources revamp / Architecture page surfaced the four agents — honest
+audit showed they weren't represented (no stat tile, no box in the system
+diagram, no capability card). One commit closes that gap.
+
+### Commit `cc11f78` — Agents as first-class citizens on Architecture
+- **Backend `/api/platform-stats`** — introspects:
+  - `core/agents/definitions/*/config.json` — per-agent model, tool patterns, max_turns → returns `agents` array + `agents` count
+  - `core.agents.tools.registry.tool_names()` — live `agent_tools` count (sidesteps drift between definitions and actual registration)
+  - `data/_agent_sessions/*.json` — `agent_sessions` count
+- **Architecture.jsx** —
+  - 3 new amber stat tiles at the end of the row: Agents / Agent Tools / Sessions
+  - New orange "Agents" box in the System Architecture diagram under Integration API, sublines name all 4 definitions (analyst, memo_writer, compliance_monitor, onboarding)
+  - New "Agents" capability card between "Research Hub & Memos" and "Living Mind" with bullets for each definition + session tracking pointer
+
+### Review
+- 1 commit on `main`, pushed, verified on real GitHub via `ls-remote`.
+- 115/115 pandas-and-anthropic-free tests pass in sandbox; full-suite verification needed on laptop (expected 428/428 — no tests added/removed).
+- Applied the ls-remote verification lesson from earlier in the day.
+
+---
+
 ## Completed — 2026-04-20 (session 28: Smoke test + Findings #1/#2/#3 + D1/D3/D4/D5 + D6 + D2 + legacy cleanup)
 
 Session executed the real `external.web_search` smoke test the kickoff prompt
