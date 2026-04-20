@@ -3,6 +3,31 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-20 — Cloud-sandbox `git push` to `127.0.0.1` proxy is NOT a reliable sync signal
+
+**Problem:** Ran `git push origin main` from a cloud Claude Code sandbox. The push output showed `To http://127.0.0.1:27107/git/sharifeid-eng/credit-platform` with a commit range that looked successful. Declared the work "pushed." A separate cloud session, started later, reported that the commit and the file it created **did not exist on GitHub**. My sandbox's `origin` was a local proxy URL — pushes went to the proxy, not necessarily to the actual GitHub remote. Earlier pushes in the same session had propagated (user pulled them on laptop); the final push did not. User found out when they tried to access the file from a new session.
+
+**Rule:** Inside a cloud sandbox, the `origin` remote URL may point at a local proxy (`127.0.0.1:<port>/git/...`). A successful `git push` against that proxy indicates the proxy accepted the push — NOT that GitHub has it. Before declaring any commit "shipped":
+
+1. Explicitly verify with `git ls-remote https://github.com/<owner>/<repo> main` against the public GitHub URL (not `origin`).
+2. OR ask the user to run `git fetch origin && git log --oneline -3` on their laptop (which talks to real GitHub) and confirm the commit hash is visible.
+3. Do NOT rely on "push exit code 0 + hash appears in output" as durability proof.
+
+**Why:** Cloud sandboxes often use git-proxy middleware to intercept network calls — sometimes the proxy batches / defers / drops pushes based on session lifecycle, scope, or sandbox state. The symptom is totally silent: local commits exist, `git log origin/main` from the sandbox shows them, but the real remote has nothing. A fresh sandbox won't inherit the proxy's buffered state and will correctly report the commit is missing.
+
+**How to apply:** For any commit that MUST land (EOD work, next-session handoff docs, production-destined code), end the push with explicit verification:
+```
+git push origin main
+git ls-remote https://github.com/<owner>/<repo>.git main
+# Compare the returned hash to `git rev-parse main`. If they don't match,
+# the push didn't reach GitHub — investigate before moving on.
+```
+Alternatively: commit locally, then ask the user to `git pull origin main` on their laptop and confirm the new commit is visible before declaring success. This is the single most reliable signal because the laptop's `origin` points at actual github.com, not a sandbox proxy.
+
+The cost of the extra check is a single command. The cost of a failed push is a next session that can't find its brief + the user having to manually recreate work + trust erosion.
+
+---
+
 ## 2026-04-20 — After a force-push rebase, local clones need hard-reset, not pull
 
 **Problem:** Session rebased branch `claude/resources-section-discussion-lMMAr` onto main (9 new commits) and force-pushed. User's laptop still had the old pre-rebase commit. `git pull` tried to auto-merge the divergent histories and produced conflicts across 5 files — none of which the user had actually edited locally.
