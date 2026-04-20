@@ -796,10 +796,12 @@ def get_platform_stats():
     tests_count = 0
     tests_dir = project_root / 'tests'
     if tests_dir.is_dir():
+        # Match: "def test_", "    def test_" (class-indented), "async def test_"
+        test_pattern = re.compile(r'^\s*(?:async\s+)?def\s+test_', re.MULTILINE)
         for pyf in tests_dir.rglob('test_*.py'):
             try:
                 content = pyf.read_text(encoding='utf-8', errors='ignore')
-                tests_count += len(re.findall(r'^def test_', content, re.MULTILINE))
+                tests_count += len(test_pattern.findall(content))
             except Exception:
                 pass
 
