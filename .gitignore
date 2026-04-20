@@ -24,3 +24,16 @@ data/_master_mind/
 **/mind/consolidated.json
 **/mind/style_guide.md
 **/mind/profile.json
+
+# Asset Class Mind — semantic asset-class jsonl files. Seeded by
+# scripts/seed_asset_class_mind.py on each machine; analyst-approved
+# entries accumulate via the pending-review queue. Server is authoritative
+# owner (same pattern as _master_mind above).
+data/_asset_class_mind/
+
+# External Intelligence pending-review queue — analyst-gated staging area
+# for web_search and other external findings. Per-machine until approved.
+data/_pending_review/
+
+# Startup dependency probe output (regenerated every app boot)
+data/_platform_health.json
