@@ -5,6 +5,7 @@
   "product": "UAE_healthcare",
   "usd_rate": 0.2723,
   "analysis_type": "klaim",
+  "asset_class": "healthcare_receivables",
   "face_value_column": "Purchase value",
   "tabs": [
     { "slug": "overview",           "label": "Overview" },

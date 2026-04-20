@@ -320,5 +320,28 @@ class TestToolCounts:
                 f"Tool {name} schema missing 'type'"
 
 
+# ── External web_search description contract ────────────────────────────
+
+class TestExternalWebSearchDescription:
+    """Finding #2 regression: the agent was splitting one user request into 3
+    parallel web_search calls because the tool description didn't cap call
+    count. We added a CALL BUDGET clause telling the agent to make one
+    comprehensive call per request. This test locks that in so nobody
+    accidentally removes it during a doc cleanup."""
+
+    def test_call_budget_clause_present(self):
+        spec = registry.get("external.web_search")
+        assert spec is not None, "external.web_search not registered"
+        desc = spec.description
+        assert "CALL BUDGET" in desc, (
+            "external.web_search description lost its CALL BUDGET clause. "
+            "Without it the agent may split one user request into multiple "
+            "parallel searches, producing one pending-review entry per sub-query."
+        )
+        assert "ONE comprehensive call" in desc
+        # Must still mention per-user-request semantics
+        assert "per user request" in desc
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -183,7 +183,13 @@ registry.register(
         "written directly to any Mind. Use this for sector trends, regulatory changes, "
         "peer benchmarks, company news, or any knowledge the analyst hasn't uploaded. "
         "Always specify where the finding should eventually land (company / asset_class / master) "
-        "and what category it represents."
+        "and what category it represents.\n\n"
+        "CALL BUDGET: make ONE comprehensive call per user request — craft a single "
+        "broad query that covers the whole topic rather than splitting into multiple "
+        "sub-queries. Each call costs real tokens AND creates a separate pending entry "
+        "the analyst must review, so combining into one query is strongly preferred. "
+        "Only make a second call if the first returns no usable results and a clearly "
+        "different angle is required."
     ),
     {
         "type": "object",
@@ -199,7 +205,12 @@ registry.register(
             },
             "target_key": {
                 "type": "string",
-                "description": "Required if scope is 'company' (company name, e.g. 'klaim') or 'asset_class' (analysis_type, e.g. 'bnpl'). Omit for 'master'.",
+                "description": (
+                    "Required if scope is 'company' (company name, e.g. 'klaim') or "
+                    "'asset_class' (semantic asset-class key — one of 'healthcare_receivables', "
+                    "'bnpl', 'pos_lending', 'rnpl', 'sme_trade_credit'; match the company's "
+                    "`asset_class` field in config.json). Omit for 'master'."
+                ),
             },
             "category": {
                 "type": "string",

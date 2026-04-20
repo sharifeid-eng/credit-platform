@@ -5,6 +5,7 @@
   "product": "RNPL",
   "usd_rate": 1.0,
   "analysis_type": "ejari_summary",
+  "asset_class": "rnpl",
   "hide_portfolio_tabs": true,
   "tabs": [
     { "slug": "overview",          "label": "Portfolio Overview" },

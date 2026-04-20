@@ -4,8 +4,11 @@ Living Mind — institutional memory for the Laith credit platform.
 Three stores + one dynamic context assembly:
   - MasterMind: fund-level knowledge (preferences, IC norms, cross-co patterns,
                 sector_context for fund-level macro/regulatory)
-  - AssetClassMind: keyed by analysis_type (benchmarks, typical terms, external
-                    research, sector_context, peer_comparison)
+  - AssetClassMind: keyed by semantic asset-class name (e.g. "healthcare_receivables",
+                    "bnpl", "pos_lending"); config.json's `asset_class` field — NOT
+                    `analysis_type` — drives Layer 2.5 resolution. Categories:
+                    benchmarks, typical_terms, external_research, sector_context,
+                    peer_comparison, methodology_note.
   - CompanyMind: per-company knowledge (corrections, memo edits, findings,
                  data quality, entities)
 
@@ -42,7 +45,7 @@ class MindLayeredContext:
 
     framework: str         # Layer 1:   codified framework principles
     master_mind: str       # Layer 2:   fund-level lessons
-    asset_class: str = ""  # Layer 2.5: per-analysis_type benchmarks + external research
+    asset_class: str = ""  # Layer 2.5: semantic asset-class benchmarks + external research
     methodology: str = ""  # Layer 3:   codified company methodology
     company_mind: str = "" # Layer 4:   company-level lessons
     thesis: str = ""       # Layer 5:   investment thesis + drift alerts
@@ -173,15 +176,23 @@ def build_mind_context(
         logger.warning("build_mind_context: Layer 2 (master mind) failed: %s", e)
         master_formatted = ""
 
-    # Layer 2.5: Asset Class Mind (per-analysis_type)
-    # Resolved analysis_type is either passed in, or pulled from company config.
+    # Layer 2.5: Asset Class Mind (semantic asset-class key)
+    # Resolution order:
+    #   1. Explicit `analysis_type` argument (caller override)
+    #   2. config.json `asset_class` field — the preferred, semantic key
+    #      (e.g. "healthcare_receivables", "bnpl", "pos_lending", "rnpl",
+    #      "sme_trade_credit"). Multiple companies in the same asset class
+    #      share a single Asset Class Mind file.
+    #   3. config.json `analysis_type` — fallback for pre-`asset_class` configs.
+    #      Usually the company shortname ("klaim", "silq") and won't match any
+    #      on-disk asset class file, but kept for backward compatibility.
     asset_class_formatted = ""
     resolved_at = analysis_type
     if resolved_at is None:
         try:
             from core.config import load_config
             cfg = load_config(company, product) or {}
-            resolved_at = cfg.get("analysis_type")
+            resolved_at = cfg.get("asset_class") or cfg.get("analysis_type")
         except Exception:
             resolved_at = None
     if resolved_at:

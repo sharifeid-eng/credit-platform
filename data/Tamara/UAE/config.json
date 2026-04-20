@@ -5,6 +5,7 @@
   "product": "UAE",
   "description": "Buy Now Pay Later — United Arab Emirates (BNPL)",
   "analysis_type": "tamara_summary",
+  "asset_class": "bnpl",
   "hide_portfolio_tabs": true,
   "tabs": [
     { "slug": "overview", "label": "Overview" },
