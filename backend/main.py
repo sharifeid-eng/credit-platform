@@ -2922,12 +2922,30 @@ Return ONLY the JSON object, no other text."""
         findings = [{'rank': 1, 'severity': 'warning', 'title': 'Summary generated',
                      'explanation': response_text, 'data_points': [], 'tab': 'overview'}]
 
+    # D2: extract Layer 2.5 external citations so the UI can show the
+    # reader which asset-class research fed this summary. Mind context
+    # was already built inside the per-asset-class helpers above; we
+    # rebuild here purely to pull the structured sources list (the
+    # formatted text is already baked into the prompt). build_mind_context
+    # reads from disk so the duplication is cheap.
+    _asset_class_sources: list = []
+    try:
+        from core.mind import build_mind_context as _build_mind_ctx
+        _mind_ctx = _build_mind_ctx(company, product, 'executive_summary')
+        _asset_class_sources = _mind_ctx.asset_class_sources or []
+    except Exception as e:
+        logger.debug("exec_summary: asset_class_sources fetch failed: %s", e)
+
     result = {
         'narrative': narrative,
         'findings': findings,
         'generated_at': datetime.now().isoformat(),
         'as_of_date': as_of_date or sel.get('date', ''),
         'context_coverage': n_metrics,
+        # D2: citation URLs that were in Layer 2.5 during generation,
+        # deduped + capped at 50 in build_mind_context. Renders as a
+        # collapsible "Informed by N sources" footer in the Exec Summary UI.
+        'asset_class_sources': _asset_class_sources,
     }
     _ai_cache_put(cache_path, result)
     log_activity(AI_EXECUTIVE_SUMMARY, company, product, f"Generated executive summary for {snap_key}")

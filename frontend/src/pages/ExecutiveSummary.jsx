@@ -195,6 +195,8 @@ export default function ExecutiveSummary() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [meta, setMeta] = useState(null)
+  const [assetClassSources, setAssetClassSources] = useState([])
+  const [sourcesExpanded, setSourcesExpanded] = useState(false)
 
   const basePath = `/company/${company}/${product}`
 
@@ -211,6 +213,8 @@ export default function ExecutiveSummary() {
       setFindings(data.findings || [])
       setFromCache(!!data.cached && !refresh)
       setMeta({ generated_at: data.generated_at, coverage: data.context_coverage, cached_at: data.cached_at })
+      // D2: collapse Layer 2.5 external sources into a footer
+      setAssetClassSources(Array.isArray(data.asset_class_sources) ? data.asset_class_sources : [])
     } catch (e) {
       setError(e.response?.data?.detail || e.message || 'Failed to generate summary')
     } finally {
@@ -384,6 +388,15 @@ export default function ExecutiveSummary() {
 
           <SummaryTable rows={narrative.summary_table} />
           <BottomLine text={narrative.bottom_line} />
+
+          {/* D2: Layer 2.5 external sources that fed the summary */}
+          {assetClassSources.length > 0 && (
+            <AssetClassSourcesFooter
+              sources={assetClassSources}
+              expanded={sourcesExpanded}
+              onToggle={() => setSourcesExpanded(v => !v)}
+            />
+          )}
         </>
       )}
 
@@ -481,5 +494,76 @@ export default function ExecutiveSummary() {
         @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.3; } }
       `}</style>
     </div>
+  )
+}
+
+// ── Layer 2.5 sources footer (D2) ─────────────────────────────────────────────
+// Collapsible list of external URLs the Asset Class Mind contributed to the
+// executive summary. NOT an attribution per paragraph (we don't have that
+// provenance); a "what was in context" list. Lands below the Bottom Line and
+// above the Key Findings section to stay visually tethered to the narrative.
+
+function AssetClassSourcesFooter({ sources, expanded, onToggle }) {
+  // Cap render at 25 rows — build_mind_context already dedupes+caps at 50.
+  const visible = sources.slice(0, 25)
+  const overflow = sources.length - visible.length
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      style={{
+        marginTop: 18, padding: 14,
+        background: 'rgba(45,212,191,0.04)',
+        border: '1px solid rgba(45,212,191,0.18)',
+        borderRadius: 8,
+      }}
+    >
+      <button
+        onClick={onToggle}
+        style={{
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+          textTransform: 'uppercase', color: 'var(--teal)',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}
+        title="External sources from the Asset Class Mind that were in AI context during generation"
+      >
+        <span>{expanded ? '▾' : '▸'}</span>
+        Informed by {sources.length} asset-class source{sources.length === 1 ? '' : 's'}
+      </button>
+
+      {expanded && (
+        <ol style={{
+          margin: '10px 0 0 18px', padding: 0,
+          fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6,
+        }}>
+          {visible.map((s, i) => (
+            <li key={i} style={{ marginBottom: 4 }}>
+              <a
+                href={s.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                style={{ color: 'var(--teal)', textDecoration: 'none' }}
+                onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline' }}
+                onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}
+              >
+                {s.title || s.url}
+              </a>
+              <span style={{ color: 'var(--text-faint)', marginLeft: 8, fontSize: 10 }}>
+                · {s.entry_category || 'entry'} · {s.source || 'unknown'}
+                {s.page_age ? ` · ${s.page_age}` : ''}
+              </span>
+            </li>
+          ))}
+          {overflow > 0 && (
+            <li style={{ color: 'var(--text-faint)', fontSize: 10, listStyle: 'none', marginTop: 6 }}>
+              … and {overflow} more source{overflow === 1 ? '' : 's'} (Operator → Asset Classes to browse all)
+            </li>
+          )}
+        </ol>
+      )}
+    </motion.div>
   )
 }
