@@ -1528,11 +1528,14 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - [x] **Legacy "Promote to Master" soft-flag** — MindEntryRow's existing button called `updateOperatorMindEntry(id, {promoted: true})`, a soft flag that only marked the source entry but never copied content into `data/_master_mind/`. Now wired to real `/api/mind/promote` via inline form matching the D1 pattern: Master-category dropdown (6 values from `_MASTER_FILES`), optional note, shared error/submitting state. State refactor: `activeForm` (`null | 'asset_class' | 'master'`) replaces single `showPromoteForm`; both promotion paths mutually exclusive. Commit `00fccf3`. The legacy PATCH `/api/operator/mind/{id}` endpoint still exists but no UI calls it.
 - [x] Test count: 461 passing (was 453; +3 D2 `TestAssetClassSources` + 5 D6 `TestFrameworkCodification`).
 
-**Still deferred:**
+**Session 28 follow-up round 2 (2026-04-20):**
+- [x] **Legacy PATCH `/operator/mind/{id}` endpoint removed** — `update_mind_entry` handler + `MindUpdate` model + `_promote_to_master` helper all deleted from `backend/operator.py` (commit `dd0849c`). The endpoint had been orphaned since the 00fccf3 UI rewiring; this commit removes the backend code so nobody reintroduces a soft-flag promotion path. `updateOperatorMindEntry` export also removed from `frontend/src/services/api.js`.
+- [x] **D6 UI surface — Codification tab** (commit `1f631db`) — OperatorCenter gains a 13th tab ("Codification", between Asset Classes and any future tab). New `CodificationTab` component shows 3-number stats row + pending/all filter + per-entry `CodificationCard` (status chip, provenance chain "← from asset_class/bnpl", inline mark-codified form with optional commit_sha + framework_section inputs). `getFrameworkCodificationCandidates` + `markFrameworkEntryCodified` API helpers added. Tab badge shows pending count.
+- [x] **D2 broader — Executive Summary citations** (commit `36bd63d`) — `/ai-executive-summary` response gains `asset_class_sources` (same shape as chat endpoint). `ExecutiveSummary.jsx` renders collapsible "▸ Informed by N asset-class sources" footer between Bottom Line and Key Findings, up to 25 clickable titles visible, overflow hint points to Asset Classes tab.
+
+**Still deferred (indefinitely):**
 - [ ] D7: Scheduled external pollers (parked — on-demand model preferred)
-- [ ] D6 UI surface — OperatorCenter "Codification" tab (or Briefing badge) that lists pending `framework_evolution` entries and surfaces the POST endpoint. Waiting for `/extend-framework` command to be the first API consumer.
-- [ ] Legacy PATCH `/api/operator/mind/{id}` soft-flag endpoint itself — no longer called by any UI, safe to remove in a cleanup commit.
-- [ ] D2 broader rollout — citations currently surface only in DataChat. Executive Summary and AI Commentary don't yet render `asset_class_sources` (commentary doesn't inject mind context at all; executive summary would need the helper return type changed from string to a tuple/dataclass). Value-incremental — add if analysts ask.
+- [ ] D2 for AI Commentary — commentary currently injects zero mind context; adding citations would require rewriting what the AI sees. Separate design discussion if analysts ask.
 
 **Post-Session-24 Rollout Bugfix Patch ✅ COMPLETE (session 25 — 2026-04-18):**
 - [x] Fix 1: Bidirectional orphan eviction — `DataRoomEngine.prune()` + auto-call in `ingest()`/`refresh()` + `dataroom_ctl prune` subcommand
