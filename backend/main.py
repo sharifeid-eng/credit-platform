@@ -2266,8 +2266,10 @@ def _build_klaim_full_context(df, mult, as_of_date, config, disp, snapshot_date)
 
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
+        # Don't pass analysis_type — config.json's `asset_class` field
+        # (healthcare_receivables) is the correct Layer 2.5 key.
         mind_ctx = build_mind_context('klaim', config.get('product', 'UAE_healthcare'),
-                                       'executive_summary', analysis_type='klaim')
+                                       'executive_summary')
         if not mind_ctx.is_empty:
             sections.append("")
             sections.append("PLATFORM MEMORY:")
@@ -2354,7 +2356,7 @@ def _build_silq_full_context(df, mult, ref_date, config, disp):
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
         mind_ctx = build_mind_context('SILQ', config.get('product', 'KSA'),
-                                       'executive_summary', analysis_type='silq')
+                                       'executive_summary')
         if not mind_ctx.is_empty:
             sections.append("")
             sections.append("PLATFORM MEMORY:")
@@ -2437,7 +2439,7 @@ def _build_aajil_full_context(data_or_df, mult=1, ref_date=None, aux=None, confi
     # Inject Living Mind context
     try:
         mind_ctx = build_mind_context('Aajil', 'KSA',
-                                       'executive_summary', analysis_type='aajil')
+                                       'executive_summary')
         if not mind_ctx.is_empty:
             sections.append("")
             sections.append("PLATFORM MEMORY:")
@@ -2563,7 +2565,7 @@ def _build_tamara_full_context(data):
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
         mind_ctx = build_mind_context('Tamara', 'KSA',
-                                       'executive_summary', analysis_type='tamara_summary')
+                                       'executive_summary')
         if not mind_ctx.is_empty:
             sections.append("")
             sections.append("PLATFORM MEMORY:")
@@ -2675,7 +2677,7 @@ def _build_ejari_full_context(data):
     # Inject Living Mind context (Layer 2 + Layer 4)
     try:
         mind_ctx = build_mind_context('Ejari', 'RNPL',
-                                       'executive_summary', analysis_type='ejari_summary')
+                                       'executive_summary')
         if not mind_ctx.is_empty:
             sections.append("")
             sections.append("PLATFORM MEMORY:")
@@ -3252,11 +3254,13 @@ def chat_with_data(company: str, product: str, request: dict,
 
     # Inject mind context with graph-aware scoring keyed to user question
     mind_chat_ctx = ""
+    asset_class_sources: list = []
     try:
         mind_ctx = build_mind_context(company, product, 'chat',
                                        query_text=request.get('question', ''))
         if not mind_ctx.is_empty:
             mind_chat_ctx = f"\n\nPLATFORM MEMORY:\n{mind_ctx.formatted}"
+        asset_class_sources = mind_ctx.asset_class_sources or []
     except Exception as e:
         logger.debug("Chat context: mind failed: %s", e)
 
@@ -3290,7 +3294,14 @@ INSTRUCTIONS:
         messages=msgs, log_prefix=f"chat.{company}",
     )
     log_activity(AI_CHAT, company, product, f"Chat: {request.get('question', '')[:80]}")
-    return {'answer': resp.content[0].text, 'question': request.get('question', '')}
+    return {
+        'answer': resp.content[0].text,
+        'question': request.get('question', ''),
+        # D2: surface Layer 2.5 external sources that were in context so
+        # the analyst can see what external research fed the answer.
+        # Already deduped + capped in build_mind_context.
+        'asset_class_sources': asset_class_sources,
+    }
 
 
 def _silq_chat(company, product, request, snap, aod, cur):
@@ -3309,11 +3320,13 @@ def _silq_chat(company, product, request, snap, aod, cur):
 
     # Inject mind context with graph-aware scoring keyed to user question
     mind_chat_ctx = ""
+    asset_class_sources: list = []
     try:
         mind_ctx = build_mind_context(company, product, 'chat',
                                        query_text=request.get('question', ''))
         if not mind_ctx.is_empty:
             mind_chat_ctx = f"\n\nPLATFORM MEMORY:\n{mind_ctx.formatted}"
+        asset_class_sources = mind_ctx.asset_class_sources or []
     except Exception as e:
         logger.debug("SILQ chat context: mind failed: %s", e)
 
@@ -3367,7 +3380,11 @@ INSTRUCTIONS:
         messages=msgs, log_prefix="chat.silq",
     )
     log_activity(AI_CHAT, company, product, f"Chat: {request.get('question', '')[:80]}")
-    return {'answer': resp.content[0].text, 'question': request.get('question', '')}
+    return {
+        'answer': resp.content[0].text,
+        'question': request.get('question', ''),
+        'asset_class_sources': asset_class_sources,
+    }
 # ── Portfolio Analytics endpoints ─────────────────────────────────────────────
 
 def _facility_params_path(company, product):

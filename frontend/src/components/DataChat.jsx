@@ -52,11 +52,16 @@ export default function DataChat({ company, product, snapshot, currency }) {
       setLegacyMessages(prev => [...prev, { role: 'user', text: q }])
       setLegacyLoading(true)
       try {
+        // postChat now returns the full payload {answer, question,
+        // asset_class_sources} so we can render Layer 2.5 citations
+        // alongside the answer text (D2).
         const reply = await postChat(company, product, snapshot, currency, q, legacyMessages)
-        if (!reply || !reply.trim()) {
+        const answer = reply?.answer || ''
+        const sources = Array.isArray(reply?.asset_class_sources) ? reply.asset_class_sources : []
+        if (!answer.trim()) {
           setLegacyMessages(prev => [...prev, { role: 'ai', text: 'No response received — please try again.', isError: true }])
         } else {
-          setLegacyMessages(prev => [...prev, { role: 'ai', text: reply }])
+          setLegacyMessages(prev => [...prev, { role: 'ai', text: answer, assetClassSources: sources }])
         }
       } catch {
         setLegacyMessages(prev => [...prev, { role: 'ai', text: 'Error — please try again.', isError: true }])
@@ -232,6 +237,7 @@ export default function DataChat({ company, product, snapshot, currency }) {
 function Bubble({ msg, company, product }) {
   const isUser = msg.role === 'user'
   const [feedback, setFeedback] = useState(null) // 'up' | 'down' | null
+  const [sourcesExpanded, setSourcesExpanded] = useState(false)
 
   const handleFeedback = async (rating) => {
     setFeedback(rating)
@@ -244,6 +250,15 @@ function Bubble({ msg, company, product }) {
       console.error('Feedback failed:', e)
     }
   }
+
+  // Layer 2.5 external sources — only present on AI replies where the
+  // Asset Class Mind had citation-bearing entries in context. Not an
+  // attribution of which URL informed which sentence (we don't have
+  // per-sentence provenance), just "here's the research that was
+  // available in context when the model answered."
+  const assetClassSources = !isUser && Array.isArray(msg.assetClassSources)
+    ? msg.assetClassSources
+    : []
 
   return (
     <div style={{
@@ -260,6 +275,54 @@ function Bubble({ msg, company, product }) {
       }}>
         {msg.text}
       </div>
+
+      {/* Layer 2.5 external sources (D2): collapsible footer */}
+      {assetClassSources.length > 0 && (
+        <div style={{ marginTop: 4, marginLeft: 4 }}>
+          <button
+            onClick={() => setSourcesExpanded(v => !v)}
+            style={{
+              background: 'none', border: 'none', padding: '2px 0', cursor: 'pointer',
+              fontSize: 9, color: 'var(--text-faint)', letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+            }}
+            title="External sources from the Asset Class Mind that were available in context"
+          >
+            {sourcesExpanded ? '▾' : '▸'} Informed by {assetClassSources.length} asset-class source{assetClassSources.length === 1 ? '' : 's'}
+          </button>
+          {sourcesExpanded && (
+            <ol style={{
+              margin: '4px 0 0 14px', padding: 0, fontSize: 10,
+              color: 'var(--text-muted)', lineHeight: 1.5,
+            }}>
+              {assetClassSources.slice(0, 25).map((s, i) => (
+                <li key={i} style={{ marginBottom: 3 }}>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    style={{ color: 'var(--teal)', textDecoration: 'none' }}
+                    onMouseEnter={e => { e.target.style.textDecoration = 'underline' }}
+                    onMouseLeave={e => { e.target.style.textDecoration = 'none' }}
+                  >
+                    {s.title || s.url}
+                  </a>
+                  <span style={{ color: 'var(--text-faint)', marginLeft: 6, fontSize: 9 }}>
+                    · {s.entry_category || 'entry'} · {s.source || 'unknown'}
+                    {s.page_age ? ` · ${s.page_age}` : ''}
+                  </span>
+                </li>
+              ))}
+              {assetClassSources.length > 25 && (
+                <li style={{ color: 'var(--text-faint)', fontSize: 9, listStyle: 'none' }}>
+                  … and {assetClassSources.length - 25} more (Operator → Asset Classes to browse)
+                </li>
+              )}
+            </ol>
+          )}
+        </div>
+      )}
+
       {/* Feedback buttons for AI responses */}
       {!isUser && !msg.isError && (
         <div style={{ display: 'flex', gap: 4, marginTop: 3, marginLeft: 4 }}>

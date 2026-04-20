@@ -24,8 +24,8 @@ build_mind_context() assembles a 6-layer knowledge context for any AI prompt:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 
 from core.mind.asset_class_mind import AssetClassMind
 from core.mind.company_mind import CompanyMind
@@ -50,6 +50,15 @@ class MindLayeredContext:
     company_mind: str = "" # Layer 4:   company-level lessons
     thesis: str = ""       # Layer 5:   investment thesis + drift alerts
     total_entries: int = 0 # Total mind entries included (L2 + L2.5 + L4)
+
+    # Structured citation sources contributing to Layer 2.5. Populated by
+    # build_mind_context() when the resolved AssetClassMind has entries
+    # with `metadata.citations` (typically web_search-approved entries).
+    # Shape: [{"source": "web_search" | "manual" | ..., "entry_category":
+    # "benchmarks" | ..., "entry_title": str, "url": str, "title": str,
+    # "page_age": str}]. Frontend renders these under AI output so
+    # analysts can see which external sources fed the response.
+    asset_class_sources: List[Dict[str, str]] = field(default_factory=list)
 
     @property
     def formatted(self) -> str:
@@ -187,6 +196,7 @@ def build_mind_context(
     #      Usually the company shortname ("klaim", "silq") and won't match any
     #      on-disk asset class file, but kept for backward compatibility.
     asset_class_formatted = ""
+    asset_class_sources: List[Dict[str, str]] = []
     resolved_at = analysis_type
     if resolved_at is None:
         try:
@@ -201,9 +211,52 @@ def build_mind_context(
             ac_ctx = ac_mind.get_context_for_prompt(task_type)
             asset_class_formatted = ac_ctx.formatted
             total_entries += ac_ctx.entry_count
+            # Flatten citation URLs from every entry's metadata into a
+            # deduped list the frontend can render. Entries that share
+            # the same URL (common — web_search agents often cite the
+            # same landing page for related queries) collapse to one row.
+            # Each row carries back-pointers (entry category + title +
+            # source type) so the UI can show provenance.
+            #
+            # Cap at _MAX_SOURCES so the payload stays bounded even
+            # after years of approved web_search entries accumulate. The
+            # cap is generous — analysts asked for transparency, not
+            # summarization — but prevents 10K-row UI renders.
+            _MAX_SOURCES = 50
+            _seen_urls: set = set()
+            for e in getattr(ac_ctx, "entries", []) or []:
+                if len(asset_class_sources) >= _MAX_SOURCES:
+                    break
+                meta = getattr(e, "metadata", {}) or {}
+                cits = meta.get("citations") or []
+                if not cits:
+                    continue
+                entry_source = meta.get("source", "unknown")
+                entry_category = getattr(e, "category", "") or ""
+                entry_title = meta.get("query") or (
+                    (getattr(e, "content", "") or "")[:80]
+                )
+                for c in cits:
+                    if len(asset_class_sources) >= _MAX_SOURCES:
+                        break
+                    if not isinstance(c, dict):
+                        continue
+                    url = c.get("url", "")
+                    if not url or url in _seen_urls:
+                        continue
+                    _seen_urls.add(url)
+                    asset_class_sources.append({
+                        "source": entry_source,
+                        "entry_category": entry_category,
+                        "entry_title": entry_title,
+                        "url": url,
+                        "title": c.get("title", "") or "",
+                        "page_age": c.get("page_age", "") or "",
+                    })
         except Exception as e:
             logger.warning("build_mind_context: Layer 2.5 (asset class) failed: %s", e)
             asset_class_formatted = ""
+            asset_class_sources = []
 
     # Layer 3: Methodology (codified company rules)
     try:
@@ -247,4 +300,5 @@ def build_mind_context(
         company_mind=company_formatted,
         thesis=thesis_ctx,
         total_entries=total_entries,
+        asset_class_sources=asset_class_sources,
     )

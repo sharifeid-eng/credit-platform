@@ -43,6 +43,13 @@ def isolated_project(tmp_path, monkeypatch):
 
     monkeypatch.setattr("core.mind.company_mind._PROJECT_ROOT", tmp_path)
     monkeypatch.setattr("core.mind.master_mind._PROJECT_ROOT", tmp_path)
+    # MasterMind reads _MASTER_DIR (computed at module load time from
+    # _PROJECT_ROOT), not _PROJECT_ROOT directly — patching just
+    # _PROJECT_ROOT won't redirect writes. Patch both.
+    monkeypatch.setattr(
+        "core.mind.master_mind._MASTER_DIR",
+        data_dir / "_master_mind",
+    )
     monkeypatch.setattr("core.mind.asset_class_mind._PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
         "core.mind.asset_class_mind._BASE_DIR",
@@ -469,6 +476,223 @@ class TestWebSearchTool:
             category="benchmarks",
         )
         assert "Invalid category" in out
+
+
+# ── D2: asset_class_sources population in build_mind_context ──────────────
+
+
+class TestAssetClassSources:
+    """D2 regression: build_mind_context() must surface citation URLs
+    from Asset Class Mind entries so the DataChat UI can render them
+    under AI answers.
+    """
+
+    def test_sources_populated_from_web_search_citations(
+        self, isolated_project, monkeypatch
+    ):
+        # Config resolver needs to find the company's asset_class
+        import core.config  # noqa: F401
+        import core.loader  # noqa: F401
+
+        data = isolated_project
+        co_dir = data / "klaim" / "UAE_healthcare"
+        co_dir.mkdir(parents=True)
+        co_dir.joinpath("config.json").write_text(json.dumps({
+            "analysis_type": "klaim",
+            "asset_class": "healthcare_receivables",
+            "currency": "AED",
+        }), encoding="utf-8")
+        monkeypatch.setattr("core.config.DATA_DIR", str(data))
+        monkeypatch.setattr("core.loader.DATA_DIR", str(data))
+
+        from core.mind import build_mind_context
+        from core.mind.asset_class_mind import AssetClassMind
+
+        acm = AssetClassMind("healthcare_receivables")
+        acm.record(
+            category="benchmarks",
+            content="MENA factoring benchmark synthesis",
+            metadata={
+                "source": "web_search",
+                "query": "MENA healthcare factoring defaults",
+                "citations": [
+                    {"url": "https://example.test/a", "title": "Source A", "page_age": "2024"},
+                    {"url": "https://example.test/b", "title": "Source B", "page_age": ""},
+                ],
+            },
+        )
+
+        ctx = build_mind_context(
+            "klaim", "UAE_healthcare",
+            task_type="chat",
+        )
+        assert len(ctx.asset_class_sources) == 2
+        first = ctx.asset_class_sources[0]
+        assert first["url"].startswith("https://example.test/")
+        assert first["source"] == "web_search"
+        assert first["entry_category"] == "benchmarks"
+        # The query string used to search becomes the entry_title —
+        # that's the analyst-meaningful label
+        assert first["entry_title"] == "MENA healthcare factoring defaults"
+
+    def test_sources_dedupe_by_url(self, isolated_project, monkeypatch):
+        import core.config  # noqa: F401
+        import core.loader  # noqa: F401
+
+        data = isolated_project
+        co_dir = data / "klaim" / "UAE_healthcare"
+        co_dir.mkdir(parents=True)
+        co_dir.joinpath("config.json").write_text(json.dumps({
+            "asset_class": "healthcare_receivables",
+            "currency": "AED",
+        }), encoding="utf-8")
+        monkeypatch.setattr("core.config.DATA_DIR", str(data))
+        monkeypatch.setattr("core.loader.DATA_DIR", str(data))
+
+        from core.mind import build_mind_context
+        from core.mind.asset_class_mind import AssetClassMind
+
+        acm = AssetClassMind("healthcare_receivables")
+        # Two entries citing the same URL — the flat sources list must
+        # keep only one row (common case: multiple web_search queries
+        # cite the same landing page).
+        for i in range(2):
+            acm.record(
+                category="benchmarks",
+                content=f"entry {i}",
+                metadata={
+                    "source": "web_search",
+                    "citations": [
+                        {"url": "https://example.test/shared", "title": "Shared",
+                         "page_age": ""},
+                    ],
+                },
+            )
+
+        ctx = build_mind_context("klaim", "UAE_healthcare", task_type="chat")
+        urls = [s["url"] for s in ctx.asset_class_sources]
+        assert urls == ["https://example.test/shared"], (
+            f"Expected deduped URL list, got {urls}"
+        )
+
+    def test_sources_empty_when_no_citations(self, isolated_project, monkeypatch):
+        """Seed-style entries (source='seed:platform_docs', no citations)
+        must not produce dangling source rows with empty URLs."""
+        import core.config  # noqa: F401
+
+        data = isolated_project
+        co_dir = data / "klaim" / "UAE_healthcare"
+        co_dir.mkdir(parents=True)
+        co_dir.joinpath("config.json").write_text(json.dumps({
+            "asset_class": "healthcare_receivables",
+        }), encoding="utf-8")
+        monkeypatch.setattr("core.config.DATA_DIR", str(data))
+        monkeypatch.setattr("core.loader.DATA_DIR", str(data))
+
+        from core.mind import build_mind_context
+        from core.mind.asset_class_mind import AssetClassMind
+
+        acm = AssetClassMind("healthcare_receivables")
+        # Use `benchmarks` — in both chat + executive_summary task
+        # relevance lists — so the entry actually lands in Layer 2.5.
+        # The test point is "no citations → no sources", not category
+        # filter behaviour.
+        acm.record(
+            category="benchmarks",
+            content="A seeded benchmark with no external URLs",
+            metadata={"source": "seed:platform_docs"},
+        )
+
+        ctx = build_mind_context("klaim", "UAE_healthcare", task_type="chat")
+        assert ctx.asset_class_sources == []
+        # Layer 2.5 text still populated — sources are optional
+        assert "seeded benchmark" in ctx.asset_class
+
+
+# ── D6: framework codification hook ───────────────────────────────────────
+
+
+class TestFrameworkCodification:
+    """D6 regression: master-mind `framework_evolution` entries must be
+    enumerable (codification queue) and individually markable codified
+    (close-the-loop flag)."""
+
+    def _seed_entry(self, content: str, reason: str = "test fixture"):
+        """Helper — write one framework_evolution entry via MasterMind.
+
+        MasterMind.record_framework_evolution takes (change, reason, date);
+        we keep the call minimal for these tests.
+        """
+        from core.mind.master_mind import MasterMind
+        mm = MasterMind()
+        return mm.record_framework_evolution(content, reason=reason)
+
+    def test_empty_queue_returns_empty_list(self, isolated_project):
+        from core.mind.framework_codification import get_codification_candidates
+        assert get_codification_candidates() == []
+
+    def test_queue_returns_pending_only_by_default(self, isolated_project):
+        from core.mind.framework_codification import (
+            get_codification_candidates, mark_codified,
+        )
+        e1 = self._seed_entry("Pending codification — new PAR definition")
+        e2 = self._seed_entry("Already done — HHI methodology update")
+        mark_codified(e2.id, commit_sha="abc123", framework_section="Section 4")
+
+        pending = get_codification_candidates()
+        assert len(pending) == 1
+        assert pending[0]["id"] == e1.id
+        assert pending[0]["codified_in_framework"] is False
+
+        all_entries = get_codification_candidates(include_codified=True)
+        assert len(all_entries) == 2
+
+    def test_mark_codified_persists_metadata(self, isolated_project):
+        from core.mind.framework_codification import (
+            get_codification_candidates, mark_codified,
+        )
+        entry = self._seed_entry("Framework tweak — denominator discipline")
+        mark_codified(
+            entry.id,
+            commit_sha="deadbee",
+            framework_section="Section 6",
+            codified_by="analyst@example",
+        )
+
+        # Re-read from disk
+        codified = [
+            e for e in get_codification_candidates(include_codified=True)
+            if e["id"] == entry.id
+        ][0]
+        assert codified["codified_in_framework"] is True
+        assert codified["codification_commit"] == "deadbee"
+        assert codified["metadata"].get("codification_section") == "Section 6"
+        assert codified["metadata"].get("codified_by") == "analyst@example"
+        assert codified["metadata"].get("codified_at")  # timestamp set
+
+    def test_mark_codified_raises_on_unknown_id(self, isolated_project):
+        from core.mind.framework_codification import mark_codified
+        # File doesn't exist yet — different error than "id not found"
+        with pytest.raises(ValueError, match="not found"):
+            mark_codified("nonexistent-id")
+
+        # After seeding, unknown id -> "No framework_evolution entry"
+        self._seed_entry("real entry")
+        with pytest.raises(ValueError, match="No framework_evolution entry"):
+            mark_codified("still-not-a-real-id")
+
+    def test_counts(self, isolated_project):
+        from core.mind.framework_codification import (
+            codification_counts, mark_codified,
+        )
+        e1 = self._seed_entry("pending 1")
+        e2 = self._seed_entry("pending 2")
+        self._seed_entry("pending 3")
+        mark_codified(e1.id, commit_sha="abc", framework_section="S1")
+        mark_codified(e2.id, commit_sha="def", framework_section="S2")
+
+        c = codification_counts()
+        assert c == {"total": 3, "codified": 2, "pending": 1}
 
 
 if __name__ == "__main__":

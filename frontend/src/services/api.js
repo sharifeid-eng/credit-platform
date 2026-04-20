@@ -61,8 +61,11 @@ export const getTabInsight       = (co, prod, snap, cur, tab, asOf, { refresh = 
 export const getExecutiveSummaryAgent = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
   api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}), mode: 'agent' } }).then(r => r.data);
 
+// Returns the full response object `{answer, question, asset_class_sources}`.
+// Callers that only care about the answer text should read `.answer`;
+// asset_class_sources carries Layer 2.5 external-source citations (D2).
 export const postChat            = (co, prod, snap, cur, question, history = []) =>
-  api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data.answer);
+  api.post(`/companies/${co}/products/${prod}/chat`, { question, history, snapshot: snap, currency: cur }).then(r => r.data);
 
 // ── Agent endpoints ─────────────────────────────────────────────────────
 export const AGENT_ANALYST_URL   = (co, prod) => `/agents/${co}/${prod}/analyst/stream`;
