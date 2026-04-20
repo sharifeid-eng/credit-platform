@@ -203,6 +203,9 @@ app.include_router(auth_router)
 from backend.intelligence import router as intelligence_router
 app.include_router(intelligence_router)
 
+from backend.external import router as external_router
+app.include_router(external_router)
+
 from backend.agents import router as agents_router
 app.include_router(agents_router, prefix="/agents", tags=["agents"])
 

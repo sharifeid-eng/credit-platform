@@ -112,5 +112,6 @@ def register_all_tools() -> None:
     from core.agents.tools import portfolio  # noqa: F401
     from core.agents.tools import compliance  # noqa: F401
     from core.agents.tools import computation  # noqa: F401
+    from core.agents.tools import external  # noqa: F401
 
     logger.info("Registered %d agent tools", len(registry.tool_names()))
