@@ -336,7 +336,9 @@ export const updateOperatorTodo      = (id, update) => api.patch(`/api/operator/
 export const deleteOperatorTodo      = (id) => api.delete(`/api/operator/todo/${id}`).then(r => r.data);
 export const getOperatorMind         = (company = null, category = null) =>
   api.get('/api/operator/mind', { params: { ...(company ? { company } : {}), ...(category ? { category } : {}) } }).then(r => r.data);
-export const updateOperatorMindEntry = (id, update) => api.patch(`/api/operator/mind/${id}`, update).then(r => r.data);
+// updateOperatorMindEntry removed 2026-04-20 — the PATCH /api/operator/mind/{id}
+// endpoint it wrapped was a soft-flag promoter superseded by promoteMindEntry()
+// (POST /api/mind/promote), which tracks real provenance. See lessons.md.
 export const sendOperatorDigest      = (webhookUrl = null) =>
   api.post('/api/operator/digest', null, { params: webhookUrl ? { webhook_url: webhookUrl } : {} }).then(r => r.data);
 
@@ -370,6 +372,19 @@ export const getAssetClassEntries    = (analysisType, { category = null, limit =
     params: { limit, ...(category ? { category } : {}) },
   }).then(r => r.data);
 export const promoteMindEntry        = (body) => api.post('/api/mind/promote', body).then(r => r.data);
+
+// Framework codification (D6) — the /extend-framework slash command + this
+// UI tab read the queue and mark entries codified once a Framework update
+// lands.
+export const getFrameworkCodificationCandidates = ({ includeCodified = false, limit = null } = {}) =>
+  api.get('/api/framework/codification-candidates', {
+    params: {
+      include_codified: includeCodified,
+      ...(limit ? { limit } : {}),
+    },
+  }).then(r => r.data);
+export const markFrameworkEntryCodified = (entryId, body = {}) =>
+  api.post(`/api/framework/codify/${entryId}`, body).then(r => r.data);
 export const getThesis               = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis`).then(r => r.data);
 export const saveThesis              = (co, prod, thesis) => api.post(`/companies/${co}/products/${prod}/thesis`, thesis).then(r => r.data);
 export const getThesisDrift          = (co, prod) => api.get(`/companies/${co}/products/${prod}/thesis/drift`).then(r => r.data);

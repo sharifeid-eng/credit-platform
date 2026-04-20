@@ -287,11 +287,6 @@ class TodoUpdate(BaseModel):
     priority: Optional[str] = None
     category: Optional[str] = None
 
-class MindUpdate(BaseModel):
-    promoted: Optional[bool] = None
-    archived: Optional[bool] = None
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/status")
@@ -415,86 +410,14 @@ def get_mind_entries(company: Optional[str] = None, category: Optional[str] = No
     }
 
 
-@router.patch("/mind/{entry_id}")
-def update_mind_entry(entry_id: str, update: MindUpdate):
-    """Promote or archive a mind entry.
-
-    Promotion: copies a company mind entry to master mind.
-    Archive: marks an entry with archived flag (soft delete).
-    """
-    # Find the entry across all JSONL files
-    all_dirs = []
-
-    # Master mind
-    master_dir = Path(DATA_DIR) / "_master_mind"
-    if master_dir.is_dir():
-        all_dirs.append(("master", None, None, master_dir))
-
-    # Company minds
-    for co in get_companies():
-        if co.startswith("_"):
-            continue
-        mind_dir = Path(DATA_DIR) / co / "mind"
-        if mind_dir.is_dir():
-            all_dirs.append(("company", co, None, mind_dir))
-
-    # Search for the entry
-    for source, co, prod, mind_dir in all_dirs:
-        for jf in mind_dir.glob("*.jsonl"):
-            lines = []
-            found = False
-            try:
-                with open(jf) as f:
-                    for line in f:
-                        stripped = line.strip()
-                        if not stripped:
-                            lines.append(line)
-                            continue
-                        entry = json.loads(stripped)
-                        if entry.get("id") == entry_id:
-                            found = True
-                            if update.promoted is not None:
-                                entry["promoted"] = update.promoted
-                            if update.archived is not None:
-                                entry["archived"] = update.archived
-                            lines.append(json.dumps(entry, ensure_ascii=False) + "\n")
-
-                            # If promoting from company to master, also append to master
-                            if update.promoted and source == "company":
-                                _promote_to_master(entry, co, prod)
-                        else:
-                            lines.append(line)
-                if found:
-                    with open(jf, "w") as f:
-                        f.writelines(lines)
-                    return {"ok": True, "id": entry_id}
-            except Exception:
-                continue
-
-    raise HTTPException(status_code=404, detail="Mind entry not found")
-
-
-def _promote_to_master(entry: dict, company: str, product: str):
-    """Copy a company mind entry to the master mind cross_company file."""
-    master_dir = Path(DATA_DIR) / "_master_mind"
-    master_dir.mkdir(parents=True, exist_ok=True)
-    cross_company_path = master_dir / "cross_company.jsonl"
-
-    promoted_entry = {
-        "id": str(uuid.uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "category": "cross_company",
-        "content": f"[Promoted from {company}/{product}] {entry.get('content', '')}",
-        "metadata": {
-            "source_company": company,
-            "source_product": product,
-            "source_id": entry.get("id"),
-            "source_category": entry.get("category"),
-        },
-        "promoted": False,
-    }
-    with open(cross_company_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(promoted_entry, ensure_ascii=False) + "\n")
+# Legacy PATCH /mind/{id} + _promote_to_master helper removed 2026-04-20.
+# They wrote a flat-metadata copy to master_mind/cross_company.jsonl and set
+# a `promoted: true` soft-flag on the source, but didn't track the
+# promoted_from/promoted_to provenance chain the rest of the system reads.
+# The UI stopped calling it when the OperatorCenter Mind tab was wired to
+# /api/mind/promote (core/mind/promotion.py) — the only supported path now.
+# See session-28 lessons.md ("UI buttons labelled as provenance operations
+# need to actually do them") for the why.
 
 
 @router.post("/digest")
