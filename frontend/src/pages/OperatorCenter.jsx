@@ -10,6 +10,7 @@ import {
   getDataroomHealthAll,
   getPendingReview, approvePendingEntry, rejectPendingEntry,
   getAssetClasses, getAssetClassEntries, promoteMindEntry,
+  getFrameworkCodificationCandidates, markFrameworkEntryCodified,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -781,6 +782,7 @@ export default function OperatorCenter() {
   const [datarooms, setDatarooms] = useState(null)
   const [pending,   setPending]   = useState(null)
   const [assetClasses, setAssetClasses] = useState(null)
+  const [codification, setCodification] = useState(null)  // D6 queue
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -840,6 +842,14 @@ export default function OperatorCenter() {
       getAssetClasses()
         .then(d => setAssetClasses(d.asset_classes || []))
         .catch(e => { console.error('Asset classes load failed:', e); setAssetClasses([]) })
+    }
+    if (activeTab === 'codification' && codification === null) {
+      getFrameworkCodificationCandidates({ includeCodified: true, limit: 100 })
+        .then(setCodification)
+        .catch(e => {
+          console.error('Codification queue load failed:', e)
+          setCodification({ candidates: [], counts: {}, error: 'Load failed' })
+        })
     }
   }, [activeTab, mindFilter, thesisCompany])
 
@@ -1029,6 +1039,12 @@ export default function OperatorCenter() {
             active={activeTab === 'asset_classes'}
             onClick={() => setActiveTab('asset_classes')}
             count={assetClasses?.length || null}
+          />
+          <TabButton
+            label="Codification"
+            active={activeTab === 'codification'}
+            onClick={() => setActiveTab('codification')}
+            count={codification?.counts?.pending || null}
           />
         </div>
 
@@ -1655,6 +1671,19 @@ export default function OperatorCenter() {
                 onRefresh={() => {
                   setAssetClasses(null)
                   getAssetClasses().then(d => setAssetClasses(d.asset_classes || [])).catch(() => setAssetClasses([]))
+                }}
+              />
+            )}
+
+            {/* ── Codification Tab (D6) ── */}
+            {activeTab === 'codification' && (
+              <CodificationTab
+                data={codification}
+                onRefresh={() => {
+                  setCodification(null)
+                  getFrameworkCodificationCandidates({ includeCodified: true, limit: 100 })
+                    .then(setCodification)
+                    .catch(() => setCodification({ candidates: [], counts: {}, error: 'Load failed' }))
                 }}
               />
             )}
@@ -2411,6 +2440,308 @@ function AssetClassesTab({ classes, onRefresh }) {
                   </div>
                 )
               })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Codification Tab (D6) ─────────────────────────────────────────────────────
+// Surfaces Master Mind `framework_evolution` entries that haven't been
+// codified into core/ANALYSIS_FRAMEWORK.md yet. The /extend-framework
+// slash command is intended as the primary consumer of the underlying
+// API; this UI is for analyst visibility + a lightweight "mark done"
+// affordance once a PR lands.
+
+function CodificationTab({ data, onRefresh }) {
+  const candidates = (data && data.candidates) || []
+  const counts = (data && data.counts) || { pending: 0, codified: 0, total: 0 }
+  const [filter, setFilter] = useState('pending') // 'pending' | 'all'
+  const [err, setErr] = useState(null)
+
+  const visible = filter === 'pending'
+    ? candidates.filter(c => !c.codified_in_framework)
+    : candidates
+
+  return (
+    <div>
+      <SectionLabel text="Framework Codification Queue" accent="#C9A84C" />
+      <p style={{
+        fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px',
+        maxWidth: 780, lineHeight: 1.55,
+      }}>
+        Master Mind entries tagged <code style={{ color: 'var(--gold)' }}>framework_evolution</code>{' '}
+        accumulate here until they're codified into <code>core/ANALYSIS_FRAMEWORK.md</code>.
+        The <code style={{ color: 'var(--teal)' }}>/extend-framework</code> slash command reads
+        this queue and proposes Framework updates; after the PR lands, mark the entry
+        codified to close the loop.
+      </p>
+
+      {/* Stats row */}
+      <div style={{
+        display: 'flex', gap: 14, marginBottom: 14, flexWrap: 'wrap',
+        fontSize: 11, color: 'var(--text-muted)',
+      }}>
+        <span>Pending: <strong style={{ color: 'var(--gold)' }}>{counts.pending || 0}</strong></span>
+        <span>Codified: <strong style={{ color: 'var(--teal)' }}>{counts.codified || 0}</strong></span>
+        <span>Total: <strong>{counts.total || 0}</strong></span>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={() => setFilter(filter === 'pending' ? 'all' : 'pending')}
+          style={{
+            fontSize: 10, padding: '3px 10px',
+            background: 'var(--bg-surface)', color: 'var(--text-muted)',
+            border: '1px solid var(--border)', borderRadius: 3, cursor: 'pointer',
+            letterSpacing: '0.05em', textTransform: 'uppercase',
+          }}
+        >
+          {filter === 'pending' ? 'Show all' : 'Pending only'}
+        </button>
+        <button
+          onClick={onRefresh}
+          style={{
+            fontSize: 10, padding: '3px 10px',
+            background: 'var(--bg-surface)', color: 'var(--text-muted)',
+            border: '1px solid var(--border)', borderRadius: 3, cursor: 'pointer',
+            letterSpacing: '0.05em', textTransform: 'uppercase',
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {err && (
+        <div style={{
+          padding: 8, marginBottom: 14,
+          fontSize: 11, color: '#F06060',
+          background: 'rgba(240,96,96,0.1)', border: '1px solid rgba(240,96,96,0.3)',
+          borderRadius: 4,
+        }}>{err}</div>
+      )}
+
+      {data === null && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading queue…</div>
+      )}
+
+      {data && visible.length === 0 && (
+        <div style={{
+          padding: 16, background: 'var(--bg-deep)',
+          border: '1px dashed var(--border)', borderRadius: 8,
+          fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6,
+        }}>
+          {filter === 'pending'
+            ? 'No pending codification candidates. Run the /extend-framework slash command to codify, or promote a Master Mind entry with category=framework_evolution to seed the queue.'
+            : 'No framework_evolution entries yet.'}
+        </div>
+      )}
+
+      {visible.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {visible.map(c => (
+            <CodificationCard
+              key={c.id}
+              entry={c}
+              onCodified={() => { setErr(null); onRefresh() }}
+              onError={(msg) => setErr(msg)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CodificationCard({ entry, onCodified, onError }) {
+  const [showForm, setShowForm] = useState(false)
+  const [commitSha, setCommitSha] = useState('')
+  const [section, setSection] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const isCodified = entry.codified_in_framework
+  const meta = entry.metadata || {}
+  const ts = entry.timestamp ? new Date(entry.timestamp) : null
+  const dateStr = ts ? ts.toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  }) : '—'
+
+  const promotedFrom = entry.promoted_from
+  const provenance = promotedFrom
+    ? `← from ${promotedFrom.scope}${promotedFrom.key ? '/' + promotedFrom.key : ''}`
+    : null
+
+  const codifiedAt = meta.codified_at
+    ? new Date(meta.codified_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+    : null
+
+  const submit = async () => {
+    setSubmitting(true)
+    try {
+      await markFrameworkEntryCodified(entry.id, {
+        commit_sha: commitSha.trim() || null,
+        framework_section: section.trim() || null,
+        // codified_by: could thread through from auth context — skipped for now
+      })
+      setShowForm(false)
+      setCommitSha('')
+      setSection('')
+      onCodified()
+    } catch (e) {
+      onError(e?.response?.data?.detail || e?.message || 'Codify failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div style={{
+      padding: 12,
+      background: 'var(--bg-deep)',
+      border: `1px solid ${isCodified ? 'rgba(45,212,191,0.3)' : 'var(--border)'}`,
+      borderLeft: `3px solid ${isCodified ? 'var(--teal)' : 'var(--gold)'}`,
+      borderRadius: 4,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6,
+        flexWrap: 'wrap',
+      }}>
+        <span style={{
+          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+          padding: '2px 7px', borderRadius: 3,
+          background: isCodified ? 'rgba(45,212,191,0.15)' : 'rgba(201,168,76,0.15)',
+          color: isCodified ? 'var(--teal)' : 'var(--gold)',
+          border: `1px solid ${isCodified ? 'rgba(45,212,191,0.3)' : 'rgba(201,168,76,0.3)'}`,
+        }}>
+          {isCodified ? '✓ Codified' : 'Pending'}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+          {entry.id ? entry.id.slice(0, 8) + '…' : '—'}
+        </span>
+        {provenance && (
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+            {provenance}
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+          {dateStr}
+        </span>
+      </div>
+
+      <div style={{
+        fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.55,
+        marginBottom: isCodified ? 8 : 10,
+      }}>
+        {entry.content}
+      </div>
+
+      {isCodified && (
+        <div style={{
+          fontSize: 10, color: 'var(--text-muted)',
+          display: 'flex', gap: 14, flexWrap: 'wrap',
+        }}>
+          {meta.codification_commit && (
+            <span>
+              commit: <code style={{ color: 'var(--teal)' }}>{meta.codification_commit.slice(0, 12)}</code>
+            </span>
+          )}
+          {meta.codification_section && (
+            <span>section: <code>{meta.codification_section}</code></span>
+          )}
+          {codifiedAt && <span>on {codifiedAt}</span>}
+          {meta.codified_by && <span>by {meta.codified_by}</span>}
+        </div>
+      )}
+
+      {!isCodified && (
+        <>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '3px 10px', cursor: 'pointer',
+                color: 'var(--gold)',
+              }}
+            >
+              Mark codified
+            </button>
+          )}
+
+          {showForm && (
+            <div style={{
+              marginTop: 8,
+              display: 'flex', flexDirection: 'column', gap: 8,
+              padding: 10, background: 'var(--bg-surface)',
+              border: '1px solid var(--border)', borderRadius: 4,
+            }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <label style={{
+                  fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase',
+                  letterSpacing: '0.08em', display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140,
+                }}>
+                  Commit SHA <span style={{ opacity: 0.5, textTransform: 'none' }}>(optional)</span>
+                  <input
+                    type="text"
+                    value={commitSha}
+                    onChange={e => setCommitSha(e.target.value)}
+                    placeholder="e.g. a3b1ad1"
+                    style={{
+                      fontSize: 11, fontFamily: 'var(--font-mono)',
+                      background: 'var(--bg-deep)', border: '1px solid var(--border)',
+                      color: 'var(--text-primary)', padding: '4px 6px', borderRadius: 3,
+                    }}
+                  />
+                </label>
+                <label style={{
+                  fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase',
+                  letterSpacing: '0.08em', display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140,
+                }}>
+                  Framework Section <span style={{ opacity: 0.5, textTransform: 'none' }}>(optional)</span>
+                  <input
+                    type="text"
+                    value={section}
+                    onChange={e => setSection(e.target.value)}
+                    placeholder="e.g. Section 16"
+                    style={{
+                      fontSize: 11, fontFamily: 'var(--font-mono)',
+                      background: 'var(--bg-deep)', border: '1px solid var(--border)',
+                      color: 'var(--text-primary)', padding: '4px 6px', borderRadius: 3,
+                    }}
+                  />
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={submit}
+                  disabled={submitting}
+                  style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    background: 'var(--gold)', border: 'none', borderRadius: 4,
+                    padding: '4px 10px', cursor: submitting ? 'wait' : 'pointer',
+                    color: 'var(--bg-base)', opacity: submitting ? 0.6 : 1,
+                  }}
+                >
+                  {submitting ? 'Marking…' : 'Confirm'}
+                </button>
+                <button
+                  onClick={() => { setShowForm(false); setCommitSha(''); setSection('') }}
+                  disabled={submitting}
+                  style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+                    padding: '4px 10px', cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </>
