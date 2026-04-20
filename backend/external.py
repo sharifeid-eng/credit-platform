@@ -281,3 +281,81 @@ def create_asset_class_entry(analysis_type: str, body: AssetClassEntryCreate):
     log_activity("asset_class_mind_recorded", None, None,
                  f"{analysis_type} · {body.category}")
     return entry.to_dict()
+
+
+# ── Framework Codification Hook (D6) ─────────────────────────────────────────
+
+
+class FrameworkCodifyRequest(BaseModel):
+    """Payload for marking a framework_evolution entry codified."""
+    commit_sha: Optional[str] = None
+    framework_section: Optional[str] = None
+    codified_by: Optional[str] = None
+
+
+@router.get("/framework/codification-candidates")
+def list_framework_codification_candidates(
+    include_codified: bool = Query(False),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+):
+    """List Master Mind `framework_evolution` entries awaiting
+    codification into `core/ANALYSIS_FRAMEWORK.md`.
+
+    Typical consumer: the `/extend-framework` slash command reads this
+    queue, proposes Framework section updates, and calls POST
+    `/api/framework/codify/{entry_id}` to close the loop when a PR
+    lands.
+
+    Query params:
+        include_codified: return all entries incl. already-codified
+                          (default False — pending only)
+        limit: cap on results (default no cap)
+    """
+    from core.mind.framework_codification import (
+        codification_counts, get_codification_candidates,
+    )
+    candidates = get_codification_candidates(
+        include_codified=include_codified, limit=limit,
+    )
+    return {
+        "candidates": candidates,
+        "counts": codification_counts(),
+    }
+
+
+@router.post("/framework/codify/{entry_id}")
+def mark_framework_entry_codified(entry_id: str, body: FrameworkCodifyRequest):
+    """Mark a framework_evolution entry codified after the Framework
+    document has been updated. Updates entry metadata in place:
+        codified_in_framework: True
+        codification_commit:   body.commit_sha or ""
+        codification_section:  body.framework_section or ""
+        codified_at:           current UTC timestamp
+        codified_by:           body.codified_by or ""
+
+    Does NOT modify ANALYSIS_FRAMEWORK.md — the Framework change is
+    expected to have been made separately (by `/extend-framework` or
+    a hand-edit). This endpoint just closes the loop by flagging the
+    source entry so it stops appearing in the pending queue.
+    """
+    from core.mind.framework_codification import mark_codified
+
+    try:
+        updated = mark_codified(
+            entry_id,
+            commit_sha=body.commit_sha,
+            framework_section=body.framework_section,
+            codified_by=body.codified_by,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except OSError as e:
+        logger.exception("framework_codify: write failed")
+        raise HTTPException(status_code=500, detail=f"Write failed: {e}")
+
+    log_activity(
+        "framework_codified", None, None,
+        f"{entry_id[:8]}... commit={body.commit_sha or '?'} "
+        f"section={body.framework_section or '?'}"
+    )
+    return updated
