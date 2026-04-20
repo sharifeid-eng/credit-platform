@@ -78,9 +78,14 @@ _SUPPORTED_EXTENSIONS = {
     ".pdf", ".xlsx", ".xls", ".ods", ".csv", ".tsv", ".docx", ".doc", ".json"
 }
 
-# Files to exclude from data room ingestion (config files, not data)
+# Files to exclude from data room ingestion (config files, engine output,
+# not user-facing data). Dotfiles (anything starting with ".") are also
+# excluded in _is_supported — covers .classification_cache.json, .ingest_log,
+# and any future engine-written state that lives inside the dataroom dir.
 _EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json",
-                      "index.pkl"}
+                      "index.pkl", "meta.json", "ingest_log.jsonl",
+                      "covenant_history.json", "facility_params.json",
+                      "debtor_validation.json", "payment_schedule.json"}
 
 # Directories to skip during recursive scan (prevents ingesting engine output)
 _EXCLUDE_DIRS = {"chunks", "analytics", "__pycache__", "node_modules", ".git", "mind"}
@@ -99,6 +104,9 @@ def _is_supported(filepath: str) -> bool:
     """Check if a file has a supported extension for parsing."""
     p = Path(filepath)
     if p.name in _EXCLUDE_FILENAMES:
+        return False
+    # Skip dotfiles (engine-written caches/state inside the dataroom dir).
+    if p.name.startswith("."):
         return False
     # Skip files inside excluded directories
     for part in p.parts:
@@ -248,6 +256,12 @@ class DataRoomEngine:
         prune_result = self.prune(company, product)
         orphan_chunks_deleted = prune_result.get("deleted", 0)
 
+        # Heal pre-existing duplicates and ingested engine-state files.
+        # Cheap, idempotent — runs every ingest so state converges.
+        dedupe_result = self.dedupe_registry(company, product)
+        # Re-load because dedupe_registry may have rewritten it.
+        registry = self._load_registry(company, product)
+
         # Build hash lookup for existing docs, but ONLY for entries whose chunks
         # file actually exists on disk. Orphan registry entries (chunks missing)
         # are evicted so their source files re-ingest. Fixes the dedup-skip bug:
@@ -281,8 +295,11 @@ class DataRoomEngine:
             "total_files": len(files),
             "ingested": 0,
             "skipped": 0,
+            "duplicates_skipped": 0,
             "orphans_dropped": len(orphans),
             "orphan_chunks_deleted": orphan_chunks_deleted,
+            "sha_duplicates_removed": dedupe_result["sha_duplicates_removed"],
+            "excluded_entries_removed": dedupe_result["excluded_removed"],
             "errors": [],
             "documents": [],
         }
@@ -291,9 +308,18 @@ class DataRoomEngine:
             try:
                 file_hash = _file_sha256(str(fpath))
 
-                # Skip if already ingested with same hash
+                # Skip if already ingested with same hash. `existing_hashes`
+                # is updated on each successful ingest below so same-bytes
+                # files at different paths within the same pass are deduped
+                # (e.g. one PDF referenced from two deal-folder breadcrumbs).
                 if file_hash in existing_hashes:
                     result["skipped"] += 1
+                    # duplicates_skipped = subset of skipped that is a
+                    # within-pass duplicate (not just a no-op re-ingest).
+                    # A hash only enters existing_hashes mid-loop when we
+                    # ingested it earlier in THIS call.
+                    if existing_hashes[file_hash] in result["documents"]:
+                        result["duplicates_skipped"] += 1
                     result["documents"].append(existing_hashes[file_hash])
                     continue
 
@@ -308,6 +334,7 @@ class DataRoomEngine:
                 else:
                     result["ingested"] += 1
                     result["documents"].append(doc_record["doc_id"])
+                    existing_hashes[file_hash] = doc_record["doc_id"]
 
             except Exception as e:
                 result["errors"].append({
@@ -411,6 +438,10 @@ class DataRoomEngine:
         prune_result = self.prune(company, product)
         orphan_chunks_deleted = prune_result.get("deleted", 0)
 
+        # Heal pre-existing duplicates and ingested engine-state files.
+        dedupe_result = self.dedupe_registry(company, product)
+        registry = self._load_registry(company, product)
+
         # Map current registry: normalized filepath -> (doc_id, hash).
         # Orphan entries (chunks file missing) are evicted so the file
         # re-ingests cleanly on this pass.
@@ -441,7 +472,21 @@ class DataRoomEngine:
                     disk_files[fpath] = _file_sha256(fpath)
 
         result = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0,
-                  "orphan_chunks_deleted": orphan_chunks_deleted, "errors": []}
+                  "duplicates_skipped": 0,
+                  "orphan_chunks_deleted": orphan_chunks_deleted,
+                  "sha_duplicates_removed": dedupe_result["sha_duplicates_removed"],
+                  "excluded_entries_removed": dedupe_result["excluded_removed"],
+                  "errors": []}
+
+        # Hash lookup across all registry entries with surviving chunks, so we
+        # can detect same-bytes-different-path within this pass. Updated as
+        # we ingest so two NEW disk files with identical bytes don't both
+        # become registry entries.
+        registry_hashes = {
+            doc.get("sha256"): doc_id
+            for doc_id, doc in registry.items()
+            if (chunks_root / f"{doc_id}.json").exists() and doc.get("sha256")
+        }
 
         # Detect new and changed files
         for fpath, file_hash in disk_files.items():
@@ -453,6 +498,7 @@ class DataRoomEngine:
                 else:
                     # File changed: remove old, re-ingest
                     self._remove_doc(company, product, old_id, registry)
+                    registry_hashes.pop(old_hash, None)
                     try:
                         doc = self._ingest_single_file(
                             company, product, fpath, file_hash, registry
@@ -461,9 +507,16 @@ class DataRoomEngine:
                             result["errors"].append({"file": fpath, "error": doc["error"]})
                         else:
                             result["updated"] += 1
+                            registry_hashes[file_hash] = doc["doc_id"]
                     except Exception as e:
                         result["errors"].append({"file": fpath, "error": str(e)})
             else:
+                # Same-bytes dedup: if another file with identical content is
+                # already in the registry (e.g. same PDF in two deal folders),
+                # skip instead of creating a second entry with a new doc_id.
+                if file_hash in registry_hashes:
+                    result["duplicates_skipped"] += 1
+                    continue
                 # New file
                 try:
                     doc = self._ingest_single_file(
@@ -473,6 +526,7 @@ class DataRoomEngine:
                         result["errors"].append({"file": fpath, "error": doc["error"]})
                     else:
                         result["added"] += 1
+                        registry_hashes[file_hash] = doc["doc_id"]
                 except Exception as e:
                     result["errors"].append({"file": fpath, "error": str(e)})
 
@@ -713,6 +767,99 @@ class DataRoomEngine:
                 company, product, deleted, kept,
             )
         return {"deleted": deleted, "kept": kept, "chunk_dir_missing": False}
+
+    def dedupe_registry(self, company: str, product: str) -> dict:
+        """Clean up pre-existing duplicates and ingested engine-written files.
+
+        Heals registries that accumulated state under the pre-fix behavior:
+          - Two+ registry entries with the same sha256 (same bytes ingested
+            from different folder paths — keeps the earliest ingested_at,
+            deletes the rest along with their chunk files).
+          - Registry entries whose filename is now on the exclusion list
+            (e.g. `.classification_cache.json`, `meta.json`) — deletes them
+            and their chunk files.
+
+        Idempotent. Auto-called from `ingest()` and `refresh()` so state
+        converges on every run; also exposed via `dataroom_ctl dedupe`.
+
+        Returns:
+            {"sha_duplicates_removed": int, "excluded_removed": int,
+             "kept": int, "chunk_files_deleted": int}
+        """
+        registry = self._load_registry(company, product)
+        if not registry:
+            return {
+                "sha_duplicates_removed": 0,
+                "excluded_removed": 0,
+                "kept": 0,
+                "chunk_files_deleted": 0,
+            }
+
+        chunks_dir = self._chunks_dir(company, product)
+        chunk_files_deleted = 0
+
+        # Pass 1 — evict entries whose filename is on the exclusion list or
+        # is a dotfile. These should never have been ingested.
+        excluded_removed = 0
+        for doc_id, doc in list(registry.items()):
+            fname = doc.get("filename", "")
+            if fname in _EXCLUDE_FILENAMES or fname.startswith("."):
+                logger.warning(
+                    "[dataroom.dedupe] Removing excluded entry %s (%s) from %s/%s",
+                    doc_id, fname, company, product,
+                )
+                self._remove_doc(company, product, doc_id, registry)
+                chunk_files_deleted += 1
+                excluded_removed += 1
+
+        # Pass 2 — group surviving entries by sha256. For each group with
+        # more than one entry, keep the earliest `ingested_at` (fallback:
+        # lowest doc_id) and drop the rest.
+        by_hash: dict = {}
+        for doc_id, doc in registry.items():
+            sha = doc.get("sha256")
+            if not sha:
+                continue
+            by_hash.setdefault(sha, []).append(doc_id)
+
+        sha_duplicates_removed = 0
+        for sha, ids in by_hash.items():
+            if len(ids) < 2:
+                continue
+            ids.sort(
+                key=lambda d: (
+                    registry[d].get("ingested_at", "9999"),
+                    d,
+                )
+            )
+            winner = ids[0]
+            for loser in ids[1:]:
+                logger.warning(
+                    "[dataroom.dedupe] Duplicate sha256 %s… — keeping %s (%s), "
+                    "removing %s (%s) from %s/%s",
+                    sha[:10], winner, registry[winner].get("filename", "?"),
+                    loser, registry[loser].get("filename", "?"),
+                    company, product,
+                )
+                self._remove_doc(company, product, loser, registry)
+                chunk_files_deleted += 1
+                sha_duplicates_removed += 1
+
+        # Persist the cleaned registry
+        if excluded_removed or sha_duplicates_removed:
+            self._save_registry(company, product, registry)
+
+        # Any chunk files still referencing removed doc_ids were unlinked
+        # via _remove_doc; account for chunks dir actually missing.
+        if not chunks_dir.exists():
+            chunk_files_deleted = 0
+
+        return {
+            "sha_duplicates_removed": sha_duplicates_removed,
+            "excluded_removed": excluded_removed,
+            "kept": len(registry),
+            "chunk_files_deleted": chunk_files_deleted,
+        }
 
     def audit(self, company: str, product: str = "") -> dict:
         """Full health audit for a company/product data room.

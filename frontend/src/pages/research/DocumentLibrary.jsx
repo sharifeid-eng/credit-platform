@@ -5,17 +5,60 @@ import useBreakpoint from '../../hooks/useBreakpoint'
 import { getDataroomDocuments, getDataroomStats, ingestDataroom, getDataroomDocumentViewUrl } from '../../services/api'
 
 // ── Category config (document_type → display) ────────────────────────────────
+// Keys MUST match backend `DocumentType` enum values from
+// core/dataroom/classifier.py. Any backend type missing here falls through
+// to `other`, which used to cause multiple "Other (N)" chips (each keyed by
+// a different unmapped enum value).
 
 const CATEGORY_CONFIG = {
+  // Legal / facility
   facility_agreement:    { label: 'Facility Agreement',    color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
-  company_presentation:  { label: 'Company Presentation',  color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
-  business_plan:         { label: 'Business Plan',         color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
-  portfolio_tape:        { label: 'Portfolio Tape',        color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
-  financial_statements:  { label: 'Financial Statements',  color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
   legal_document:        { label: 'Legal Document',        color: '#F0C040', bg: 'rgba(240,192,64,0.12)' },
+
+  // Investor / reporting
+  investor_report:       { label: 'Investor Report',       color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
+  company_presentation:  { label: 'Company Presentation',  color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
+  board_pack:            { label: 'Board Pack',            color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
+
+  // Due diligence / audit
+  fdd_report:            { label: 'FDD Report',            color: '#F06060', bg: 'rgba(240,96,96,0.12)' },
+  audit_report:          { label: 'Audit Report',          color: '#F06060', bg: 'rgba(240,96,96,0.12)' },
   credit_report:         { label: 'Credit Report',         color: '#F06060', bg: 'rgba(240,96,96,0.12)' },
-  tape_summary:          { label: 'Analytics Snapshot',    color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+
+  // Financial
+  financial_model:       { label: 'Financial Model',       color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+  financial_statement:   { label: 'Financial Statement',   color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+  financial_statements:  { label: 'Financial Statements',  color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+  tax_filing:            { label: 'Tax Filing',            color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+  bank_statement:        { label: 'Bank Statement',        color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+  business_plan:         { label: 'Business Plan',         color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  debt_overview:         { label: 'Debt Overview',         color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+
+  // Portfolio / vintage
+  portfolio_tape:        { label: 'Portfolio Tape',        color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
+  vintage_cohort:        { label: 'Vintage Cohort',        color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
+  sales_data:            { label: 'Sales Data',            color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
+  demographics:          { label: 'Demographics',          color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
+
+  // Analytics snapshots (platform-generated)
+  analytics_tape:        { label: 'Analytics Snapshot',    color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  analytics_portfolio:   { label: 'Analytics Snapshot',    color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  analytics_ai:          { label: 'AI Summary',            color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  analytics_report:      { label: 'Analytics Report',      color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+  tape_summary:          { label: 'Analytics Snapshot',    color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' }, // legacy alias
+
+  // Memos
+  memo_draft:            { label: 'Memo (Draft)',          color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
+  memo_final:            { label: 'Memo',                  color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
+
+  // Governance / compliance
+  cap_table:             { label: 'Cap Table',             color: '#F0C040', bg: 'rgba(240,192,64,0.12)' },
+  kyc_compliance:        { label: 'KYC / Compliance',      color: '#F0C040', bg: 'rgba(240,192,64,0.12)' },
+  credit_policy:         { label: 'Credit Policy',         color: '#F0C040', bg: 'rgba(240,192,64,0.12)' },
+
+  // Fallbacks
   other:                 { label: 'Other',                 color: '#8494A7', bg: 'rgba(132,148,167,0.12)' },
+  unknown:               { label: 'Unknown',               color: '#8494A7', bg: 'rgba(132,148,167,0.12)' },
 }
 
 function getCategoryConfig(docType) {

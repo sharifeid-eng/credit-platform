@@ -17,6 +17,9 @@ Commands
                                  Rebuild TF-IDF index from existing chunks
     prune [--company X] [--product P]
                                  Delete orphan chunk files (no registry entry)
+    dedupe [--company X] [--product P]
+                                 Drop sha256-duplicate registry entries
+                                 and registry entries for excluded filenames
     wipe --company X [--product P] [--yes]
                                  Delete registry/chunks/index/meta (prompts)
     classify --company X [--product P] [--only-other]
@@ -234,6 +237,47 @@ def cmd_prune(args: argparse.Namespace) -> int:
     return 3 if any_failure else 0
 
 
+def cmd_dedupe(args: argparse.Namespace) -> int:
+    """Drop sha256-duplicate registry entries + excluded-filename entries.
+
+    Heals registries that accumulated duplicates under the pre-fix engine
+    (same file bytes ingested from two folder paths became two doc_ids).
+    Also removes any registry entries for files now on the exclusion list
+    (e.g. `.classification_cache.json`) that shouldn't have been ingested.
+
+    Idempotent; safe to re-run. Auto-called by ingest()/refresh() too.
+    """
+    engine = DataRoomEngine()
+    companies = [args.company] if args.company else get_companies()
+
+    reports = []
+    any_failure = False
+    for co in companies:
+        dr_dir = _REPO_ROOT / "data" / co / "dataroom"
+        if not dr_dir.is_dir():
+            continue
+        product = _resolve_product(engine, co, args.product if args.company else None)
+        try:
+            result = engine.dedupe_registry(co, product)
+        except Exception as e:
+            any_failure = True
+            result = {"error": str(e)}
+        reports.append({"company": co, "product": product, **result})
+
+        if result.get("error"):
+            _err(f"[{co}] ERROR: {result['error']}")
+        else:
+            _err(
+                f"[{co}/{product or '-'}] deduped: "
+                f"sha_duplicates_removed={result.get('sha_duplicates_removed', 0)} "
+                f"excluded_removed={result.get('excluded_removed', 0)} "
+                f"kept={result.get('kept', 0)}"
+            )
+
+    _emit({"command": "dedupe", "reports": reports})
+    return 3 if any_failure else 0
+
+
 def cmd_wipe(args: argparse.Namespace) -> int:
     engine = DataRoomEngine()
     product = _resolve_product(engine, args.company, args.product)
@@ -373,6 +417,14 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--company", help="Prune only this company (default: all)")
     sp.add_argument("--product", help="Product key (autodetected if omitted)")
     sp.set_defaults(func=cmd_prune)
+
+    sp = sub.add_parser(
+        "dedupe",
+        help="Drop sha256-duplicate registry entries + excluded-filename entries",
+    )
+    sp.add_argument("--company", help="Dedupe only this company (default: all)")
+    sp.add_argument("--product", help="Product key (autodetected if omitted)")
+    sp.set_defaults(func=cmd_dedupe)
 
     sp = sub.add_parser("wipe", help="Delete registry/chunks/index/meta (source files preserved)")
     sp.add_argument("--company", required=True)
