@@ -329,10 +329,55 @@ function TodoItem({ item, onToggle, onDelete }) {
 }
 
 // ── Mind entry row ───────────────────────────────────────────────────────────
-function MindEntryRow({ entry, onPromote }) {
+// Shared list of asset-class keys — matches data/_asset_class_mind/ jsonl
+// filenames and each company's config.json `asset_class` field. Kept in
+// sync with core/mind/promotion.py::_TARGET_CATEGORIES.
+const _ASSET_CLASS_OPTIONS = [
+  { value: 'healthcare_receivables', label: 'Healthcare Receivables' },
+  { value: 'bnpl',                   label: 'BNPL' },
+  { value: 'pos_lending',            label: 'POS Lending' },
+  { value: 'rnpl',                   label: 'RNPL' },
+  { value: 'sme_trade_credit',       label: 'SME Trade Credit' },
+]
+const _ASSET_CLASS_CATEGORIES = [
+  'methodology_note', 'benchmarks', 'typical_terms',
+  'external_research', 'sector_context', 'peer_comparison',
+]
+
+function MindEntryRow({ entry, onPromote, onPromoteToAssetClass }) {
+  const [showPromoteForm, setShowPromoteForm] = useState(false)
+  const [targetAssetClass, setTargetAssetClass] = useState(_ASSET_CLASS_OPTIONS[0].value)
+  const [targetCategory, setTargetCategory] = useState(_ASSET_CLASS_CATEGORIES[0])
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [promoteError, setPromoteError] = useState(null)
+
   const ts = entry.timestamp ? new Date(entry.timestamp) : null
   const dateStr = ts ? ts.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
   const source = entry._source === 'master' ? 'Master' : `${entry._company}/${entry._product}`
+
+  // promoted_to is a backlink appended by promote_entry(); a non-empty
+  // array means the entry has been copied up-stack at least once.
+  const promotedTo = (entry.metadata && entry.metadata.promoted_to) || []
+  const alreadyPromotedToAssetClass = promotedTo.some(p => p && p.scope === 'asset_class')
+
+  const submitPromote = async () => {
+    setSubmitting(true)
+    setPromoteError(null)
+    try {
+      await onPromoteToAssetClass(entry, {
+        targetKey: targetAssetClass,
+        targetCategory,
+        note: note.trim() || undefined,
+      })
+      setShowPromoteForm(false)
+      setNote('')
+    } catch (e) {
+      setPromoteError(e?.response?.data?.detail || e?.message || 'Promotion failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div style={{
@@ -362,26 +407,142 @@ function MindEntryRow({ entry, onPromote }) {
       <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5, paddingRight: 8 }}>
         {entry.content}
       </div>
+
+      {/* Action row for company entries */}
       {entry._source === 'company' && !entry.promoted && (
-        <button
-          onClick={() => onPromote(entry.id)}
-          style={{
-            marginTop: 6, fontSize: 9, fontWeight: 700,
-            background: 'none', border: '1px solid var(--border)',
-            borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
-            color: 'var(--gold)', letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Promote to Master
-        </button>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          {!alreadyPromotedToAssetClass && (
+            <button
+              onClick={() => setShowPromoteForm(v => !v)}
+              style={{
+                fontSize: 9, fontWeight: 700,
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
+                color: 'var(--teal)', letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {showPromoteForm ? 'Cancel' : '↑ Promote to Asset Class'}
+            </button>
+          )}
+          <button
+            onClick={() => onPromote(entry.id)}
+            style={{
+              fontSize: 9, fontWeight: 700,
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
+              color: 'var(--gold)', letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Promote to Master
+          </button>
+        </div>
       )}
-      {entry.promoted && (
+
+      {/* Inline promotion form (Company → Asset Class) */}
+      {showPromoteForm && (
+        <div style={{
+          marginTop: 8, padding: 10,
+          background: 'var(--bg-deep)', border: '1px solid var(--border)', borderRadius: 4,
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              Asset Class
+              <select
+                value={targetAssetClass}
+                onChange={e => setTargetAssetClass(e.target.value)}
+                style={{
+                  fontSize: 11, fontFamily: 'var(--font-mono)',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', padding: '4px 6px', borderRadius: 3,
+                }}
+              >
+                {_ASSET_CLASS_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', flexDirection: 'column', gap: 3 }}>
+              Category
+              <select
+                value={targetCategory}
+                onChange={e => setTargetCategory(e.target.value)}
+                style={{
+                  fontSize: 11, fontFamily: 'var(--font-mono)',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', padding: '4px 6px', borderRadius: 3,
+                }}
+              >
+                {_ASSET_CLASS_CATEGORIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Optional note (why this belongs at the asset-class level)"
+            rows={2}
+            style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              color: 'var(--text-primary)', padding: 6, borderRadius: 3,
+              resize: 'vertical',
+            }}
+          />
+          {promoteError && (
+            <div style={{ fontSize: 11, color: '#F06060' }}>{promoteError}</div>
+          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={submitPromote}
+              disabled={submitting}
+              style={{
+                fontSize: 9, fontWeight: 700,
+                background: 'var(--teal)', border: 'none',
+                borderRadius: 4, padding: '4px 10px',
+                cursor: submitting ? 'wait' : 'pointer',
+                color: 'var(--bg-base)', letterSpacing: '0.06em',
+                textTransform: 'uppercase', opacity: submitting ? 0.6 : 1,
+              }}
+            >
+              {submitting ? 'Promoting…' : 'Promote'}
+            </button>
+            <button
+              onClick={() => { setShowPromoteForm(false); setPromoteError(null); setNote('') }}
+              disabled={submitting}
+              style={{
+                fontSize: 9, fontWeight: 700,
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+                color: 'var(--text-muted)', letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {alreadyPromotedToAssetClass && (
         <span style={{
           display: 'inline-block', marginTop: 6, fontSize: 9, fontWeight: 700,
           color: 'var(--teal)', letterSpacing: '0.06em', textTransform: 'uppercase',
         }}>
-          Promoted
+          ↑ Promoted to {(promotedTo.find(p => p.scope === 'asset_class') || {}).key || 'Asset Class'}
+        </span>
+      )}
+      {entry.promoted && (
+        <span style={{
+          display: 'inline-block', marginLeft: alreadyPromotedToAssetClass ? 12 : 0, marginTop: 6,
+          fontSize: 9, fontWeight: 700,
+          color: 'var(--gold)', letterSpacing: '0.06em', textTransform: 'uppercase',
+        }}>
+          ↑ Promoted to Master
         </span>
       )}
     </div>
@@ -612,6 +773,25 @@ export default function OperatorCenter() {
     }
   }
 
+  // Real Company→Asset Class promotion (writes to
+  // data/_asset_class_mind/{target_key}.jsonl with a full provenance
+  // chain, AND flags the source entry's promoted_to[]). Unlike the soft
+  // "Promote to Master" flag above, this actually copies the entry so
+  // Layer 2.5 picks it up at the next build_mind_context() call.
+  const handlePromoteToAssetClass = async (entry, { targetKey, targetCategory, note }) => {
+    await promoteMindEntry({
+      source_scope: 'company',
+      source_key: entry._company,
+      source_product: entry._product,
+      entry_id: entry.id,
+      target_scope: 'asset_class',
+      target_key: targetKey,
+      target_category: targetCategory,
+      note,
+    })
+    loadMind(mindFilter)
+  }
+
   const companies = status?.companies || []
   const companyNames = [...new Set(companies.map(c => c.company))]
   const activity = status?.activity_log || []
@@ -831,7 +1011,12 @@ export default function OperatorCenter() {
                 </div>
                 {mindEntries.length > 0 ? (
                   mindEntries.map((e, i) => (
-                    <MindEntryRow key={e.id || i} entry={e} onPromote={handlePromoteMind} />
+                    <MindEntryRow
+                      key={e.id || i}
+                      entry={e}
+                      onPromote={handlePromoteMind}
+                      onPromoteToAssetClass={handlePromoteToAssetClass}
+                    />
                   ))
                 ) : (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
