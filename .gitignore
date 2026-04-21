@@ -37,3 +37,15 @@ data/_pending_review/
 
 # Startup dependency probe output (regenerated every app boot)
 data/_platform_health.json
+
+# Per-product covenant evaluation history — the backend appends to this file
+# every /portfolio/covenants call, so laptop and prod diverge immediately. Each
+# machine keeps its own local history. Audit-trail; not source state. Session
+# 31 EoD caught this after a runtime-state commit collided with prod's live
+# writes during the redeploy pull.
+data/*/*/covenant_history.json
+
+# Intelligence System relation graph — written by the event bus listeners on
+# every TAPE_INGESTED / DOCUMENT_INGESTED / MEMO_EDITED. Diverges per machine
+# the same way the mind jsonl files do.
+**/mind/relations.json
