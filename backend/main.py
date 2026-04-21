@@ -3493,6 +3493,7 @@ def _save_covenant_history(company, product, result):
             'compliant': cov.get('compliant', True),
             'current': cov.get('current'),
             'date': test_date,
+            'method': cov.get('method'),  # see core/portfolio.py for taxonomy
         }
         records = history.get(name, [])
         # Deduplicate: replace existing record with same date

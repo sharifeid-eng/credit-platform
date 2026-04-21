@@ -1029,6 +1029,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': cash_available,
         'partial': not cash_available,
+        'method': 'manual',
         'note': 'Enter cash balance and net cash burn on the platform' if not cash_available else None,
         'breakdown': [
             {'label': 'Consolidated Cash and Cash Equivalents', 'value': _safe(cash)},
@@ -1091,6 +1092,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'stable',
         'compliance_path': compliance_path,
         'note': compliance_note,
         'view_note': dual_note,
@@ -1132,6 +1134,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'age_pending',  # age_active > 90 AND Pending > 0; stable across tapes
         'eod_rule': 'single_breach_not_eod',  # MMA 18.3(i): single breach is NOT an EoD
         'note': 'Single breach is not an Event of Default (MMA 18.3(i))',
         'breakdown': [
@@ -1161,6 +1164,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'age_pending',  # age_active > 120 AND Pending > 0; stable across tapes
         'eod_rule': 'single_breach_is_eod',  # MMA 18.2(b)(ii): single breach IS an EoD
         'note': 'Calculated on the last day of each calendar month',
         'breakdown': [
@@ -1195,6 +1199,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': period_str,
         'available': True,
         'partial': True,
+        'method': 'cumulative',  # single-tape approximation; stable across tapes
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(ii): 2 consecutive breaches for EoD
         'note': 'Single-tape approximation: cumulative collected / face value. True period ratio requires two snapshots.',
         'breakdown': [
@@ -1242,6 +1247,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': period_str,
         'available': True,
         'partial': False,
+        'method': pvd_method,  # 'direct' uses Expected collection days, 'proxy' uses Deal date
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(iii): 2 consecutive breaches for EoD
         'note': 'EoD requires 2 consecutive monthly breaches (MMA 18.3(iii))',
         'breakdown': [
@@ -1271,6 +1277,7 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': parent_available,
         'partial': not parent_available,
+        'method': 'manual',
         'eod_rule': 'single_breach_is_eod',
         'note': 'Requires manual input — enter Parent cash and burn data on the platform' if not parent_available else None,
         'breakdown': [
@@ -1339,9 +1346,11 @@ def annotate_covenant_eod(result, history):
             cov['consecutive_breaches'] = 1 if is_breaching else 0
 
         elif eod_rule == 'two_consecutive_breaches':
-            # Check if the most recent prior period was also a breach
-            # Validate that it's truly the preceding period (within ~45 days)
+            # Check if the most recent prior period was also a breach.
+            # Requires: (a) prior period is truly the preceding month (within ~45 days),
+            # AND (b) prior record used the same compute method (methodology change breaks the chain).
             prior_breach = False
+            method_changed = False
             if prev_records:
                 prev_period = prev_records[0].get('period', '')
                 current_period = cov.get('period', '')
@@ -1353,7 +1362,17 @@ def annotate_covenant_eod(result, history):
                         is_consecutive = 15 <= gap_days <= 45  # roughly one calendar month
                     except Exception:
                         is_consecutive = True  # if date parsing fails, assume consecutive
-                prior_breach = is_consecutive and not prev_records[0].get('compliant', True)
+
+                prev_method = prev_records[0].get('method')
+                current_method = cov.get('method')
+                # Treat missing method as unknown — don't penalise legacy history entries.
+                method_changed = bool(prev_method and current_method and prev_method != current_method)
+
+                prior_breach = (
+                    is_consecutive
+                    and not method_changed
+                    and not prev_records[0].get('compliant', True)
+                )
 
             if is_breaching and prior_breach:
                 consecutive = 2
@@ -1362,7 +1381,8 @@ def annotate_covenant_eod(result, history):
             elif is_breaching:
                 consecutive = 1
                 eod_triggered = False
-                eod_status = 'first_breach'
+                # If method changed, flag why we didn't treat this as consecutive.
+                eod_status = 'first_breach_after_method_change' if method_changed else 'first_breach'
             else:
                 consecutive = 0
                 eod_triggered = False
@@ -1371,6 +1391,8 @@ def annotate_covenant_eod(result, history):
             cov['eod_triggered'] = eod_triggered
             cov['eod_status'] = eod_status
             cov['consecutive_breaches'] = consecutive
+            if method_changed:
+                cov['method_changed_vs_prior'] = True
 
     # Recount with EoD awareness
     eod_count = sum(1 for c in result['covenants'] if c.get('eod_triggered'))

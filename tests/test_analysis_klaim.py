@@ -821,3 +821,113 @@ class TestProviderSegmentAnalysis:
         seg = compute_segment_analysis(mar03_df, 1, segment_by='provider')
         assert seg['available'] is False
         assert 'provider' not in seg['available_dimensions']
+
+
+class TestCovenantMethodTagging:
+    """Covenant history entries carry a `method` field so methodology changes
+    (e.g. Paid vs Due: proxy -> direct once Expected collection days arrived)
+    don't silently count as consecutive breaches under the two-consecutive rule.
+    """
+
+    def test_every_covenant_has_method_field(self, full_df):
+        from core.portfolio import compute_klaim_covenants
+        res = compute_klaim_covenants(full_df, 1, '2026-04-15')
+        for cv in res['covenants']:
+            assert 'method' in cv, f"{cv['name']} missing method"
+            assert cv['method'] in {'direct', 'proxy', 'age_pending', 'cumulative', 'stable', 'manual'}
+
+    def test_paid_vs_due_direct_when_expected_collection_days_present(self, full_df):
+        """Paid vs Due must report method='direct' on tapes with Expected collection days."""
+        from core.portfolio import compute_klaim_covenants
+        if 'Expected collection days' not in full_df.columns:
+            pytest.skip("Tape lacks Expected collection days")
+        res = compute_klaim_covenants(full_df, 1, '2026-04-15')
+        pvd = next(c for c in res['covenants'] if c['name'] == 'Paid vs Due Ratio')
+        assert pvd['method'] == 'direct'
+
+    def test_method_change_breaks_consecutive_breach_chain(self):
+        """If prior breach used 'proxy' and current breach uses 'direct',
+        annotate_covenant_eod must NOT count them as two consecutive breaches.
+        """
+        from core.portfolio import annotate_covenant_eod
+        fake_result = {
+            'covenants': [{
+                'name': 'Paid vs Due Ratio',
+                'compliant': False,
+                'current': 0.83,
+                'period': '2026-04-01 – 2026-04-30',
+                'method': 'direct',
+                'eod_rule': 'two_consecutive_breaches',
+            }]
+        }
+        fake_history = {
+            'Paid vs Due Ratio': [{
+                'period': '2026-03-01 – 2026-03-31',
+                'compliant': False,
+                'current': 0.70,
+                'date': '2026-03-31',
+                'method': 'proxy',
+            }]
+        }
+        annotated = annotate_covenant_eod(fake_result, fake_history)
+        pvd = annotated['covenants'][0]
+        assert pvd['eod_triggered'] is False
+        assert pvd['eod_status'] == 'first_breach_after_method_change'
+        assert pvd['consecutive_breaches'] == 1
+        assert pvd.get('method_changed_vs_prior') is True
+
+    def test_method_match_preserves_consecutive_breach(self):
+        """When methods match, two consecutive breaches still trigger EoD."""
+        from core.portfolio import annotate_covenant_eod
+        fake_result = {
+            'covenants': [{
+                'name': 'Paid vs Due Ratio',
+                'compliant': False,
+                'current': 0.83,
+                'period': '2026-04-01 – 2026-04-30',
+                'method': 'direct',
+                'eod_rule': 'two_consecutive_breaches',
+            }]
+        }
+        fake_history = {
+            'Paid vs Due Ratio': [{
+                'period': '2026-03-01 – 2026-03-31',
+                'compliant': False,
+                'current': 0.70,
+                'date': '2026-03-31',
+                'method': 'direct',
+            }]
+        }
+        annotated = annotate_covenant_eod(fake_result, fake_history)
+        pvd = annotated['covenants'][0]
+        assert pvd['eod_triggered'] is True
+        assert pvd['eod_status'] == 'eod_triggered'
+        assert pvd['consecutive_breaches'] == 2
+
+    def test_missing_method_treated_as_unknown_not_penalised(self):
+        """Legacy history entries without `method` shouldn't block the consecutive chain."""
+        from core.portfolio import annotate_covenant_eod
+        fake_result = {
+            'covenants': [{
+                'name': 'Paid vs Due Ratio',
+                'compliant': False,
+                'current': 0.83,
+                'period': '2026-04-01 – 2026-04-30',
+                'method': 'direct',
+                'eod_rule': 'two_consecutive_breaches',
+            }]
+        }
+        fake_history = {
+            'Paid vs Due Ratio': [{
+                'period': '2026-03-01 – 2026-03-31',
+                'compliant': False,
+                'current': 0.70,
+                'date': '2026-03-31',
+                # no `method` key — legacy entry
+            }]
+        }
+        annotated = annotate_covenant_eod(fake_result, fake_history)
+        pvd = annotated['covenants'][0]
+        # Legacy missing-method: don't penalise, count as consecutive
+        assert pvd['eod_triggered'] is True
+        assert pvd['consecutive_breaches'] == 2
