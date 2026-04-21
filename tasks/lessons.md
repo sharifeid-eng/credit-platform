@@ -3,6 +3,24 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-21 — Persistent history files must record the compute method per entry
+
+**Problem:** `covenant_history.json` stored `{period, compliant, current, date}` per covenant per evaluation — but not the method used to compute `current`. The Apr 13 entry was written using proxy DPD on the March tape (no `Expected collection days` column). On Apr 15, Klaim supplied the April tape which added the column, flipping Paid-vs-Due to method `direct`. `annotate_covenant_eod`'s `two_consecutive_breaches` rule compared Apr 13 (proxy, 70.3%) + Apr 15 (direct, 83.4%) as two consecutive breaches and flagged a spurious EoD. Both numbers were correct at their respective moments — but treating them as a series misrepresented a methodology transition as a repeated breach.
+
+Simultaneously, in my first Final Report for the April tape add, I narrated "PAR30 improved -7.9pp between Apr 13 and Apr 15" as direction-of-travel signal. The user caught that the two points used different DPD methods and weren't like-for-like — the apparent improvement might have been the methodology change, not a portfolio change.
+
+**Rule:** Any persistent history file that accumulates a metric over time must record **how the metric was computed** at each append, not just the value. Consumer logic that applies cross-period rules (consecutive-breach detection, trend narratives, rolling averages, YoY comparisons) must check method consistency before treating two points as comparable. Legacy entries predating the method field must be handled as "unknown, don't penalise" — otherwise existing history becomes invalid the moment the field is added.
+
+**How to apply:**
+- Add a `method` field to every record in any JSONL/JSON history store at the same time you introduce the store. Cheap up front; avoids a retroactive backfill later. For Klaim: `covenant_history.json` records now carry `method`.
+- When rules compare consecutive points (`annotate_covenant_eod` 2-consec check, any rolling-avg Z-score, seasonality YoY compare), gate the comparison on `prev.method == current.method`. If they differ, treat as reset / first-breach-after-method-change / flag-for-review — not as a silent third entry in a series.
+- Missing-method legacy entries: use `bool(prev_method and current_method and prev_method != current_method)` short-circuit so `None` reads as "unknown, don't penalise". Prevents retroactive invalidation of existing history when the field is added.
+- When narrating a period-over-period trend (in commentary, memos, the Final Report for a new tape), first check whether compute method changed between the two points. If yes, say so explicitly — "lower vs prior period, but the prior used a proxy measure; first clean methodology-comparable delta will be period N+1". Don't frame it as a portfolio trend.
+- Symptom in the wild: a time-series chart showing a step change exactly at the moment a new data column arrived or a compute function was updated — suspect the methodology transition before the portfolio.
+- See `tests/test_analysis_klaim.py::TestCovenantMethodTagging` — `test_method_change_breaks_consecutive_breach_chain` and `test_missing_method_treated_as_unknown_not_penalised`.
+
+---
+
 ## 2026-04-21 — Validate the business identity before writing the validation check
 
 **Problem:** `core/validation.py` Balance Identity check assumed `Collected + Denied + Pending` should sum to `Purchase value` (±5%). On Apr 15 it flagged 2,775 of 8,080 deals — a 34% false-positive rate. The actual Klaim accounting identity is `Paid + Denied + Pending ≡ PV` (holds to floating-point zero); `Collected` legitimately exceeds `Paid` because it also includes VAT reimbursement and fees. The original check was using an intuitive-sounding but WRONG identity — no one validated it against a real tape before committing.

@@ -27,12 +27,24 @@ Track active work here. Claude updates this as tasks progress.
 - Live dev-server verified (Apr 15 Chrome smoke test): Provider HHI visible, Provider Concentration section renders, ALPINE/ALRAIAA show in top 3; zero console errors. Mar 3 check: Provider artefacts + Provider dim button both absent.
 - Tests: 12 new — `TestProviderConcentration` (6), `TestProviderSegmentAnalysis` (6).
 
-**Totals:** 3 commits, 26 new tests, **499 tests passing** (was 473). No scope creep — every touched line traces to one of the three parts.
+**Part 4 — covenant history method tagging** (`9a9bc84`)
+- Added `method` field to every covenant dict in `compute_klaim_covenants` — describes how the current reading was computed: `direct` (uses Expected collection days), `proxy`, `age_pending`, `cumulative`, `stable`, `manual`. Paid vs Due's `pvd_method` variable existed locally but was never written to the dict; now it is.
+- `_save_covenant_history` persists `method` on every append. `annotate_covenant_eod` checks method consistency on the `two_consecutive_breaches` rule — if prior record's method differs from current, status becomes `first_breach_after_method_change` + `method_changed_vs_prior: true` flag, chain does NOT escalate to EoD.
+- Problem this solves: the backfilled Klaim Apr 13 entry (Mar tape, proxy method) combined with the Apr 15 tape (direct method) was producing a spurious Paid-vs-Due EoD on the two-consecutive rule — the methodology transition was being silently counted as a second breach. Now correctly reads as first direct-method breach.
+- PAR60 EoD on Apr 15 remains correct (single-breach rule, methods matched across both dates — `age_pending` on both).
+- Legacy history entries missing `method` are treated as unknown and not penalised (`bool(None and X)` short-circuits) — preserves backwards compat.
+- Backfilled Klaim Apr 13 entries with real methods: PAR30/PAR60 = `age_pending`, Collection Ratio = `cumulative`, Paid vs Due = `proxy`, Parent Cash = `manual`.
+- Tests: 5 new — `TestCovenantMethodTagging`.
 
-**Known follow-ups flagged (not in scope):**
-- Data chat context builder labels Group HHI as "Provider" (pre-Provider-column naming). Now misleading since we have a real Provider. Candidate for fix when revisiting `hhi_ctx` in `backend/main.py:3260`.
+**Part 5 — DataChat HHI context cleanup** (`5a3032b`)
+- `chat_with_data` HHI context builder was labelling `key='group'` as "Provider" (stale from before the Provider column existed) and only iterating over `['group', 'product']`. AI chat was seeing Group HHI under a Provider heading and never seeing the actual Provider HHI. Fixed to iterate `['group', 'provider', 'product']` with correct labels.
+
+**Totals:** 6 commits, **504 tests passing** (was 473). Every touched line traces to one of the five parts.
+
+**Follow-ups still open (not in scope):**
 - `DB path` (db_loader.py) doesn't carry Apr 15's new columns → wal_total, provider features naturally degrade to unavailable when `DATABASE_URL` is set. Same as older tapes. Fine.
-- Multi-branch Group intra-drilldown (click-to-expand Provider breakdown inside Group table row) — marked as nice-to-have in spec, not implemented. Candidate for a follow-up if analysts request it.
+- Multi-branch Group intra-drilldown (click-to-expand Provider breakdown inside Group table row) — marked as nice-to-have, not implemented.
+- Stale worktrees (~50 in `git worktree list`) — user to undertake separately.
 
 ---
 
