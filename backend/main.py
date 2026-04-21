@@ -71,7 +71,10 @@ from core.portfolio import (
     annotate_covenant_eod,
 )
 from core.database import engine, get_db
-from core.db_loader import has_db_data, load_from_db, get_facility_config as db_facility_config
+from core.db_loader import (
+    load_from_db, resolve_snapshot, list_snapshots,
+    get_facility_config as db_facility_config,
+)
 from backend.integration import router as integration_router
 from core.dataroom.engine import DataRoomEngine
 from core.dataroom.analytics_snapshot import AnalyticsSnapshotEngine
@@ -920,7 +923,23 @@ def list_products(company: str):
     return ps
 
 @app.get("/companies/{company}/products/{product}/snapshots")
-def list_snapshots(company: str, product: str):
+def list_product_snapshots(company: str, product: str, db: Session = Depends(get_db)):
+    """List snapshots for a product.
+
+    For tape-ingested types (klaim, silq): reads from DB (`snapshots` table).
+    For non-tape types (ejari_summary, tamara_summary, aajil): reads the
+    pre-computed file from disk. Response shape preserves `filename` + `date`
+    for frontend back-compat; `source` and `row_count` added for DB-sourced rows.
+    """
+    at = _get_analysis_type(company, product)
+    if at in ('klaim', 'silq') and db is not None:
+        snaps = list_snapshots(db, company, product)
+        return [
+            {'filename': s['filename'], 'date': s['date'],
+             'source': s['source'], 'row_count': s['row_count']}
+            for s in snaps
+        ]
+    # Non-tape types keep the filesystem listing
     return [{'filename': s['filename'], 'date': s['date']}
             for s in get_snapshots(company, product)]
 
@@ -3524,43 +3543,71 @@ def _load_facility_params(company, product):
     return merge_facility_params(company, product, manual)
 
 def _portfolio_load(company, product, snapshot, as_of_date, currency, db=None):
-    """Load data for portfolio computation. Tries DB first, falls back to tape.
+    """Load a snapshot from DB for portfolio computation.
 
-    When DB has invoices for this company/product, loads from database.
-    Otherwise loads from tape file (CSV/Excel) as before.
+    DB is the authoritative source after Session 31. Tape files populate DB via
+    scripts/ingest_tape.py (one snapshot per file); Integration API writes land
+    in a rolling daily live snapshot (scripts/ingest_tape.py or the API writes
+    directly). There is no tape-fallback read path — if the requested snapshot
+    doesn't exist in DB, the endpoint 404s. `snapshot` accepts a snapshot name
+    (e.g. "2026-04-15_uae_healthcare"), a filename with extension, or an ISO
+    date; `None` resolves to the latest snapshot by `taken_at`.
+
+    Only supported for klaim + silq analysis types. Ejari/Tamara/Aajil use
+    non-tape ingestion (pre-computed summaries, data rooms) and don't participate
+    in portfolio analytics.
     """
     config = load_config(company, product)
     analysis_type = config.get('analysis_type', '') if config else ''
     disp = currency or (config['currency'] if config else 'USD')
     mult = apply_multiplier(config, disp)
 
-    # Try database first
-    if db and has_db_data(db, company, product):
-        df = load_from_db(db, company, product)
-        sel = {'date': datetime.now().strftime('%Y-%m-%d'), 'filename': 'database', 'source': 'database'}
-        ref_date = as_of_date or sel['date']
-        # Merge DB facility config with file-based params
-        facility_params = _load_facility_params(company, product)
-        facility_params.update(db_facility_config(db, company, product))
-    else:
-        # Fall back to tape file
-        snaps = get_snapshots(company, product)
-        if not snaps:
-            raise HTTPException(status_code=404, detail="No snapshots found")
-        sel = next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
+    if analysis_type not in ('klaim', 'silq'):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Portfolio analytics not available for analysis_type={analysis_type!r}",
+        )
 
-        if analysis_type == 'silq':
-            df, _ = load_silq_snapshot(sel['filepath'])
-            if as_of_date:
-                df = filter_silq_by_date(df, as_of_date)
-        else:
-            df = load_snapshot(sel['filepath'])
-            if as_of_date:
-                df = filter_by_date(df, as_of_date)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
-        ref_date = as_of_date or sel['date']
-        facility_params = _load_facility_params(company, product)
+    snap = resolve_snapshot(db, company, product, snapshot)
+    if snap is None:
+        detail = (
+            f"Snapshot not found: {snapshot!r}"
+            if snapshot
+            else f"No snapshots exist for {company}/{product}. "
+                 f"Run `python scripts/ingest_tape.py --company {company} --product {product} --all`."
+        )
+        raise HTTPException(status_code=404, detail=detail)
 
+    # If caller passed as_of_date AND it matches a real snapshot's taken_at,
+    # prefer that snapshot over the one named in `snapshot`. This lets a
+    # Portfolio "as-of date" dropdown act as a snapshot selector without the
+    # frontend needing to wire both fields: pick a date → backend picks the
+    # matching snapshot (same-day) and uses that date as ref_date. Falls back
+    # to the resolved snapshot + filter otherwise (user picking an arbitrary
+    # date that isn't an ingest point).
+    if as_of_date:
+        date_match = resolve_snapshot(db, company, product, snapshot=as_of_date)
+        if date_match is not None and str(date_match.taken_at) == str(as_of_date):
+            snap = date_match
+
+    df = load_from_db(db, company, product, snapshot_id=snap.id)
+    if as_of_date:
+        df = filter_by_date(df, as_of_date) if analysis_type == 'klaim' else filter_silq_by_date(df, as_of_date)
+
+    sel = {
+        'id': str(snap.id),
+        'filename': snap.name,
+        'name': snap.name,
+        'date': snap.taken_at.isoformat(),
+        'source': snap.source,
+    }
+    ref_date = as_of_date or sel['date']
+
+    facility_params = _load_facility_params(company, product)
+    facility_params.update(db_facility_config(db, company, product))
     if config and 'usd_rate' in config:
         facility_params.setdefault('usd_rate', config['usd_rate'])
 
@@ -3675,7 +3722,8 @@ def get_portfolio_borrowing_base(company: str, product: str,
     except Exception:
         pass
 
-    return {**result, 'currency': disp, 'snapshot': sel['date']}
+    return {**result, 'currency': disp, 'snapshot': sel['date'],
+            'data_source': 'database', 'snapshot_source': sel.get('source', 'tape')}
 
 
 @app.get("/companies/{company}/products/{product}/portfolio/concentration-limits")
@@ -3690,7 +3738,8 @@ def get_portfolio_concentration_limits(company: str, product: str,
         result = portfolio_concentration_limits(df, mult, ref_date, fp)
     else:
         result = compute_klaim_concentration_limits(df, mult, ref_date, fp)
-    return {**result, 'currency': disp, 'snapshot': sel['date']}
+    return {**result, 'currency': disp, 'snapshot': sel['date'],
+            'data_source': 'database', 'snapshot_source': sel.get('source', 'tape')}
 
 
 @app.get("/companies/{company}/products/{product}/portfolio/covenants")
@@ -3714,20 +3763,17 @@ def get_portfolio_covenants(company: str, product: str,
     except Exception:
         pass  # History tracking is optional — never break the main response
 
-    # --- Trend: load previous snapshot to compute rate-of-change per covenant ---
+    # --- Trend: load previous snapshot from DB to compute rate-of-change per covenant ---
     try:
-        snaps = get_snapshots(company, product)
+        snaps = list_snapshots(db, company, product)  # DB-sourced, oldest-first by taken_at
         if len(snaps) >= 2:
             current_idx = next(
-                (i for i, s in enumerate(snaps) if s['date'] == sel.get('date')), 0
+                (i for i, s in enumerate(snaps) if s['name'] == sel.get('name')), 0
             )
-            prev_idx = current_idx - 1  # snaps sorted oldest-first (ascending)
+            prev_idx = current_idx - 1
             if prev_idx >= 0:
                 prev_snap = snaps[prev_idx]
-                if atype == 'silq':
-                    prev_df, _ = load_silq_snapshot(prev_snap['filepath'])
-                else:
-                    prev_df = load_snapshot(prev_snap['filepath'])
+                prev_df = load_from_db(db, company, product, snapshot_id=prev_snap['id'])
                 prev_ref = prev_snap['date']
                 if atype == 'silq':
                     prev_result = portfolio_covenants(prev_df, mult, prev_ref, fp)
@@ -3745,7 +3791,8 @@ def get_portfolio_covenants(company: str, product: str,
     except Exception:
         pass  # Trend data is optional — never break the main response
 
-    return {**result, 'currency': disp, 'snapshot': sel['date']}
+    return {**result, 'currency': disp, 'snapshot': sel['date'],
+            'data_source': 'database', 'snapshot_source': sel.get('source', 'tape')}
 
 
 @app.get("/companies/{company}/products/{product}/portfolio/flow")
@@ -3757,7 +3804,8 @@ def get_portfolio_flow(company: str, product: str,
     df, sel, config, disp, mult, ref_date, fp, atype = _portfolio_load(
         company, product, snapshot, as_of_date, currency, db=db)
     result = compute_portfolio_flow(df, mult)
-    return {**result, 'currency': disp, 'snapshot': sel['date']}
+    return {**result, 'currency': disp, 'snapshot': sel['date'],
+            'data_source': 'database', 'snapshot_source': sel.get('source', 'tape')}
 
 
 @app.get("/companies/{company}/products/{product}/portfolio/facility-params")
@@ -4096,16 +4144,12 @@ def get_portfolio_bank_statements(company: str, product: str,
 def get_portfolio_covenant_dates(company: str, product: str,
                                   db: Session = Depends(get_db)):
     """Return available covenant test dates (snapshot dates)."""
-    snaps = get_snapshots(company, product)
-    dates = [s['date'] for s in snaps]
-    # Also add today if DB has data
-    if db:
-        from core.db_loader import has_db_data
-        if has_db_data(db, company, product):
-            today = datetime.now().strftime('%Y-%m-%d')
-            if today not in dates:
-                dates.insert(0, today)
-    return {'dates': sorted(dates, reverse=True)}
+    snaps = list_snapshots(db, company, product) if db else []
+    if not snaps:
+        # Fallback for non-tape analysis types that don't live in DB
+        snaps = get_snapshots(company, product)
+    dates = sorted({s['date'] for s in snaps if s.get('date')}, reverse=True)
+    return {'dates': dates}
 
 
 # ── PDF Report Generation ─────────────────────────────────────────────────────

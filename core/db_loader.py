@@ -1,31 +1,31 @@
-"""Database query helpers that return DataFrames compatible with core/analysis.py.
+"""Database query helpers that return snapshot-scoped DataFrames.
 
-This is the bridge between PostgreSQL and the existing computation engine.
-Queries the DB, returns DataFrames with the same column names that
-core/portfolio.py, core/analysis.py, and core/analysis_silq.py expect.
-Zero changes needed to any analysis function.
+Bridges PostgreSQL and the existing computation engine. Every query is
+snapshot-filtered: one snapshot = one point-in-time view of the book. The
+same invoice_number can exist in many snapshots with different state at each.
+
+Key design: `Invoice.extra_data` (JSONB) carries every non-core tape column
+keyed by the ORIGINAL tape column name. On read, those keys are spread back
+onto the DataFrame as columns with the exact same names. New analytical
+columns added to a tape flow through the DB automatically — no schema
+migration, no loader-mapping change. See scripts/ingest_tape.py for the
+write side.
+
+Snapshot resolution:
+- `load_from_db(db, co, prod)` with no `snapshot_id` → latest by taken_at.
+- `load_from_db(db, co, prod, snapshot_id=...)` → that exact snapshot.
+- `load_from_db(db, co, prod, snapshot_name=...)` → by unique (product_id, name).
 """
+from typing import Optional
+
 import pandas as pd
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from core.models import Organization, Product, Invoice, Payment, FacilityConfig
+
+from core.models import Organization, Product, Snapshot, Invoice, Payment, FacilityConfig
 
 
-# ── Query helpers ────────────────────────────────────────────────────────────
-
-def has_db_data(db, company: str, product: str) -> bool:
-    """Check if the DB has any invoices for this company/product."""
-    if db is None:
-        return False
-    stmt = (
-        select(func.count(Invoice.id))
-        .join(Product, Invoice.product_id == Product.id)
-        .join(Organization, Product.org_id == Organization.id)
-        .where(Organization.name == company, Product.name == product)
-    )
-    count = db.execute(stmt).scalar()
-    return (count or 0) > 0
-
+# ── Product/org helpers ──────────────────────────────────────────────────────
 
 def get_product_record(db, company: str, product: str):
     """Get the Product ORM object, or None."""
@@ -39,8 +39,26 @@ def get_product_record(db, company: str, product: str):
     return db.execute(stmt).scalar_one_or_none()
 
 
+def get_org_and_product(db, company: str, product: str):
+    """Get (Organization, Product) tuple or (None, None)."""
+    if db is None:
+        return None, None
+    stmt = (
+        select(Organization, Product)
+        .join(Product, Product.org_id == Organization.id)
+        .where(Organization.name == company, Product.name == product)
+    )
+    row = db.execute(stmt).first()
+    if row:
+        return row[0], row[1]
+    return None, None
+
+
 def get_facility_config(db, company: str, product: str) -> dict:
-    """Load facility config from DB, or return empty dict."""
+    """Load facility config from DB, or return empty dict.
+
+    Facility config is per-product (singleton), snapshot-independent.
+    """
     if db is None:
         return {}
     prod = get_product_record(db, company, product)
@@ -59,165 +77,224 @@ def get_facility_config(db, company: str, product: str) -> dict:
     return result
 
 
-def get_org_and_product(db, company: str, product: str):
-    """Get (Organization, Product) tuple or (None, None)."""
+# ── Snapshot helpers ─────────────────────────────────────────────────────────
+
+def list_snapshots(db, company: str, product: str) -> list[dict]:
+    """Return all snapshots for a product, oldest first.
+
+    Shape matches what the /snapshots endpoint historically returned from the
+    filesystem, plus `source` and `row_count`. Frontend back-compat: `filename`
+    and `date` fields preserved.
+    """
     if db is None:
-        return None, None
+        return []
+    prod = get_product_record(db, company, product)
+    if prod is None:
+        return []
     stmt = (
-        select(Organization, Product)
-        .join(Product, Product.org_id == Organization.id)
-        .where(Organization.name == company, Product.name == product)
+        select(Snapshot)
+        .where(Snapshot.product_id == prod.id)
+        .order_by(Snapshot.taken_at, Snapshot.ingested_at)
     )
-    row = db.execute(stmt).first()
-    if row:
-        return row[0], row[1]
-    return None, None
+    snaps = db.execute(stmt).scalars().all()
+    return [
+        {
+            'id': str(s.id),
+            'filename': s.name,       # Back-compat: old endpoint returned filename
+            'name': s.name,
+            'date': s.taken_at.isoformat() if s.taken_at else None,
+            'source': s.source,
+            'row_count': s.row_count,
+            'ingested_at': s.ingested_at.isoformat() if s.ingested_at else None,
+        }
+        for s in snaps
+    ]
+
+
+def resolve_snapshot(db, company: str, product: str,
+                     snapshot: Optional[str] = None) -> Optional[Snapshot]:
+    """Resolve a `snapshot` query param to a Snapshot ORM row.
+
+    `snapshot` can be:
+      - None → latest snapshot by taken_at
+      - a snapshot name (e.g. "2026-04-15_uae_healthcare")
+      - a filename with extension (e.g. "2026-04-15_uae_healthcare.csv") — stripped
+      - an ISO date (e.g. "2026-04-15") — matched against taken_at
+    Returns None if no snapshot exists for the product.
+    """
+    if db is None:
+        return None
+    prod = get_product_record(db, company, product)
+    if prod is None:
+        return None
+
+    base = select(Snapshot).where(Snapshot.product_id == prod.id)
+
+    if snapshot is None:
+        # Latest snapshot
+        stmt = base.order_by(Snapshot.taken_at.desc(), Snapshot.ingested_at.desc()).limit(1)
+        return db.execute(stmt).scalar_one_or_none()
+
+    # Strip extension if user passed a filename
+    name_candidate = snapshot
+    for ext in ('.csv', '.xlsx', '.ods', '.json'):
+        if name_candidate.endswith(ext):
+            name_candidate = name_candidate[: -len(ext)]
+            break
+
+    # Try exact name match
+    stmt = base.where(Snapshot.name == name_candidate).limit(1)
+    hit = db.execute(stmt).scalar_one_or_none()
+    if hit:
+        return hit
+
+    # Try ISO-date match against taken_at
+    try:
+        import datetime as _dt
+        d = _dt.date.fromisoformat(snapshot)
+        stmt = base.where(Snapshot.taken_at == d).order_by(Snapshot.ingested_at.desc()).limit(1)
+        return db.execute(stmt).scalar_one_or_none()
+    except ValueError:
+        return None
 
 
 # ── DataFrame loaders ────────────────────────────────────────────────────────
 
-def load_klaim_from_db(db, company: str, product: str) -> pd.DataFrame:
-    """Query invoices + payments for a Klaim product, return DataFrame
-    with column names matching the tape format expected by core/analysis.py
-    and core/portfolio.py (Klaim functions).
+# Tape columns reconstructed from payments (not stored in extra_data).
+_KLAIM_PAYMENT_DERIVED = 'Collected till date'
+_SILQ_PAYMENT_DERIVED = 'Amt_Repaid'
 
-    Tape columns produced:
-        Deal date, Status, Purchase value, Purchase price, Discount,
-        Collected till date, Denied by insurance, Pending insurance response,
-        Expected total, Group, Product, New business, Gross revenue,
-        Setup fee, Other fee, Adjustments, Provisions
+
+def load_klaim_from_db(db, company: str, product: str,
+                       snapshot_id=None) -> pd.DataFrame:
+    """Query a Klaim product's invoices + payments for one snapshot.
+
+    If snapshot_id is None, uses the latest snapshot by taken_at.
+    Returns a DataFrame with tape-compatible column names. Every `extra_data`
+    key from the ingest script round-trips back as a DataFrame column with
+    its original name (e.g. 'Expected collection days', 'Collection days so
+    far', 'Provider'). Unknown snapshots or empty products return empty DataFrame.
     """
-    _, prod = get_org_and_product(db, company, product)
-    if not prod:
+    snap = _resolve_or_latest(db, company, product, snapshot_id)
+    if snap is None:
         return pd.DataFrame()
 
-    # Query all invoices for this product
-    stmt = (
-        select(Invoice)
-        .where(Invoice.product_id == prod.id)
-        .order_by(Invoice.invoice_date)
-    )
-    invoices = db.execute(stmt).scalars().all()
+    invoices = db.execute(
+        select(Invoice).where(Invoice.snapshot_id == snap.id).order_by(Invoice.invoice_date)
+    ).scalars().all()
     if not invoices:
         return pd.DataFrame()
 
-    # Pre-aggregate payments for all invoices in a single query (avoids N+1)
+    # Aggregate payments per invoice in one query (avoid N+1)
     inv_ids = [inv.id for inv in invoices]
-    pay_totals = {}
-    if inv_ids:
-        pay_stmt = (
-            select(Payment.invoice_id, func.coalesce(func.sum(Payment.payment_amount), 0))
-            .where(Payment.invoice_id.in_(inv_ids))
-            .group_by(Payment.invoice_id)
-        )
-        pay_totals = dict(db.execute(pay_stmt).all())
+    pay_totals = dict(db.execute(
+        select(Payment.invoice_id, func.coalesce(func.sum(Payment.payment_amount), 0))
+        .where(Payment.invoice_id.in_(inv_ids))
+        .group_by(Payment.invoice_id)
+    ).all())
 
-    # Build rows
     rows = []
     for inv in invoices:
-        meta = inv.extra_data or {}
-        collected = float(pay_totals.get(inv.id, 0))
-
-        rows.append({
-            'Deal date': pd.to_datetime(inv.invoice_date),
+        row = {
+            'Deal date': inv.invoice_date,
             'Status': inv.status,
-            'Purchase value': float(inv.amount_due),
-            'Purchase price': float(meta.get('purchase_price', inv.amount_due)),
-            'Discount': float(meta.get('discount', 0)),
-            'Collected till date': collected,
-            'Denied by insurance': float(meta.get('denied', 0)),
-            'Pending insurance response': float(meta.get('pending', 0)),
-            'Expected total': float(meta.get('expected_total', inv.amount_due)),
+            'Purchase value': float(inv.amount_due) if inv.amount_due is not None else 0.0,
             'Group': inv.customer_name or '',
-            'Product': meta.get('product_type', ''),
-            'New business': meta.get('new_business', ''),
-            'Gross revenue': float(meta.get('gross_revenue', 0)),
-            'Setup fee': float(meta.get('setup_fee', 0)),
-            'Other fee': float(meta.get('other_fee', 0)),
-            'Adjustments': float(meta.get('adjustments', 0)),
-            'Provisions': float(meta.get('provisions', 0)),
-            'Claim count': int(meta.get('claim_count', 1)),
-        })
+            'Payer': inv.payer_name or '',
+            'Deal ID': inv.invoice_number,
+            _KLAIM_PAYMENT_DERIVED: float(pay_totals.get(inv.id, 0)),
+        }
+        if inv.extra_data:
+            # Spread every extra_data key back under its original tape column name.
+            # Skip any core/reconstructed columns if somehow present (shouldn't be).
+            for k, v in inv.extra_data.items():
+                if k not in row:
+                    row[k] = v
+        rows.append(row)
 
     df = pd.DataFrame(rows)
     df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce', format='mixed')
     return df
 
 
-def load_silq_from_db(db, company: str, product: str) -> pd.DataFrame:
-    """Query invoices + payments for a SILQ product, return DataFrame
-    with column names matching the tape format expected by core/analysis_silq.py
-    and core/portfolio.py (SILQ functions).
+def load_silq_from_db(db, company: str, product: str,
+                      snapshot_id=None) -> pd.DataFrame:
+    """Query a SILQ product's invoices + payments for one snapshot.
 
-    Tape columns produced (matching analysis_silq.py constants):
-        Deal ID, Shop_ID, Product, Loan_Status,
-        Disbursement_Date, Repayment_Deadline, Last_Collection_Date,
-        Disbursed_Amount (SAR), Outstanding_Amount (SAR),
-        Overdue_Amount (SAR), Total_Collectable_Amount (SAR),
-        Amt_Repaid, Margin Collected, Principal Collected,
-        Tenure, Loan_Age, Shop_Credit_Limit (SAR)
+    Same extra_data round-trip as Klaim. SILQ-specific core columns use their
+    native tape names: Deal ID, Shop_ID, Loan_Status, Disbursement_Date,
+    Repayment_Deadline, Disbursed_Amount (SAR), Amt_Repaid.
     """
-    _, prod = get_org_and_product(db, company, product)
-    if not prod:
+    snap = _resolve_or_latest(db, company, product, snapshot_id)
+    if snap is None:
         return pd.DataFrame()
 
-    stmt = (
-        select(Invoice)
-        .where(Invoice.product_id == prod.id)
-        .order_by(Invoice.invoice_date)
-    )
-    invoices = db.execute(stmt).scalars().all()
+    invoices = db.execute(
+        select(Invoice).where(Invoice.snapshot_id == snap.id).order_by(Invoice.invoice_date)
+    ).scalars().all()
     if not invoices:
         return pd.DataFrame()
 
+    inv_ids = [inv.id for inv in invoices]
+    pay_totals = dict(db.execute(
+        select(Payment.invoice_id, func.coalesce(func.sum(Payment.payment_amount), 0))
+        .where(Payment.invoice_id.in_(inv_ids))
+        .group_by(Payment.invoice_id)
+    ).all())
+
     rows = []
     for inv in invoices:
-        meta = inv.extra_data or {}
-
-        # Aggregate payments
-        pay_stmt = (
-            select(
-                func.coalesce(func.sum(Payment.payment_amount), 0)
-            ).where(Payment.invoice_id == inv.id)
-        )
-        repaid = float(db.execute(pay_stmt).scalar() or 0)
-
-        rows.append({
+        row = {
             'Deal ID': inv.invoice_number,
-            'Shop_ID': inv.customer_name or meta.get('shop_id', ''),
-            'Product': meta.get('product_type', ''),
+            'Shop_ID': inv.customer_name or '',
             'Loan_Status': inv.status,
-            'Disbursement_Date': pd.to_datetime(inv.invoice_date),
-            'Repayment_Deadline': pd.to_datetime(inv.due_date) if inv.due_date else pd.NaT,
-            'Last_Collection_Date': pd.to_datetime(meta.get('last_collection_date')) if meta.get('last_collection_date') else pd.NaT,
-            'Disbursed_Amount (SAR)': float(inv.amount_due),
-            'Outstanding_Amount (SAR)': float(meta.get('outstanding', inv.amount_due)) - repaid,
-            'Overdue_Amount (SAR)': float(meta.get('overdue', 0)),
-            'Total_Collectable_Amount (SAR)': float(meta.get('collectable', inv.amount_due)),
-            'Amt_Repaid': repaid,
-            'Margin Collected': float(meta.get('margin_collected', 0)),
-            'Principal Collected': float(meta.get('principal_collected', 0)),
-            'Tenure': int(meta.get('tenure', 0)),
-            'Loan_Age': int(meta.get('loan_age', 0)),
-            'Shop_Credit_Limit (SAR)': float(meta.get('shop_credit_limit', 0)),
-        })
+            'Disbursement_Date': inv.invoice_date,
+            'Repayment_Deadline': inv.due_date,
+            'Disbursed_Amount (SAR)': float(inv.amount_due) if inv.amount_due is not None else 0.0,
+            _SILQ_PAYMENT_DERIVED: float(pay_totals.get(inv.id, 0)),
+        }
+        if inv.extra_data:
+            for k, v in inv.extra_data.items():
+                if k not in row:
+                    row[k] = v
+        rows.append(row)
 
     df = pd.DataFrame(rows)
+    # Coerce known date columns back to datetime
     for col in ('Disbursement_Date', 'Repayment_Deadline', 'Last_Collection_Date'):
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce')
     return df
 
 
-def load_from_db(db, company: str, product: str) -> pd.DataFrame:
-    """Load invoices as a tape-compatible DataFrame.
-    Auto-dispatches to Klaim or SILQ loader based on product.analysis_type.
+def load_from_db(db, company: str, product: str,
+                 snapshot_id=None) -> pd.DataFrame:
+    """Load a snapshot as a tape-compatible DataFrame.
+
+    Dispatches to the Klaim or SILQ loader based on product.analysis_type.
+    Returns empty DataFrame if product is unknown, has no snapshots, or
+    analysis_type isn't a tape-ingested type.
     """
     prod = get_product_record(db, company, product)
     if not prod:
         return pd.DataFrame()
 
     if prod.analysis_type == 'silq':
-        return load_silq_from_db(db, company, product)
+        return load_silq_from_db(db, company, product, snapshot_id=snapshot_id)
+    elif prod.analysis_type == 'klaim':
+        return load_klaim_from_db(db, company, product, snapshot_id=snapshot_id)
     else:
-        return load_klaim_from_db(db, company, product)
+        # ejari_summary / tamara_summary / aajil — non-tape ingestion paths
+        return pd.DataFrame()
+
+
+def _resolve_or_latest(db, company, product, snapshot_id):
+    """Return the Snapshot row matching snapshot_id, or latest if None.
+
+    snapshot_id may be a UUID object, a UUID string, or None.
+    """
+    if snapshot_id is not None:
+        return db.execute(
+            select(Snapshot).where(Snapshot.id == snapshot_id)
+        ).scalar_one_or_none()
+    return resolve_snapshot(db, company, product, snapshot=None)

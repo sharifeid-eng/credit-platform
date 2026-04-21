@@ -3,6 +3,104 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Session 31 — DB as snapshotted source of truth (DRAFT — awaiting user decisions)
+
+### Context
+
+Session 30 left behind a latent architectural defect: `_portfolio_load` silently prefers the DB path when `has_db_data(db, co, prod)` returns True. The DB currently holds a single "current state" of invoices — there is no snapshot dimension. Consequences, all surfaced on 2026-04-21:
+
+- Snapshot selector on `/portfolio/covenants` is non-functional when DB has data (same DataFrame served regardless of chosen snapshot; only `ref_date` varies via `as_of_date`).
+- DB-loader mapper (`load_klaim_from_db`) ignores `Invoice.extra_data` JSONB, so any tape column added after last seed is dropped. Apr 15 tape's `Expected collection days`, `Collection days so far`, `Provider`, `AccountManager`, `SalesManager` are all lost → `Total WAL = n/a`, direct-DPD PAR degrades to shortfall proxy, Provider chart missing.
+- `sel['date']` defaults to `datetime.now()` on the DB path — API response echoes back a "snapshot" date that doesn't correspond to any real file.
+- "Tape Fallback" badge in `PortfolioAnalytics.jsx:127` lies: reads `data.data_source || 'tape'` but covenants/BB/concentration endpoints never return `data_source`, so badge defaults to "Tape Fallback" even when DB is serving.
+
+User intent (2026-04-21): **"we are very close to integrate live data. create a plan for the best long term solution and lets implement."** — no midway fixes. DB becomes authoritative for both tape snapshots and live Integration API writes; snapshots become a first-class dimension.
+
+### Architectural decisions (need user call before implementation)
+
+**D1 — Existing DB data fate.** 7,697 current Klaim invoices + any SILQ rows were seeded once from Mar 3 tape and have drifted from reality (no snapshot lineage, no extra_data, wrong column set). Two options:
+- (a) **Drop + clean re-seed from all tape files.** Every tape file in `data/{co}/{prod}/*.csv` becomes one Snapshot row; invoices re-created with `extra_data` fully populated. 7,697 rows is derived data — zero information loss. Recommended.
+- (b) Tag existing rows as `source='legacy_initial_seed'` snapshot; re-seed only goes forward. Preserves write history but that history is not analytically useful.
+
+**D2 — Live snapshot granularity.** Once portfolio companies push via Integration API, how do writes partition into snapshots?
+- (a) **Rolling daily.** On first push each UTC day, create `live-YYYY-MM-DD` snapshot; all that day's writes go into it; same-day duplicate `invoice_number` → UPSERT within the day's snapshot; next day → new snapshot, prior day frozen. Gives naturally-spaced history without flooding the dropdown. Recommended.
+- (b) Singleton mutable `live` snapshot. One row per invoice, overwritten on push. Loses history — same bug class we're fixing.
+- (c) Per-call snapshot. Too granular; dropdown floods.
+
+**D3 — Tape files post-ingest.** Once DB carries every row with full `extra_data`:
+- (a) **Keep `data/{co}/{prod}/*.csv` files as archival source-of-truth.** Analysts continue to upload CSVs manually; `scripts/ingest_tape.py` reads them into DB snapshots; files stay on disk for audit. Recommended.
+- (b) Delete files post-ingest. Saves disk but loses bit-identical replay capability.
+
+**Default recommendations to proceed with unless you say otherwise: D1(a), D2(a), D3(a).**
+
+### Implementation plan
+
+**Phase 1 — Schema & migration** → verify: `alembic upgrade head` runs cleanly; new tables visible; all old data either dropped or tagged per D1.
+- [ ] New `Snapshot` ORM model in `core/models.py`: `id UUID`, `product_id FK`, `name str`, `source enum('tape','live','manual')`, `taken_at date`, `ingested_at datetime`, `row_count int`, `notes text?`, unique `(product_id, name)`.
+- [ ] `Invoice`: add `snapshot_id UUID FK NOT NULL`. Drop existing `Index("ix_invoices_org_product", ...)`, replace with `ix_invoices_snapshot_product` and composite unique `(snapshot_id, invoice_number)`. Keep `extra_data JSONB` — this is where every non-core tape column lands.
+- [ ] `Payment`: add `snapshot_id UUID FK NOT NULL` (duplicated on write — payments inherit their invoice's snapshot; FK lets us query payments per snapshot without a join).
+- [ ] `BankStatement`: add `snapshot_id UUID FK` (nullable — bank statements are time-series, not snapshot-scoped; but we index them by snapshot for consistency).
+- [ ] `FacilityConfig`: **unchanged** (one per product, snapshot-independent).
+- [ ] Alembic migration: create `snapshots` table, add FKs, backfill per D1 choice, enforce NOT NULL at the end.
+
+**Phase 2 — Seed & ingestion tooling** → verify: `python scripts/ingest_tape.py --company klaim --product UAE_healthcare --file 2026-04-15_uae_healthcare.csv` creates one Snapshot row + 8,080 Invoice rows with `extra_data` populated.
+- [ ] `scripts/ingest_tape.py` (new). Reads tape file via existing `load_snapshot()`, creates Snapshot, bulk-inserts invoices in batches of 1,000, populates `extra_data` with every column not already in the relational schema. Idempotent: same tape file → UPSERT by `(product_id, snapshot_id, invoice_number)`.
+- [ ] Replace/augment `scripts/seed_db.py`: iterates all tapes per company/product, calls `ingest_tape.py` logic per file. Produces N snapshots per product.
+- [ ] Dry-run mode (`--dry-run`) — shows counts without writing.
+
+**Phase 3 — Read path rewrite** → verify: `curl /portfolio/covenants?snapshot=2026-04-15_uae_healthcare` returns 148d / Path B (matching test fixture), same as direct Python call.
+- [ ] `core/db_loader.py::load_klaim_from_db(db, co, prod, snapshot_id=None)` — signature change. Filters invoices by snapshot_id (defaults to latest by `taken_at`). Reads every `extra_data` JSONB key back onto the DataFrame with its original tape column name. Same for `load_silq_from_db`, `load_from_db` dispatcher.
+- [ ] `core/db_loader.py::list_snapshots(db, co, prod)` — returns `[{id, name, source, taken_at, row_count}, ...]` ordered by `taken_at`.
+- [ ] `backend/main.py::_portfolio_load`: always DB path (tape fallback removed). Resolves `snapshot` query param against `list_snapshots` by name; 404 if not found. `sel = snapshot_row` — real date, real name, real source.
+- [ ] Remove `has_db_data` short-circuit + tape-fallback code path.
+
+**Phase 4 — Snapshots endpoint & list** → verify: `GET /companies/klaim/products/UAE_healthcare/snapshots` returns DB rows, not filesystem listing.
+- [ ] `get_snapshots` endpoint reads from DB via `list_snapshots`. Returns `{filename, date, source}` to preserve frontend contract (filename = snapshot.name, source new).
+- [ ] `get_snapshots` in `core/loader.py` becomes a pure-file-system helper used only by `ingest_tape.py` and `seed_db.py` — never by live endpoints.
+
+**Phase 5 — Integration API** → verify: bulk invoice push with 5,000 rows creates or appends to today's live snapshot; dashboard dropdown shows `live-2026-04-21` with row count.
+- [ ] New helper `get_or_create_live_snapshot(db, product, as_of_date=None)` in db_loader. On first push of a given UTC day, create `live-YYYY-MM-DD` snapshot. Subsequent same-day pushes reuse it.
+- [ ] `POST /api/integration/invoices` + `/bulk`: auto-tag with today's live snapshot. Contract unchanged (no new required fields from caller).
+- [ ] `PATCH /api/integration/invoices/{id}`: disallow edits to non-live snapshots (historical snapshots immutable). Reject with 409 if target invoice's snapshot is `source='tape'`.
+- [ ] `DELETE /api/integration/invoices/{id}`: same constraint.
+- [ ] `POST /api/integration/payments` + `/bulk` + `/invoices/{id}/payments`: inherit invoice's snapshot_id on write.
+
+**Phase 6 — Frontend honesty** → verify: badge reads "Live Data" on DB response, source chips render in dropdown.
+- [ ] Covenants/BB/Concentration endpoints return `data_source: 'database'` + `snapshot_source: 'tape' | 'live' | 'manual'`.
+- [ ] `PortfolioAnalytics.jsx:127` uses `data_source` honestly. Add `snapshot_source` chip next to snapshot name in dropdown (small Tape/Live tag).
+
+**Phase 7 — Tests** → verify: all pre-existing 505 tests still pass, plus ~50 new snapshot-layer tests.
+- [ ] `tests/test_db_snapshots.py` (new): snapshot creation, uniqueness, invoice isolation across snapshots, extra_data round-trip (all 5 Apr 15 columns survive DB → DataFrame), historical query (Mar 3 snapshot ≠ Apr 15 snapshot).
+- [ ] `tests/test_integration_api_snapshots.py` (new): bulk push creates live snapshot, same-day upsert, next-day new snapshot, edit rejected on tape snapshot.
+- [ ] `tests/test_portfolio_load.py` (new or extend existing): `_portfolio_load` resolves named snapshot, falls back to latest, 404 on missing.
+- [ ] Existing `test_analysis_klaim.py::TestDualViewWAL` should now pass against DB-loaded Apr 15 tape (wal_total = 137d).
+
+**Phase 8 — Verification & acceptance** → verify in browser + curl.
+- [ ] Browser: Klaim / covenants / Apr 15 → WAL shows 148d / Path B (matches session 30 screenshot + new CovenantCard fix).
+- [ ] Browser: Klaim / covenants / Mar 3 → WAL shows 140d / Path B.
+- [ ] Browser: data source badge says "Live Data" (because DB is now serving); snapshot chip says "Tape".
+- [ ] curl `/snapshots` returns Snapshot rows, not filesystem listing.
+- [ ] Seed a mock live push for Klaim (bulk POST 10 invoices via Integration API with today's date); confirm new `live-2026-04-21` snapshot appears in dropdown; confirm historical tape snapshots unchanged.
+- [ ] 505 + ~50 tests all green.
+
+### Scope, risk, sequencing
+
+- **Estimated effort:** 15–20 focused hours. Real schema change, not a patch. Will land in 4–6 commits along phase boundaries.
+- **Blast radius:** touches `core/models.py`, `core/db_loader.py`, `backend/main.py` (`_portfolio_load`, snapshots endpoint), `backend/integration.py`, `scripts/seed_db.py`, new `scripts/ingest_tape.py`, new Alembic migration, `frontend/src/pages/PortfolioAnalytics.jsx`. 3 new test files.
+- **Biggest risk:** the Alembic migration on data that's hot in production. I'll write a reversible migration + dry-run path, test on a fresh DB first, then on a staging copy.
+- **What breaks in between:** nothing visible to the analyst if phases land in order. Integration API contract is preserved throughout. Tape-fallback is removed in Phase 3 — after Phase 2 has populated DB with all historical snapshots, so dashboard continues to show every historical tape that existed before.
+- **What's out of scope this session:** bank statement snapshot semantics (file remains singleton-per-org); facility_config changes; admin UI for tape upload (still a CLI); UI for browsing snapshot diffs.
+
+### Blocking on user decisions before writing any code
+
+**D1** drop + re-seed / tag legacy?
+**D2** rolling daily live / singleton mutable / per-call?
+**D3** keep tape files post-ingest / delete?
+
+Recommend proceeding with **D1(a), D2(a), D3(a)**. Say "proceed" and I'll start Phase 1; say "adjust X" and I'll revise.
+
+---
+
 ## Session 30 — Klaim Apr 15 tape: validation fixes + Provider + dual-view WAL (2026-04-21)
 
 **Part 1 — validation/consistency recalibration** (`4f2d186`)
