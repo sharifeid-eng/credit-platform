@@ -3,6 +3,21 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-21 — Tape files don't deploy with git; EoD must flag them for manual SCP
+
+**Problem:** Session 30 added `data/klaim/UAE_healthcare/2026-04-15_uae_healthcare.csv`, the new Klaim April tape (8,080 rows × 65 cols, 4 MB). Following my own EoD Step 11, I checked `git diff HEAD~N --name-only | grep registry.json` → empty → told the user "no dataroom sync needed" and considered the deploy path complete. User then opened the production dashboard and the Apr 15 snapshot was missing from the dropdown. Root cause: raw tape files live under `data/{company}/{product}/` and are gitignored (correctly — we don't want 4 MB CSVs in git history). `sync-data.ps1` only walks `dataroom/` subdirectories to push PDFs/xlsx/docx there; it does NOT touch sibling tape directories. And `deploy.sh` pulls from git, so it can't bring a file git doesn't know about. Net: the tape only ever existed on the laptop. EoD Step 11 as written only checked the dataroom rail, missed the parallel tape rail entirely.
+
+**Rule:** Any data file that is (a) gitignored and (b) not covered by an existing sync script is platform-dark until manually SCP'd. EoD must enumerate both rails — dataroom registry changes AND new/modified tape files — before signing off. A green deploy without the data isn't really green; the user won't see the work until the raw file lands on the server.
+
+**How to apply:**
+- EoD skill Step 11 now has a second mandatory sub-check for untracked date-prefixed tape files (`git ls-files --others --exclude-standard -- "data/*/*/2*.csv" "data/*/*/2*.xlsx" "data/*/*/2*.ods"`), mirroring the existing `registry.json` dataroom check. Don't remove either.
+- Cross-reference the untracked-files list against session activity — a pre-existing tape from an earlier session will ALSO appear as untracked (gitignored, local-only), so "file is untracked" alone is insufficient. Flag only files the session added / replaced / analysed.
+- The SCP command per file: `scp -o ServerAliveInterval=30 <laptop-path> root@<server>:/opt/credit-platform/data/<company>/<product>/`. The server-side `/app/data/` volume mount picks it up immediately; no backend restart required because `get_snapshots()` re-reads the directory on every call.
+- Any time a new gitignored data category is introduced (new asset-class-specific file type, new off-tape sidecar that carries analyst-entered numbers like cash balance, a CSV the user drops alongside a tape), the EoD skill's Step 11 needs a parallel check added to its enumeration. The rule-of-thumb: if it's gitignored AND the platform reads it AND no sync script covers it → it needs an EoD deploy check.
+- Symptom in the wild: a successful deploy + clean git state + "all tests pass" but the user reports a specific snapshot/document/report isn't visible on production. Suspect a data-sync rail the EoD didn't enumerate before investigating app bugs.
+
+---
+
 ## 2026-04-21 — Persistent history files must record the compute method per entry
 
 **Problem:** `covenant_history.json` stored `{period, compliant, current, date}` per covenant per evaluation — but not the method used to compute `current`. The Apr 13 entry was written using proxy DPD on the March tape (no `Expected collection days` column). On Apr 15, Klaim supplied the April tape which added the column, flipping Paid-vs-Due to method `direct`. `annotate_covenant_eod`'s `two_consecutive_breaches` rule compared Apr 13 (proxy, 70.3%) + Apr 15 (direct, 83.4%) as two consecutive breaches and flagged a spurious EoD. Both numbers were correct at their respective moments — but treating them as a series misrepresented a methodology transition as a repeated breach.

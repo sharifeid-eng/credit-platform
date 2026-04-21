@@ -114,6 +114,20 @@ If ANY registry.json files appear in the output, remind the user:
 > ```
 > Then redeploy — `deploy.sh` will auto-ingest any datarooms with missing chunks.
 
+**Tape file sync check (mandatory — do not skip):** Raw loan tapes (`data/{company}/{product}/YYYY-MM-DD_*.csv|xlsx|ods`) are gitignored AND not covered by `sync-data.ps1` (that script only walks `dataroom/` folders). If the session added or replaced a tape file, it only exists on the laptop until manually SCP'd. Run:
+```
+git ls-files --others --exclude-standard -- "data/*/*/2*.csv" "data/*/*/2*.xlsx" "data/*/*/2*.ods"
+```
+This lists untracked date-prefixed files in per-product directories. Not every untracked file needs syncing (pre-existing tapes from earlier sessions will also show up), but any file the user referenced, validated, loaded, or analysed during THIS session needs explicit SCP. Cross-reference against the session's activity to decide.
+
+If any tape files need syncing, remind the user with exact commands per file:
+
+> **Sync new tape file(s) to production.** Run from your laptop PowerShell (one `scp` per file):
+> ```powershell
+> scp -o ServerAliveInterval=30 C:\Users\SharifEid\credit-platform\data\{company}\{product}\YYYY-MM-DD_{name}.csv root@204.168.252.26:/opt/credit-platform/data/{company}/{product}/
+> ```
+> The backend re-reads the data directory on every snapshot request — no restart required. Refresh the dashboard in the browser and the new snapshot will appear in the dropdown.
+
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
 ## Step 12 — Sync all environments
