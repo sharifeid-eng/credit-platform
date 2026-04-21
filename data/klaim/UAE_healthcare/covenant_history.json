@@ -1,6 +1,27 @@
 {
   "PAR30 (Portfolio at Risk > 30 days)": [
     {
+      "period": "2026-03-03",
+      "compliant": false,
+      "current": 0.3149955885197587,
+      "date": "2026-03-03",
+      "method": "age_pending"
+    },
+    {
+      "period": "2026-04-15",
+      "compliant": false,
+      "current": 0.3150558736896316,
+      "date": "2026-04-15",
+      "method": "age_pending"
+    },
+    {
+      "period": "2026-04-21",
+      "compliant": false,
+      "current": 0.4212737995295583,
+      "date": "2026-04-21",
+      "method": "age_pending"
+    },
+    {
       "period": "2026-04-13",
       "compliant": false,
       "current": 0.3938332095771121,
@@ -9,6 +30,27 @@
     }
   ],
   "PAR60 (Portfolio at Risk > 60 days)": [
+    {
+      "period": "2026-03-03",
+      "compliant": false,
+      "current": 0.2791662344711876,
+      "date": "2026-03-03",
+      "method": "age_pending"
+    },
+    {
+      "period": "2026-04-15",
+      "compliant": false,
+      "current": 0.2714889032069125,
+      "date": "2026-04-15",
+      "method": "age_pending"
+    },
+    {
+      "period": "2026-04-21",
+      "compliant": false,
+      "current": 0.32849615634718166,
+      "date": "2026-04-21",
+      "method": "age_pending"
+    },
     {
       "period": "2026-04-13",
       "compliant": false,
@@ -19,6 +61,27 @@
   ],
   "Collection Ratio (cumulative)": [
     {
+      "period": "2026-03-01 \u2013 2026-03-31",
+      "compliant": true,
+      "current": 0.7077267657336078,
+      "date": "2026-03-03",
+      "method": "cumulative"
+    },
+    {
+      "period": "2026-04-01 \u2013 2026-04-30",
+      "compliant": true,
+      "current": 0.7404493432578781,
+      "date": "2026-04-15",
+      "method": "cumulative"
+    },
+    {
+      "period": "2026-04-01 \u2013 2026-04-30",
+      "compliant": true,
+      "current": 0.7077267657336078,
+      "date": "2026-04-21",
+      "method": "cumulative"
+    },
+    {
       "period": "2026-04-01 \u2013 2026-04-30",
       "compliant": true,
       "current": 0.7077267657336078,
@@ -28,6 +91,27 @@
   ],
   "Paid vs Due Ratio": [
     {
+      "period": "2026-03-01 \u2013 2026-03-31",
+      "compliant": false,
+      "current": 0.7031565563816208,
+      "date": "2026-03-03",
+      "method": "proxy"
+    },
+    {
+      "period": "2026-04-01 \u2013 2026-04-30",
+      "compliant": false,
+      "current": 0.8335218480874959,
+      "date": "2026-04-15",
+      "method": "direct"
+    },
+    {
+      "period": "2026-04-01 \u2013 2026-04-30",
+      "compliant": false,
+      "current": 0.7031565563816208,
+      "date": "2026-04-21",
+      "method": "proxy"
+    },
+    {
       "period": "2026-04-01 \u2013 2026-04-30",
       "compliant": false,
       "current": 0.7031565563816208,
@@ -36,6 +120,27 @@
     }
   ],
   "Parent Minimum Cash Balance": [
+    {
+      "period": "2026-03-03",
+      "compliant": true,
+      "current": 0,
+      "date": "2026-03-03",
+      "method": "manual"
+    },
+    {
+      "period": "2026-04-15",
+      "compliant": true,
+      "current": 0,
+      "date": "2026-04-15",
+      "method": "manual"
+    },
+    {
+      "period": "2026-04-21",
+      "compliant": true,
+      "current": 0,
+      "date": "2026-04-21",
+      "method": "manual"
+    },
     {
       "period": "2026-04-13",
       "compliant": true,

@@ -165,6 +165,12 @@
       "relation_type": "evidence_for",
       "confidence": 0.95,
       "created_at": "2026-04-17T12:14:10.253254+00:00"
+    },
+    {
+      "target_id": "17bf81ef-dac7-45c6-9ff5-7fca9c7aed9d",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-21T11:15:50.901572+00:00"
     }
   ],
   "8c9fc124-dd63-41c0-8fba-95c6df8424e6": [
@@ -228,6 +234,312 @@
       "confidence": 0.95,
       "created_at": "2026-04-17T12:14:10.253254+00:00",
       "_reverse": true
+    }
+  ],
+  "a56b3d19-005e-400c-81c5-12a4cd27e991": [
+    {
+      "target_id": "35780adf-7ec0-4576-a778-78bc73605474",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.164995+00:00"
+    },
+    {
+      "target_id": "8640ee1c-d482-46c5-a77a-1178fcd38f73",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:49.511221+00:00",
+      "_reverse": true
+    }
+  ],
+  "35780adf-7ec0-4576-a778-78bc73605474": [
+    {
+      "target_id": "a56b3d19-005e-400c-81c5-12a4cd27e991",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.164995+00:00",
+      "_reverse": true
+    }
+  ],
+  "52127690-d30b-4f70-91e7-8895c438ea90": [
+    {
+      "target_id": "beaec3f4-1474-44e0-9db6-61f3032eda40",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.463825+00:00"
+    },
+    {
+      "target_id": "b1733968-4f80-48d6-8504-f8e64436e52a",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:49.942181+00:00",
+      "_reverse": true
+    }
+  ],
+  "beaec3f4-1474-44e0-9db6-61f3032eda40": [
+    {
+      "target_id": "52127690-d30b-4f70-91e7-8895c438ea90",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.463825+00:00",
+      "_reverse": true
+    }
+  ],
+  "463ac270-f492-454f-8a72-48ad385c5d68": [
+    {
+      "target_id": "f318ceec-124b-4803-b682-ec0adc6954c0",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.796511+00:00"
+    },
+    {
+      "target_id": "dd856756-c44d-4d30-b001-726b36a88d45",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:50.550988+00:00",
+      "_reverse": true
+    }
+  ],
+  "f318ceec-124b-4803-b682-ec0adc6954c0": [
+    {
+      "target_id": "463ac270-f492-454f-8a72-48ad385c5d68",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.796511+00:00",
+      "_reverse": true
+    }
+  ],
+  "17bf81ef-dac7-45c6-9ff5-7fca9c7aed9d": [
+    {
+      "target_id": "586e72d7-822e-4873-b86b-e0f684ba4c80",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.998263+00:00"
+    },
+    {
+      "target_id": "2026-03-03_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-21T11:15:50.901572+00:00",
+      "_reverse": true
+    },
+    {
+      "target_id": "2026-04-15_uae_healthcare.csv",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-21T18:27:35.333589+00:00",
+      "_reverse": true
+    }
+  ],
+  "586e72d7-822e-4873-b86b-e0f684ba4c80": [
+    {
+      "target_id": "17bf81ef-dac7-45c6-9ff5-7fca9c7aed9d",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:38.998263+00:00",
+      "_reverse": true
+    }
+  ],
+  "fc66f567-c108-44a7-bee7-8520d48c130b": [
+    {
+      "target_id": "33a20339-170b-42ef-a762-2617b2a0937e",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:39.313930+00:00"
+    },
+    {
+      "target_id": "3519608e-5837-4980-9a8e-b5fa5a36eb0b",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:51.478487+00:00",
+      "_reverse": true
+    }
+  ],
+  "33a20339-170b-42ef-a762-2617b2a0937e": [
+    {
+      "target_id": "fc66f567-c108-44a7-bee7-8520d48c130b",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:39.313930+00:00",
+      "_reverse": true
+    }
+  ],
+  "839bb8f9-e1f7-48bc-be93-4d41e4529b11": [
+    {
+      "target_id": "17f4be8f-8940-4b37-a8a9-37fa6404d20a",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:39.584475+00:00"
+    },
+    {
+      "target_id": "fdc297a2-71b4-4be5-af51-17440ee3e326",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:51.790811+00:00",
+      "_reverse": true
+    }
+  ],
+  "17f4be8f-8940-4b37-a8a9-37fa6404d20a": [
+    {
+      "target_id": "839bb8f9-e1f7-48bc-be93-4d41e4529b11",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:39.584475+00:00",
+      "_reverse": true
+    }
+  ],
+  "9a310207-3adb-4913-a8d8-bceada48cc85": [
+    {
+      "target_id": "76dc3e8f-6fb9-444f-99fc-2b3c83c382ce",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:39.601489+00:00"
+    },
+    {
+      "target_id": "3e9f528d-bae7-4ccf-a628-0f2d7e5b68af",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:52.226300+00:00",
+      "_reverse": true
+    }
+  ],
+  "76dc3e8f-6fb9-444f-99fc-2b3c83c382ce": [
+    {
+      "target_id": "9a310207-3adb-4913-a8d8-bceada48cc85",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:39.601489+00:00",
+      "_reverse": true
+    }
+  ],
+  "8640ee1c-d482-46c5-a77a-1178fcd38f73": [
+    {
+      "target_id": "a56b3d19-005e-400c-81c5-12a4cd27e991",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:49.511221+00:00"
+    },
+    {
+      "target_id": "6bf6d689-fec8-4c82-b191-97c14e56e8e2",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.296359+00:00",
+      "_reverse": true
+    }
+  ],
+  "b1733968-4f80-48d6-8504-f8e64436e52a": [
+    {
+      "target_id": "52127690-d30b-4f70-91e7-8895c438ea90",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:49.942181+00:00"
+    },
+    {
+      "target_id": "add442e8-5169-4725-9573-4e5291e9cfbd",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.310713+00:00",
+      "_reverse": true
+    }
+  ],
+  "dd856756-c44d-4d30-b001-726b36a88d45": [
+    {
+      "target_id": "463ac270-f492-454f-8a72-48ad385c5d68",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:50.550988+00:00"
+    },
+    {
+      "target_id": "2acd80cf-cd17-4c1f-8827-53029d800403",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.323417+00:00",
+      "_reverse": true
+    }
+  ],
+  "3519608e-5837-4980-9a8e-b5fa5a36eb0b": [
+    {
+      "target_id": "fc66f567-c108-44a7-bee7-8520d48c130b",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:51.478487+00:00"
+    },
+    {
+      "target_id": "0db2c104-5019-46d0-a33f-378d47f8f5cc",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.346096+00:00",
+      "_reverse": true
+    }
+  ],
+  "fdc297a2-71b4-4be5-af51-17440ee3e326": [
+    {
+      "target_id": "839bb8f9-e1f7-48bc-be93-4d41e4529b11",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:51.790811+00:00"
+    },
+    {
+      "target_id": "dd2bce9f-095e-4d73-b158-58b0f34e6234",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.360072+00:00",
+      "_reverse": true
+    }
+  ],
+  "3e9f528d-bae7-4ccf-a628-0f2d7e5b68af": [
+    {
+      "target_id": "9a310207-3adb-4913-a8d8-bceada48cc85",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T11:15:52.226300+00:00"
+    }
+  ],
+  "6bf6d689-fec8-4c82-b191-97c14e56e8e2": [
+    {
+      "target_id": "8640ee1c-d482-46c5-a77a-1178fcd38f73",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.296359+00:00"
+    }
+  ],
+  "add442e8-5169-4725-9573-4e5291e9cfbd": [
+    {
+      "target_id": "b1733968-4f80-48d6-8504-f8e64436e52a",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.310713+00:00"
+    }
+  ],
+  "2acd80cf-cd17-4c1f-8827-53029d800403": [
+    {
+      "target_id": "dd856756-c44d-4d30-b001-726b36a88d45",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.323417+00:00"
+    }
+  ],
+  "2026-04-15_uae_healthcare.csv": [
+    {
+      "target_id": "17bf81ef-dac7-45c6-9ff5-7fca9c7aed9d",
+      "relation_type": "evidence_for",
+      "confidence": 0.95,
+      "created_at": "2026-04-21T18:27:35.333589+00:00"
+    }
+  ],
+  "0db2c104-5019-46d0-a33f-378d47f8f5cc": [
+    {
+      "target_id": "3519608e-5837-4980-9a8e-b5fa5a36eb0b",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.346096+00:00"
+    }
+  ],
+  "dd2bce9f-095e-4d73-b158-58b0f34e6234": [
+    {
+      "target_id": "fdc297a2-71b4-4be5-af51-17440ee3e326",
+      "relation_type": "supersedes",
+      "confidence": 1.0,
+      "created_at": "2026-04-21T18:27:35.360072+00:00"
     }
   ]
 }
