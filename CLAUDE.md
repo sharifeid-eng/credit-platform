@@ -159,7 +159,7 @@ The platform allows analysts and investment committee members to:
 - PostgreSQL 18.3 database with SQLAlchemy 2.0 ORM + Alembic migrations
 - Integration API (12 endpoints) for portfolio companies to push invoices/payments/bank statements
 - Real-time borrowing base waterfall, concentration limits, covenant monitoring
-- Portfolio computation engine (`core/portfolio.py`) with DB-optional fallback to tape data
+- Portfolio computation engine (`core/portfolio.py`) reading snapshot-dimensioned DB (tape uploads + Integration API live pushes both create snapshots; Session 31)
 - Frontend: 6 portfolio tabs (Borrowing Base, Concentration Limits, Covenants, Invoices, Payments, Bank Statements)
 ### Phase 3 — Team & IC Viewing Layer ✅ (partial)
 - ✅ Role-based access (admin vs viewer via Cloudflare Access JWT)
@@ -175,7 +175,7 @@ The platform allows analysts and investment committee members to:
 - **PDF Reports:** Playwright (headless Chrome) for dashboard screenshots + ReportLab for PDF composition
 - **Data sources:**
   - **Tape Analytics:** CSV/Excel files stored locally under `data/` (manual upload)
-  - **Portfolio Analytics:** PostgreSQL database fed by Integration API (with fallback to tape data if DB not configured)
+  - **Portfolio Analytics:** PostgreSQL database (REQUIRED — Session 31 removed the tape-fallback read path). Tape uploads populate DB via `scripts/ingest_tape.py` (one Snapshot per file); Integration API writes populate a rolling-daily `live-YYYY-MM-DD` snapshot. DB is the only runtime source.
 -----
 ## How to Start the App (Every Session)
 **One command (recommended):**
@@ -278,8 +278,8 @@ credit-platform/
 │   ├── analysis_tamara.py  # Tamara BNPL JSON parser + enrichment (data room ingestion pattern)
 │   ├── analysis_aajil.py   # Aajil SME trade credit JSON parser + enrichment (investor deck pattern)
 │   ├── research_report.py  # Platform-level credit research report PDF generator (any company)
-│   ├── database.py         # SQLAlchemy 2.0 engine/session setup (DB-optional mode)
-│   ├── db_loader.py        # DB → tape-compatible DataFrame bridge (Klaim + SILQ mappers)
+│   ├── database.py         # SQLAlchemy 2.0 engine/session setup
+│   ├── db_loader.py        # Snapshot-scoped DB → tape-compatible DataFrame (list_snapshots, resolve_snapshot, extra_data spread-back)
 │   ├── loader.py           # File discovery, snapshot loading
 │   ├── config.py           # Per-product config (currency, description) via config.json
 │   ├── consistency.py      # Snapshot-to-snapshot data integrity checks
@@ -530,7 +530,7 @@ Key columns in loan tape files:
 |`GET /companies/{co}/products/{p}/charts/methodology-log`    |Data corrections & column availability log|
 |`GET /framework`                                             |Analysis Framework markdown document  |
 
-**Portfolio Analytics endpoints (real data — DB or tape fallback):**
+**Portfolio Analytics endpoints (snapshot-scoped DB reads; response includes `data_source='database'` + `snapshot_source`):**
 |Endpoint                                                     |Description                        |
 |-------------------------------------------------------------|-----------------------------------|
 |`GET /companies/{co}/products/{p}/portfolio/borrowing-base`  |Waterfall + KPIs + facility capacity|
@@ -687,7 +687,7 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 |Payments             |Payment ledger with ADVANCE/PARTIAL/FINAL badges, transaction filters, date range picker|
 |Bank Statements      |Cash position KPI cards (balance, collection), historical statement list, PDF download links|
 
-**Data source:** Portfolio Analytics reads from PostgreSQL database when configured (`DATABASE_URL`). Falls back to tape CSV/Excel files if DB not available. The computation engine (`core/portfolio.py`) works with tape-compatible DataFrames regardless of source.
+**Data source (post Session 31):** Portfolio Analytics reads from the snapshot-dimensioned PostgreSQL DB exclusively. Tape uploads populate DB via `scripts/ingest_tape.py` (one Snapshot per tape file, `source='tape'`). Integration API pushes populate a rolling-daily `live-YYYY-MM-DD` snapshot. `core/db_loader.py` produces tape-compatible DataFrames by spreading the `Invoice.extra_data` JSONB back onto DataFrame columns under each tape column's ORIGINAL name — so new tape columns flow through the entire stack automatically. No tape-fallback read path; portfolio endpoints 404 with a hint pointing at `ingest_tape.py` when no snapshot matches.
 -----
 ## Legal Analysis Tabs (8) — AI-Powered Document Analysis
 |Tab                |What It Shows                                                |
@@ -730,22 +730,23 @@ Dashboard controls (Tape only): Snapshot selector, As-of Date picker, Currency t
 | **Purpose** | Retrospective analysis, IC reporting | Live monitoring, borrowing base, covenants | Contractual truth, compliance comparison |
 | **Backend module** | `core/analysis.py` + `core/loader.py` | `core/portfolio.py` + `core/db_loader.py` | `core/legal_extractor.py` + `core/legal_compliance.py` |
 
-**DB-optional mode:** If `DATABASE_URL` is not set in `.env`, portfolio endpoints automatically fall back to computing from the latest tape CSV/Excel file. This allows the platform to run without PostgreSQL for tape-only analysis.
+**PostgreSQL is required post-Session-31.** The tape-fallback read path was removed; portfolio endpoints query DB only. `DATABASE_URL` must be set. To bootstrap a fresh environment: apply migrations (`alembic upgrade head`), then populate snapshots from tape files (`python scripts/ingest_tape.py --all`).
 
-**Tape-compatible bridge:** `core/db_loader.py` maps database rows (Invoice + Payment records) to DataFrames with identical column names as CSV tapes. This means `core/portfolio.py` and `core/analysis.py` work identically regardless of data source — zero code changes needed.
+**Tape-compatible bridge:** `core/db_loader.py` maps DB rows (Invoice + Payment, filtered by `snapshot_id`) to DataFrames with tape-column names. Every non-core tape column round-trips through `Invoice.extra_data` JSONB using its original tape column name (e.g., `'Expected collection days'`, `'Collection days so far'`, `'Provider'`). `core/portfolio.py` and `core/analysis.py` work identically — zero code changes when new tape columns arrive.
 
 **Integration API authentication:** Portfolio companies authenticate via `X-API-Key` header. Keys are generated with `scripts/create_api_key.py`, SHA-256 hashed, and stored in the `organizations` table. Each API key is scoped to one organization — queries automatically filter to that org's data.
 
-**Database schema (7 tables):**
+**Database schema (8 tables):**
 | Table | Purpose |
 |---|---|
 | `users` | Platform users with email, name, role (admin/viewer), active status |
 | `organizations` | Portfolio companies (Klaim, SILQ) with API key hash |
 | `products` | Products per org with analysis_type, currency, facility_limit |
-| `invoices` | Receivables pool (amount_due, status, customer, extra_data JSONB) |
-| `payments` | Payment activity (ADVANCE/PARTIAL/FINAL types) |
-| `bank_statements` | Cash position tracking with optional PDF file storage |
-| `facility_configs` | Per-facility lending terms in JSONB (advance_rates, concentration_limits, covenants) |
+| `snapshots` | Point-in-time views per product (source='tape'/'live'/'manual', taken_at, row_count). Created by `ingest_tape.py` per tape file OR by Integration API on first write each UTC day. Session 31. |
+| `invoices` | Receivables pool, tagged with `snapshot_id`. Composite unique `(snapshot_id, invoice_number)` — same invoice can exist in many snapshots. `extra_data` JSONB carries every non-core tape column verbatim. |
+| `payments` | Payment activity (ADVANCE/PARTIAL/FINAL), tagged with `snapshot_id` (inherited from parent invoice on write) |
+| `bank_statements` | Cash position tracking with optional PDF file storage; nullable `snapshot_id` for batch traceability |
+| `facility_configs` | Per-facility lending terms in JSONB (advance_rates, concentration_limits, covenants) — singleton per product, snapshot-independent |
 
 -----
 ## Research Hub & Memo Engine
@@ -846,9 +847,12 @@ When onboarding a new company, follow these steps to build its methodology page.
 - **URL-based tab navigation** — Active tab stored in URL `:tab` param, not React state. Enables bookmarking/sharing. `TapeAnalytics` reads `useParams().tab`, maps slug to label via `SLUG_TO_LABEL`.
 - **CompanyContext** — Central state provider extracted from old `Company.jsx`. Both `TapeAnalytics` and `PortfolioAnalytics` consume via `useCompany()` hook. Prevents re-fetches when switching between tape and portfolio views.
 - **CompanyLayout** — Wraps `CompanyProvider` around `Sidebar` + `<Outlet>`. Simple flex layout: sidebar (240px fixed) + main content area (flex: 1).
-- **Portfolio Analytics live data** — All 6 portfolio tabs now use real backend endpoints. `_portfolio_load()` in `main.py` auto-selects data source: DB if configured and has data, otherwise falls back to tape files. Returns tape-compatible DataFrame.
-- **DB-optional architecture** — `core/database.py` checks for `DATABASE_URL` in env. If missing, all DB-touching code gracefully returns None. Portfolio endpoints fall back to tape data. App runs fine without PostgreSQL.
-- **Tape-compatible DataFrame bridge** — `core/db_loader.py` maps Invoice+Payment DB records to DataFrames with identical column names as CSV tapes. `load_klaim_from_db()` and `load_silq_from_db()` handle company-specific mappings. Zero changes needed to analysis functions.
+- **Portfolio Analytics data source — snapshot-dimensioned DB (Session 31)** — All 6 portfolio tabs read from the DB. `_portfolio_load()` in `main.py` is DB-only; it resolves the `snapshot` query param to a Snapshot row via `resolve_snapshot()` and loads invoices + payments filtered by `snapshot_id`. No tape-fallback. 404s on unknown snapshot with a hint pointing at `scripts/ingest_tape.py`. Tape files populate DB via `ingest_tape.py` (one Snapshot per tape); Integration API pushes populate a rolling-daily `live-YYYY-MM-DD` snapshot. `sel['date'] = snap.taken_at` (real date, not `datetime.now()` — the old bug).
+- **As-of-date auto-resolves to matching snapshot** — When the caller passes an `as_of_date` that matches a real snapshot's `taken_at`, `_portfolio_load` prefers that snapshot over the one named in the `snapshot` query param. This lets the existing Portfolio `<select>` (a date picker, not a snapshot picker) act as a snapshot selector without a frontend rewrite. If no snapshot matches the date, falls back to the named snapshot + date filter.
+- **Same-day tape + live collision** — If a tape is uploaded AND a live snapshot exists for the same `taken_at`, `resolve_snapshot` orders by `ingested_at DESC` and returns the most-recently-ingested. Rule of thumb: the LAST write wins. Analysts should be aware when picking a snapshot on a day both sources exist — use the explicit snapshot dropdown in Tape Analytics for unambiguous selection.
+- **`Invoice.extra_data` JSONB round-trip** — Every non-core tape column (everything except `invoice_number`, `amount_due`, `status`, `customer_name`, `payer_name`, `invoice_date`, `due_date`) is stored in `extra_data` KEYED BY THE ORIGINAL TAPE COLUMN NAME. `db_loader.load_klaim_from_db` / `load_silq_from_db` spread every key back onto the DataFrame under that same name. A new analytical column in a tape (e.g., Apr 15's `Expected collection days`, `Collection days so far`, `Provider`) flows through the entire stack automatically — no schema migration, no loader-mapping change. Reserve the relational schema for INDEX/JOIN columns only.
+- **Tape-compatible DataFrame bridge** — `core/db_loader.py` maps Invoice+Payment DB records to DataFrames with identical column names as CSV tapes. `load_klaim_from_db()` and `load_silq_from_db()` handle company-specific core columns; `extra_data` handles the rest. Zero changes needed to analysis functions when tape schema evolves.
+- **Rolling-daily live snapshot (Integration API write path, Session 31)** — `get_or_create_live_snapshot(db, product)` creates `live-YYYY-MM-DD` on first Integration API write of each UTC day. Subsequent same-day writes UPSERT by `(snapshot_id, invoice_number)` into that snapshot. Next day's first write creates a new snapshot; prior day becomes frozen history. `is_snapshot_mutable(snapshot, today)` — True only for today's live snapshot. PATCH/DELETE on tape or prior-day-live returns 409. Concurrent first-push race is resolved by the unique `(product_id, name)` constraint (loser reads winner's row).
 - **Integration API authentication** — `backend/auth.py` validates `X-API-Key` header via SHA-256 hash lookup. `get_current_org()` FastAPI dependency injects the authenticated Organization. All integration queries are org-scoped.
 - **Bulk operations** — Integration API supports up to 5,000 invoices/payments per bulk request with per-item error tracking.
 - **Tiered concentration limits** — Single-borrower limit scales with facility size per loan docs ($10M→20%, $20M→15%, >$20M→10%). Implemented in `core/portfolio.py` `_conc_threshold()`.
@@ -1231,21 +1235,21 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - Bank Statements — cash position KPI cards, historical statement list
 - ✅ **Phase 2A — PostgreSQL database:**
   - PostgreSQL 18.3 with SQLAlchemy 2.0 ORM + Alembic migrations
-  - 6 tables: organizations, products, invoices, payments, bank_statements, facility_configs
-  - DB-optional mode — app runs without PostgreSQL, falls back to tape data
-  - Tape-compatible DataFrame bridge (`core/db_loader.py`) — zero changes to analysis functions
-  - Seed script (`scripts/seed_db.py`) to populate DB from existing tape files
+  - 8 tables: users, organizations, products, snapshots, invoices, payments, bank_statements, facility_configs (snapshots added in Session 31)
+  - Tape-compatible DataFrame bridge (`core/db_loader.py`) — snapshot-scoped reads, `extra_data` JSONB round-trip, zero changes to analysis functions when tape schema evolves
+  - Tape ingest CLI (`scripts/ingest_tape.py`) — one Snapshot per tape file, `--all` / `--dry-run` / `--force` flags; legacy `scripts/seed_db.py` still present for reference
 - ✅ **Phase 2B — Integration API:**
   - 12 inbound endpoints under `/api/integration/` for portfolio companies to push data
   - X-API-Key authentication (SHA-256 hashed, org-scoped)
-  - Invoices: CRUD + bulk create (up to 5,000/request)
-  - Payments: create + bulk create, linked to invoices
-  - Bank statements: create with optional base64 PDF upload
+  - Invoices: CRUD + bulk create (up to 5,000/request), rolling-daily UPSERT by `(snapshot_id, invoice_number)` into `live-YYYY-MM-DD` snapshot (Session 31)
+  - Payments: create + bulk create, inherit invoice's `snapshot_id` on write
+  - Bank statements: create with optional base64 PDF upload, tagged with live snapshot
+  - PATCH/DELETE return 409 on tape or prior-day-live snapshots (immutability rule, Session 31)
   - API key generation CLI (`scripts/create_api_key.py`)
 - ✅ **Phase 2C — Portfolio computation engine:**
   - `core/portfolio.py` — borrowing base waterfall, concentration limits (4 types, tiered thresholds), covenants (5-6 per asset class), portfolio cash flow
   - Supports both Klaim (receivables factoring) and SILQ (POS lending) asset classes
-  - `_portfolio_load()` auto-selects data source (DB → tape fallback)
+  - `_portfolio_load()` — DB-only read path, resolves snapshot via `resolve_snapshot()`, 404s on unknown snapshot (Session 31)
 - ✅ **SILQ Feb 2026 tape onboarded:**
   - Three product types: BNPL, RBF, RCL — consistent across both tapes
   - Loader reads all data sheets and normalises `Loan_Type` → `Product`
