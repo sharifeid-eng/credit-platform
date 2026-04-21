@@ -20,6 +20,7 @@ export function CompanyProvider({ children }) {
   const [products, setProducts]     = useState([])
   const [product, setProduct]       = useState(null)
   const [snapshots, setSnapshots]   = useState([])
+  const [snapshotsMeta, setSnapshotsMeta] = useState([])   // full objects with source + row_count
   const [snapshot, setSnapshot]     = useState(null)
   const [config, setConfig]         = useState({})
   const [currency, setCurrency]     = useState('USD')
@@ -56,7 +57,15 @@ export function CompanyProvider({ children }) {
       getSnapshots(company, product),
       getConfig(company, product),
     ]).then(([snaps, cfg]) => {
-      const snapStrings = snaps.map(s => typeof s === 'string' ? s : s.filename ?? s.date ?? String(s))
+      // Preserve full objects ({filename, date, source, row_count}) in snapshotsMeta;
+      // keep string array in snapshots for back-compat with existing consumers.
+      const snapObjects = snaps.map(s =>
+        typeof s === 'string'
+          ? { filename: s, date: null, source: 'tape', row_count: null }
+          : s
+      )
+      const snapStrings = snapObjects.map(s => s.filename ?? s.date ?? String(s))
+      setSnapshotsMeta(snapObjects)
       setSnapshots(snapStrings)
       setSnapshot(snapStrings[snapStrings.length - 1] ?? null)
       setConfig(cfg)
@@ -118,7 +127,7 @@ export function CompanyProvider({ children }) {
   return (
     <CompanyContext.Provider value={{
       company, products, product, setProduct,
-      snapshots, snapshot, setSnapshot,
+      snapshots, snapshotsMeta, snapshot, setSnapshot,
       config, currency, setCurrency, localCcy,
       summary, summaryLoading,
       aiCache, setAiCache,

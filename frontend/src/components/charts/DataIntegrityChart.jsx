@@ -4,6 +4,7 @@ import {
   generateIntegrityReport, getIntegrityReportCached,
   saveIntegrityNotes, getIntegrityNotes,
 } from '../../services/api'
+import SnapshotSelect from '../SnapshotSelect'
 
 // ── Severity styling ─────────────────────────────────────────────────────────
 const SEV = {
@@ -45,24 +46,6 @@ function GoldLoadingBar() {
       }} />
       <style>{`@keyframes integrityLoadSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }`}</style>
     </div>
-  )
-}
-
-// ── Dark Select (same pattern as Company.jsx) ────────────────────────────────
-function DarkSelect({ value, onChange, children }) {
-  return (
-    <select
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        fontSize: 11, padding: '6px 10px',
-        background: 'var(--bg-surface)', border: '1px solid var(--border)',
-        borderRadius: 7, color: 'var(--text-primary)',
-        fontFamily: 'var(--font-mono)', outline: 'none',
-      }}
-    >
-      {children}
-    </select>
   )
 }
 
@@ -204,7 +187,7 @@ function NoteField({ value, onChange, onSave }) {
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
-export default function DataIntegrityChart({ company, product, snapshots, currency }) {
+export default function DataIntegrityChart({ company, product, snapshots, snapshotsMeta, currency }) {
   // Defaults: second-to-last and last snapshot
   const defaultOld = snapshots?.length >= 2 ? snapshots[snapshots.length - 2] : snapshots?.[0] ?? ''
   const defaultNew = snapshots?.length >= 1 ? snapshots[snapshots.length - 1] : ''
@@ -320,9 +303,13 @@ export default function DataIntegrityChart({ company, product, snapshots, curren
           <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>
             Old Tape
           </div>
-          <DarkSelect value={snapOld} onChange={setSnapOld}>
-            {(snapshots ?? []).map(s => <option key={s} value={s}>{s}</option>)}
-          </DarkSelect>
+          <SnapshotSelect
+            value={snapOld}
+            onChange={setSnapOld}
+            snapshots={snapshots ?? []}
+            snapshotsMeta={snapshotsMeta}
+            minWidth={240}
+          />
         </div>
         <div style={{ fontSize: 16, color: 'var(--text-faint)', fontWeight: 700, paddingTop: 14 }}>
           &rarr;
@@ -331,9 +318,13 @@ export default function DataIntegrityChart({ company, product, snapshots, curren
           <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>
             New Tape
           </div>
-          <DarkSelect value={snapNew} onChange={setSnapNew}>
-            {(snapshots ?? []).map(s => <option key={s} value={s}>{s}</option>)}
-          </DarkSelect>
+          <SnapshotSelect
+            value={snapNew}
+            onChange={setSnapNew}
+            snapshots={snapshots ?? []}
+            snapshotsMeta={snapshotsMeta}
+            minWidth={240}
+          />
         </div>
         <div style={{ flex: 1 }} />
         {!results ? (

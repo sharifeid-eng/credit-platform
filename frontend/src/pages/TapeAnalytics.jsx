@@ -10,6 +10,7 @@ import AICommentary  from '../components/AICommentary'
 import DataChat      from '../components/DataChat'
 import TabInsight       from '../components/TabInsight'
 import BackdatedBanner  from '../components/BackdatedBanner'
+import SnapshotSelect   from '../components/SnapshotSelect'
 
 // Klaim Charts
 import DeploymentChart         from '../components/charts/DeploymentChart'
@@ -59,7 +60,7 @@ export default function TapeAnalytics() {
   const { isMobile } = useBreakpoint()
 
   const {
-    company, product, snapshots, snapshot, setSnapshot,
+    company, product, snapshots, snapshotsMeta, snapshot, setSnapshot,
     config, currency, setCurrency, localCcy,
     summary, summaryLoading,
     aiCache, setAiCache,
@@ -106,9 +107,12 @@ export default function TapeAnalytics() {
       <div style={{ padding: isMobile ? '12px 14px 0' : '16px 28px 0', display: 'flex', gap: isMobile ? 8 : 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         {/* Snapshot selector */}
         <ControlGroup label="Tape">
-          <DarkSelect value={snapshot ?? ''} onChange={v => { setSnapshot(v); setAiCache(null) }}>
-            {snapshots.map(s => <option key={s} value={s}>{s}</option>)}
-          </DarkSelect>
+          <SnapshotSelect
+            value={snapshot ?? ''}
+            onChange={v => { setSnapshot(v); setAiCache(null) }}
+            snapshots={snapshots}
+            snapshotsMeta={snapshotsMeta}
+          />
         </ControlGroup>
 
         {/* As-of Date picker */}
@@ -239,7 +243,7 @@ function SilqTabContent({ tab, activeTab, company, product, snapshot, snapshots,
     )
   }
   if (tab === 'data-integrity') {
-    return <DataIntegrityChart company={company} product={product} snapshots={snapshots} currency={currency} />
+    return <DataIntegrityChart company={company} product={product} snapshots={snapshots} snapshotsMeta={snapshotsMeta} currency={currency} />
   }
   // Map tab slugs to components
   const SILQ_TABS = {
@@ -358,7 +362,7 @@ function KlaimTabContent({ activeTab, company, product, snapshot, snapshots, cur
         </ChartTab>
       )}
       {activeTab === 'Data Integrity' && (
-        <DataIntegrityChart company={company} product={product} snapshots={snapshots} currency={currency} />
+        <DataIntegrityChart company={company} product={product} snapshots={snapshots} snapshotsMeta={snapshotsMeta} currency={currency} />
       )}
     </>
   )
@@ -671,23 +675,6 @@ function ControlGroup({ label, children }) {
       </div>
       {children}
     </div>
-  )
-}
-
-function DarkSelect({ value, onChange, children }) {
-  return (
-    <select
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        fontSize: 11, padding: '6px 10px',
-        background: 'var(--bg-surface)', border: '1px solid var(--border)',
-        borderRadius: 7, color: 'var(--text-primary)',
-        fontFamily: 'var(--font-mono)', outline: 'none',
-      }}
-    >
-      {children}
-    </select>
   )
 }
 
