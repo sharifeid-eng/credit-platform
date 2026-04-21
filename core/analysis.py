@@ -2294,12 +2294,53 @@ def compute_methodology_log(df, as_of_date=None):
     # Column availability
     expected_cols = ['Purchase value', 'Collected till date', 'Denied by insurance',
                      'Expected till date', 'Expected total', 'Discount',
-                     'New business', 'Product', 'Group', 'Owner']
+                     'New business', 'Product', 'Group', 'Owner',
+                     'Paid by insurance', 'Pending insurance response',
+                     'Expected collection days', 'Collection days so far', 'Provider']
     col_availability = {col: col in df.columns for col in expected_cols}
 
     # Curve columns
     curve_count = len([c for c in df.columns if c.startswith('Actual in ') and 'days' in c])
     col_availability['Collection curves'] = curve_count > 0
+
+    # Close-date proxy used by Total-WAL (compute_klaim_covenants): document which proxy
+    # path applies on this tape so the covenant breakdown and IC audit trail agree.
+    has_cdsf = 'Collection days so far' in df.columns
+    has_exp  = 'Expected collection days' in df.columns
+    if has_cdsf:
+        wal_total_proxy = {
+            'description': 'Completed-deal close age = Collection days so far (observed), '
+                           'clipped to [0, elapsed]; falls back to Expected collection days '
+                           'where the observed value is missing or negative. Active deals use '
+                           'elapsed (snapshot − Deal date).',
+            'column': 'Collection days so far',
+            'fallback_column': 'Expected collection days' if has_exp else None,
+            'available': True,
+            'confidence': 'B',
+        }
+    elif has_exp:
+        wal_total_proxy = {
+            'description': 'Completed-deal close age = Expected collection days (contractual), '
+                           'clipped to [0, elapsed]. Observed Collection days so far not on tape.',
+            'column': 'Expected collection days',
+            'fallback_column': None,
+            'available': True,
+            'confidence': 'B',
+        }
+    else:
+        wal_total_proxy = {
+            'description': 'Total WAL unavailable — tape lacks both Collection days so far '
+                           'and Expected collection days.',
+            'column': None,
+            'fallback_column': None,
+            'available': False,
+            'confidence': 'unavailable',
+        }
+    adjustments.append({
+        'type': 'close_date_proxy',
+        'target_metric': 'wal_total_days',
+        **wal_total_proxy,
+    })
 
     # Data quality summary
     total_rows = len(df)

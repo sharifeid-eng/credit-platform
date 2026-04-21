@@ -613,6 +613,68 @@ def _klaim_deal_age_days(df, ref_date=None):
     return (ref_date - df['Deal date']).dt.days.clip(lower=0)
 
 
+def _klaim_wal_total(df, ref_date, mult):
+    """
+    Weighted-average life across the whole book (active + completed), PV-weighted.
+
+    Active deals (still accumulating age):  age = snapshot_date − Deal date.
+    Completed deals (bounded life):         age = Collection days so far, clipped to
+                                                  [0, elapsed]. Falls back to
+                                                  Expected collection days when the
+                                                  observed column is missing/NaN/negative.
+
+    Rationale: "Collection days so far" is the observed collection duration — the most
+    faithful close-date proxy available. Fallback to contractual "Expected collection
+    days" when the observed value is absent or corrupted (e.g. some completed rows
+    carry negative/zero Collection days so far). Values above `elapsed` are clipped so
+    we never project into the future of the snapshot.
+
+    Weighting is Purchase value (face-value, life-of-deal) because this is the IC
+    "how long is a dollar deployed?" view — distinct from Active WAL which is
+    outstanding-weighted for covenant purposes.
+
+    Active WAL is Framework Confidence A (observed); Total WAL is Confidence B
+    (observed for active, observed-with-fallback for completed). Proxy choice is
+    recorded in compute_methodology_log().
+
+    Returns (wal_total_days, proxy_method) or (None, 'unavailable').
+    """
+    if 'Deal date' not in df.columns or 'Purchase value' not in df.columns or 'Status' not in df.columns:
+        return None, 'unavailable'
+    has_cdsf = 'Collection days so far' in df.columns
+    has_exp  = 'Expected collection days' in df.columns
+    if not has_cdsf and not has_exp:
+        return None, 'unavailable'
+
+    pv = pd.to_numeric(df['Purchase value'], errors='coerce').fillna(0) * mult
+    if pv.sum() <= 0:
+        return None, 'unavailable'
+
+    elapsed = _klaim_deal_age_days(df, ref_date)
+    completed = df['Status'] == 'Completed'
+
+    # Start from elapsed; override completed rows with the observed/inferred close age.
+    age = elapsed.astype(float).copy()
+    if completed.any():
+        close_age = pd.Series(np.nan, index=df.index)
+        if has_cdsf:
+            cdsf = pd.to_numeric(df['Collection days so far'], errors='coerce')
+            # Treat negatives as corrupted; keep non-negative observed values.
+            close_age = close_age.where(~(cdsf >= 0), cdsf)
+        if has_exp:
+            exp = pd.to_numeric(df['Expected collection days'], errors='coerce')
+            # Fill remaining NaN rows (where CDSF was missing/negative) with contractual term.
+            close_age = close_age.fillna(exp.where(exp >= 0))
+        # Final fallback to elapsed (so graceful on any stray row still-NaN).
+        close_age = close_age.fillna(elapsed)
+        # Clip to [0, elapsed] so completed-deal age can never exceed what's physically possible.
+        age.loc[completed] = np.minimum(np.maximum(close_age[completed], 0), elapsed[completed])
+
+    wal = float(np.average(age, weights=pv))
+    method = 'collection_days_so_far' if has_cdsf else 'expected_collection_days'
+    return wal, method
+
+
 # ── Klaim Borrowing Base ────────────────────────────────────────────────────
 
 def compute_klaim_borrowing_base(df, mult=1, ref_date=None, facility_params=None):
@@ -978,27 +1040,50 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
 
     # ── 2. Weighted Average Life (≤ 70d, OR Extended Age 70-90d ≤ 5%) ──
     # MMA Art. 21: WAL test satisfied if WAL ≤ 70 days (Path A),
-    # OR even if WAL > 70d, if Extended Age Receivables (70-90d) ≤ 5% of Eligible OPB (Path B)
+    # OR even if WAL > 70d, if Extended Age Receivables (70-90d) ≤ 5% of Eligible OPB (Path B).
+    # The covenant is defined against the ACTIVE pool (outstanding-weighted) per the MMA, so
+    # compliance keeps using wal_active. wal_total is an IC/monitoring view of life-of-deal
+    # capital efficiency across the whole book (active + completed, PV-weighted).
     wal_threshold = facility_params.get('wal_threshold_days', 70)
     ext_age_limit = facility_params.get('extended_age_limit', 0.05)
     ext_age_upper = facility_params.get('extended_age_upper_days', 90)
     age = _klaim_deal_age_days(active, ref_date)
-    wal = 0
+    wal_active = 0
     ext_age_pct = 0
     if total_ar > 0:
-        wal = float(np.average(age, weights=outstanding))
+        wal_active = float(np.average(age, weights=outstanding))
         ext_age_mask = (age > wal_threshold) & (age <= ext_age_upper)
         ext_age_pct = float(outstanding[ext_age_mask].sum()) / total_ar if total_ar > 0 else 0
 
+    wal_total, wal_total_method = _klaim_wal_total(df, ref_date, mult)
+
     # Dual-path compliance: Path A (WAL ≤ threshold) OR Path B (Extended Age ≤ 5%)
-    path_a = bool(wal <= wal_threshold)
+    # Compliance is ALWAYS decided on active WAL, per MMA definition.
+    path_a = bool(wal_active <= wal_threshold)
     path_b = bool(ext_age_pct <= ext_age_limit)
     wal_compliant = path_a or path_b
     compliance_path = 'Path A (WAL)' if path_a else ('Path B (carve-out)' if path_b else 'Breach')
 
+    wal_total_label = f'{wal_total:.0f} days' if wal_total is not None else 'n/a (needs Expected collection days)'
+    dual_note = (
+        'Covenant decided on Active WAL (outstanding-weighted). '
+        'Total WAL is a life-of-deal view across active + completed (PV-weighted).'
+    )
+    compliance_note = (
+        f'Compliant via carve-out (Extended Age {ext_age_pct:.1%} ≤ {ext_age_limit:.0%})'
+        if (not path_a and path_b)
+        else (f'{wal_active - wal_threshold:.0f} days over' if not wal_compliant else None)
+    )
+
     covenants.append({
         'name': 'Weighted average life of receivables',
-        'current': _safe(wal),
+        'current': _safe(wal_active),
+        'wal_active_days': _safe(wal_active),
+        'wal_total_days': _safe(wal_total) if wal_total is not None else None,
+        'wal_total_available': wal_total is not None,
+        'wal_total_method': wal_total_method,
+        'wal_active_confidence': 'A',
+        'wal_total_confidence': 'B',
         'threshold': _safe(wal_threshold),
         'compliant': wal_compliant,
         'operator': '<=',
@@ -1007,9 +1092,11 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': True,
         'partial': False,
         'compliance_path': compliance_path,
-        'note': f'Compliant via carve-out (Extended Age {ext_age_pct:.1%} ≤ {ext_age_limit:.0%})' if (not path_a and path_b) else (f'{wal - wal_threshold:.0f} days over' if not wal_compliant else None),
+        'note': compliance_note,
+        'view_note': dual_note,
         'breakdown': [
-            {'label': 'Weighted Average Life', 'value': f'{wal:.0f} days'},
+            {'label': 'Active WAL (covenant, outstanding-weighted)', 'value': f'{wal_active:.0f} days'},
+            {'label': 'Total WAL (book, PV-weighted)', 'value': wal_total_label},
             {'label': 'WAL Limit (Path A)', 'value': f'{wal_threshold} days'},
             {'label': f'Extended Age ({wal_threshold}-{ext_age_upper}d) share', 'value': f'{ext_age_pct:.1%}'},
             {'label': 'Extended Age Limit (Path B)', 'value': f'{ext_age_limit:.0%}'},

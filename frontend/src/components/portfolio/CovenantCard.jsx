@@ -9,7 +9,8 @@ const EOD_STYLES = {
 
 export default function CovenantCard({ covenant, currency = 'AED' }) {
   const { name, current, threshold, compliant, operator, format, period, breakdown,
-          previous_value, days_since_previous, eod_rule, eod_status, eod_triggered, consecutive_breaches } = covenant
+          previous_value, days_since_previous, eod_rule, eod_status, eod_triggered, consecutive_breaches,
+          view_note } = covenant
 
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
@@ -227,6 +228,21 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
               <span style={{ fontFamily: 'var(--font-mono)' }}>{fmtBreakdownValue(item.value)}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* View note (dual-perspective explainer, e.g. Active vs Total WAL) */}
+      {view_note && (
+        <div style={{
+          marginTop: 10,
+          paddingTop: 8,
+          borderTop: '1px dashed var(--border)',
+          fontSize: 10,
+          fontStyle: 'italic',
+          color: 'var(--text-muted)',
+          lineHeight: 1.5,
+        }}>
+          {view_note}
         </div>
       )}
     </div>

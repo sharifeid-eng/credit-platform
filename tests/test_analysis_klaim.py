@@ -623,3 +623,99 @@ class TestStatusReversalSeverityKlaim:
         warn = [w for w in cons['warnings'] if 'denial reopen' in w['check']]
         assert len(warn) == 1
         assert '1 deals' in warn[0]['detail']
+
+
+# ── Dual-view WAL (Part 3) ────────────────────────────────────────────────────
+
+class TestDualViewWAL:
+    """
+    Active WAL (outstanding-weighted) is the covenant value, unchanged.
+    Total WAL (PV-weighted across active + completed) is a new IC/monitoring view
+    that strips the retention bias of active-only WAL.
+    """
+
+    def _wal(self, df, ref_date):
+        from core.portfolio import compute_klaim_covenants
+        covs = compute_klaim_covenants(df, mult=1, ref_date=ref_date)
+        return [c for c in covs['covenants'] if 'life' in c['name'].lower()][0]
+
+    def test_active_wal_matches_148_on_apr15(self, apr15_df):
+        """Active WAL (outstanding-weighted) should be ~148 days on Apr 15."""
+        w = self._wal(apr15_df, '2026-04-15')
+        assert w['wal_active_days'] == pytest.approx(148, abs=1)
+        # Covenant value mirrors active WAL
+        assert w['current'] == pytest.approx(w['wal_active_days'], abs=0.01)
+
+    def test_total_wal_strictly_less_than_active_on_apr15(self, apr15_df):
+        """Completed deals have bounded life; active ones accumulate. So wal_total < wal_active."""
+        w = self._wal(apr15_df, '2026-04-15')
+        assert w['wal_total_available'] is True
+        assert w['wal_total_days'] is not None
+        assert w['wal_total_days'] < w['wal_active_days'], (
+            f"Total WAL ({w['wal_total_days']:.1f}d) must be strictly less than "
+            f"Active WAL ({w['wal_active_days']:.1f}d) — if not, the close-date proxy is wrong"
+        )
+
+    def test_total_wal_method_documented(self, apr15_df):
+        w = self._wal(apr15_df, '2026-04-15')
+        # Apr 15 has Collection days so far, so observed proxy should win
+        assert w['wal_total_method'] == 'collection_days_so_far'
+        assert w['wal_active_confidence'] == 'A'
+        assert w['wal_total_confidence'] == 'B'
+
+    def test_total_wal_graceful_degradation_on_older_tape(self, mar03_df):
+        """Mar 3 tape lacks Collection days so far AND Expected collection days → wal_total=None."""
+        w = self._wal(mar03_df, '2026-03-03')
+        # Active WAL still computes
+        assert w['wal_active_days'] > 0
+        # Total WAL unavailable
+        assert w['wal_total_available'] is False
+        assert w['wal_total_days'] is None
+        assert w['wal_total_method'] == 'unavailable'
+
+    def test_covenant_compliance_keyed_to_active_not_total(self, apr15_df):
+        """MMA-defined covenant must still key off active WAL, not total."""
+        w = self._wal(apr15_df, '2026-04-15')
+        # Apr 15 compliance path should be computed against wal_active (148d > 70d → Path B carve-out)
+        # NOT against wal_total (137d — if we used this, Path A would appear to pass).
+        assert w['compliance_path'].startswith('Path B') or w['compliance_path'].startswith('Path A')
+        # Active WAL >= 70 means Path A fails — ensure we're evaluating active, not total.
+        assert w['wal_active_days'] > 70
+        assert w['compliance_path'] != 'Path A (WAL)', (
+            "Covenant compliance should not use wal_total for Path A evaluation"
+        )
+
+    def test_total_wal_has_view_note(self, apr15_df):
+        w = self._wal(apr15_df, '2026-04-15')
+        assert w.get('view_note'), "Covenant must carry a view_note explaining Active vs Total"
+        assert 'active' in w['view_note'].lower()
+        assert 'total' in w['view_note'].lower()
+
+    def test_methodology_log_documents_close_date_proxy(self, apr15_df, mar03_df):
+        from core.analysis import compute_methodology_log
+        ml_apr = compute_methodology_log(apr15_df)
+        proxy_apr = [a for a in ml_apr['adjustments'] if a.get('type') == 'close_date_proxy']
+        assert len(proxy_apr) == 1
+        assert proxy_apr[0]['available'] is True
+        assert proxy_apr[0]['column'] == 'Collection days so far'
+        assert proxy_apr[0]['target_metric'] == 'wal_total_days'
+
+        ml_mar = compute_methodology_log(mar03_df)
+        proxy_mar = [a for a in ml_mar['adjustments'] if a.get('type') == 'close_date_proxy']
+        assert len(proxy_mar) == 1
+        assert proxy_mar[0]['available'] is False
+
+    def test_column_availability_registers_new_columns(self, apr15_df, mar03_df):
+        from core.analysis import compute_methodology_log
+        ml_apr = compute_methodology_log(apr15_df)
+        ca_apr = ml_apr['column_availability']
+        # Apr 15 should register all three new columns as available
+        assert ca_apr['Expected collection days'] is True
+        assert ca_apr['Collection days so far'] is True
+        assert ca_apr['Provider'] is True
+        # Mar 3 should register them as absent
+        ml_mar = compute_methodology_log(mar03_df)
+        ca_mar = ml_mar['column_availability']
+        assert ca_mar['Expected collection days'] is False
+        assert ca_mar['Collection days so far'] is False
+        assert ca_mar['Provider'] is False
