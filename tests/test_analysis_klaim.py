@@ -692,6 +692,29 @@ class TestDualViewWAL:
         assert 'active' in w['view_note'].lower()
         assert 'total' in w['view_note'].lower()
 
+    def test_path_b_carve_out_contract_for_frontend(self, apr15_df):
+        """
+        Pins the backend/frontend contract for the WAL Path B carve-out.
+
+        CovenantCard.jsx suppresses the Path A headroom + projected-breach lines when
+        `compliance_path === 'Path B (carve-out)'` (headroom would be negative, projection
+        would fall in the past — both are mathematically real but operationally misleading
+        because Path A is not the binding gate). The card renders the covenant's `note`
+        instead. This test pins the three things that guard depends on:
+          (1) compliance_path emits the EXACT string 'Path B (carve-out)' when Path B binds
+          (2) note is populated in that state (fallback in the UI is a generic string)
+          (3) note surfaces the Extended Age current value + limit, so the numbers hidden
+              from Path A still reach the user through Path B's phrasing.
+        """
+        w = self._wal(apr15_df, '2026-04-15')
+        assert w['compliance_path'] == 'Path B (carve-out)', (
+            "Apr 15 WAL covenant should be compliant via Path B (active WAL=148d > 70d limit, "
+            "Extended Age carve-out 4.4% <= 5%). Frontend guard keys off this exact string."
+        )
+        assert w.get('note'), "note must be populated when Path B binds — frontend renders it in place of Path A headroom"
+        assert 'Extended Age' in w['note'], "note must surface the Extended Age current value"
+        assert '≤' in w['note'], "note must include the '≤' comparison so the limit is visible"
+
     def test_methodology_log_documents_close_date_proxy(self, apr15_df, mar03_df):
         from core.analysis import compute_methodology_log
         ml_apr = compute_methodology_log(apr15_df)

@@ -10,7 +10,16 @@ const EOD_STYLES = {
 export default function CovenantCard({ covenant, currency = 'AED' }) {
   const { name, current, threshold, compliant, operator, format, period, breakdown,
           previous_value, days_since_previous, eod_rule, eod_status, eod_triggered, consecutive_breaches,
-          view_note } = covenant
+          view_note, compliance_path, note } = covenant
+
+  // WAL covenant has dual-path compliance (MMA Art. 21): Path A (WAL <= limit) OR
+  // Path B (Extended Age 70-90d carve-out <= 5%). When Path B is the binding path,
+  // headroom + projection against threshold (Path A) are numerically real but
+  // operationally misleading — e.g. on Apr 15 Klaim: current=148d, threshold=70d,
+  // headroom=-78d (teal ✓ on negative number), and projection says "breach 14 months ago".
+  // In that case, suppress both lines and render the covenant's own `note` which
+  // already states "Compliant via carve-out (Extended Age X.X% ≤ Y%)".
+  const compliantViaPathB = compliance_path === 'Path B (carve-out)'
 
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
@@ -125,7 +134,7 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
       )}
 
       {/* Trigger distance (headroom when compliant) */}
-      {compliant && (
+      {compliant && !compliantViaPathB && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
           <div style={{ fontSize: 10, color: 'var(--accent-teal)', display: 'flex', alignItems: 'center', gap: 4 }}>
             <span>✓</span>
@@ -150,6 +159,17 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Path B carve-out: render binding compliance fact instead of Path A headroom/projection */}
+      {compliant && compliantViaPathB && (
+        <div style={{
+          fontSize: 10, color: 'var(--text-muted)', marginBottom: 12,
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <span style={{ color: 'var(--accent-teal)' }}>✓</span>
+          {note || 'Compliant via Path B carve-out'}
         </div>
       )}
 
