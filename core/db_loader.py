@@ -16,6 +16,8 @@ Snapshot resolution:
 - `load_from_db(db, co, prod, snapshot_id=...)` → that exact snapshot.
 - `load_from_db(db, co, prod, snapshot_name=...)` → by unique (product_id, name).
 """
+import uuid
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -23,6 +25,70 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from core.models import Organization, Product, Snapshot, Invoice, Payment, FacilityConfig
+
+
+# ── Live snapshot helpers (Integration API write path) ──────────────────────
+
+def get_or_create_live_snapshot(db, product: Product, as_of: Optional[date] = None) -> Snapshot:
+    """Return today's rolling-daily live snapshot for a product, creating if needed.
+
+    `as_of` defaults to UTC today. Each UTC day gets one `live-YYYY-MM-DD`
+    snapshot per product. Same-day Integration API writes all land in that
+    snapshot; next-day writes create a new snapshot (prior day is then frozen
+    history).
+
+    Idempotent: concurrent first-push-of-the-day collisions are resolved by the
+    unique (product_id, name) constraint — the loser re-reads and returns the
+    winner's row. Caller must commit or let FastAPI's db dependency commit.
+    """
+    if as_of is None:
+        as_of = datetime.now(timezone.utc).date()
+    name = f"live-{as_of.isoformat()}"
+
+    existing = db.execute(
+        select(Snapshot).where(Snapshot.product_id == product.id, Snapshot.name == name)
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    snap = Snapshot(
+        id=uuid.uuid4(),
+        product_id=product.id,
+        name=name,
+        source='live',
+        taken_at=as_of,
+        ingested_at=datetime.utcnow(),
+        row_count=0,
+        notes='Rolling daily live snapshot, populated by Integration API writes.',
+    )
+    db.add(snap)
+    try:
+        db.flush()
+    except Exception:
+        # Concurrent create — someone else won the race. Re-read and return theirs.
+        db.rollback()
+        existing = db.execute(
+            select(Snapshot).where(Snapshot.product_id == product.id, Snapshot.name == name)
+        ).scalar_one_or_none()
+        if existing is None:
+            raise
+        return existing
+    return snap
+
+
+def is_snapshot_mutable(snapshot: Snapshot, today: Optional[date] = None) -> bool:
+    """A snapshot is mutable only when it's the current UTC day's live snapshot.
+
+    This enforces the Integration API's immutability rule: tape snapshots are
+    read-only (they represent a frozen book state from a specific upload);
+    prior days' live snapshots are read-only (they represent that day's end
+    state); only today's live snapshot accepts writes/updates/deletes.
+    """
+    if snapshot is None or snapshot.source != 'live':
+        return False
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+    return snapshot.taken_at == today
 
 
 # ── Product/org helpers ──────────────────────────────────────────────────────

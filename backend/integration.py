@@ -20,7 +20,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.database import get_db
-from core.models import Organization, Product, Invoice, Payment, BankStatement
+from core.db_loader import get_or_create_live_snapshot, is_snapshot_mutable
+from core.models import Organization, Product, Snapshot, Invoice, Payment, BankStatement
 from backend.auth import get_current_org
 from backend.schemas import (
     InvoiceCreate, InvoiceBulkCreate, InvoiceUpdate, InvoiceResponse,
@@ -62,6 +63,65 @@ def _get_invoice_or_404(db: Session, org: Organization, invoice_id: str) -> Invo
     return inv
 
 
+def _upsert_invoice_in_snapshot(db: Session, *, org: Organization, prod: Product,
+                                 snap: Snapshot, item) -> tuple[Invoice, bool]:
+    """Create or update an invoice inside the given snapshot.
+
+    Same-day UPSERT semantic: if `item.invoice_number` already exists in this
+    snapshot, mutate that row; otherwise create new. Returns (invoice, created).
+    """
+    existing = db.query(Invoice).filter_by(
+        snapshot_id=snap.id, invoice_number=item.invoice_number
+    ).first()
+    if existing is not None:
+        existing.amount_due = item.amount_due
+        existing.currency = item.currency_alpha3
+        existing.status = item.status
+        existing.customer_name = item.customer_name
+        existing.payer_name = item.payer_name
+        existing.invoice_date = item.invoice_date
+        existing.due_date = item.due_date
+        existing.extra_data = item.extra_data
+        existing.updated_at = datetime.utcnow()
+        return existing, False
+    inv = Invoice(
+        id=uuid.uuid4(),
+        org_id=org.id,
+        product_id=prod.id,
+        snapshot_id=snap.id,
+        invoice_number=item.invoice_number,
+        amount_due=item.amount_due,
+        currency=item.currency_alpha3,
+        status=item.status,
+        customer_name=item.customer_name,
+        payer_name=item.payer_name,
+        invoice_date=item.invoice_date,
+        due_date=item.due_date,
+        extra_data=item.extra_data,
+    )
+    db.add(inv)
+    return inv, True
+
+
+def _require_mutable(inv: Invoice) -> None:
+    """Raise 409 if the invoice's snapshot is not today's live snapshot.
+
+    Enforces immutability: tape snapshots are frozen IC views, prior-day
+    live snapshots are frozen history. Only today's live accepts writes.
+    """
+    if not is_snapshot_mutable(inv.snapshot):
+        src = inv.snapshot.source if inv.snapshot else 'unknown'
+        taken = inv.snapshot.taken_at.isoformat() if inv.snapshot and inv.snapshot.taken_at else '?'
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Invoice belongs to an immutable snapshot "
+                f"(source={src}, taken_at={taken}). "
+                f"Only today's live-YYYY-MM-DD snapshot accepts writes."
+            ),
+        )
+
+
 # ── Invoice endpoints ────────────────────────────────────────────────────────
 
 @router.get("/invoices", response_model=PaginatedInvoices)
@@ -97,24 +157,21 @@ def create_invoice(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Create a single invoice."""
-    prod = _resolve_product(db, org, body.product_id)
+    """Create (or same-day UPSERT) an invoice.
 
-    inv = Invoice(
-        id=uuid.uuid4(),
-        org_id=org.id,
-        product_id=prod.id,
-        invoice_number=body.invoice_number,
-        amount_due=body.amount_due,
-        currency=body.currency_alpha3,
-        status=body.status,
-        customer_name=body.customer_name,
-        payer_name=body.payer_name,
-        invoice_date=body.invoice_date,
-        due_date=body.due_date,
-        extra_data=body.extra_data,
-    )
-    db.add(inv)
+    The invoice is tagged with today's rolling-daily live snapshot
+    (`live-YYYY-MM-DD`), created on demand. If the same `invoice_number` was
+    already pushed today, the existing row is updated in place — preserves
+    the "one state per invoice per day" model. Tomorrow's first push of the
+    same invoice_number creates a new row in the new day's snapshot (prior
+    day becomes frozen history).
+    """
+    prod = _resolve_product(db, org, body.product_id)
+    snap = get_or_create_live_snapshot(db, prod)
+
+    inv, created = _upsert_invoice_in_snapshot(db, org=org, prod=prod, snap=snap, item=body)
+    if created:
+        snap.row_count = (snap.row_count or 0) + 1
     db.commit()
     db.refresh(inv)
     return InvoiceResponse.from_orm_invoice(inv)
@@ -126,38 +183,47 @@ def create_invoices_bulk(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Create up to 5,000 invoices in a single request."""
-    created = 0
+    """Create or same-day UPSERT up to 5,000 invoices in one request.
+
+    All items land in today's live snapshot (see create_invoice for semantics).
+    Per-item failures are reported in the `errors` array; successful items
+    commit together at the end.
+    """
+    created_count = 0
+    upserted_count = 0
     errors = []
+
+    # Resolve product + live snapshot once per distinct product_id to avoid
+    # re-querying per item. The common case is one product per bulk.
+    snap_cache: dict[str, Snapshot] = {}
+    prod_cache: dict[str, Product] = {}
 
     for i, item in enumerate(body.invoices):
         try:
-            with db.begin_nested():  # savepoint — rollback only this item on failure
-                prod = _resolve_product(db, org, item.product_id)
-                inv = Invoice(
-                    id=uuid.uuid4(),
-                    org_id=org.id,
-                    product_id=prod.id,
-                    invoice_number=item.invoice_number,
-                    amount_due=item.amount_due,
-                    currency=item.currency_alpha3,
-                    status=item.status,
-                    customer_name=item.customer_name,
-                    payer_name=item.payer_name,
-                    invoice_date=item.invoice_date,
-                    due_date=item.due_date,
-                    extra_data=item.extra_data,
-                )
-                db.add(inv)
+            with db.begin_nested():
+                cache_key = str(item.product_id) if item.product_id else '__default__'
+                if cache_key not in prod_cache:
+                    prod_cache[cache_key] = _resolve_product(db, org, item.product_id)
+                    snap_cache[cache_key] = get_or_create_live_snapshot(db, prod_cache[cache_key])
+                prod = prod_cache[cache_key]
+                snap = snap_cache[cache_key]
+                _, is_new = _upsert_invoice_in_snapshot(db, org=org, prod=prod, snap=snap, item=item)
+                if is_new:
+                    snap.row_count = (snap.row_count or 0) + 1
                 db.flush()
-            created += 1
+            if is_new:
+                created_count += 1
+            else:
+                upserted_count += 1
+        except HTTPException as e:
+            errors.append({"index": i, "detail": e.detail})
         except Exception as e:
             errors.append({"index": i, "detail": str(e)})
 
-    if created > 0:
+    if created_count + upserted_count > 0:
         db.commit()
 
-    return BulkCreateResponse(created=created, errors=errors)
+    return BulkCreateResponse(created=created_count + upserted_count, errors=errors)
 
 
 @router.patch("/invoices/{invoice_id}", response_model=InvoiceResponse)
@@ -167,8 +233,11 @@ def update_invoice(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Update an invoice (partial update)."""
+    """Partial-update an invoice. Only invoices in today's live snapshot
+    are mutable; tape snapshots and prior-day live snapshots return 409.
+    """
     inv = _get_invoice_or_404(db, org, invoice_id)
+    _require_mutable(inv)
 
     update_data = body.model_dump(exclude_unset=True)
     if 'currency_alpha3' in update_data:
@@ -190,8 +259,11 @@ def delete_invoice(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Delete an invoice and its associated payments."""
+    """Delete an invoice and its payments. Only invoices in today's live
+    snapshot are deletable; tape + prior-day live snapshots return 409.
+    """
     inv = _get_invoice_or_404(db, org, invoice_id)
+    _require_mutable(inv)
     db.delete(inv)  # cascade deletes payments
     db.commit()
 
@@ -228,12 +300,17 @@ def create_payment(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Create a payment for a specific invoice."""
+    """Create a payment for a specific invoice. Only invoices in today's
+    live snapshot accept new payments; historical snapshots return 409.
+    Payment inherits its parent invoice's snapshot_id.
+    """
     inv = _get_invoice_or_404(db, org, invoice_id)
+    _require_mutable(inv)
 
     pay = Payment(
         id=uuid.uuid4(),
         invoice_id=inv.id,
+        snapshot_id=inv.snapshot_id,
         payment_type=body.payment_type,
         payment_amount=body.payment_amount,
         currency=body.currency_alpha3,
@@ -252,17 +329,22 @@ def create_payments_bulk(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Create up to 5,000 payments in a single request."""
+    """Create up to 5,000 payments in a single request. Each payment inherits
+    its parent invoice's snapshot_id; payments targeting invoices in
+    immutable (tape or historical-live) snapshots are reported as errors.
+    """
     created = 0
     errors = []
 
     for i, item in enumerate(body.payments):
         try:
-            with db.begin_nested():  # savepoint — rollback only this item on failure
+            with db.begin_nested():
                 inv = _get_invoice_or_404(db, org, item.invoice_id)
+                _require_mutable(inv)
                 pay = Payment(
                     id=uuid.uuid4(),
                     invoice_id=inv.id,
+                    snapshot_id=inv.snapshot_id,
                     payment_type=item.payment_type,
                     payment_amount=item.payment_amount,
                     currency=item.currency_alpha3,
@@ -314,7 +396,9 @@ def create_bank_statement(
     org: Organization = Depends(get_current_org),
     db: Session = Depends(get_db),
 ):
-    """Upload a bank statement."""
+    """Upload a bank statement. Tagged with today's live snapshot (of the
+    org's first product) for batch traceability; statements remain queryable
+    by statement_date independently."""
     file_path = None
     if body.attached_file_base64:
         os.makedirs(STATEMENTS_DIR, exist_ok=True)
@@ -323,9 +407,13 @@ def create_bank_statement(
         with open(file_path, 'wb') as f:
             f.write(base64.b64decode(body.attached_file_base64))
 
+    prod = _resolve_product(db, org, None)
+    snap = get_or_create_live_snapshot(db, prod)
+
     bs = BankStatement(
         id=uuid.uuid4(),
         org_id=org.id,
+        snapshot_id=snap.id,
         balance=body.balance,
         currency=body.currency,
         account_type=body.account_type,
