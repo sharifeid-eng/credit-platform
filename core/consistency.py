@@ -109,15 +109,39 @@ def run_consistency_check(old_df, new_df, old_label, new_label):
             )
             
             reversed_status = status_merged[
-                (status_merged['Status_old'] == 'Completed') & 
+                (status_merged['Status_old'] == 'Completed') &
                 (status_merged['Status_new'] != 'Completed')
             ]
             if not reversed_status.empty:
-                issues.append({
-                    'severity': 'CRITICAL',
-                    'check': 'Status Reversal',
-                    'detail': f"{len(reversed_status)} deals moved backwards from Completed status"
-                })
+                # Completed → Executed is a known Klaim pattern: a deal closes as Completed when
+                # full payment is booked, then a later insurance denial re-opens it (Collected
+                # stays high, Denied becomes non-zero, Status returns to Executed for continued
+                # dispute/collection work). Downgrade to WARNING with an explanatory note so the
+                # integrity report doesn't flag this as a critical anomaly.
+                reopen = reversed_status[reversed_status['Status_new'] == 'Executed']
+                other = reversed_status[reversed_status['Status_new'] != 'Executed']
+
+                if not reopen.empty:
+                    warnings.append({
+                        'severity': 'WARNING',
+                        'check': 'Status Reversal (denial reopen)',
+                        'detail': f"{len(reopen)} deals moved Completed → Executed",
+                        'note': (
+                            "Known Klaim pattern: a deal closes as Completed when full payment is "
+                            "booked, then a subsequent insurance denial re-opens it (Denied becomes "
+                            "non-zero, Status returns to Executed for continued dispute/collection). "
+                            "Not a data error."
+                        ),
+                    })
+                if not other.empty:
+                    issues.append({
+                        'severity': 'CRITICAL',
+                        'check': 'Status Reversal',
+                        'detail': (
+                            f"{len(other)} deals moved Completed → {sorted(other['Status_new'].unique().tolist())} "
+                            f"(unexpected reversal path)"
+                        ),
+                    })
 
     # ── 4. Portfolio-level checks ────────────────────────────
     if 'Collected till date' in old_df.columns and 'Collected till date' in new_df.columns:

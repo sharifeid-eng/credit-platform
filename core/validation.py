@@ -243,22 +243,28 @@ def validate_tape(df):
                     })
 
     # ── 13. Balance identity violations ──
+    # Klaim accounting identity (empirically verified):
+    #   Paid by insurance + Denied by insurance + Pending insurance response ≡ Purchase value
+    # `Collected till date` legitimately exceeds `Paid by insurance` because Collected includes
+    # VAT reimbursement and fees received on top of the claim principal — it is NOT part of the
+    # three-way identity. Only flag when Paid column is available; gracefully skip otherwise.
     bal_cols = {
-        'collected': 'Collected till date',
-        'denied':    'Denied by insurance',
-        'pending':   'Pending insurance response',
-        'pv':        'Purchase value',
+        'paid':    'Paid by insurance',
+        'denied':  'Denied by insurance',
+        'pending': 'Pending insurance response',
+        'pv':      'Purchase value',
     }
     if all(c in df.columns for c in bal_cols.values()):
         nums = {k: pd.to_numeric(df[v], errors='coerce').fillna(0) for k, v in bal_cols.items()}
-        total_out = nums['collected'] + nums['denied'] + nums['pending']
-        violations = df[total_out > nums['pv'] * 1.05]
+        total_src = nums['paid'] + nums['denied'] + nums['pending']
+        tolerance = nums['pv'].abs() * 0.01
+        violations = df[((total_src - nums['pv']).abs() > tolerance) & (nums['pv'] > 0)]
         if len(violations) > 0:
             warnings.append({
                 'check': 'Balance Identity Violations',
                 'detail': (
-                    f'{len(violations)} deals where Collected + Denied + Pending > '
-                    f'105% of Purchase value. Possible data inconsistency.'
+                    f'{len(violations)} deals where |Paid + Denied + Pending − Purchase value| '
+                    f'> 1% of Purchase value. Possible data inconsistency.'
                 ),
             })
 

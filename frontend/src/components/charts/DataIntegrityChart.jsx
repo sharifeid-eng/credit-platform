@@ -516,11 +516,12 @@ function ConsistencyCard({ consistency }) {
 }
 
 function normalizeItem(item) {
-  if (typeof item === 'string') return { name: item, detail: '', ids: [] }
+  if (typeof item === 'string') return { name: item, detail: '', ids: [], note: '' }
   return {
     name: item.check ?? item.name ?? '',
     detail: item.detail ?? item.message ?? '',
     ids: item.ids ?? item.deal_ids ?? [],
+    note: item.note ?? '',
   }
 }
 
@@ -542,6 +543,14 @@ function ConsistencyItem({ issue }) {
       {issue.detail && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7 }}>
           {issue.detail}
+        </div>
+      )}
+      {issue.note && (
+        <div style={{
+          fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6,
+          fontStyle: 'italic', paddingTop: 2,
+        }}>
+          {issue.note}
         </div>
       )}
       {issue.ids.length > 0 && (

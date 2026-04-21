@@ -22,6 +22,8 @@ from core.analysis import (
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
     compute_par,
 )
+from core.validation import validate_tape
+from core.consistency import run_consistency_check
 from core.loader import load_snapshot
 from core.config import load_config
 
@@ -38,6 +40,20 @@ def _find_latest_tape():
 def full_df():
     path = _find_latest_tape()
     assert path is not None, "No Klaim tape found"
+    return load_snapshot(path)
+
+@pytest.fixture(scope='module')
+def apr15_df():
+    path = os.path.join(DATA_DIR, '2026-04-15_uae_healthcare.csv')
+    if not os.path.exists(path):
+        pytest.skip("Apr 15 tape not present")
+    return load_snapshot(path)
+
+@pytest.fixture(scope='module')
+def mar03_df():
+    path = os.path.join(DATA_DIR, '2026-03-03_uae_healthcare.csv')
+    if not os.path.exists(path):
+        pytest.skip("Mar 3 tape not present")
     return load_snapshot(path)
 
 @pytest.fixture(scope='module')
@@ -511,3 +527,99 @@ class TestPAR:
                 active.get('Denied by insurance', pd.Series(0, index=active.index))
             ).clip(lower=0).sum()
             assert result['total_active_outstanding'] == pytest.approx(outstanding, rel=0.01)
+
+
+# ── Validation & consistency fixes (Klaim-specific) ───────────────────────────
+
+class TestBalanceIdentityKlaim:
+    """
+    Balance Identity should use the Klaim accounting identity
+        Paid by insurance + Denied by insurance + Pending insurance response ≡ Purchase value
+    not the broken Collected+Denied+Pending > 1.05*PV rule (which fired on 34% of Apr 15).
+    """
+
+    def test_paid_den_pen_equals_pv_on_apr15(self, apr15_df):
+        """The underlying identity should hold to floating-point zero."""
+        paid = pd.to_numeric(apr15_df['Paid by insurance'], errors='coerce').fillna(0)
+        den  = pd.to_numeric(apr15_df['Denied by insurance'], errors='coerce').fillna(0)
+        pen  = pd.to_numeric(apr15_df['Pending insurance response'], errors='coerce').fillna(0)
+        pv   = pd.to_numeric(apr15_df['Purchase value'], errors='coerce').fillna(0)
+        diff = (paid + den + pen) - pv
+        assert abs(diff.mean()) < 1e-6
+        assert diff.abs().max() < 1.0  # well within 1% of any deal value
+
+    def test_balance_identity_flags_drop_on_apr15(self, apr15_df):
+        """On the Apr 15 tape the new check must flag ≤ 5 deals, not thousands."""
+        res = validate_tape(apr15_df)
+        bi = [w for w in res['warnings'] if w['check'] == 'Balance Identity Violations']
+        total_flagged = sum(
+            int(w['detail'].split()[0]) for w in bi
+        ) if bi else 0
+        assert total_flagged <= 5, (
+            f"Balance Identity check is firing on {total_flagged} deals — "
+            f"it should use Paid+Den+Pen = PV, not Collected+Den+Pen"
+        )
+
+    def test_balance_identity_skipped_without_paid_column(self):
+        """Graceful degradation: drop the check when 'Paid by insurance' is absent."""
+        df = pd.DataFrame({
+            'Purchase value': [100, 100],
+            'Collected till date': [50, 0],
+            'Denied by insurance': [30, 0],
+            'Pending insurance response': [40, 0],
+            'Status': ['Executed', 'Completed'],
+        })
+        res = validate_tape(df)
+        bi = [w for w in res['warnings'] if w['check'] == 'Balance Identity Violations']
+        assert bi == [], "Balance Identity should be skipped when Paid column is missing"
+
+    def test_over_collection_check_still_runs(self, apr15_df):
+        """The separate Over-Collection sanity check should still fire on Apr 15 (1 deal)."""
+        res = validate_tape(apr15_df)
+        oc = [w for w in res['warnings'] if w['check'] == 'Over-Collection']
+        assert len(oc) == 1
+        assert '1 deals' in oc[0]['detail'] or '1 deal' in oc[0]['detail']
+
+
+class TestStatusReversalSeverityKlaim:
+    """
+    Completed→Executed reversal is a known Klaim pattern (denial reopen) and should be
+    WARNING, not CRITICAL. Other reversal paths (Completed→Pending, Completed→null) stay
+    CRITICAL since those would be genuinely anomalous.
+    """
+
+    def test_completed_to_executed_is_warning_not_critical(self, mar03_df, apr15_df):
+        cons = run_consistency_check(mar03_df, apr15_df, '2026-03-03', '2026-04-15')
+
+        # No 'Status Reversal' (without qualifier) in critical issues
+        critical_reversal = [
+            i for i in cons['issues'] if i['check'] == 'Status Reversal'
+        ]
+        assert critical_reversal == [], (
+            f"Completed→Executed should be WARNING, not CRITICAL. "
+            f"Found critical: {critical_reversal}"
+        )
+
+        # Should be present in warnings with the denial-reopen note
+        reopen_warning = [
+            w for w in cons['warnings'] if 'denial reopen' in w['check']
+        ]
+        assert len(reopen_warning) == 1
+        assert '55 deals' in reopen_warning[0]['detail']
+        assert reopen_warning[0].get('note'), (
+            "Warning must include a `note` field explaining the denial-reopen pattern"
+        )
+        assert 'insurance denial' in reopen_warning[0]['note'].lower()
+
+    def test_non_executed_reversal_still_critical(self):
+        """Completed→Pending (or any non-Executed target) stays CRITICAL."""
+        old = pd.DataFrame({'ID': [1, 2, 3], 'Status': ['Completed', 'Completed', 'Completed']})
+        new = pd.DataFrame({'ID': [1, 2, 3], 'Status': ['Pending', 'Executed', 'Completed']})
+        cons = run_consistency_check(old, new, 'old', 'new')
+        crit = [i for i in cons['issues'] if i['check'] == 'Status Reversal']
+        # One deal went Completed→Pending (critical), one Completed→Executed (warning), one unchanged
+        assert len(crit) == 1
+        assert '1 deals' in crit[0]['detail']
+        warn = [w for w in cons['warnings'] if 'denial reopen' in w['check']]
+        assert len(warn) == 1
+        assert '1 deals' in warn[0]['detail']

@@ -40,6 +40,8 @@ def build_consistency_prompt(company, product, checks):
             findings_text += "\nWARNINGS:\n"
             for item in report['warnings']:
                 findings_text += f"  - [{item['check']}] {item['detail']}\n"
+                if item.get('note'):
+                    findings_text += f"    Note: {item['note']}\n"
         
         if report['info']:
             findings_text += "\nINFO:\n"
