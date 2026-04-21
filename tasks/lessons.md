@@ -3,6 +3,32 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Runtime-written state files must be gitignored, not committed
+
+**Problem:** Session 31 EoD committed `data/klaim/UAE_healthcare/covenant_history.json` and `data/klaim/mind/relations.json` (in commit `4b05dcc` — "chore: runtime side-effects"). My reasoning was: "they're tracked files dirty in the working tree; EoD says commit the data artifacts; so commit them." First prod redeploy after the push failed:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+    data/klaim/UAE_healthcare/covenant_history.json
+    data/klaim/mind/relations.json
+Please commit your changes or stash them before you merge.
+Aborting
+```
+
+Root cause: these are runtime-written state files. The backend appends to `covenant_history.json` on every `/portfolio/covenants` call (for EoD-consecutive-breach tracking per MMA 18.3). The intelligence event-bus writes `relations.json` on every `TAPE_INGESTED` / `DOCUMENT_INGESTED` event. Laptop and prod write their own histories from their own backend traffic — the two diverge continuously. A commit of either machine's version is semantically meaningless (not a source change) AND guaranteed to collide with the other machine's local state.
+
+These files had been historically tracked (pre-`.gitignore`-discipline era), which is how I got tricked into treating them as content rather than state. `.gitignore` already excluded the analogous cases (`ai_cache/`, `_master_mind/`, `_platform_health.json`) — these two were just never ported over.
+
+**Rule:** If a file gets written by the backend process at runtime (even once, even via rare append), it must be gitignored. It doesn't matter that it's currently "tracked" in git's eyes — being previously-committed is a bug to fix, not a reason to keep committing. Every machine keeps its own copy; no version is canonical.
+
+**How to apply:**
+- When EoD inventories dirty files, test each one with "is this file modified by the running backend on its own, without a human edit?" If yes, gitignore + `git rm --cached`.
+- When adding a new sidecar storage file (covenant history, relation graph, cache, audit log, index, health probe), add it to `.gitignore` IN THE SAME COMMIT that introduces the write. Don't wait for an EoD to catch it.
+- Existing lesson on the opposite pattern (2026-04-21, "Tape files don't deploy with git") covers manual-only files that NEED manual sync. This lesson covers the inverse — automatic-write files that MUST NOT be synced.
+- Pattern cleanup in commit `f0e35b9` — `data/*/*/covenant_history.json` and `**/mind/relations.json` added to `.gitignore`; three files `git rm --cached`'d. Prod recovery required a cp-backup / pull / cp-restore dance to preserve real production evaluation history.
+
+---
+
 ## 2026-04-22 — Silent data-source routing betrays every downstream consumer
 
 **Problem:** `backend/main.py::_portfolio_load` silently preferred the DB path whenever `has_db_data(db, co, prod)` returned True, with zero indication to the caller. In every session after the one-time `scripts/seed_db.py` run, the backend was serving stale Mar-3-vintage DB data for Klaim even though:
