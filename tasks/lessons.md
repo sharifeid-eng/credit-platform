@@ -3,6 +3,40 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Silent data-source routing betrays every downstream consumer
+
+**Problem:** `backend/main.py::_portfolio_load` silently preferred the DB path whenever `has_db_data(db, co, prod)` returned True, with zero indication to the caller. In every session after the one-time `scripts/seed_db.py` run, the backend was serving stale Mar-3-vintage DB data for Klaim even though:
+- The Apr 15 tape file was on disk with all 65 columns.
+- The snapshot dropdown in the UI let the analyst pick "2026-04-15".
+- The response JSON dutifully echoed `snapshot: 2026-04-21` (from `sel['date'] = datetime.now()`).
+- The "Tape Fallback" badge continued to say "Tape Fallback" while DB was the actual source.
+- The DB had no snapshot dimension — `invoice_number` uniqueness was global, so the same ID couldn't exist in multiple snapshots anyway; there was only ever one "current state" per product.
+
+The bug surfaced only when a covenant-card rendering fix triggered a closer look at the returned numbers. Apr 15 WAL was 183d / Breach instead of the expected 148d / Path B. The delta was four compounding silent failures: (1) snapshot param ignored, (2) `sel['date']` defaulted to today, (3) `db_loader` mapped only the Sep-2025 column set (dropped `Expected collection days`, `Collection days so far`, `Provider`), (4) UI badge hid the routing decision.
+
+**Rule:** A read path with a fallback MUST return a `data_source` / `snapshot_source` field and the UI MUST surface it. "Silently prefer DB if available, otherwise tape" is a bug generator because the two paths diverge over time (schema drift, seed staleness, ref_date drift) and no one notices until the divergence becomes semantically absurd. Make the routing observable at every layer: response field, log line, UI badge.
+
+**How to apply:**
+- Every data-source endpoint returns an explicit provenance field (this session added `data_source='database'` + `snapshot_source=sel.source` to all 4 portfolio endpoints).
+- Frontend badges key off the provenance field, not a frontend guess (`PortfolioAnalytics.jsx` now reads `data.data_source` honestly).
+- When adding a new "if DB configured and has data" shortcut, STOP and ask: does the DB have the same richness as the fallback? If no, the shortcut is a regression trap. Either make DB match (this session's `extra_data` JSONB spread-back) or route explicitly via caller intent (query param), never silently.
+- When `sel['date']` (or any "as-of" field) is derived from system time instead of data state, it's a lie. Always key off the underlying data (snapshot.taken_at, tape filename, ingest timestamp).
+
+---
+
+## 2026-04-22 — JSONB spread-back kills the "hand-map every column in the loader" pattern
+
+**Problem:** The original `load_klaim_from_db` had a ~20-line hand-maintained dictionary mapping `inv.extra_data['discount'] → 'Discount'`, `inv.extra_data['pending'] → 'Pending insurance response'`, etc. Every time a new tape column was added (Mar 2026's IRR + collection curves, Apr 15's direct-DPD + Provider), a parallel edit was needed in both `seed_db.py` (write) and `db_loader.py` (read) — or the column got silently dropped on the DB path. Five new Apr 15 columns had been added to the tape but the corresponding mapper edits never happened, so those columns vanished whenever DB was serving.
+
+**Rule:** `extra_data` JSONB keys should be the EXACT tape column names verbatim. No snake_case translation, no renames. The writer (`scripts/ingest_tape.py`) dumps every non-core column under its original name; the reader spreads every key back onto the DataFrame as a column. A new tape column flows through the entire stack automatically — zero code changes from ingest to dashboard.
+
+**How to apply:**
+- Reserve the relational schema for fields you need to INDEX or JOIN on (invoice_number, amount_due, status, invoice_date). Everything else → JSONB.
+- When designing a new persistent store for tape-shaped data, resist the urge to "normalize" column names. The tape format IS the contract. Rename in the UI layer if you need to.
+- Test: add one new column to a tape, ingest it, confirm it appears in the DataFrame produced by the loader without touching any Python. If that fails, the pipeline is fragile.
+
+---
+
 ## 2026-04-21 — Tape files don't deploy with git; EoD must flag them for manual SCP
 
 **Problem:** Session 30 added `data/klaim/UAE_healthcare/2026-04-15_uae_healthcare.csv`, the new Klaim April tape (8,080 rows × 65 cols, 4 MB). Following my own EoD Step 11, I checked `git diff HEAD~N --name-only | grep registry.json` → empty → told the user "no dataroom sync needed" and considered the deploy path complete. User then opened the production dashboard and the Apr 15 snapshot was missing from the dropdown. Root cause: raw tape files live under `data/{company}/{product}/` and are gitignored (correctly — we don't want 4 MB CSVs in git history). `sync-data.ps1` only walks `dataroom/` subdirectories to push PDFs/xlsx/docx there; it does NOT touch sibling tape directories. And `deploy.sh` pulls from git, so it can't bring a file git doesn't know about. Net: the tape only ever existed on the laptop. EoD Step 11 as written only checked the dataroom rail, missed the parallel tape rail entirely.

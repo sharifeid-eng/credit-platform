@@ -3,7 +3,52 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
-## Session 31 — DB as snapshotted source of truth (DRAFT — awaiting user decisions)
+## Active
+
+_Nothing in progress._
+
+---
+
+## Completed — 2026-04-22
+
+### Session 31 (continued) — DB as snapshotted source of truth — SHIPPED
+
+Started 2026-04-21, shipped + deployed 2026-04-22. Root cause of the investigation: `_portfolio_load` silently preferred the DB path when `has_db_data()` was True, but DB had no snapshot dimension and `db_loader` dropped every non-core column. Apr 15 covenants returned `wal_active=183d / Breach / Total WAL=n/a / Extended Age=12.7% / sel['date']=datetime.now()` instead of `148d / Path B / 137d / 4.4% / 2026-04-15`. Three commits on branch `claude/hardcore-johnson-94c5fe`:
+
+1. **`dae0d02` — fix(klaim): CovenantCard Path B carve-out suppression** (pre-Session-31, the original trigger).
+   - WAL is the only Klaim covenant with dual-path compliance. On Path B, `headroom=current-threshold` is negative and the breach projection lands in the past — both mathematically correct vs Path A but operationally misleading. Guarded by `compliance_path === 'Path B (carve-out)'`; renders the covenant's own `note` ("Compliant via carve-out (Extended Age X.X% ≤ Y%)") in a muted line.
+   - 1 new backend contract test (`test_path_b_carve_out_contract_for_frontend`) pins the exact string + note shape the frontend guard depends on.
+
+2. **`aba8994` — feat(db): snapshots as first-class dimension + DB as authoritative source** (Phases 1-6).
+   - **Schema (migration `c3d4e5f6a7b8`, destructive per D1a):** new `snapshots` table (product_id + name unique; source ∈ tape/live/manual; taken_at, ingested_at, row_count). `Invoice.snapshot_id NOT NULL FK` + `(snapshot_id, invoice_number)` unique. `Payment.snapshot_id NOT NULL FK`. `BankStatement.snapshot_id` nullable FK. All existing 9,612 invoices + 8,866 payments deleted (D1a).
+   - **`scripts/ingest_tape.py`** (new CLI): one tape → one Snapshot + N Invoices + M Payments. `extra_data` JSONB keys use the original tape column names verbatim — new analytical columns flow through DB automatically, no loader-mapping change ever needed. CLI: `--company/--product/--file`, `--all`, `--dry-run`, `--force`. Idempotent on (product_id, name).
+   - **Read path rewrite (`core/db_loader.py`):** new `list_snapshots(db, co, prod)` and `resolve_snapshot(db, co, prod, snapshot)`. `load_klaim_from_db` / `load_silq_from_db` take `snapshot_id` param, spread `extra_data` keys back onto the DataFrame. Apr 15 DataFrame once again carries all 65 columns including the ones required for direct-DPD PAR + dual-view WAL. `has_db_data` removed.
+   - **`_portfolio_load` rewritten:** DB-only, no tape fallback. Resolves snapshot via `resolve_snapshot`, 404s on miss. `sel['date'] = snap.taken_at` (real date, not `datetime.now()`). As-of-date auto-resolves to matching snapshot so the existing Portfolio as-of-date dropdown acts as a snapshot selector without a frontend rewrite.
+   - **Honesty:** every portfolio endpoint returns `data_source='database'` + `snapshot_source=sel.source`. `PortfolioAnalytics.jsx:127` badge stops lying about "Tape Fallback".
+   - **9 snapshots backfilled** (5 Klaim + 4 SILQ), 42,535 rows total. Verified end-to-end: Apr 15 → 148d / Path B / Total WAL 137d; Mar 3 → 140d / Path B / n/a (graceful).
+
+3. **`074d382` — feat(integration): live-snapshot write path + 38 snapshot-layer tests** (Phases 5+7).
+   - **Rolling-daily live snapshot** (`live-YYYY-MM-DD`). `get_or_create_live_snapshot(db, product)` — idempotent under concurrent race. `is_snapshot_mutable(snapshot, today)` — True only for today's live snapshot; tape + prior-day live are frozen.
+   - **Integration API:** POST /invoices UPSERTs by `(snapshot_id, invoice_number)` within today's snapshot. PATCH/DELETE require live-today snapshot (else 409). Payment inherits `invoice.snapshot_id` on write. Bulk paths + bank statements all tagged.
+   - **28 DB snapshot layer tests** (`tests/test_db_snapshots.py`): ingest round-trip, `extra_data` preservation (Apr 15 new columns), Mar 3 graceful degradation, resolve by name/filename/ISO-date/None, list ordering, DB↔tape equivalence, snapshot isolation (Apr 15 ≠ Mar 3), live-snapshot helper create-if-needed + idempotent, mutability rules.
+   - **10 Integration API tests** (`tests/test_integration_snapshots.py`): first-push creates snapshot, same-day reuses, same invoice_number UPSERTs, bulk 5x in one snapshot, PATCH/DELETE on tape → 409, payment inherits snapshot_id, read-path compat.
+   - **498 tests passing** total (was 460).
+
+4. **`ccff5ab` — feat(frontend): SnapshotSelect component with TAPE/LIVE/MANUAL pills.**
+   - Custom dropdown replacing native `<select>` in TapeAnalytics controls bar + DataIntegrityChart Old Tape / New Tape dropdowns. Colour-coded chip per source (TAPE=gold, LIVE=teal, MANUAL=blue). Keyboard nav (arrows/Enter/Esc), click-outside, ARIA `role=option` + `aria-selected`.
+   - `CompanyContext` gains `snapshotsMeta` (full `{filename, date, source, row_count}` objects) alongside the existing `snapshots` string array — back-compat preserved.
+   - Dead `DarkSelect` helper removed from both TapeAnalytics.jsx and DataIntegrityChart.jsx.
+   - Vite build passes clean (1108 modules).
+
+**Production deployed:** Hetzner VPS pulled `main`, rebuilt backend with `--no-cache`, applied migration `c3d4e5f6a7b8` inside container, ingested 42,535 rows across 9 snapshots. Site live at https://laithanalytics.ai. Browser-verified: Apr 15 WAL 148d / Path B / Total WAL 137d, Live Data badge, real snapshot dropdown — all matching local.
+
+**Still deferred (not this session):**
+- D7 — scheduled external pollers (still parked)
+- Klaim Account Debtor validation (CRITICAL DATA GAP — waiting on company communication before designing data source)
+
+---
+
+## Session 31 — DB as snapshotted source of truth (SHIPPED — historical plan)
 
 ### Context
 
