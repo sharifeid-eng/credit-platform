@@ -516,7 +516,13 @@ def compute_revenue(df, mult):
 # ── Concentration ─────────────────────────────────────────────────────────────
 
 def compute_concentration(df, mult):
-    """Group, product, discount concentration + top deals."""
+    """Group, product, discount concentration + top deals.
+
+    Provider (Apr 15 2026+ only) is a strict sub-dimension of Group — one Provider
+    maps to exactly one Group, Groups can have multiple Provider branches. Emitted
+    only when the column is present; frontend hides the Provider donut/table/HHI
+    on older tapes via `result.get('provider')` check.
+    """
     result = {}
     total = df['Purchase value'].sum() * mult
 
@@ -534,6 +540,21 @@ def compute_concentration(df, mult):
         g['denial_rate']    = (g['denied']    / g['purchase_value'] * 100).round(1)
         g['percentage']     = (g['purchase_value'] / total * 100).round(1)
         result['group']     = g.sort_values('purchase_value', ascending=False).head(15).to_dict(orient='records')
+
+    if 'Provider' in df.columns:
+        p = df.groupby('Provider').agg(
+            purchase_value = ('Purchase value', 'sum'),
+            deal_count     = ('Purchase value', 'count'),
+            collected      = ('Collected till date', 'sum'),
+            denied         = ('Denied by insurance', 'sum'),
+        ).reset_index()
+        p['purchase_value']  *= mult
+        p['collected']       *= mult
+        p['denied']          *= mult
+        p['collection_rate'] = (p['collected'] / p['purchase_value'] * 100).round(1)
+        p['denial_rate']     = (p['denied']    / p['purchase_value'] * 100).round(1)
+        p['percentage']      = (p['purchase_value'] / total * 100).round(1)
+        result['provider']   = p.sort_values('purchase_value', ascending=False).head(15).to_dict(orient='records')
 
     if 'Product' in df.columns:
         p = df.groupby('Product').agg(
@@ -905,11 +926,14 @@ def compute_dso(df, mult, as_of_date=None):
 # ── HHI (Herfindahl-Hirschman Index) ─────────────────────────────────────────
 
 def compute_hhi(df, mult):
-    """HHI concentration indices on Group and Product + top-N exposure caps."""
+    """HHI concentration indices on Group, Provider and Product + top-N exposure caps.
+
+    Provider is emitted only when the column is present (Apr 2026+ tapes).
+    """
     total = df['Purchase value'].sum() * mult
     result = {}
 
-    for col_name, key in [('Group', 'group'), ('Product', 'product')]:
+    for col_name, key in [('Group', 'group'), ('Provider', 'provider'), ('Product', 'product')]:
         if col_name not in df.columns:
             continue
         agg = df.groupby(col_name)['Purchase value'].sum() * mult
@@ -2025,13 +2049,29 @@ def compute_underwriting_drift(df, mult, as_of_date=None):
 # ── Segment Analysis ─────────────────────────────────────────────────────────
 
 def compute_segment_analysis(df, mult, as_of_date=None, segment_by='product'):
-    """Multi-dimensional performance cuts by different segmentation dimensions."""
+    """Multi-dimensional performance cuts by different segmentation dimensions.
+
+    Supported dimensions (availability depends on columns present on the tape):
+      - 'product'       — tape 'Product' column
+      - 'provider_size' — bucketed from Group volume (Small/Medium/Large/Enterprise)
+      - 'deal_size'     — bucketed from Purchase value (always available)
+      - 'new_repeat'    — tape 'New business' column
+      - 'group'         — tape 'Group' column (capped top-25 + Other)
+      - 'provider'      — tape 'Provider' column (Apr 2026+, capped top-25 + Other)
+
+    High-cardinality dimensions (group: 144 values, provider: 216) are capped at
+    top-25 by originated volume with the long tail collapsed into an 'Other' bucket
+    to keep the dropdown tractable and the heat-map readable.
+    """
     # Determine available dimensions
     available_dims = []
     if 'Product' in df.columns:
         available_dims.append('product')
     if 'Group' in df.columns:
         available_dims.append('provider_size')
+        available_dims.append('group')
+    if 'Provider' in df.columns:
+        available_dims.append('provider')
     if 'New business' in df.columns:
         available_dims.append('new_repeat')
     available_dims.append('deal_size')  # always available — computed from Purchase value
@@ -2053,6 +2093,15 @@ def compute_segment_analysis(df, mult, as_of_date=None, segment_by='product'):
             if total > 200_000:   return 'Medium (200K-1M)'
             return 'Small (<200K)'
         df['_segment'] = df['Group'].apply(_size_band)
+    elif segment_by == 'group' and 'Group' in df.columns:
+        # High cardinality — cap at top-25 by originated volume, collapse rest to Other.
+        totals = df.groupby('Group')['Purchase value'].sum().sort_values(ascending=False)
+        top = set(totals.head(25).index)
+        df['_segment'] = df['Group'].where(df['Group'].isin(top), 'Other').fillna('Unknown')
+    elif segment_by == 'provider' and 'Provider' in df.columns:
+        totals = df.groupby('Provider')['Purchase value'].sum().sort_values(ascending=False)
+        top = set(totals.head(25).index)
+        df['_segment'] = df['Provider'].where(df['Provider'].isin(top), 'Other').fillna('Unknown')
     elif segment_by == 'new_repeat' and 'New business' in df.columns:
         df['_segment'] = df['New business'].apply(lambda x: 'New' if x else 'Repeat')
     elif segment_by == 'deal_size':
@@ -2378,11 +2427,15 @@ def separate_portfolio(df, mult=1):
 # ── HHI Time Series ──────────────────────────────────────────────────────────
 
 def compute_hhi_for_snapshot(df, mult):
-    """Compute HHI for a single snapshot — used by the time series endpoint."""
+    """Compute HHI for a single snapshot — used by the time series endpoint.
+
+    Emits group_hhi, provider_hhi (Apr 2026+ only), product_hhi. Missing columns
+    yield None so frontend can render a null-aware line per-series.
+    """
     total = (df['Purchase value'] * mult).sum()
     result = {}
 
-    for col_name, key in [('Group', 'group'), ('Product', 'product')]:
+    for col_name, key in [('Group', 'group'), ('Provider', 'provider'), ('Product', 'product')]:
         if col_name not in df.columns:
             result[f'{key}_hhi'] = None
             continue

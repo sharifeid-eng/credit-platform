@@ -8,6 +8,8 @@ const DIMENSIONS = [
   { key: 'provider_size',  label: 'Provider Size' },
   { key: 'deal_size',      label: 'Deal Size' },
   { key: 'new_repeat',     label: 'New vs Repeat' },
+  { key: 'group',          label: 'Group' },
+  { key: 'provider',       label: 'Provider' },
 ]
 
 export default function SegmentAnalysisChart({ company, product, snapshot, currency, asOfDate }) {
@@ -65,9 +67,16 @@ export default function SegmentAnalysisChart({ company, product, snapshot, curre
     return COLORS.red
   }
 
+  // Only show dimensions the backend reports as available on this tape vintage
+  // (e.g. 'provider' is Apr 2026+; older tapes hide it).
+  const availableDims = data?.available_dimensions ?? null
+  const visibleDims = availableDims
+    ? DIMENSIONS.filter(d => availableDims.includes(d.key))
+    : DIMENSIONS
+
   const dimSelector = (
-    <div style={{ display: 'flex', gap: 4 }}>
-      {DIMENSIONS.map(d => (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      {visibleDims.map(d => (
         <button
           key={d.key}
           onClick={() => setDim(d.key)}

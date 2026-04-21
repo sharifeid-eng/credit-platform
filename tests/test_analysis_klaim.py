@@ -17,10 +17,11 @@ from core.analysis import (
     compute_collection_velocity, compute_denial_trend, compute_cohorts,
     compute_actual_vs_expected, compute_ageing, compute_revenue,
     compute_concentration, compute_returns_analysis, compute_dso,
-    compute_hhi, compute_denial_funnel, compute_stress_test,
+    compute_hhi, compute_hhi_for_snapshot,
+    compute_denial_funnel, compute_stress_test,
     compute_expected_loss, compute_loss_triangle, compute_group_performance,
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
-    compute_par,
+    compute_par, compute_segment_analysis,
 )
 from core.validation import validate_tape
 from core.consistency import run_consistency_check
@@ -719,3 +720,104 @@ class TestDualViewWAL:
         assert ca_mar['Expected collection days'] is False
         assert ca_mar['Collection days so far'] is False
         assert ca_mar['Provider'] is False
+
+
+# ── Provider wiring (Part 2) ──────────────────────────────────────────────────
+
+class TestProviderConcentration:
+    """Provider is a strict sub-dimension of Group — branch-level attribution."""
+
+    def test_provider_present_on_apr15(self, apr15_df):
+        conc = compute_concentration(apr15_df, 1)
+        assert 'provider' in conc
+        assert len(conc['provider']) > 0
+        # Top provider on Apr 15 is ALPINE at ~5.3%
+        top = conc['provider'][0]
+        assert top['Provider'] == 'ALPINE'
+        assert top['percentage'] == pytest.approx(5.3, abs=0.1)
+
+    def test_provider_absent_on_mar03(self, mar03_df):
+        """Graceful degradation: older tapes omit the provider section entirely."""
+        conc = compute_concentration(mar03_df, 1)
+        assert 'provider' not in conc
+        # Group still present
+        assert 'group' in conc
+        # Existing behaviour preserved: top_deals, product still present
+        assert 'top_deals' in conc
+
+    def test_provider_hhi_value_on_apr15(self, apr15_df):
+        """Manually verified: Provider HHI on Apr 15 is ~201 (0.0201)."""
+        hhi = compute_hhi(apr15_df, 1)
+        assert 'provider' in hhi
+        # HHI reported as decimal fraction; expecting ~0.0201 = 201 bps²
+        assert hhi['provider']['hhi'] == pytest.approx(0.0201, abs=0.0005)
+        assert hhi['provider']['count'] == 216
+
+    def test_provider_hhi_absent_on_mar03(self, mar03_df):
+        hhi = compute_hhi(mar03_df, 1)
+        assert 'provider' not in hhi
+        # Group HHI still computed
+        assert 'group' in hhi
+
+    def test_provider_hhi_time_series_emits_nulls(self, mar03_df, apr15_df):
+        """Time series must emit provider_hhi=None on tapes without the column."""
+        ts_mar = compute_hhi_for_snapshot(mar03_df, 1)
+        ts_apr = compute_hhi_for_snapshot(apr15_df, 1)
+        assert ts_mar['provider_hhi'] is None
+        assert ts_apr['provider_hhi'] is not None
+        assert ts_apr['provider_hhi'] == pytest.approx(0.0201, abs=0.0005)
+        # Group HHI always computed
+        assert ts_mar['group_hhi'] is not None
+        assert ts_apr['group_hhi'] is not None
+
+    def test_provider_is_strict_subtree_of_group(self, apr15_df):
+        """No Provider maps to multiple Groups (clean tree, user-verified)."""
+        pg = apr15_df.groupby('Provider')['Group'].nunique()
+        assert (pg > 1).sum() == 0, (
+            f"{int((pg > 1).sum())} Providers map to multiple Groups — not a clean tree"
+        )
+
+
+class TestProviderSegmentAnalysis:
+    """Segment Analysis should expose provider/group dimensions where available."""
+
+    def test_apr15_exposes_provider_and_group_dimensions(self, apr15_df):
+        seg = compute_segment_analysis(apr15_df, 1, segment_by='product')
+        assert 'provider' in seg['available_dimensions']
+        assert 'group' in seg['available_dimensions']
+
+    def test_mar03_exposes_group_but_not_provider(self, mar03_df):
+        seg = compute_segment_analysis(mar03_df, 1, segment_by='product')
+        assert 'group' in seg['available_dimensions']
+        assert 'provider' not in seg['available_dimensions']
+
+    def test_provider_segment_cuts_off_at_25_plus_other(self, apr15_df):
+        """High-cardinality dimensions collapse long tail into 'Other' bucket."""
+        seg = compute_segment_analysis(apr15_df, 1, segment_by='provider')
+        assert seg['available'] is True
+        segments = seg['segments']
+        # 216 distinct providers → top 25 + Other = 26 segments
+        assert len(segments) == 26
+        segment_names = [s['segment'] for s in segments]
+        assert 'Other' in segment_names
+
+    def test_group_segment_cuts_off_at_25_plus_other(self, apr15_df):
+        seg = compute_segment_analysis(apr15_df, 1, segment_by='group')
+        assert seg['available'] is True
+        segments = seg['segments']
+        # 144 distinct groups → top 25 + Other = 26 segments
+        assert len(segments) == 26
+        assert 'Other' in [s['segment'] for s in segments]
+
+    def test_sorted_by_originated_descending(self, apr15_df):
+        """Most material segments first — IC-friendly ordering."""
+        seg = compute_segment_analysis(apr15_df, 1, segment_by='provider')
+        origs = [s['originated'] for s in seg['segments']]
+        # Allow 'Other' anywhere since it's a heavy-tail aggregate; just check sorted
+        assert origs == sorted(origs, reverse=True)
+
+    def test_provider_dim_unavailable_on_mar03_returns_error(self, mar03_df):
+        """Asking for provider dim on a pre-Apr15 tape returns available=False."""
+        seg = compute_segment_analysis(mar03_df, 1, segment_by='provider')
+        assert seg['available'] is False
+        assert 'provider' not in seg['available_dimensions']

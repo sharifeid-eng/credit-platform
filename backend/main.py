@@ -1512,6 +1512,7 @@ def get_hhi_timeseries(company: str, product: str, currency: Optional[str] = Non
             points.append({
                 'date': snap['date'],
                 'group_hhi': hhi.get('group_hhi'),
+                'provider_hhi': hhi.get('provider_hhi'),  # None on tapes without Provider col
                 'product_hhi': hhi.get('product_hhi'),
             })
         except Exception:

@@ -40,6 +40,11 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           value: d.purchase_value,
           pct:   d.percentage,
         }))
+        const providerData = (concRes.provider ?? []).map(d => ({
+          name:  d.Provider ?? d.name,
+          value: d.purchase_value,
+          pct:   d.percentage,
+        }))
         const topDeals = (concRes.top_deals ?? []).map(d => ({
           date:          d['Deal date'] ?? d.date,
           status:        d.Status ?? d.status,
@@ -49,7 +54,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           denied:        d['Denied by insurance'] ?? d.denied,
         }))
         const ownerRaw = concRes.owner ?? {}
-        setData({ groupData, topDeals, hhi: concRes.hhi ?? {}, owner: ownerRaw })
+        setData({ groupData, providerData, topDeals, hhi: concRes.hhi ?? {}, owner: ownerRaw })
         setGroupPerf(perfRes.groups ?? [])
 
         // Portfolio health and ageing donuts from ageing endpoint
@@ -73,10 +78,11 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
       .finally(() => setLoading(false))
   }, [company, product, snapshot, currency, asOfDate])
 
-  const groupData = data?.groupData ?? []
-  const topDeals  = data?.topDeals  ?? []
-  const hhi       = data?.hhi ?? {}
-  const owner     = data?.owner ?? {}
+  const groupData    = data?.groupData ?? []
+  const providerData = data?.providerData ?? []
+  const topDeals     = data?.topDeals ?? []
+  const hhi          = data?.hhi ?? {}
+  const owner        = data?.owner ?? {}
   const ownerAvailable = owner.available === true
   const ownerList = (owner.owners ?? []).map(d => ({
     name:            d.owner,
@@ -98,8 +104,9 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
 
       {/* HHI Concentration Badges */}
       {hhi.group && (
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <HHIBadge label="Group HHI" value={hhi.group.hhi} top1={hhi.group.top_1_pct} top5={hhi.group.top_5_pct} maxName={hhi.group.max_name} />
+          {hhi.provider && <HHIBadge label="Provider HHI" value={hhi.provider.hhi} top1={hhi.provider.top_1_pct} top5={hhi.provider.top_5_pct} maxName={hhi.provider.max_name} />}
           {hhi.product && <HHIBadge label="Product HHI" value={hhi.product.hhi} top1={hhi.product.top_1_pct} top5={hhi.product.top_5_pct} maxName={hhi.product.max_name} />}
         </div>
       )}
@@ -127,6 +134,32 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
           </div>
         </div>
       </ChartPanel>
+
+      {/* Provider concentration donut (Apr 2026+ only — hidden when res.provider absent) */}
+      {providerData.length > 0 && (
+        <ChartPanel title="Provider Concentration" subtitle="Branch-level attribution within each group — top 15 shown" loading={loading} error={error} minHeight={260}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <ResponsiveContainer width={220} height={220}>
+              <PieChart>
+                <Pie data={providerData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                  {providerData.map((_, i) => <Cell key={i} fill={SLICE_COLORS[i % SLICE_COLORS.length]} />)}
+                </Pie>
+                <Tooltip {...tooltipStyle} formatter={(v, name) => [fmtMoney(v, currency), name]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+              {providerData.slice(0, 8).map((d, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: SLICE_COLORS[i % SLICE_COLORS.length], flexShrink: 0 }} />
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: SLICE_COLORS[i % SLICE_COLORS.length], fontWeight: 600, flexShrink: 0 }}>{fmtPct(d.pct)}</div>
+                </div>
+              ))}
+              {providerData.length > 8 && <div style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 2 }}>+{providerData.length - 8} more</div>}
+            </div>
+          </div>
+        </ChartPanel>
+      )}
 
       {/* ── Owner / SPV Concentration ── */}
       {ownerAvailable && ownerList.length > 0 && (
