@@ -3259,11 +3259,11 @@ def chat_with_data(company: str, product: str, request: dict,
     try:
         hhi = compute_hhi(df, mult)
         parts = []
-        for key in ['group', 'product']:
+        labels = {'group': 'Group', 'provider': 'Provider', 'product': 'Product'}
+        for key in ['group', 'provider', 'product']:
             if key in hhi:
                 h = hhi[key]
-                label = 'Provider' if key == 'group' else 'Product'
-                parts.append(f"  {label}: HHI={h['hhi']:.4f}, "
+                parts.append(f"  {labels[key]}: HHI={h['hhi']:.4f}, "
                              f"Top1={h['top_1_pct']}%, Top5={h['top_5_pct']}% "
                              f"({h['count']} unique)")
         if parts:
