@@ -3,6 +3,39 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Session 30 — Klaim Apr 15 tape: validation fixes + Provider + dual-view WAL (2026-04-21)
+
+**Part 1 — validation/consistency recalibration** (`4f2d186`)
+- Balance Identity check rewritten to Klaim accounting identity `Paid + Denied + Pending ≡ Purchase value` (1% tolerance). Was using `Collected + Denied + Pending > 1.05 × PV` which fired on **2,775 / 8,080 deals (34%)** on Apr 15 — all false positives because Collected legitimately exceeds Paid (VAT + fees on top of claim principal). After fix: **2,775 → 0 flags** on Apr 15.
+- Status reversal `Completed → Executed` downgraded from CRITICAL to WARNING with explanatory `note` field. Known Klaim pattern: deal closes on booked payment, subsequent insurance denial re-opens it (Denied becomes non-zero, Status returns to Executed for dispute/collection). Mar 3 → Apr 15: **55 critical reversals → 0 critical, 55 warnings**. Note propagates into AI integrity report prompt + frontend ConsistencyItem renderer (italic subtitle). Other reversal paths (Completed→Pending, Completed→null) still CRITICAL.
+- Tests: 6 new — `TestBalanceIdentityKlaim`, `TestStatusReversalSeverityKlaim`.
+
+**Part 3 — dual-view WAL** (`1bfdbf2`)
+- `wal_active_days` (148d on Apr 15): outstanding-weighted active-only, **unchanged — still the covenant value per MMA Art. 21**. Framework Confidence A.
+- `wal_total_days` (137d on Apr 15): PV-weighted across active + completed — IC/monitoring view that strips the retention bias of active-only WAL (slow payers overweighted because fast ones leave the pool quickly). Framework Confidence B.
+- Close-date proxy for completed deals: `Collection days so far` (observed), clipped to `[0, elapsed]`, fallback to `Expected collection days` when observed is missing/negative. Documented in `compute_methodology_log()` as a `close_date_proxy` adjustment entry.
+- Initially tried `Expected collection days` as primary proxy → wal_total (152.8d) > wal_active (148d), invariant failed. Switched to observed `Collection days so far` → wal_total (137.2d) < wal_active (148d) ✓. Lesson recorded.
+- Covenant card renders both in breakdown + dashed-divider `view_note` block explaining the split. Covenant compliance still keyed to Active WAL only (Path A ≤ 70d OR Path B Extended Age ≤ 5%). Mar 3 and older: wal_total = None, graceful.
+- `column_availability` in methodology log now tracks `Paid by insurance`, `Pending insurance response`, `Expected collection days`, `Collection days so far`, `Provider`.
+- Tests: 8 new — `TestDualViewWAL` (active=148±1, total<active invariant, graceful degradation on Mar 3, covenant keyed to active not total, view_note present, proxy documented, new columns registered).
+
+**Part 2 — Provider column wired end-to-end** (`300bcde`)
+- `compute_concentration`: emits `result.provider` (top-15, same shape as group) when column present. Apr 15 top 3: ALPINE 5.3%, ALRAIAA 4.7%, AFAQ 4.5%.
+- `compute_hhi`: adds `provider` section (Apr 15 HHI = 0.0201 ≈ 201 bps²). `compute_hhi_for_snapshot` emits `provider_hhi` in time series — null on pre-Apr 15 tapes.
+- `compute_segment_analysis`: two new dimensions `group` and `provider`; both high-cardinality (144 / 216 distinct), collapsed to **top-25 by originated volume + `Other` bucket** for tractable dropdown + heat-map. Frontend dropdown filters against `available_dimensions` so older tapes hide Provider automatically.
+- Frontend: ConcentrationChart gains Provider donut + top-8 inline list and a Provider HHI badge (gold/teal/red coloured). SegmentAnalysisChart wraps DIMENSIONS through `availableDims` filter. All conditional on payload presence — Mar 3 UI unchanged.
+- Live dev-server verified (Apr 15 Chrome smoke test): Provider HHI visible, Provider Concentration section renders, ALPINE/ALRAIAA show in top 3; zero console errors. Mar 3 check: Provider artefacts + Provider dim button both absent.
+- Tests: 12 new — `TestProviderConcentration` (6), `TestProviderSegmentAnalysis` (6).
+
+**Totals:** 3 commits, 26 new tests, **499 tests passing** (was 473). No scope creep — every touched line traces to one of the three parts.
+
+**Known follow-ups flagged (not in scope):**
+- Data chat context builder labels Group HHI as "Provider" (pre-Provider-column naming). Now misleading since we have a real Provider. Candidate for fix when revisiting `hhi_ctx` in `backend/main.py:3260`.
+- `DB path` (db_loader.py) doesn't carry Apr 15's new columns → wal_total, provider features naturally degrade to unavailable when `DATABASE_URL` is set. Same as older tapes. Fine.
+- Multi-branch Group intra-drilldown (click-to-expand Provider breakdown inside Group table row) — marked as nice-to-have in spec, not implemented. Candidate for a follow-up if analysts request it.
+
+---
+
 ## Next Session Priorities
 
 ### Aajil — Remaining

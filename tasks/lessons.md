@@ -3,6 +3,38 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-21 — Validate the business identity before writing the validation check
+
+**Problem:** `core/validation.py` Balance Identity check assumed `Collected + Denied + Pending` should sum to `Purchase value` (±5%). On Apr 15 it flagged 2,775 of 8,080 deals — a 34% false-positive rate. The actual Klaim accounting identity is `Paid + Denied + Pending ≡ PV` (holds to floating-point zero); `Collected` legitimately exceeds `Paid` because it also includes VAT reimbursement and fees. The original check was using an intuitive-sounding but WRONG identity — no one validated it against a real tape before committing.
+
+**Rule:** Any validation rule of the form `A + B + C ≈ D` is a claim about how the business data is structured. That claim needs empirical verification on the real data before the check ships: mean and stddev of `A+B+C - D` should be near zero (not just "within tolerance"). If the stddev is material, the rule is wrong — either the columns don't mean what you think, or there's an unmodeled term. Fix the rule; don't widen the tolerance.
+
+**How to apply:**
+- When writing or modifying a "this should equal that" check: first run it against the latest real tape interactively. Compute `diff.mean()`, `diff.std()`, `diff.abs().max()`. If `mean ≈ 0` and `stddev ≈ 0` and `max ≈ 0`, the identity holds — the check is well-founded. If any is materially non-zero, stop and re-read the column definitions.
+- For Klaim specifically: `Collected` = Paid + VAT reimbursement + fees received. Only `Paid` is part of the face-value identity. `Collected > Paid` for every deal with non-zero VAT/fees — this is structural, not a data error.
+- Symptom in the wild: when a validation check fires on >5% of rows on a known-clean tape, the check is usually wrong, not the data. Always investigate the math first.
+- See `tests/test_analysis_klaim.py::TestBalanceIdentityKlaim::test_paid_den_pen_equals_pv_on_apr15` for the invariant assertion — it verifies the identity holds to floating-point zero before asserting the check fires on ≤5 deals.
+
+---
+
+## 2026-04-21 — For dual-view metrics with asymmetric weighting, use observed values not contractual inferences
+
+**Problem:** Adding Total-WAL alongside Active-WAL for the Klaim covenant. User asserted invariant `wal_total < wal_active` on Apr 15 because completed deals have bounded life while actives accumulate age. First attempt used `min(Expected collection days, elapsed)` as the completed-deal close-age proxy. Result: `wal_total = 152.8d > wal_active = 148d`. Invariant failed.
+
+Why: Klaim has 1,503 active deals (mean elapsed 248d, median 121d) and 6,576 completed deals (mean Expected collection days 94d, median 87d). PV-weighted Total across the whole book weighs completed deals' CONTRACTUAL term against active deals' ACTUAL elapsed age. Because active-WAL is outstanding-weighted (young active deals with big outstanding dominate) while Total is PV-weighted, the two are measuring different things with different weight vectors — the invariant survives only if BOTH are grounded in what actually happened.
+
+Switched to `Collection days so far` (observed, clipped to `[0, elapsed]`, fallback to `Expected collection days` when missing/negative). Result: `wal_total = 137.2d < wal_active = 148d` ✓. Completed deals' mean OBSERVED life = 60d (much shorter than contractual 87d — on average they pay faster than term).
+
+**Rule:** If you're introducing a dual view of a metric with asymmetric weighting (one view uses outstanding-weight, the other PV-weight) and the acceptance criterion is a strict ordering between them, the cross-view invariant is fragile. Prefer OBSERVED values over CONTRACTUAL inferences for the side where observations exist — the invariant survives the weighting difference only if both views are grounded in what actually happened, not what was supposed to happen.
+
+**How to apply:**
+- When designing a new metric that must compare against an existing one under a different weighting, STOP and compute both candidates on the real tape before coding. If the invariant fails, you've picked the wrong proxy — diagnose WHY (which rows push the sum the wrong way, what assumption they violate) before switching. Don't just try another proxy blindly.
+- For Klaim: `Collection days so far` is the observed completion duration for completed deals (despite some data noise — a few rows negative or >3y). `Expected collection days` is the contractual term used at pricing time, not observed. Observed > contractual precedence for life-of-deal computations.
+- Document the chosen proxy in `compute_methodology_log()` as a `close_date_proxy` audit-trail entry so IC consumers can see which path was used per tape vintage.
+- See `tests/test_analysis_klaim.py::TestDualViewWAL::test_total_wal_strictly_less_than_active_on_apr15` — the assertion message explicitly says "if not, the close-date proxy is wrong" so a future failure is self-diagnosing.
+
+---
+
 ## 2026-04-20 — Dedup maps must update inside the loop, never just at setup
 
 **Problem:** `core/dataroom/engine.py` ingest() built an `existing_hashes` dict once from the prior registry at the top of the function, then loop-checked every on-disk file against it. When two files with identical bytes existed at different paths (same corporate PDF referenced from `Company Overview/` AND `US Opportunity/` — common in data rooms), the first got ingested successfully, **but `existing_hashes` was never updated with the new hash**, so the second file hit `file_hash in existing_hashes == False` and got ingested as a duplicate with a different doc_id. Klaim had 75 such pairs; the UI displayed 153 docs instead of the real ~76. `refresh()` had the exact same shape (keyed on filepath, not hash). Identical root cause.
