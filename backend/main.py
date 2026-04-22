@@ -3317,6 +3317,16 @@ async def get_executive_summary_stream(
                 # budget_warning, error) exactly as the runtime emitted it.
                 yield event.to_sse()
                 last_yield = _time.monotonic()
+
+                # Capture runtime-yielded error events into stream_error so the
+                # terminal `done` payload carries the message. Without this,
+                # onError in the frontend would fire with the real message, then
+                # onDone would clobber it with the fallback "Stream ended without
+                # a result" because d.error was empty. The runtime has already
+                # returned after yielding error (runtime.py:491-499), so the
+                # producer thread will push SENTINEL shortly.
+                if event.type == "error" and stream_error is None:
+                    stream_error = (event.data or {}).get("message") or "agent runtime error"
         finally:
             # Internal session — no persistence. Safe-delete best-effort.
             try:

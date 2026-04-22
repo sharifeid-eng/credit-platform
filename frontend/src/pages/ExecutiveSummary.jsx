@@ -353,9 +353,10 @@ export default function ExecutiveSummary() {
       setElapsed(Math.floor((Date.now() - startedAt) / 1000))
     }, 1000)
 
-    // Local flag (not state) — React closures in the callback set below
+    // Local flags (not state) — React closures in the callback set below
     // would otherwise snapshot stale `findings` when onDone fires.
     let resultEmitted = false
+    let errorSet = false
 
     const finish = () => {
       setLoading(false)
@@ -397,10 +398,15 @@ export default function ExecutiveSummary() {
         },
         onError: (err) => {
           setError(err?.message || 'Failed to generate summary')
+          errorSet = true
           finish()
         },
         onDone: (d) => {
-          if (d && d.ok === false && !resultEmitted) {
+          // Only set fallback error if nothing else has surfaced one already.
+          // onError fires before onDone when the runtime yields an error event,
+          // and we don't want onDone's generic fallback to clobber the real
+          // message from the agent runtime.
+          if (d && d.ok === false && !resultEmitted && !errorSet) {
             setError(d.error || 'Stream ended without a result')
           }
           finish()

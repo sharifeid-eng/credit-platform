@@ -332,6 +332,15 @@ class TestAgentPath:
         done_data = next(d for t, d in events if t == "done")
         assert done_data["ok"] is False
 
+        # Terminal done must carry the runtime error message — otherwise the
+        # frontend's onDone fallback clobbers onError's real message with a
+        # generic "Stream ended without a result" because d.error was empty.
+        # (Regression for 2026-04-22 user report after max_tokens bump.)
+        assert done_data.get("error"), (
+            "terminal done must propagate runtime StreamEvent('error') message"
+        )
+        assert "budget exceeded" in done_data["error"]
+
 
 # ── Parser helper tests ─────────────────────────────────────────────────────
 
