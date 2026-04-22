@@ -195,6 +195,14 @@ def _get_dso_analysis(
     as_of_date: Optional[str] = None,
 ) -> str:
     at = detect_analysis_type(company, product)
+
+    if at == "aajil":
+        return (
+            "DSO analysis not available for analysis_type=aajil — Aajil uses "
+            "installment-based DPD (see analytics.get_ageing_breakdown for "
+            "overdue installment buckets) rather than DSO timing."
+        )
+
     if at == "silq":
         df, sel, _ = load_silq_tape(company, product, snapshot, as_of_date)
     else:
@@ -587,6 +595,17 @@ def _get_dtfc_analysis(
     as_of_date: Optional[str] = None,
 ) -> str:
     at = detect_analysis_type(company, product)
+
+    if at not in ("klaim",):
+        # DTFC is a Klaim-specific leading indicator (days from funding to first
+        # cash). SILQ uses disbursement-to-first-payment cycle differently;
+        # Aajil uses installment-based metrics.
+        return (
+            f"DTFC (Days to First Cash) not available for analysis_type={at} — "
+            f"this is a Klaim-specific leading indicator. Try "
+            f"analytics.get_cohort_analysis for vintage performance instead."
+        )
+
     df, sel = load_tape(company, product, snapshot, as_of_date)
     _, disp, mult = get_currency(company, product, currency)
 

@@ -168,6 +168,34 @@ class TestAajilHandlerSignatures:
         assert isinstance(result, str) and result
         assert "Portfolio Ageing" in result
 
+    def test_get_dso_analysis_aajil_graceful_skip(self):
+        """DSO used to call load_tape(Aajil) in its else branch, producing a
+        wrong-shape DataFrame that crashed compute_dso. Aajil has no DSO
+        compute function (it uses installment-based DPD), so graceful skip is
+        correct. Must not raise, must return hint pointing at working tool."""
+        tool = registry.get("analytics.get_dso_analysis")
+        result = tool.handler(**self.AAJIL)
+        assert isinstance(result, str) and result
+        assert "aajil" in result.lower()
+        assert "not available" in result.lower()
+        # Must NOT start with Error: / Tool error — the runtime counts those
+        # toward the 3-consecutive-tool-errors circuit breaker.
+        assert not result.startswith("Error:")
+        assert not result.startswith("Tool error")
+
+    def test_get_dtfc_analysis_aajil_graceful_skip(self):
+        """DTFC is Klaim-specific. Without an Aajil guard, load_tape returned
+        the Aajil xlsx mis-shaped and compute_dtfc crashed on missing columns,
+        tripping the runtime's 3-errors-in-a-row circuit breaker. Must return
+        a hint string, not raise."""
+        tool = registry.get("analytics.get_dtfc_analysis")
+        result = tool.handler(**self.AAJIL)
+        assert isinstance(result, str) and result
+        assert "aajil" in result.lower()
+        assert "not available" in result.lower()
+        assert not result.startswith("Error:")
+        assert not result.startswith("Tool error")
+
 
 class TestInternalEventLoopGuard:
     """Verify _run_agent_sync's event-loop guard handles non-main threads.
