@@ -816,6 +816,17 @@ When onboarding a new company, follow these steps to build its methodology page.
 3. **Add cross-cutting sections** — Product Types, Cohort Analysis, Data Caveats, Currency, Data Quality
 4. **Add conditional branch** in `Methodology.jsx` — new `{TYPE}_SECTIONS` array with `level` tags, new content component
 5. **Verify metrics match backend** — every formula in the methodology must correspond to an actual computation in the analysis module
+
+### Agent Tool Coverage Checklist (required before Executive Summary reads well)
+New analysis types don't automatically get coverage in every analytics tool — each tool's dispatch table has to be extended or the tool must gracefully skip. When onboarding a new company, audit `core/agents/tools/analytics.py` (and `compliance.py`) against this checklist:
+1. **Register an Aajil-style branch** in `_get_portfolio_summary`, `_get_cohort_analysis`, `_get_concentration`, `_get_collection_velocity`, `_get_deployment`, `_get_ageing_breakdown`, `_get_loss_waterfall`, `_get_covenants` — these are the 8 tools the exec summary agent calls most often. Either dispatch to a company-specific compute function or return a graceful-skip hint (`"X not available for analysis_type={at} — try Y instead"`).
+2. **Graceful-skip strings must not start with `Error:` or `Tool error`** — the runtime counts those toward the 3-consecutive-errors circuit breaker (`core/agents/runtime.py:470`). Leading with "X not available for…" is safe.
+3. **Audit every `load_tape(...)` call** for the new analysis type — `load_tape` only handles Klaim-shaped tapes. Every other type needs its own loader branch (e.g. `load_aajil_tape`) or an explicit early-return guard.
+4. **Check `config.json` section_guidance_map** in both `core/agents/internal.py:generate_agent_executive_summary` AND `backend/main.py` (stream endpoint) — add a per-company sections list matching the L1-L5 hierarchy. Missing entries fall back to the generic default, which drifts from company-specific priorities.
+5. **Add regression tests** in `tests/test_agent_tools.py` — one handler test per tool pinning the graceful-skip contract (no crash, no `Error:` prefix, hints at a working alternative). See `TestAajilHandlerSignatures` for the pattern.
+6. **Accept that some metrics genuinely don't apply** — DSO isn't meaningful for installment lending; PAR needs contractual due dates the tape may not have; covenants require a facility document. Tools for these return graceful skips; the Executive Summary agent then populates `analytics_coverage` (rendered as a callout between Bottom Line and Key Findings) instead of filing findings about missing tools.
+
+The Executive Summary prompt (in `core/agents/prompts.py`) encodes this behavior: findings are credit observations only; tool gaps go to `analytics_coverage`. New companies automatically benefit — no prompt changes needed when onboarding, just tool coverage.
 -----
 ## Key Architectural Decisions
 - **`core/analysis.py`** — all pure data computation. No FastAPI, no I/O.

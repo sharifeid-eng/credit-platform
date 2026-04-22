@@ -257,6 +257,9 @@ class TestAgentPath:
         assert result_data["findings"][0]["title"] == "agent-result"
         assert result_data["narrative"]["bottom_line"] == "Proceed"
         assert result_data["mode"] == "agent"
+        # analytics_coverage key always present in the payload (null when
+        # agent didn't emit one) so the frontend destructure is predictable.
+        assert "analytics_coverage" in result_data
 
         # Terminal done carries the runtime's token counts for cost tracking
         done_data = next(d for t, d in events if t == "done")
@@ -301,6 +304,59 @@ class TestAgentPath:
         assert len(result["findings"]) == 1
         assert result["findings"][0]["severity"] == "warning"
         assert "not JSON" in result["findings"][0]["explanation"]
+
+    def test_analytics_coverage_flows_through_stream(self, monkeypatch):
+        """End-to-end: agent emits analytics_coverage → it lands in result_payload
+        → frontend receives it. Aajil is the primary use case (PAR/DSO/covenant
+        tools unavailable), but any company with partial tool coverage benefits."""
+        _patch_common(monkeypatch)
+        monkeypatch.setattr("backend.main._ai_cache_get", lambda path: None)
+        write_calls = []
+        monkeypatch.setattr(
+            "backend.main._ai_cache_put",
+            lambda path, data: write_calls.append((path, data)),
+        )
+
+        agent_output = {
+            "narrative": {
+                "sections": [{"title": "Overview", "content": "p"}],
+                "summary_table": [],
+                "bottom_line": "b",
+            },
+            "analytics_coverage": (
+                "PAR, DSO, and covenant modules are unavailable for aajil — "
+                "limits forward-trajectory and headroom monitoring."
+            ),
+            "findings": [{"rank": 1, "severity": "positive", "title": "t",
+                          "explanation": "e", "data_points": [], "tab": "overview"}],
+        }
+
+        _patch_agent(monkeypatch, [
+            _FakeStreamEvent("text", {"delta": json.dumps(agent_output)}),
+            _FakeStreamEvent("done", {
+                "total_input_tokens": 100, "total_output_tokens": 50,
+                "turns_used": 1, "session_id": "s",
+            }),
+        ])
+
+        with client.stream(
+            "GET",
+            "/companies/Aajil/products/KSA/ai-executive-summary/stream?refresh=true",
+        ) as resp:
+            assert resp.status_code == 200
+            body = b"".join(resp.iter_bytes()).decode("utf-8")
+
+        events = _parse_sse(body)
+        result = next(d for t, d in events if t == "result")
+
+        assert result["analytics_coverage"] is not None
+        assert "PAR, DSO" in result["analytics_coverage"]
+        assert "aajil" in result["analytics_coverage"]
+
+        # And it survives the cache round-trip so subsequent views see it too.
+        assert len(write_calls) == 1
+        cached = write_calls[0][1]
+        assert cached["analytics_coverage"] == result["analytics_coverage"]
 
     def test_agent_error_event_is_forwarded(self, monkeypatch):
         _patch_common(monkeypatch)
@@ -367,15 +423,17 @@ class TestParseAgentExecSummaryResponse:
             "findings": [{"rank": 1, "severity": "positive", "title": "t",
                           "explanation": "e", "data_points": [], "tab": "overview"}],
         }
-        narr, finds, ok = self._call(json.dumps(payload))
+        narr, finds, coverage, ok = self._call(json.dumps(payload))
         assert ok is True
         assert narr["bottom_line"] == "v"
         assert finds[0]["title"] == "t"
+        # No analytics_coverage in payload → None (not empty string)
+        assert coverage is None
 
     def test_json_fence_stripped(self):
         payload = {"narrative": {"bottom_line": "ok"}, "findings": []}
         fenced = "```json\n" + json.dumps(payload) + "\n```"
-        narr, finds, ok = self._call(fenced)
+        narr, finds, coverage, ok = self._call(fenced)
         assert ok is True
         assert narr["bottom_line"] == "ok"
 
@@ -391,7 +449,7 @@ class TestParseAgentExecSummaryResponse:
             "Let me compile the executive summary.\n\n"
             + json.dumps(payload)
         )
-        narr, finds, ok = self._call(text)
+        narr, finds, coverage, ok = self._call(text)
         assert ok is True, "extraction should succeed despite preamble"
         assert narr["bottom_line"] == "verdict"
         assert finds[0]["title"] == "t"
@@ -400,7 +458,7 @@ class TestParseAgentExecSummaryResponse:
         """Trailing prose after the JSON must not break extraction."""
         payload = {"narrative": {"bottom_line": "v"}, "findings": []}
         text = json.dumps(payload) + "\n\nLet me know if you need more detail."
-        narr, finds, ok = self._call(text)
+        narr, finds, coverage, ok = self._call(text)
         assert ok is True
         assert narr["bottom_line"] == "v"
 
@@ -408,15 +466,16 @@ class TestParseAgentExecSummaryResponse:
         """Pre-narrative format returned a bare findings list — still supported."""
         findings_list = [{"rank": 1, "severity": "positive", "title": "t",
                           "explanation": "e", "data_points": [], "tab": "overview"}]
-        narr, finds, ok = self._call(json.dumps(findings_list))
+        narr, finds, coverage, ok = self._call(json.dumps(findings_list))
         assert ok is True
         assert narr is None
         assert len(finds) == 1
+        assert coverage is None
 
     def test_completely_unparseable_falls_back(self):
         """Pure markdown with no {…} substring → warning fallback with raw text."""
         text = "## Portfolio Overview\n\n**Collection rate:** 87.3%\n\n| Metric | Value |\n|---|---|"
-        narr, finds, ok = self._call(text)
+        narr, finds, coverage, ok = self._call(text)
         assert ok is False
         assert narr is None
         assert len(finds) == 1
@@ -424,12 +483,14 @@ class TestParseAgentExecSummaryResponse:
         assert finds[0]["title"] == "Summary generated (unparsed)"
         # Raw text preserved for analyst debugging
         assert "Portfolio Overview" in finds[0]["explanation"]
+        assert coverage is None
 
     def test_empty_string_fallback(self):
-        narr, finds, ok = self._call("")
+        narr, finds, coverage, ok = self._call("")
         assert ok is False
         assert narr is None
         assert finds == []  # Empty input produces no warning finding either
+        assert coverage is None
 
     def test_severity_never_positive_on_failure(self):
         """Regression for the session 2026-04-22 bug — the sync endpoint
@@ -437,7 +498,47 @@ class TestParseAgentExecSummaryResponse:
         'Agent Summary', which rendered as a teal POSITIVE card misleading
         the analyst into thinking the markdown dump was a success. Parse
         failures must always produce severity='warning'."""
-        narr, finds, ok = self._call("not JSON at all, just prose")
+        narr, finds, coverage, ok = self._call("not JSON at all, just prose")
         assert ok is False
         assert finds[0]["severity"] == "warning"
         assert finds[0]["title"] != "Agent Summary"
+
+    def test_analytics_coverage_passed_through(self):
+        """New field introduced 2026-04-22 to move tool-gap / undefined-thesis
+        concerns OUT of the ranked findings list and INTO a dedicated callout.
+        Parser must pass the string through verbatim so the frontend can render
+        it as a monitoring caveat between Bottom Line and Key Findings."""
+        payload = {
+            "narrative": {"bottom_line": "v"},
+            "analytics_coverage": (
+                "PAR, DSO, and covenant compliance modules are unavailable for "
+                "this analysis type. No formal investment thesis is defined."
+            ),
+            "findings": [],
+        }
+        narr, finds, coverage, ok = self._call(json.dumps(payload))
+        assert ok is True
+        assert coverage is not None
+        assert "PAR, DSO" in coverage
+        assert "investment thesis" in coverage
+
+    def test_analytics_coverage_empty_string_stripped(self):
+        """Empty or whitespace-only analytics_coverage must be normalised to
+        None so the frontend doesn't render a placeholder callout block."""
+        for empty in ("", "   ", "\n\n", "  \t  "):
+            payload = {"narrative": {"bottom_line": "v"},
+                       "analytics_coverage": empty, "findings": []}
+            _, _, coverage, ok = self._call(json.dumps(payload))
+            assert ok is True
+            assert coverage is None, f"empty={empty!r} should normalise to None"
+
+    def test_analytics_coverage_non_string_ignored(self):
+        """Defensive: if the agent returns a list/object/number in this field
+        (mis-interpreting the schema), we drop it rather than leaking shape
+        mismatches to the frontend."""
+        for bogus in ([], {}, 42, True, None):
+            payload = {"narrative": {"bottom_line": "v"},
+                       "analytics_coverage": bogus, "findings": []}
+            _, _, coverage, ok = self._call(json.dumps(payload))
+            assert ok is True
+            assert coverage is None, f"non-string={bogus!r} should normalise to None"

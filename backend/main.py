@@ -410,22 +410,28 @@ def _ai_cache_put(cache_path: str, data: dict) -> None:
 
 
 def _parse_agent_exec_summary_response(response_text: str):
-    """Parse the analyst agent's executive-summary text into (narrative, findings, ok).
+    """Parse the analyst agent's executive-summary text into
+    (narrative, findings, analytics_coverage, ok).
 
-    The agent is prompted to return a JSON object with ``narrative`` + ``findings``,
-    but will sometimes prepend conversational preamble ("I now have comprehensive
-    data…") or wrap the JSON in ```json fences. Tries, in order:
+    The agent is prompted to return a JSON object with ``narrative`` +
+    ``findings`` (required) and an optional ``analytics_coverage`` callout
+    string. Sometimes preambles conversational text ("I now have comprehensive
+    data…") or wraps in ```json fences. Tries, in order:
       1. Strip whitespace + ```json/``` fences, then json.loads the whole text.
       2. Extract the outermost ``{…}`` substring, then json.loads that.
       3. Fall back to a single "Summary generated (unparsed)" warning finding
          carrying the raw text, so the analyst sees what came back.
 
     Legacy list-shape responses (bare findings array) are accepted as
-    findings-only (no narrative).
+    findings-only (no narrative, no analytics_coverage).
+
+    Returns a 4-tuple for backward compatibility, but callers written before
+    2026-04-22 that unpack 3 values will get a TypeError — acceptable because
+    all call sites live in this file.
     """
     text = (response_text or "").strip()
     if not text:
-        return None, [], False
+        return None, [], None, False
 
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -444,16 +450,24 @@ def _parse_agent_exec_summary_response(response_text: str):
                 parsed = None
 
     if isinstance(parsed, list):
-        return None, parsed, True
+        return None, parsed, None, True
     if isinstance(parsed, dict):
-        return parsed.get("narrative"), parsed.get("findings", []), True
+        # analytics_coverage is optional — pass through verbatim if present and
+        # non-empty. Filter out empty strings and whitespace-only placeholders
+        # so the frontend doesn't render a blank callout.
+        coverage = parsed.get("analytics_coverage")
+        if isinstance(coverage, str):
+            coverage = coverage.strip() or None
+        else:
+            coverage = None
+        return parsed.get("narrative"), parsed.get("findings", []), coverage, True
 
     return None, [{
         "rank": 1, "severity": "warning",
         "title": "Summary generated (unparsed)",
         "explanation": response_text or "(empty response)",
         "data_points": [], "tab": "overview",
-    }], False
+    }], None, False
 
 
 def _extract_questions(text):
@@ -2838,10 +2852,11 @@ def get_executive_summary(company: str, product: str,
             at = _get_analysis_type(company, product)
             guidance = section_guidance_map.get(at, None)
             summary_text = generate_agent_executive_summary(company, product, snapshot, currency, as_of_date, guidance)
-            narrative, findings, _parsed_ok = _parse_agent_exec_summary_response(summary_text)
+            narrative, findings, analytics_coverage, _parsed_ok = _parse_agent_exec_summary_response(summary_text)
             result = {
                 'narrative': narrative,
                 'findings': findings,
+                'analytics_coverage': analytics_coverage,
                 'generated_at': datetime.now().isoformat(),
                 'as_of_date': as_of_date or sel_for_key.get('date', ''),
                 'mode': 'agent',
@@ -3116,9 +3131,8 @@ async def get_executive_summary_stream(
                 yield f"event: done\ndata: {json.dumps({'ok': True, 'from_cache': True})}\n\n"
             return StreamingResponse(_cache_stream(), media_type="text/event-stream", headers=_sse_headers)
 
-    # ── Build agent prompt (mirrors generate_agent_executive_summary but
-    # extended with an explicit JSON output contract so we can parse
-    # narrative+findings after the stream closes). ─────────────────────────
+    # Per-company section guidance. Keys match analysis_type; fall through to
+    # the default hierarchy-level guidance inside build_executive_summary_prompt.
     section_guidance_map = {
         'tamara_summary': "Portfolio Overview & Scale, Vintage Default Performance, Delinquency Trends, Dilution, Covenant Compliance, Concentration, Financial Performance, Forward Outlook",
         'ejari_summary': "Portfolio Overview, Monthly Cohorts, Loss Waterfall, Roll Rates, Historical Performance, Segment Analysis, Credit Quality, Najiz & Legal, Write-offs",
@@ -3126,47 +3140,15 @@ async def get_executive_summary_stream(
         'aajil': "Portfolio Overview, Traction, Delinquency, Collections, Cohorts, Concentration, Underwriting, Customer Segments, Forward Signals",
     }
     at = _get_analysis_type(company, product)
-    guidance = section_guidance_map.get(at) or (
-        "1. Portfolio Overview — size, growth, composition\n"
-        "2. Cash Conversion — collection performance, DSO, velocity\n"
-        "3. Credit Quality — PAR, delinquency, health distribution\n"
-        "4. Loss Economics — default rates, recovery, net loss, margins\n"
-        "5. Concentration & Segments — provider risk, product mix\n"
-        "6. Forward Signals — leading indicators, covenant headroom, drift\n"
-        "7. Bottom Line — overall assessment with specific recommendations"
-    )
-    ctx_line = (
-        f"[Context: company={company}, product={product}"
-        + (f", snapshot={snapshot}" if snapshot else "")
-        + (f", currency={currency}" if currency else "")
-        + (f", as_of_date={as_of_date}" if as_of_date else "")
-        + "]"
-    )
-    prompt = (
-        f"{ctx_line}\n\n"
-        "Generate a comprehensive executive summary for this portfolio company. "
-        "For each section, pull the relevant analytics data via tools and search the "
-        "data room for supporting evidence. Cross-reference with the investment thesis "
-        "if one exists.\n\n"
-        f"Sections: {guidance}\n\n"
-        "Return your output as a JSON object (no prose outside the JSON, no markdown fences):\n"
-        "{\n"
-        '  "narrative": {\n'
-        '    "sections": [ {"title": "...", "content": "paragraphs separated by \\n\\n", '
-        '"conclusion": "...", '
-        '"metrics": [{"label": "...", "value": "...", "assessment": "healthy|acceptable|warning|critical|monitor"}]} ],\n'
-        '    "summary_table": [ {"metric": "...", "value": "...", '
-        '"assessment": "Healthy|Acceptable|Warning|Critical|Monitor"} ],\n'
-        '    "bottom_line": "..."\n'
-        "  },\n"
-        '  "findings": [ {"rank": 1, "severity": "critical|warning|positive", '
-        '"title": "...", "explanation": "...", "data_points": ["..."], "tab": "tab-slug"} ]\n'
-        "}\n\n"
-        "RULES:\n"
-        "- Every claim must cite a specific number obtained from a tool call.\n"
-        "- 6-10 narrative sections, 5-10 findings ranked by business impact.\n"
-        "- Plain prose in all text fields — no markdown syntax (no **bold**, no | tables |, no --- separators).\n"
-        "- Professional IC tone. Start your response with `{` — no preamble, no fences, no closing prose."
+    guidance = section_guidance_map.get(at)
+    from core.agents.prompts import build_executive_summary_prompt
+    prompt = build_executive_summary_prompt(
+        company=company,
+        product=product,
+        snapshot=snapshot,
+        currency=currency,
+        as_of_date=as_of_date,
+        section_guidance=guidance,
     )
 
     async def _stream():
@@ -3277,7 +3259,7 @@ async def get_executive_summary_stream(
                     agent_done_data = dict(event.data or {})
 
                     response_text = "".join(full_text)
-                    narrative, findings, _parsed_ok = _parse_agent_exec_summary_response(response_text)
+                    narrative, findings, analytics_coverage, _parsed_ok = _parse_agent_exec_summary_response(response_text)
 
                     # Layer 2.5 citations — same as sync endpoint
                     _asset_class_sources: list = []
@@ -3290,6 +3272,7 @@ async def get_executive_summary_stream(
                     result_payload = {
                         "narrative": narrative,
                         "findings": findings,
+                        "analytics_coverage": analytics_coverage,
                         "generated_at": datetime.now().isoformat(),
                         "as_of_date": as_of_date or snap_date,
                         "mode": "agent",

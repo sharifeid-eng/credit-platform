@@ -197,46 +197,14 @@ def generate_agent_executive_summary(
 
     Returns: full executive summary text.
     """
-    guidance = section_guidance or (
-        "Structure your analysis as:\n"
-        "1. Portfolio Overview — size, growth, composition\n"
-        "2. Cash Conversion — collection performance, DSO, velocity\n"
-        "3. Credit Quality — PAR, delinquency, health distribution\n"
-        "4. Loss Economics — default rates, recovery, net loss, margins\n"
-        "5. Concentration & Segments — provider risk, product mix\n"
-        "6. Forward Signals — leading indicators, covenant headroom, drift\n"
-        "7. Bottom Line — overall assessment with specific recommendations\n"
-    )
-
-    prompt = (
-        f"[Context: company={company}, product={product}"
-        + (f", snapshot={snapshot}" if snapshot else "")
-        + (f", currency={currency}" if currency else "")
-        + (f", as_of_date={as_of_date}" if as_of_date else "")
-        + "]\n\n"
-        "Generate a comprehensive executive summary for this portfolio company. "
-        "For each section, pull the relevant analytics data via tools and search the "
-        "data room for supporting evidence. Cross-reference with the investment thesis "
-        "if one exists.\n\n"
-        f"Sections: {guidance}\n\n"
-        "Return your output as a JSON object (no prose outside the JSON, no markdown fences):\n"
-        "{\n"
-        '  "narrative": {\n'
-        '    "sections": [ {"title": "...", "content": "paragraphs separated by \\n\\n", '
-        '"conclusion": "...", '
-        '"metrics": [{"label": "...", "value": "...", "assessment": "healthy|acceptable|warning|critical|monitor"}]} ],\n'
-        '    "summary_table": [ {"metric": "...", "value": "...", '
-        '"assessment": "Healthy|Acceptable|Warning|Critical|Monitor"} ],\n'
-        '    "bottom_line": "..."\n'
-        "  },\n"
-        '  "findings": [ {"rank": 1, "severity": "critical|warning|positive", '
-        '"title": "...", "explanation": "...", "data_points": ["..."], "tab": "tab-slug"} ]\n'
-        "}\n\n"
-        "RULES:\n"
-        "- Every claim must cite a specific number obtained from a tool call.\n"
-        "- 6-10 narrative sections, 5-10 findings ranked by business impact.\n"
-        "- Plain prose in all text fields — no markdown syntax (no **bold**, no | tables |, no --- separators).\n"
-        "- Professional IC tone. Start your response with `{` — no preamble, no fences, no closing prose."
+    from core.agents.prompts import build_executive_summary_prompt
+    prompt = build_executive_summary_prompt(
+        company=company,
+        product=product,
+        snapshot=snapshot,
+        currency=currency,
+        as_of_date=as_of_date,
+        section_guidance=section_guidance,
     )
 
     return _run_agent_sync(

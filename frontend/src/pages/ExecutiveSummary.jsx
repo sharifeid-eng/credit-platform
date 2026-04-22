@@ -267,6 +267,42 @@ function BottomLine({ text }) {
   )
 }
 
+// Platform-caveat callout for unavailable analytics / undefined thesis status.
+// Rendered between Bottom Line and Key Findings so tool-coverage concerns
+// stay distinct from credit findings but remain visible to the IC reader.
+// Uses a muted amber accent — not a severity signal, just a monitoring caveat.
+function AnalyticsCoverageCallout({ text }) {
+  if (!text) return null
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        padding: '14px 20px',
+        borderRadius: 8,
+        background: 'rgba(148,163,184,0.04)',
+        border: '1px solid rgba(148,163,184,0.15)',
+        borderLeft: '3px solid var(--text-muted)',
+        marginBottom: 12,
+      }}
+    >
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        marginBottom: 8,
+      }}>
+        Analytics Coverage
+      </div>
+      <p style={{
+        fontSize: 12, lineHeight: 1.6, color: 'var(--text-muted)',
+        margin: 0,
+      }}>
+        {text}
+      </p>
+    </motion.div>
+  )
+}
+
 export default function ExecutiveSummary() {
   const { company, product, snapshot, currency, asOfDate, isBackdated } = useCompany()
   const { isMobile } = useBreakpoint()
@@ -277,6 +313,11 @@ export default function ExecutiveSummary() {
   const [meta, setMeta] = useState(null)
   const [assetClassSources, setAssetClassSources] = useState([])
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
+  // analytics_coverage: optional 1-3 sentence callout from the agent describing
+  // unavailable tools / undefined thesis. Rendered between Bottom Line and Key
+  // Findings as a distinct monitoring-caveat block so these platform concerns
+  // don't mix with portfolio findings.
+  const [analyticsCoverage, setAnalyticsCoverage] = useState(null)
 
   // Live streaming progress — mirrors the agent's tool-call timeline so the
   // analyst watching the page can see what the model is doing rather than a
@@ -389,6 +430,13 @@ export default function ExecutiveSummary() {
           resultEmitted = true
           setNarrative(data.narrative || null)
           setFindings(data.findings || [])
+          // analytics_coverage is optional — only set if non-empty string so
+          // the callout block doesn't render a placeholder.
+          setAnalyticsCoverage(
+            typeof data.analytics_coverage === 'string' && data.analytics_coverage.trim()
+              ? data.analytics_coverage.trim()
+              : null,
+          )
           setMeta({
             generated_at: data.generated_at,
             as_of_date: data.as_of_date,
@@ -574,6 +622,11 @@ export default function ExecutiveSummary() {
 
           <SummaryTable rows={narrative.summary_table} />
           <BottomLine text={narrative.bottom_line} />
+
+          {/* Platform caveat: unavailable analytics / undefined thesis. Only
+              renders when the agent populated the field, so companies with
+              full coverage don't see a placeholder block. */}
+          <AnalyticsCoverageCallout text={analyticsCoverage} />
 
           {/* D2: Layer 2.5 external sources that fed the summary */}
           {assetClassSources.length > 0 && (
