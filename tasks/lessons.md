@@ -3,6 +3,115 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Ask "is this latent elsewhere?" BEFORE fixing a user-reported bug
+
+**Problem:** User reported Aajil Executive Summary rendering raw markdown instead of structured narrative. My instinct was to fix the specific symptom — hardened the sync-path prompt and JSON parser. That shipped. Then the same user saw a new failure mode, then another, then another. Each fix exposed the next layer:
+
+1. Markdown dump (fix: JSON contract in prompt)
+2. Truncated JSON (fix: bump max_tokens from 2000 to 16000)
+3. Generic "Stream ended without a result" (fix: propagate runtime errors into terminal done)
+4. "3 consecutive tool errors" (fix: add Aajil branches to 2 more unguarded tools)
+
+Four round-trips, four deploys, user burning time each cycle. The real failure was my scope discipline: I fixed what the user reported instead of asking "what class of bug is this, and where else could it live?"
+
+When the user explicitly asked "are these issues Aajil specific?" after seeing the fixes work, I traced the answer — 6 of 7 content issues were prompt-level, affecting every company. Klaim and SILQ hadn't surfaced them only because their tool coverage was fuller, leaving less room for agent drift. Had I asked that question on the first round, I would have audited ALL tool dispatch tables for ALL analysis_types in one pass instead of discovering gaps one at a time through user friction.
+
+**Rule:** When a user reports a bug, before writing the fix, spend one think-cycle on:
+1. **What's the class of bug?** (signature mismatch, silent fallback, unguarded assumption, ...)
+2. **Where else does this class of bug live?** (grep for the same pattern, audit sibling functions)
+3. **Would a fuller audit ship in the same round?** If yes, do it. One deploy instead of four.
+
+**How to apply:**
+- Never fix only the specific file the user named. Grep for the pattern across the codebase first.
+- Write the audit into the plan, not as follow-up. "Fix DSO tool for Aajil" is incomplete; "audit all load_tape() call sites for every analysis_type" is the work.
+- When presenting the fix, explicitly name what's platform-wide vs what's case-specific. Don't let the user discover it three iterations later.
+
+---
+
+## 2026-04-22 — Parse-failure fallbacks must render as failure, never as success
+
+**Problem:** Sync-path `/ai-executive-summary` endpoint tried `json.loads()` on the agent's response. On failure it wrapped the raw text as a single finding with `severity='positive'` and `title='Agent Summary'`. The frontend rendered this as a **teal POSITIVE card** with the entire markdown dump as the "explanation". To the analyst, it looked like a successful output — they had no signal that parsing had failed. They kept clicking Refresh (which re-read the same bad cache) until someone spotted the broken rendering.
+
+```python
+# Original — looks harmless, is catastrophically misleading:
+except (json.JSONDecodeError, AttributeError):
+    findings = [{'rank': 1, 'severity': 'positive', 'title': 'Agent Summary',
+                 'explanation': summary_text, ...}]
+```
+
+The severity and title were inherited by copy-paste from a debug placeholder. Nobody verified what they rendered as. Teal POSITIVE + "Agent Summary" + 40KB of raw markdown in the explanation field = the exact output an analyst would least suspect of being broken.
+
+**Rule:** Every fallback path for "we couldn't parse/compute/fetch what the user asked for" must be visually distinct from a successful response. Parse failures are `severity='warning'` at minimum (never 'positive', never 'success'), title names the failure mode ('Summary generated (unparsed)', not 'Agent Summary'), body quotes the raw response verbatim for analyst debugging.
+
+**How to apply:**
+- When you see `severity='positive'` or `status='ok'` inside an `except:` or fallback branch, that's the bug. Fix the severity to match the actual state.
+- For UI renderers that key on severity/status, do a visual smoke test of every fallback path — does the "couldn't parse" fallback look distinguishable from a real success? If not, the semantic label is wrong.
+- Write a test: `test_severity_never_positive_on_failure` (now in `tests/test_exec_summary_stream.py::TestParseAgentExecSummaryResponse`). Lock the contract.
+
+---
+
+## 2026-04-22 — Agent tool dispatch must be audited against every analysis_type, not just the "primary" one
+
+**Problem:** The analyst agent has ~20 analytics tools in `core/agents/tools/analytics.py`. Each was written with Klaim in mind; some gained SILQ branches later; Aajil was added most recently. Only SOME tools got Aajil branches during onboarding — the others silently fell into their `else` branches which called `load_tape()` (Klaim-shaped CSV loader). When the agent is given a narrow task, it only calls a few tools and the gaps are invisible. The Executive Summary — which calls the agent with `max_turns=20` and instructions to pull data for 9 sections — is the stress test. It calls every tool. Gaps compound: two or three unguarded tools crash in a row, runtime's "3 consecutive errors → stop" circuit breaker fires, the whole response aborts with no data.
+
+Four tools were unguarded on Aajil, discovered over two audit rounds:
+- `_get_covenants` (imported nonexistent `compute_aajil_covenants`)
+- `_get_deployment` (grouped by nonexistent `Month` column)
+- `_get_ageing_breakdown` (filtered by nonexistent `Status='Executed'`)
+- `_get_dso_analysis` + `_get_dtfc_analysis` (metrics genuinely Klaim-specific; crashed on column assumptions)
+
+The first three were caught on pass one. The last two were only surfaced after error propagation was fixed and the "3 consecutive tool errors" message became visible. If I had audited ALL `load_tape()` call sites in pass one (there are 19), I would have found them.
+
+**Rule:** When adding a new `analysis_type` to the platform, audit every tool dispatch helper in `core/agents/tools/` against the new type. Checklist in CLAUDE.md under "Agent Tool Coverage Checklist".
+
+**How to apply:**
+- Grep for `load_tape\(` across `core/agents/tools/` and verify every call site has an early-return guard OR a company-specific branch before it.
+- Graceful-skip strings must NOT start with `Error:` or `Tool error` — the runtime counts those toward the 3-errors circuit breaker (`core/agents/runtime.py:470`). Lead with "X not available for analysis_type=Y — try Z instead".
+- Write a regression test class per analysis_type in `tests/test_agent_tools.py` — pin the graceful-skip contract for every tool handler.
+- Before declaring a new company onboarded, run a full Executive Summary end-to-end — it exercises ~12 tools in one go. If the agent bails with "3 consecutive tool errors", you have coverage gaps.
+
+---
+
+## 2026-04-22 — `max_tokens_per_response` defaults guard cost, not output size — structured JSON needs explicit bumps
+
+**Problem:** `core/agents/definitions/analyst/config.json` sets `max_tokens_per_response: 2000`. This was fine for commentary, tab insights, chat — all short-form prose. When the Executive Summary endpoint started asking the same analyst agent for structured JSON with 6-10 narrative sections, a summary table, a bottom line, and 10 findings, the response easily exceeded 8K tokens. Output truncated mid-string (observed: response ended at `"assessment":` inside a metric object), leaving unparseable JSON. Symptom was "WARNING / Summary generated (unparsed)" even though the agent had finished its reasoning and was successfully writing the JSON.
+
+Worth noting: Claude bills on actual output tokens, not budget. Raising `max_tokens` from 2000 to 16000 costs nothing unless the model legitimately fills the extra space. The default is conservative to cap runaway costs on buggy prompts, not to constrain legitimate long-form output.
+
+**Rule:** `max_tokens_per_response` is a cost guard, not a correctness knob. Structured output (JSON with nested arrays) needs headroom proportional to schema complexity. Budget ~500-1000 tokens per top-level object and error on the high side.
+
+**How to apply:**
+- For any agent call producing structured JSON with N sections × M fields, estimate: `total_tokens ≈ sections × fields × 50`. For exec summary (10 × 15 × 50 ≈ 7500), 16000 is safe headroom.
+- Override per-call using `_run_agent_sync(..., max_tokens_per_response=16000)` or `config.max_tokens_per_response = 16000` — don't change the global default.
+- Test failure mode: if you see JSON ending at a mid-field `"key":` position, it's truncation not agent error.
+
+---
+
+## 2026-04-22 — Button labels must describe the action, not imply a semantic that contradicts it
+
+**Problem:** ExecutiveSummary.jsx has two buttons side-by-side: a small "Regenerate" (outline) and a gold "Refresh" (prominent). User clicked "Refresh" expecting fresh output; got the same stale cached result. The code:
+
+```jsx
+<button onClick={() => generate(true)}>Regenerate</button>    // ← refresh=true, busts cache
+<button onClick={() => generate(false)}>Refresh</button>      // ← refresh=false, serves cache
+```
+
+The labels mean the opposite of what a user expects:
+- "Refresh" in every other UI means "re-fetch fresh data"
+- "Regenerate" is the explicit cache-bust action here, but it's the smaller/less-prominent button
+
+User clicked the prominent gold button labeled "Refresh" three times during debugging before I noticed the label contradiction. Each click silently served the same cached bad output. If either button had been labeled correctly, we would have saved two deploy cycles.
+
+**Rule:** Button labels must describe the literal action. "Refresh" should always re-fetch or re-compute. If you have both a cache-read and a cache-bust action, label them differently ("Reload from cache" / "Regenerate") or collapse to one button that always busts cache when explicitly clicked.
+
+**How to apply:**
+- When a button controls cache state, verify its label matches the cache action it takes.
+- If the UI has a "prominent" CTA button, it should do the thing users most-likely want. For stale-result screens, that's usually cache-bust.
+- Consider swapping the visual prominence: make the cache-bust button gold/primary, the cache-read button secondary or hidden entirely.
+- (Follow-up for this platform: swap the labels or collapse to one "Regenerate" button on ExecutiveSummary.jsx. Tracked as a UX nit, not a bug.)
+
+---
+
 ## 2026-04-22 — Sync client in an async SSE endpoint freezes the whole event loop
 
 **Problem:** First cut of `get_executive_summary_stream` in `backend/main.py` ran the agent's async generator inline in the asyncio task:

@@ -11,6 +11,58 @@ _Nothing in progress._
 
 ## Completed — 2026-04-22
 
+### Session 33 — Executive Summary hardening: Aajil audit + 5 prompt disciplines — SHIPPED
+
+Starting state: Session 32 shipped the SSE stream endpoint but production revealed three follow-on failures on the Aajil Executive Summary. Each symptom surfaced after fixing the prior one, which is exactly what happens when you don't have error propagation: you keep "fixing" the visible message until the real cause shows up.
+
+**Symptoms encountered (in order):**
+1. `/company/Aajil/KSA/executive-summary` rendered a single POSITIVE "Agent Summary" card dumping raw markdown with literal `**bold**` and `| tables |` — cache-hit from the sync endpoint's fallback.
+2. After the first fix: "WARNING / Summary generated (unparsed)" with raw text ending mid-string at `"assessment":` — agent output truncated by max_tokens.
+3. After the second fix: generic "Stream ended without a result" with no visible error — backend swallowed runtime-yielded error events.
+4. After error propagation fix: "3 consecutive tool errors — stopping to avoid loop" — real error now visible; analyst agent was tripping on unguarded `load_tape(Aajil)` calls.
+
+**Six commits landed:**
+
+1. **`86c12a8` (pre-session)** — `fix(agents)`: Aajil-aware branches for `_get_covenants` (graceful skip — no `compute_aajil_covenants` exists), `_get_deployment` (dispatch to `compute_aajil_traction`), `_get_ageing_breakdown` (dispatch to `compute_aajil_delinquency`). 3 new regression tests in `tests/test_agent_tools.py` `TestAajilHandlerSignatures`.
+
+2. **`b6a9d04`** — `fix(exec-summary)`: JSON contract in sync prompt + robust parser.
+   - Rewrote `generate_agent_executive_summary` sync prompt to mirror stream endpoint's JSON schema (was asking for markdown narrative; fell back to wrapping raw markdown as severity='positive' "Agent Summary" — matching the screenshot exactly).
+   - Added `_parse_agent_exec_summary_response()` helper: strips ```json fences → tries `json.loads()` → falls back to outermost `{...}` substring extraction (handles conversational preamble like "I now have comprehensive data…") → final fallback is severity='warning' 'Summary generated (unparsed)' (never 'positive', never 'Agent Summary').
+   - Both sync (`main.py:2855`) and stream (`main.py:3294`) paths use the helper. Dead code removed.
+   - 8 new `TestParseAgentExecSummaryResponse` tests lock in the extraction paths + "severity never positive on failure" regression.
+
+3. **`9673b22`** — `fix(exec-summary)`: bump analyst `max_tokens_per_response` to 16000 for structured JSON output.
+   - Root cause of symptom #2. Analyst default was 2000 tokens — catastrophically low for 6-10 narrative sections × 300-500 words + findings array. Opus 4.6 supports 32K output; 16K is safely within limits.
+   - `_run_agent_sync()` gained `max_tokens_per_response` override param (mirrors existing `max_turns` override).
+   - Both exec summary call sites bump to 16000; other analyst calls (commentary, tab_insight, chat) keep the 2000 default so runaway cost is capped elsewhere.
+
+4. **`df76558`** — `fix(exec-summary)`: propagate runtime error messages through terminal done.
+   - Root cause of symptom #3. When the runtime yielded `StreamEvent("error", …)` (e.g. tool-loop abort), the backend passed it through as an SSE `error` event but never set `stream_error` — so the terminal `done` payload was `{"ok": false}` with no `error` field. Frontend's `onError` fired with the real message, then `onDone` overwrote it with the fallback "Stream ended without a result".
+   - Backend now captures runtime-yielded errors into `stream_error` so terminal `done` carries the message.
+   - Frontend tracks `errorSet` locally and `onDone` fallback only fires if nothing else surfaced an error.
+   - Strengthened existing `test_agent_error_event_is_forwarded` to assert terminal done carries the propagated message.
+
+5. **`e232d55`** — `fix(agents)`: graceful-skip `_get_dso_analysis` and `_get_dtfc_analysis` on Aajil.
+   - Root cause of symptom #4. Second-pass audit revealed two more tools calling `load_tape(Aajil)` in their `else` branch without guards. Both metrics are Klaim-specific (DSO = days-from-funding, DTFC = days-to-first-cash). Aajil uses installment-based DPD instead.
+   - Both handlers now return hint strings pointing at working alternatives (`get_ageing_breakdown`, `get_cohort_analysis`) so the agent moves on in 1 turn instead of burning 3 on error retries.
+   - Full audit of all 19 `load_tape()` call sites in `analytics.py` — all now properly guarded.
+   - 2 new regression tests lock in the graceful-skip contract including "must not start with `Error:`" (runtime counts those toward the 3-errors circuit breaker).
+
+6. **`abacdcf`** — `feat(exec-summary)`: 5 prompt disciplines + `analytics_coverage` callout.
+   - Full content review of the PDF output (13 pages, Aajil Exec Summary) surfaced 6 content-level issues beyond the rendering bugs: arithmetic drift (gross 4.2M / recoveries 0.9M / net 3.4M doesn't reconcile), "estimated >60%" when computable, silent section substitution (swapped Cohorts for Loss Attribution), platform findings mixed with credit findings (tool gaps + undefined thesis ranked top-3), lenient severity (16.9% recovery = Warning should be Critical), metric reconciliation gaps (298.3M vs 332.3M realised without naming denominators).
+   - NEW: `core/agents/prompts.py` — single source of truth for Executive Summary prompt. Both sync + stream endpoints import `build_executive_summary_prompt()`.
+   - 5 new binding rule sections: ARITHMETIC DISCIPLINE, COMPUTE-DON'T-ESTIMATE, SECTION DISCIPLINE, FINDINGS DISCIPLINE, SEVERITY CALIBRATION.
+   - NEW optional schema field `analytics_coverage` (string). 1-3 sentence callout naming unavailable tools + undefined thesis. Rendered as muted amber block between Bottom Line and Key Findings — distinct from credit severity signals. Parser normalises empty/whitespace/non-string to None so frontend doesn't render placeholder.
+   - Frontend: new `AnalyticsCoverageCallout` component + `analyticsCoverage` state; wired into result handler.
+   - CLAUDE.md: new "Agent Tool Coverage Checklist" (6 items) alongside Methodology checklist — locks in graceful-skip contract, load_tape audit requirement, section_guidance_map per-company expectation.
+   - NEW `tests/test_exec_summary_prompt.py` (20 prompt-contract tests) + 4 new tests in `test_exec_summary_stream.py` covering analytics_coverage pass-through + round-trip.
+
+**Scope answer (user's explicit question):** 6 of 7 content issues are prompt-level and apply to every company. Klaim and SILQ didn't surface them because their tool coverage is fuller — less room for agent drift. Aajil stressed the system with gaps. Same fixes benefit all companies; no per-company prompt changes needed when onboarding (only tool coverage + section_guidance_map entries).
+
+**Final state: 525 passing, 59 skipped, 0 failures** (baseline was 504).
+
+---
+
 ### Session 32 — Executive Summary SSE stream — SHIPPED
 
 User report: Aajil `/executive-summary` returned **HTTP 524** (Cloudflare edge-proxy origin timeout, ~100s on CF Free). Diagnosed: frontend was using `getExecutiveSummaryAgent` (`mode=agent`) which routes to `generate_agent_executive_summary` — analyst agent with `max_turns=20` + internal 120s timeout. Aajil legitimately exceeds 100s because most of its analytics tools crash on Klaim-specific column assumptions, so the agent loops on tool errors. Blocking GET → CF kills connection before agent finishes → 524.
