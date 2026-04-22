@@ -111,6 +111,64 @@ class TestKlaimHandlerSignatures:
         assert "Segment Analysis" in result
 
 
+# ── Aajil handler regression tests (signature correctness) ───────────────
+
+def _aajil_data_available():
+    """Skip real-data tests when the Aajil tape isn't present."""
+    return Path("data/Aajil/KSA").exists() and any(
+        Path("data/Aajil/KSA").glob("*.xlsx")
+    )
+
+
+@pytest.mark.skipif(
+    not _aajil_data_available(),
+    reason="Aajil KSA tape not present in this environment",
+)
+class TestAajilHandlerSignatures:
+    """Regression tests for the Aajil analytics tool handlers.
+
+    These three tools (covenants, deployment, ageing) unconditionally imported
+    Klaim-shaped compute functions (``compute_aajil_covenants`` doesn't exist;
+    ``compute_deployment`` groups by ``Month``; ``compute_ageing`` filters on
+    ``Status == 'Executed'``). The analyst agent looped on ``KeyError`` /
+    ``ImportError`` for ~4 minutes before max_turns when running on Aajil.
+    Same class of bug as session 26's ``0e82f35`` audit — Aajil coverage
+    slipped through.
+
+    Each handler must return a non-empty string without raising.
+    """
+
+    AAJIL = dict(company="Aajil", product="KSA")
+
+    def test_get_covenants_aajil_graceful_skip(self):
+        """Covenants has no compute_aajil_covenants — must return a hint string,
+        not crash with ImportError."""
+        tool = registry.get("analytics.get_covenants")
+        result = tool.handler(**self.AAJIL)
+        assert isinstance(result, str) and result
+        assert "aajil" in result.lower()
+        # Hint should point the agent at a working alternative
+        assert "get_portfolio_summary" in result or "not available" in result.lower()
+
+    def test_get_deployment_aajil(self):
+        """Deployment used to call compute_deployment which groups by 'Month'.
+        Aajil's tape has 'Invoice Date', not 'Month'. Must dispatch to
+        compute_aajil_traction."""
+        tool = registry.get("analytics.get_deployment")
+        result = tool.handler(**self.AAJIL)
+        assert isinstance(result, str) and result
+        assert "Deployment History" in result
+
+    def test_get_ageing_breakdown_aajil(self):
+        """Ageing used to call compute_ageing which filters on
+        Status == 'Executed'. Aajil uses 'Realised Status' with values
+        Realised/Accrued/Written Off. Must dispatch to compute_aajil_delinquency."""
+        tool = registry.get("analytics.get_ageing_breakdown")
+        result = tool.handler(**self.AAJIL)
+        assert isinstance(result, str) and result
+        assert "Portfolio Ageing" in result
+
+
 class TestInternalEventLoopGuard:
     """Verify _run_agent_sync's event-loop guard handles non-main threads.
 

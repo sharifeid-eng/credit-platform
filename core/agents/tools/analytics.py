@@ -356,10 +356,12 @@ def _get_covenants(
         from core.portfolio import compute_klaim_covenants
         result = compute_klaim_covenants(df, mult, ref_date=as_of_date or sel.get("date"))
     elif at == "aajil":
-        df, sel, _ = load_aajil_tape(company, product, snapshot, as_of_date)
-        _, disp, mult = get_currency(company, product, currency)
-        from core.analysis_aajil import compute_aajil_covenants
-        result = compute_aajil_covenants(df, mult)
+        return (
+            "Covenants not available for analysis_type=aajil — no "
+            "compute_aajil_covenants backend function exists yet. "
+            "Try analytics.get_portfolio_summary, analytics.get_cohort_analysis, "
+            "or analytics.get_loss_waterfall instead."
+        )
     else:
         return f"Covenants not available for analysis_type={at}"
 
@@ -516,10 +518,23 @@ def _get_deployment(
     as_of_date: Optional[str] = None,
 ) -> str:
     at = detect_analysis_type(company, product)
+
+    if at == "aajil":
+        df, sel, aux = load_aajil_tape(company, product, snapshot, as_of_date)
+        _, disp, mult = get_currency(company, product, currency)
+        from core.analysis_aajil import compute_aajil_traction
+        result = compute_aajil_traction(df, mult, aux=aux)
+        volume = result.get("volume_monthly", [])
+        lines = [f"Deployment History — {company}/{product}"]
+        for m in volume[-12:]:
+            month = m.get("date", "?")
+            total = format_number(m.get("disbursed_sar"), is_currency=True, currency=disp)
+            deals = m.get("count", 0)
+            lines.append(f"  {month}: {total} ({deals} deals)")
+        return "\n".join(lines)
+
     if at == "silq":
         df, sel, _ = load_silq_tape(company, product, snapshot, as_of_date)
-    elif at == "aajil":
-        df, sel, _ = load_aajil_tape(company, product, snapshot, as_of_date)
     else:
         df, sel = load_tape(company, product, snapshot, as_of_date)
 
@@ -595,6 +610,41 @@ def _get_ageing_breakdown(
     as_of_date: Optional[str] = None,
 ) -> str:
     at = detect_analysis_type(company, product)
+
+    if at == "aajil":
+        df, sel, aux = load_aajil_tape(company, product, snapshot, as_of_date)
+        _, disp, mult = get_currency(company, product, currency)
+        from core.analysis_aajil import compute_aajil_delinquency
+        result = compute_aajil_delinquency(df, mult, aux=aux)
+
+        lines = [f"Portfolio Ageing — {company}/{product}"]
+        lines.append(f"  Total active balance: {format_number(result.get('total_active_balance'), is_currency=True, currency=disp)}")
+        lines.append(f"  Total overdue balance: {format_number(result.get('total_overdue_balance'), is_currency=True, currency=disp)}")
+        lines.append(f"  PAR 1+ inst: {format_number(result.get('par_1_inst'), is_pct=True)}")
+        lines.append(f"  PAR 2+ inst: {format_number(result.get('par_2_inst'), is_pct=True)}")
+        lines.append(f"  PAR 3+ inst: {format_number(result.get('par_3_inst'), is_pct=True)}")
+
+        buckets = result.get("buckets", [])
+        if buckets:
+            lines.append("  Overdue buckets:")
+            for b in buckets:
+                bucket = b.get("bucket", "?")
+                count = b.get("count", 0)
+                balance = format_number(b.get("balance"), is_currency=True, currency=disp)
+                lines.append(f"    {bucket}: {count} deals ({balance})")
+
+        by_type = result.get("by_deal_type", [])
+        if by_type:
+            lines.append("  By deal type:")
+            for t in by_type:
+                dt = t.get("deal_type", "?")
+                active = t.get("active_count", 0)
+                overdue = t.get("overdue_count", 0)
+                pct = format_number(t.get("overdue_pct"), is_pct=True)
+                lines.append(f"    {dt}: {overdue}/{active} overdue ({pct})")
+
+        return "\n".join(lines)
+
     if at == "silq":
         df, sel, _ = load_silq_tape(company, product, snapshot, as_of_date)
     else:
