@@ -3179,6 +3179,10 @@ async def get_executive_summary_stream(
         tool_specs = build_tools_for_agent("analyst")
         config = load_agent_config("analyst", tool_specs=tool_specs)
         config.max_turns = 20
+        # Exec summary emits ~6-10 sections + 5-10 findings as structured JSON;
+        # the analyst default (2000) truncates mid-string, making the response
+        # unparseable. 16000 gives ~12K words of headroom.
+        config.max_tokens_per_response = 16000
         session = AgentSession.create("analyst", metadata={
             "company": company, "product": product, "type": "executive_summary",
         })

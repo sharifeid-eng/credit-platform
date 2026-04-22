@@ -20,11 +20,23 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
-def _run_agent_sync(agent_name: str, prompt: str, metadata: dict, max_turns: int = None) -> str:
+def _run_agent_sync(
+    agent_name: str,
+    prompt: str,
+    metadata: dict,
+    max_turns: int = None,
+    max_tokens_per_response: int = None,
+) -> str:
     """Run an agent synchronously (blocking). Returns the text response.
 
     Used for internal agent invocations where we need the result
     before returning the HTTP response (cached endpoints).
+
+    ``max_tokens_per_response`` overrides the agent config default (typically
+    2000). Long-form structured output like the Executive Summary JSON
+    (~6-10 sections + 5-10 findings) easily overflows 2000 tokens mid-string,
+    producing unparseable responses — callers emitting large JSON should
+    bump this to 8000-16000.
     """
     from core.agents.config import load_agent_config
     from core.agents.runtime import AgentRunner
@@ -35,6 +47,8 @@ def _run_agent_sync(agent_name: str, prompt: str, metadata: dict, max_turns: int
     config = load_agent_config(agent_name, tool_specs=tool_specs)
     if max_turns is not None:
         config.max_turns = max_turns
+    if max_tokens_per_response is not None:
+        config.max_tokens_per_response = max_tokens_per_response
 
     session = AgentSession.create(agent_name, metadata=metadata)
     runner = AgentRunner(config)
@@ -230,6 +244,7 @@ def generate_agent_executive_summary(
         prompt,
         metadata={"company": company, "product": product, "type": "executive_summary"},
         max_turns=20,  # Executive summary needs many tool calls
+        max_tokens_per_response=16000,  # Structured JSON with 6-10 sections + findings
     )
 
 
