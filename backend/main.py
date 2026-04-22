@@ -408,6 +408,54 @@ def _ai_cache_put(cache_path: str, data: dict) -> None:
     except OSError:
         pass  # Silently fail — caching is best-effort
 
+
+def _parse_agent_exec_summary_response(response_text: str):
+    """Parse the analyst agent's executive-summary text into (narrative, findings, ok).
+
+    The agent is prompted to return a JSON object with ``narrative`` + ``findings``,
+    but will sometimes prepend conversational preamble ("I now have comprehensive
+    data…") or wrap the JSON in ```json fences. Tries, in order:
+      1. Strip whitespace + ```json/``` fences, then json.loads the whole text.
+      2. Extract the outermost ``{…}`` substring, then json.loads that.
+      3. Fall back to a single "Summary generated (unparsed)" warning finding
+         carrying the raw text, so the analyst sees what came back.
+
+    Legacy list-shape responses (bare findings array) are accepted as
+    findings-only (no narrative).
+    """
+    text = (response_text or "").strip()
+    if not text:
+        return None, [], False
+
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+
+    parsed = None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find('{')
+        end = text.rfind('}')
+        if start >= 0 and end > start:
+            try:
+                parsed = json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                parsed = None
+
+    if isinstance(parsed, list):
+        return None, parsed, True
+    if isinstance(parsed, dict):
+        return parsed.get("narrative"), parsed.get("findings", []), True
+
+    return None, [{
+        "rank": 1, "severity": "warning",
+        "title": "Summary generated (unparsed)",
+        "explanation": response_text or "(empty response)",
+        "data_points": [], "tab": "overview",
+    }], False
+
+
 def _extract_questions(text):
     """Extract numbered questions from AI analysis text."""
     questions = []
@@ -2790,15 +2838,7 @@ def get_executive_summary(company: str, product: str,
             at = _get_analysis_type(company, product)
             guidance = section_guidance_map.get(at, None)
             summary_text = generate_agent_executive_summary(company, product, snapshot, currency, as_of_date, guidance)
-            # Try to parse as JSON (agent may return structured output)
-            try:
-                parsed = json.loads(summary_text.strip().removeprefix('```json').removeprefix('```').removesuffix('```').strip())
-                narrative = parsed.get('narrative', None)
-                findings = parsed.get('findings', [])
-            except (json.JSONDecodeError, AttributeError):
-                narrative = None
-                findings = [{'rank': 1, 'severity': 'positive', 'title': 'Agent Summary',
-                             'explanation': summary_text, 'data_points': [], 'tab': 'overview'}]
+            narrative, findings, _parsed_ok = _parse_agent_exec_summary_response(summary_text)
             result = {
                 'narrative': narrative,
                 'findings': findings,
@@ -3125,7 +3165,8 @@ async def get_executive_summary_stream(
         "RULES:\n"
         "- Every claim must cite a specific number obtained from a tool call.\n"
         "- 6-10 narrative sections, 5-10 findings ranked by business impact.\n"
-        "- Professional IC tone. Return ONLY the JSON object."
+        "- Plain prose in all text fields — no markdown syntax (no **bold**, no | tables |, no --- separators).\n"
+        "- Professional IC tone. Start your response with `{` — no preamble, no fences, no closing prose."
     )
 
     async def _stream():
@@ -3231,27 +3272,8 @@ async def get_executive_summary_stream(
                     # duplicates meaning.
                     agent_done_data = dict(event.data or {})
 
-                    response_text = "".join(full_text).strip()
-                    if response_text.startswith("```"):
-                        response_text = re.sub(r"^```(?:json)?\s*", "", response_text)
-                        response_text = re.sub(r"\s*```$", "", response_text)
-
-                    try:
-                        parsed = json.loads(response_text)
-                        if isinstance(parsed, list):
-                            narrative = None
-                            findings = parsed
-                        else:
-                            narrative = parsed.get("narrative")
-                            findings = parsed.get("findings", [])
-                    except json.JSONDecodeError:
-                        narrative = None
-                        findings = [{
-                            "rank": 1, "severity": "warning",
-                            "title": "Summary generated (unparsed)",
-                            "explanation": response_text or "(empty response)",
-                            "data_points": [], "tab": "overview",
-                        }]
+                    response_text = "".join(full_text)
+                    narrative, findings, _parsed_ok = _parse_agent_exec_summary_response(response_text)
 
                     # Layer 2.5 citations — same as sync endpoint
                     _asset_class_sources: list = []

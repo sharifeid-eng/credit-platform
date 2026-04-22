@@ -201,19 +201,28 @@ def generate_agent_executive_summary(
         + (f", as_of_date={as_of_date}" if as_of_date else "")
         + "]\n\n"
         "Generate a comprehensive executive summary for this portfolio company. "
-        "For each section, pull the relevant analytics data and search the data room "
-        "for supporting evidence. Cross-reference with the investment thesis if one exists.\n\n"
-        f"{guidance}\n\n"
-        "For each section:\n"
-        "- Lead with 2-3 key metrics (cite specific numbers)\n"
-        "- Provide analytical commentary (what the numbers mean)\n"
-        "- Flag any warnings or positive signals\n"
-        "- Reference data room sources where relevant\n\n"
-        "At the end, provide:\n"
-        "- A summary table of key metrics with RAG status (Healthy/Acceptable/Warning/Critical)\n"
-        "- A bottom-line verdict with 3-5 specific diligence items\n"
-        "- 5-10 ranked findings (severity: critical/warning/positive) with the tab to view them\n\n"
-        "Professional IC-ready tone. Every claim must be backed by a specific number from a tool call."
+        "For each section, pull the relevant analytics data via tools and search the "
+        "data room for supporting evidence. Cross-reference with the investment thesis "
+        "if one exists.\n\n"
+        f"Sections: {guidance}\n\n"
+        "Return your output as a JSON object (no prose outside the JSON, no markdown fences):\n"
+        "{\n"
+        '  "narrative": {\n'
+        '    "sections": [ {"title": "...", "content": "paragraphs separated by \\n\\n", '
+        '"conclusion": "...", '
+        '"metrics": [{"label": "...", "value": "...", "assessment": "healthy|acceptable|warning|critical|monitor"}]} ],\n'
+        '    "summary_table": [ {"metric": "...", "value": "...", '
+        '"assessment": "Healthy|Acceptable|Warning|Critical|Monitor"} ],\n'
+        '    "bottom_line": "..."\n'
+        "  },\n"
+        '  "findings": [ {"rank": 1, "severity": "critical|warning|positive", '
+        '"title": "...", "explanation": "...", "data_points": ["..."], "tab": "tab-slug"} ]\n'
+        "}\n\n"
+        "RULES:\n"
+        "- Every claim must cite a specific number obtained from a tool call.\n"
+        "- 6-10 narrative sections, 5-10 findings ranked by business impact.\n"
+        "- Plain prose in all text fields — no markdown syntax (no **bold**, no | tables |, no --- separators).\n"
+        "- Professional IC tone. Start your response with `{` — no preamble, no fences, no closing prose."
     )
 
     return _run_agent_sync(

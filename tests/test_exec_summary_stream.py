@@ -331,3 +331,104 @@ class TestAgentPath:
 
         done_data = next(d for t, d in events if t == "done")
         assert done_data["ok"] is False
+
+
+# ── Parser helper tests ─────────────────────────────────────────────────────
+
+class TestParseAgentExecSummaryResponse:
+    """Covers `_parse_agent_exec_summary_response`.
+
+    The helper backs both the sync and SSE Executive Summary paths; the
+    Aajil regression (session 2026-04-22) where the agent dumped markdown
+    with a conversational preamble ("I now have comprehensive data…")
+    caused `json.loads()` to fail and the result was wrapped as a
+    single POSITIVE "Agent Summary" finding showing raw `**bold**`
+    syntax in the UI. These tests pin each extraction path the helper
+    now handles.
+    """
+
+    def _call(self, text):
+        from backend.main import _parse_agent_exec_summary_response
+        return _parse_agent_exec_summary_response(text)
+
+    def test_clean_json_parses(self):
+        payload = {
+            "narrative": {"sections": [{"title": "T", "content": "c"}],
+                          "summary_table": [], "bottom_line": "v"},
+            "findings": [{"rank": 1, "severity": "positive", "title": "t",
+                          "explanation": "e", "data_points": [], "tab": "overview"}],
+        }
+        narr, finds, ok = self._call(json.dumps(payload))
+        assert ok is True
+        assert narr["bottom_line"] == "v"
+        assert finds[0]["title"] == "t"
+
+    def test_json_fence_stripped(self):
+        payload = {"narrative": {"bottom_line": "ok"}, "findings": []}
+        fenced = "```json\n" + json.dumps(payload) + "\n```"
+        narr, finds, ok = self._call(fenced)
+        assert ok is True
+        assert narr["bottom_line"] == "ok"
+
+    def test_conversational_preamble_skipped(self):
+        """The Aajil bug: agent prepends 'I now have comprehensive data across
+        all dimensions. Let me compile the executive summary.' before the JSON.
+        Helper must recover by extracting the outermost {…} substring."""
+        payload = {"narrative": {"bottom_line": "verdict"},
+                   "findings": [{"rank": 1, "severity": "positive", "title": "t",
+                                 "explanation": "e", "data_points": [], "tab": "overview"}]}
+        text = (
+            "I now have comprehensive data across all dimensions. "
+            "Let me compile the executive summary.\n\n"
+            + json.dumps(payload)
+        )
+        narr, finds, ok = self._call(text)
+        assert ok is True, "extraction should succeed despite preamble"
+        assert narr["bottom_line"] == "verdict"
+        assert finds[0]["title"] == "t"
+
+    def test_closing_prose_stripped(self):
+        """Trailing prose after the JSON must not break extraction."""
+        payload = {"narrative": {"bottom_line": "v"}, "findings": []}
+        text = json.dumps(payload) + "\n\nLet me know if you need more detail."
+        narr, finds, ok = self._call(text)
+        assert ok is True
+        assert narr["bottom_line"] == "v"
+
+    def test_legacy_list_shape_accepted(self):
+        """Pre-narrative format returned a bare findings list — still supported."""
+        findings_list = [{"rank": 1, "severity": "positive", "title": "t",
+                          "explanation": "e", "data_points": [], "tab": "overview"}]
+        narr, finds, ok = self._call(json.dumps(findings_list))
+        assert ok is True
+        assert narr is None
+        assert len(finds) == 1
+
+    def test_completely_unparseable_falls_back(self):
+        """Pure markdown with no {…} substring → warning fallback with raw text."""
+        text = "## Portfolio Overview\n\n**Collection rate:** 87.3%\n\n| Metric | Value |\n|---|---|"
+        narr, finds, ok = self._call(text)
+        assert ok is False
+        assert narr is None
+        assert len(finds) == 1
+        assert finds[0]["severity"] == "warning"
+        assert finds[0]["title"] == "Summary generated (unparsed)"
+        # Raw text preserved for analyst debugging
+        assert "Portfolio Overview" in finds[0]["explanation"]
+
+    def test_empty_string_fallback(self):
+        narr, finds, ok = self._call("")
+        assert ok is False
+        assert narr is None
+        assert finds == []  # Empty input produces no warning finding either
+
+    def test_severity_never_positive_on_failure(self):
+        """Regression for the session 2026-04-22 bug — the sync endpoint
+        used to mislabel parse failures as severity='positive' with title
+        'Agent Summary', which rendered as a teal POSITIVE card misleading
+        the analyst into thinking the markdown dump was a success. Parse
+        failures must always produce severity='warning'."""
+        narr, finds, ok = self._call("not JSON at all, just prose")
+        assert ok is False
+        assert finds[0]["severity"] == "warning"
+        assert finds[0]["title"] != "Agent Summary"
