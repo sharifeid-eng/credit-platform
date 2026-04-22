@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
-import { getExecutiveSummaryAgent as getExecutiveSummary } from '../services/api'
+import { streamExecutiveSummary } from '../services/api'
 import useBreakpoint from '../hooks/useBreakpoint'
 
 const SEVERITY_STYLES = {
@@ -155,6 +155,86 @@ function SummaryTable({ rows }) {
   )
 }
 
+function StreamProgressPanel({ stage, history, elapsed, fromCache }) {
+  // Renders a live terminal-ish timeline of agent tool calls so the analyst
+  // can see what the model is doing. The final entry is marked "active"
+  // until the next tool_call lands. See ExecutiveSummary.generate for the
+  // source of truth on stage strings.
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0')
+  const ss = String(elapsed % 60).padStart(2, '0')
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      style={{
+        padding: '20px 24px', borderRadius: 8,
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        fontFamily: 'var(--font-mono)',
+      }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        paddingBottom: 12, marginBottom: 12,
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%', background: fromCache ? '#2DD4BF' : '#C9A84C',
+          boxShadow: `0 0 0 3px ${fromCache ? 'rgba(45,212,191,0.15)' : 'rgba(201,168,76,0.15)'}`,
+          animation: fromCache ? 'none' : 'pulse 1.5s ease-in-out infinite',
+        }} />
+        <span style={{
+          fontSize: 11, fontWeight: 700, color: fromCache ? '#2DD4BF' : '#C9A84C',
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+        }}>
+          {fromCache ? 'Cached' : 'Analyst Agent Running'}
+        </span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          {mm}:{ss}
+        </span>
+      </div>
+
+      {/* Current stage — large and animated */}
+      {stage && (
+        <div style={{
+          fontSize: 14, color: 'var(--text-primary)', fontWeight: 500,
+          marginBottom: history.length > 0 ? 16 : 4,
+        }}>
+          <span style={{ color: 'var(--gold)', marginRight: 8 }}>▸</span>
+          {stage}
+          <span style={{ marginLeft: 4, animation: 'blink 1s step-end infinite', color: 'var(--gold)' }}>_</span>
+        </div>
+      )}
+
+      {/* Prior stages */}
+      {history.length > 1 && (
+        <div style={{
+          fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.9,
+          maxHeight: 220, overflowY: 'auto',
+        }}>
+          {history.slice(0, -1).map((h, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-faint)', fontSize: 10, minWidth: 14 }}>✓</span>
+              <span>{h.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!fromCache && elapsed > 45 && (
+        <div style={{
+          marginTop: 14, paddingTop: 12,
+          borderTop: '1px solid var(--border)',
+          fontSize: 10, color: 'var(--text-faint)', fontStyle: 'italic',
+        }}>
+          Executive summaries typically complete in 60–120 seconds. The stream is
+          kept alive with heartbeats so long runs won't be cut off.
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 function BottomLine({ text }) {
   if (!text) return null
   return (
@@ -198,28 +278,137 @@ export default function ExecutiveSummary() {
   const [assetClassSources, setAssetClassSources] = useState([])
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
 
+  // Live streaming progress — mirrors the agent's tool-call timeline so the
+  // analyst watching the page can see what the model is doing rather than a
+  // mystery spinner for 60-90s.
+  const [stage, setStage] = useState(null)        // "Pulling portfolio summary…"
+  const [stageHistory, setStageHistory] = useState([]) // completed stages for the live panel
+  const [elapsed, setElapsed] = useState(0)
+  const [fromCache, setFromCache] = useState(false)
+  const abortRef = useRef(null)
+  const elapsedTimerRef = useRef(null)
+
   const basePath = `/company/${company}/${product}`
 
-  const [fromCache, setFromCache] = useState(false)
+  // Friendly labels for agent tool names — keeps the stream panel readable.
+  // Unknown tools fall back to their description (which the runtime already
+  // prettifies). Keys cover both short and fully-qualified forms.
+  const TOOL_LABELS = {
+    get_portfolio_summary:      'Pulling portfolio summary',
+    get_collection_velocity:    'Analysing collection velocity',
+    get_deployment:             'Reviewing capital deployment',
+    get_denial_trend:           'Checking denial trend',
+    get_ageing_breakdown:       'Inspecting ageing buckets',
+    get_returns_analysis:       'Computing returns & margins',
+    get_concentration:          'Measuring concentration risk',
+    get_cohort_analysis:        'Walking vintage cohorts',
+    get_covenants:              'Checking covenant compliance',
+    get_loss_waterfall:         'Building loss waterfall',
+    get_par_analysis:           'Assessing portfolio at risk',
+    get_underwriting_drift:     'Detecting underwriting drift',
+    get_segment_analysis:       'Cutting portfolio segments',
+    get_cdr_ccr:                'Running CDR / CCR',
+    get_metric_trend:           'Pulling metric time-series',
+    search_dataroom:            'Searching the data room',
+    search_dataroom_documents:  'Searching the data room',
+    search_dataroom_knowledge_base: 'Searching knowledge base',
+    get_thesis:                 'Cross-referencing investment thesis',
+    get_company_mind:           'Pulling platform memory',
+    get_master_mind:            'Pulling fund-level lessons',
+  }
+  const labelForTool = (tool, fallback) => {
+    if (!tool) return fallback || 'Thinking'
+    // Agent runtime strips its own prefixes, but be defensive.
+    const key = tool.replace(/^analytics_|^dataroom_|^mind_|^memo_|^portfolio_|^compliance_|^computation_/, '')
+    return TOOL_LABELS[key] || fallback || `Running ${key.replace(/_/g, ' ')}`
+  }
 
-  const generate = async (refresh = false) => {
+  // Cleanup on unmount: cancel stream + kill elapsed timer
+  useEffect(() => () => {
+    if (abortRef.current) abortRef.current.abort()
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
+  }, [])
+
+  const generate = (refresh = false) => {
     if (isBackdated) return
+    if (abortRef.current) abortRef.current.abort()
+
     setLoading(true)
     setError(null)
-    try {
-      const snap = snapshot?.filename || snapshot
-      const data = await getExecutiveSummary(company, product, snap, currency, asOfDate, { refresh })
-      setNarrative(data.narrative || null)
-      setFindings(data.findings || [])
-      setFromCache(!!data.cached && !refresh)
-      setMeta({ generated_at: data.generated_at, coverage: data.context_coverage, cached_at: data.cached_at })
-      // D2: collapse Layer 2.5 external sources into a footer
-      setAssetClassSources(Array.isArray(data.asset_class_sources) ? data.asset_class_sources : [])
-    } catch (e) {
-      setError(e.response?.data?.detail || e.message || 'Failed to generate summary')
-    } finally {
-      setLoading(false)
+    setStage('Starting…')
+    setStageHistory([])
+    setElapsed(0)
+    setFromCache(false)
+    if (refresh) {
+      // On explicit refresh, clear prior content so the user sees the rebuild.
+      setNarrative(null)
+      setFindings(null)
+      setMeta(null)
     }
+
+    // Tick the elapsed counter once per second so the UI feels alive under
+    // CF's idle proxy; the heartbeat also feeds this.
+    const startedAt = Date.now()
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+
+    // Local flag (not state) — React closures in the callback set below
+    // would otherwise snapshot stale `findings` when onDone fires.
+    let resultEmitted = false
+
+    const finish = () => {
+      setLoading(false)
+      setStage(null)
+      if (elapsedTimerRef.current) {
+        clearInterval(elapsedTimerRef.current)
+        elapsedTimerRef.current = null
+      }
+      abortRef.current = null
+    }
+
+    const snap = snapshot?.filename || snapshot
+    abortRef.current = streamExecutiveSummary(
+      company, product, snap, currency, asOfDate,
+      {
+        onCached: () => { setFromCache(true); setStage('Serving cached summary') },
+        onToolCall: ({ tool, description }) => {
+          const label = labelForTool(tool, description)
+          setStage(label)
+          setStageHistory(prev => [...prev, { label, at: Date.now() }])
+        },
+        onText: () => {
+          // First text delta = agent is writing the final JSON response.
+          setStage('Writing narrative & findings')
+        },
+        onBudgetWarning: ({ pct }) => {
+          setStage(`Token budget ${pct}% — wrapping up`)
+        },
+        onResult: (data) => {
+          resultEmitted = true
+          setNarrative(data.narrative || null)
+          setFindings(data.findings || [])
+          setMeta({
+            generated_at: data.generated_at,
+            as_of_date: data.as_of_date,
+            mode: data.mode,
+          })
+          setAssetClassSources(Array.isArray(data.asset_class_sources) ? data.asset_class_sources : [])
+        },
+        onError: (err) => {
+          setError(err?.message || 'Failed to generate summary')
+          finish()
+        },
+        onDone: (d) => {
+          if (d && d.ok === false && !resultEmitted) {
+            setError(d.error || 'Stream ended without a result')
+          }
+          finish()
+        },
+        onAbort: () => { finish() },
+      },
+      { refresh },
+    )
   }
 
   const tabUrl = (slug) => {
@@ -299,13 +488,25 @@ export default function ExecutiveSummary() {
       </div>
 
       {/* Meta info */}
-      {meta && (
+      {meta && !loading && (
         <div style={{
           display: 'flex', gap: 16, marginBottom: 20,
           fontSize: 10, color: 'var(--text-muted)', alignItems: 'center',
+          flexWrap: 'wrap',
         }}>
-          <span>Analyzed {meta.coverage} metrics</span>
-          <span>Generated {new Date(meta.generated_at).toLocaleString()}</span>
+          {meta.generated_at && (
+            <span>Generated {new Date(meta.generated_at).toLocaleString()}</span>
+          )}
+          {meta.mode === 'agent' && (
+            <span style={{
+              fontSize: 9, fontWeight: 600, color: 'var(--text-faint)',
+              background: 'rgba(45,212,191,0.08)', padding: '2px 8px',
+              borderRadius: 3, letterSpacing: '0.06em',
+              border: '1px solid rgba(45,212,191,0.15)',
+            }}>
+              AGENT
+            </span>
+          )}
           {fromCache && (
             <span style={{
               fontSize: 9, fontWeight: 600, color: 'var(--text-faint)',
@@ -346,35 +547,14 @@ export default function ExecutiveSummary() {
         </div>
       )}
 
-      {/* Loading skeleton */}
+      {/* Loading — live agent stream panel */}
       {loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Narrative skeleton - taller blocks */}
-          {[1,2,3,4].map(i => (
-            <div key={`n${i}`} style={{
-              height: 160, borderRadius: 8,
-              background: 'var(--bg-surface)', border: '1px solid var(--border)',
-              animation: 'pulse 1.5s ease-in-out infinite',
-              opacity: 0.9 - i * 0.05,
-            }} />
-          ))}
-          {/* Summary table skeleton */}
-          <div style={{
-            height: 120, borderRadius: 8,
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            animation: 'pulse 1.5s ease-in-out infinite',
-            opacity: 0.6,
-          }} />
-          {/* Findings skeleton - shorter blocks */}
-          {[1,2,3].map(i => (
-            <div key={`f${i}`} style={{
-              height: 80, borderRadius: 8,
-              background: 'var(--bg-surface)', border: '1px solid var(--border)',
-              animation: 'pulse 1.5s ease-in-out infinite',
-              opacity: 0.5 - i * 0.05,
-            }} />
-          ))}
-        </div>
+        <StreamProgressPanel
+          stage={stage}
+          history={stageHistory}
+          elapsed={elapsed}
+          fromCache={fromCache}
+        />
       )}
 
       {/* Narrative Analysis */}
@@ -492,6 +672,7 @@ export default function ExecutiveSummary() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.3; } }
+        @keyframes blink { 50% { opacity: 0; } }
       `}</style>
     </div>
   )

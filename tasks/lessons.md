@@ -3,6 +3,63 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Sync client in an async SSE endpoint freezes the whole event loop
+
+**Problem:** First cut of `get_executive_summary_stream` in `backend/main.py` ran the agent's async generator inline in the asyncio task:
+
+```python
+async def _producer():
+    async for event in runner.stream(prompt, session):  # <-- blocks event loop
+        await queue.put(event)
+```
+
+Browser test on Aajil: stage stuck at "Starting…" for 83s while the elapsed counter kept ticking. Backend log showed tool calls actually executing (agent was alive and burning Claude turns). But ZERO events reached the client until that first Claude turn's HTTP socket finally freed. Heartbeats also never fired — the 20s `: keepalive\n\n` emitter never got a chance to run. Even `/health` on the same uvicorn instance timed out while a stream was in flight.
+
+Root cause: `AgentRunner.stream()` is declared `async`, but its hot path is `with self._get_client().messages.stream(...)` which is the SYNC Anthropic client. Sync httpx call = blocks the thread until the first response byte arrives. In an async handler on a single-worker uvicorn, that's the entire event loop. Producer can't yield, consumer can't drain, heartbeats can't fire, other requests stall.
+
+**Why I didn't spot it sooner:** `backend/agents.py::_stream_agent` uses the same `async for event in agent.stream(...)` pattern AND works in production. I copied that pattern thinking it was correct. But memo and analyst endpoints run at CF-proxy scale where a burst of concurrent requests masks single-request event-loop starvation, and their agent calls are shorter (<30s, no heartbeat needed). Aajil's exec summary with 20-turn cap + broken tools = the degenerate case that exposes the latent bug. The fix already existed in the codebase — `memo_generate_stream` offloads its pipeline to a `ThreadPoolExecutor` and uses `loop.call_soon_threadsafe` to push progress events back — but the analyst/stream endpoint had quietly been shipping the broken pattern.
+
+**Fix:** Run the async generator in a dedicated thread with its own event loop, push events back to the main loop's `asyncio.Queue` via `loop.call_soon_threadsafe`:
+
+```python
+loop = asyncio.get_event_loop()
+stop_event = threading.Event()
+
+def _thread_push(item):
+    try:
+        loop.call_soon_threadsafe(queue.put_nowait, item)
+    except RuntimeError:  # loop closed — client gone
+        pass
+
+def _producer_thread():
+    t_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(t_loop)
+    try:
+        async def _drain():
+            async for event in runner.stream(prompt, session):
+                if stop_event.is_set():
+                    break
+                _thread_push(event)
+        t_loop.run_until_complete(_drain())
+    finally:
+        _thread_push(SENTINEL)
+        t_loop.close()
+
+threading.Thread(target=_producer_thread, daemon=True).start()
+```
+
+After the fix: first tool_call event reached the browser at 00:06. 15+ stages rendered live during a 4m24s run — well past CF's 100s cap that produced the original 524.
+
+**Rule:** If an async generator touches ANY synchronous I/O (sync HTTP client, sync DB driver, blocking C extension), it CANNOT be awaited inline in a FastAPI async handler. Offload to a thread. Treat the rule as binding for any agent/streaming endpoint that uses the `anthropic.Anthropic` (sync) client rather than `anthropic.AsyncAnthropic`.
+
+**How to apply:**
+- When adding a new SSE endpoint that runs an agent or any `anthropic.Anthropic` call: use the thread-offload pattern from `memo_generate_stream` OR the one documented above for `get_executive_summary_stream`. Never `async for event in runner.stream(...)` directly in an asyncio task.
+- `backend/agents.py::_stream_agent` is currently using the broken pattern — it works in the common case because analyst/compliance runs are short, but a long one will starve the event loop. Follow-up: refactor it to the same thread-offload pattern as a preventative fix.
+- When debugging "stream shows X for Y seconds then resumes" or "heartbeat never fires", check whether a sync call sits inside an async generator somewhere in the call chain. Event-loop starvation always looks like batched, bursty output.
+- Browser-side elapsed counters / connection-alive indicators lie about this. They're driven by `setInterval` in the client, not server byte flow. The only honest server-liveness signal is "did a new event or comment line arrive in the network tab?" — verify via Chrome DevTools → Network → response stream, not by watching the UI clock tick.
+
+---
+
 ## 2026-04-22 — Runtime-written state files must be gitignored, not committed
 
 **Problem:** Session 31 EoD committed `data/klaim/UAE_healthcare/covenant_history.json` and `data/klaim/mind/relations.json` (in commit `4b05dcc` — "chore: runtime side-effects"). My reasoning was: "they're tracked files dirty in the working tree; EoD says commit the data artifacts; so commit them." First prod redeploy after the push failed:

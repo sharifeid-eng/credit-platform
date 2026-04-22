@@ -81,6 +81,93 @@ export const postAgentCompliance = (co, prod, snap, cur) =>
 export const getExecutiveSummary = (co, prod, snap, cur, asOf, { refresh = false } = {}) =>
   api.get(`/companies/${co}/products/${prod}/ai-executive-summary`, { params: { ...p(snap, cur, asOf), ...(refresh ? { refresh: true } : {}) } }).then(r => r.data);
 
+// SSE streaming variant — runs the executive-summary agent and forwards events
+// (start/cached/text/tool_call/tool_result/result/error/done) to `handlers`.
+// Returns an AbortController the caller can use to cancel.
+//
+// We use fetch + ReadableStream (not EventSource) so we can: (a) send the
+// CF_Authorization cookie via credentials:'include' and (b) cancel cleanly
+// via AbortController. EventSource lacks both.
+export function streamExecutiveSummary(co, prod, snap, cur, asOf, handlers = {}, { refresh = false } = {}) {
+  const params = new URLSearchParams();
+  if (snap) params.set('snapshot', snap);
+  if (cur) params.set('currency', cur);
+  if (asOf) params.set('as_of_date', asOf);
+  if (refresh) params.set('refresh', 'true');
+  const url = `${API_BASE}/companies/${co}/products/${prod}/ai-executive-summary/stream?${params.toString()}`;
+
+  const abort = new AbortController();
+
+  (async () => {
+    try {
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'text/event-stream' },
+        credentials: 'include',
+        signal: abort.signal,
+      });
+      if (!resp.ok) {
+        let detail = '';
+        try { detail = await resp.text(); } catch { /* ignore */ }
+        handlers.onError?.(new Error(`HTTP ${resp.status}${detail ? ` — ${detail.slice(0, 200)}` : ''}`));
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE message = everything up to a blank line (\n\n).
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+
+        for (const raw of events) {
+          const msg = raw.trimStart();
+          // Comment heartbeat (": keepalive") — ignore per SSE spec, but
+          // let the caller know we're still alive so the UI can tick a
+          // "stream alive" indicator if it wants.
+          if (msg.startsWith(':')) { handlers.onHeartbeat?.(); continue; }
+
+          let eventType = 'message';
+          let dataLines = [];
+          for (const line of msg.split('\n')) {
+            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+            else if (line.startsWith('data: ')) dataLines.push(line.slice(6));
+          }
+          if (dataLines.length === 0) continue;
+
+          let data;
+          try { data = JSON.parse(dataLines.join('\n')); }
+          catch { data = { raw: dataLines.join('\n') }; }
+
+          switch (eventType) {
+            case 'start':         handlers.onStart?.(data); break;
+            case 'cached':        handlers.onCached?.(data); break;
+            case 'text':          handlers.onText?.(data); break;
+            case 'tool_call':     handlers.onToolCall?.(data); break;
+            case 'tool_result':   handlers.onToolResult?.(data); break;
+            case 'budget_warning': handlers.onBudgetWarning?.(data); break;
+            case 'result':        handlers.onResult?.(data); break;
+            case 'error':         handlers.onError?.(new Error(data.message || 'stream error')); break;
+            case 'done':          handlers.onDone?.(data); break;
+            default:              handlers.onEvent?.(eventType, data);
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') handlers.onAbort?.();
+      else handlers.onError?.(err);
+    }
+  })();
+
+  return abort;
+}
+
 export const getAICacheStatus    = (co, prod, snap, asOf) =>
   api.get(`/companies/${co}/products/${prod}/ai-cache-status`, { params: { snapshot: snap, ...(asOf ? { as_of_date: asOf } : {}) } }).then(r => r.data);
 

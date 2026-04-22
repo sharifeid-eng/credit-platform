@@ -11,6 +11,40 @@ _Nothing in progress._
 
 ## Completed — 2026-04-22
 
+### Session 32 — Executive Summary SSE stream — SHIPPED
+
+User report: Aajil `/executive-summary` returned **HTTP 524** (Cloudflare edge-proxy origin timeout, ~100s on CF Free). Diagnosed: frontend was using `getExecutiveSummaryAgent` (`mode=agent`) which routes to `generate_agent_executive_summary` — analyst agent with `max_turns=20` + internal 120s timeout. Aajil legitimately exceeds 100s because most of its analytics tools crash on Klaim-specific column assumptions, so the agent loops on tool errors. Blocking GET → CF kills connection before agent finishes → 524.
+
+Options presented: (1) revert to non-agent path (1-line, ships in minutes), (2) cut `max_turns` to 12, (3) convert endpoint to SSE with heartbeats like `memo_generate_stream`. User chose (3) with "option b" — full stage events, not just a spinner.
+
+**Shipped:**
+
+1. **[backend/main.py](backend/main.py) — new `GET /companies/{co}/products/{p}/ai-executive-summary/stream`** SSE endpoint.
+   - Cache-hit fast path: emits `start → cached → result → done` instantly (still SSE so the client has one code path).
+   - Cache-miss: builds the agent prompt (extended with an explicit JSON output contract so we can parse narrative+findings after streaming), runs the `analyst` agent in a **dedicated thread with its own event loop**, pushes `StreamEvent`s to an `asyncio.Queue` via `loop.call_soon_threadsafe`. Drain loop emits `: keepalive\n\n` every 20s of idle time. This thread offload was the critical fix — without it, the sync Anthropic client blocked uvicorn's main event loop, freezing both heartbeats AND the queue drain (symptom during browser test: stage stuck at "Starting…" for 83s while backend log showed tool calls executing).
+   - Intercepts the runtime's `done`, parses accumulated text as JSON, writes to cache (same `_ai_cache_key` as sync endpoint so both share state), emits a structured `result` event, then emits a single terminal `done` with `turns_used` + token counts.
+   - Preserves the existing sync endpoint untouched (analysts on non-agent paths still work).
+
+2. **[frontend/src/services/api.js](frontend/src/services/api.js) — new `streamExecutiveSummary(co, prod, snap, cur, asOf, handlers, {refresh})`** helper. `fetch` + `ReadableStream` (not `EventSource` — need cookie credentials + AbortController). Parses SSE frames, dispatches to per-event handlers (`onStart`, `onCached`, `onText`, `onToolCall`, `onToolResult`, `onBudgetWarning`, `onResult`, `onError`, `onDone`, `onHeartbeat`, `onAbort`). Returns the `AbortController` for caller cancellation.
+
+3. **[frontend/src/pages/ExecutiveSummary.jsx](frontend/src/pages/ExecutiveSummary.jsx) — rewrote `generate()` to consume the stream.**
+   - Replaced the pulsing skeleton with a new `StreamProgressPanel` — terminal-style live timeline: current stage (with blinking cursor + gold arrow marker) + elapsed `mm:ss` counter + prior stages with ✓ checkmarks in a scroll box.
+   - Friendly labels for 20+ tool names: `get_portfolio_summary` → "Pulling portfolio summary", `get_par_analysis` → "Assessing portfolio at risk", `get_cohort_analysis` → "Walking vintage cohorts", etc. Unknown tools fall back to `Running {tool_name_prettified}`.
+   - Hint banner appears after 45s: "Executive summaries typically complete in 60-120 seconds. The stream is kept alive with heartbeats so long runs won't be cut off."
+   - Stale-closure bug avoided via `resultEmitted` local flag (instead of reading `findings` state in `onDone` callback).
+   - Cleanup on unmount: aborts stream + clears elapsed timer.
+   - Meta-bar refactored: drops `coverage`/`cached_at` (agent mode doesn't compute these), adds AGENT + CACHED chips.
+
+4. **[tests/test_exec_summary_stream.py](tests/test_exec_summary_stream.py) — 4 regression tests** pinning the SSE contract:
+   - `test_cache_hit_streams_result_immediately` — exactly `start → cached → result → done`; cached payload round-trips; done carries `from_cache=True`.
+   - `test_agent_events_forward_and_result_is_parsed` — `tool_call`/`tool_result`/`text` forwarded as-is; result lands AFTER the last text chunk; exactly ONE terminal `done` (no double-done); agent metadata (`turns_used`, tokens) merged into our done; side effect: parsed payload written to cache.
+   - `test_unparseable_text_falls_back_to_warning_finding` — JSON parse failure still produces a renderable result (`narrative: null`, one warning finding carrying the raw text as explanation).
+   - `test_agent_error_event_is_forwarded` — runtime error events pass through; terminal done still fires with `ok: false`.
+
+**Browser verification:** Stream held open **4m 24s** on Aajil (well past CF's 100s cap that produced the original 524). 15+ tool calls streamed live. Every stage transition rendered in real time; prior stages collapsed into a ✓-marked scroll box. All 488 tests still pass (59 DB tests skipped — DATABASE_URL not set in worktree).
+
+**Follow-up spawned separately:** Aajil's agent tools crash (`compute_aajil_covenants` doesn't exist; `_get_deployment`/`_get_ageing_breakdown` assume Klaim's `Month`/`Status` columns). The SSE transport works — the agent's quality for Aajil specifically is gated on those pre-existing bugs. Tracked as its own task/worktree.
+
 ### Session 31 (continued) — DB as snapshotted source of truth — SHIPPED
 
 Started 2026-04-21, shipped + deployed 2026-04-22. Root cause of the investigation: `_portfolio_load` silently preferred the DB path when `has_db_data()` was True, but DB had no snapshot dimension and `db_loader` dropped every non-core column. Apr 15 covenants returned `wal_active=183d / Breach / Total WAL=n/a / Extended Age=12.7% / sel['date']=datetime.now()` instead of `148d / Path B / 137d / 4.4% / 2026-04-15`. Three commits on branch `claude/hardcore-johnson-94c5fe`:

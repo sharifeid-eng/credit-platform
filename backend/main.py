@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -3015,6 +3015,306 @@ Return ONLY the JSON object, no other text."""
     _ai_cache_put(cache_path, result)
     log_activity(AI_EXECUTIVE_SUMMARY, company, product, f"Generated executive summary for {snap_key}")
     return result
+
+
+@app.get("/companies/{company}/products/{product}/ai-executive-summary/stream")
+async def get_executive_summary_stream(
+    company: str,
+    product: str,
+    request: Request,
+    snapshot: Optional[str] = None,
+    as_of_date: Optional[str] = None,
+    currency: Optional[str] = None,
+    refresh: bool = False,
+):
+    """Stream the agent-driven executive summary via SSE.
+
+    The analyst agent runs with max_turns=20 in a background producer task;
+    StreamEvents are drained through an asyncio.Queue. A ``: keepalive\\n\\n``
+    SSE comment is emitted after 20s of idle — mirrors memo_generate_stream —
+    so Cloudflare's ~100s edge-proxy cap can't kill long agent runs (Aajil
+    legitimately exceeds 100s end-to-end). See tasks/lessons.md CF+SSE entry.
+
+    Event types (heartbeats aside):
+      start    — {company, product, snapshot}
+      cached   — {from_cache: true}  (only on disk-cache hit)
+      text / tool_call / tool_result / budget_warning — forwarded from runtime
+      result   — {narrative, findings, asset_class_sources, generated_at, ...}
+      error    — {message}
+      done     — {ok, turns_used?, total_input_tokens?, total_output_tokens?, from_cache?}
+    """
+    import asyncio as _asyncio
+    import time as _time
+    from fastapi.responses import StreamingResponse
+
+    # Same cache key / backdated guard as the sync endpoint so both share state
+    sel_for_key = _resolve_snapshot(company, product, snapshot)
+    snap_key = sel_for_key.get('filename', snapshot or '')
+    snap_date = sel_for_key.get('date', '')
+    _check_backdated(as_of_date, snap_date)
+    cache_path = _ai_cache_key(
+        'executive_summary', company, product, snap_key, as_of_date or '',
+        snapshot_date=snap_date, currency=currency or ''
+    )
+
+    _sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        # Disables nginx proxy_buffering — critical for SSE to flush byte-by-byte
+        "X-Accel-Buffering": "no",
+    }
+
+    # Fast path: cached response → emit immediately (still as SSE so the
+    # client uses one code path).
+    if not refresh:
+        cached = _ai_cache_get(cache_path)
+        if cached:
+            async def _cache_stream():
+                yield f"event: start\ndata: {json.dumps({'company': company, 'product': product, 'snapshot': snap_key})}\n\n"
+                yield f"event: cached\ndata: {json.dumps({'from_cache': True})}\n\n"
+                yield f"event: result\ndata: {json.dumps(cached, default=str)}\n\n"
+                yield f"event: done\ndata: {json.dumps({'ok': True, 'from_cache': True})}\n\n"
+            return StreamingResponse(_cache_stream(), media_type="text/event-stream", headers=_sse_headers)
+
+    # ── Build agent prompt (mirrors generate_agent_executive_summary but
+    # extended with an explicit JSON output contract so we can parse
+    # narrative+findings after the stream closes). ─────────────────────────
+    section_guidance_map = {
+        'tamara_summary': "Portfolio Overview & Scale, Vintage Default Performance, Delinquency Trends, Dilution, Covenant Compliance, Concentration, Financial Performance, Forward Outlook",
+        'ejari_summary': "Portfolio Overview, Monthly Cohorts, Loss Waterfall, Roll Rates, Historical Performance, Segment Analysis, Credit Quality, Najiz & Legal, Write-offs",
+        'silq': "Portfolio Overview, Delinquency & DPD, Collections by Product, Cohort Performance, Concentration, Yield & Tenure",
+        'aajil': "Portfolio Overview, Traction, Delinquency, Collections, Cohorts, Concentration, Underwriting, Customer Segments, Forward Signals",
+    }
+    at = _get_analysis_type(company, product)
+    guidance = section_guidance_map.get(at) or (
+        "1. Portfolio Overview — size, growth, composition\n"
+        "2. Cash Conversion — collection performance, DSO, velocity\n"
+        "3. Credit Quality — PAR, delinquency, health distribution\n"
+        "4. Loss Economics — default rates, recovery, net loss, margins\n"
+        "5. Concentration & Segments — provider risk, product mix\n"
+        "6. Forward Signals — leading indicators, covenant headroom, drift\n"
+        "7. Bottom Line — overall assessment with specific recommendations"
+    )
+    ctx_line = (
+        f"[Context: company={company}, product={product}"
+        + (f", snapshot={snapshot}" if snapshot else "")
+        + (f", currency={currency}" if currency else "")
+        + (f", as_of_date={as_of_date}" if as_of_date else "")
+        + "]"
+    )
+    prompt = (
+        f"{ctx_line}\n\n"
+        "Generate a comprehensive executive summary for this portfolio company. "
+        "For each section, pull the relevant analytics data via tools and search the "
+        "data room for supporting evidence. Cross-reference with the investment thesis "
+        "if one exists.\n\n"
+        f"Sections: {guidance}\n\n"
+        "Return your output as a JSON object (no prose outside the JSON, no markdown fences):\n"
+        "{\n"
+        '  "narrative": {\n'
+        '    "sections": [ {"title": "...", "content": "paragraphs separated by \\n\\n", '
+        '"conclusion": "...", '
+        '"metrics": [{"label": "...", "value": "...", "assessment": "healthy|acceptable|warning|critical|monitor"}]} ],\n'
+        '    "summary_table": [ {"metric": "...", "value": "...", '
+        '"assessment": "Healthy|Acceptable|Warning|Critical|Monitor"} ],\n'
+        '    "bottom_line": "..."\n'
+        "  },\n"
+        '  "findings": [ {"rank": 1, "severity": "critical|warning|positive", '
+        '"title": "...", "explanation": "...", "data_points": ["..."], "tab": "tab-slug"} ]\n'
+        "}\n\n"
+        "RULES:\n"
+        "- Every claim must cite a specific number obtained from a tool call.\n"
+        "- 6-10 narrative sections, 5-10 findings ranked by business impact.\n"
+        "- Professional IC tone. Return ONLY the JSON object."
+    )
+
+    async def _stream():
+        import threading as _threading
+        from core.agents.config import load_agent_config
+        from core.agents.runtime import AgentRunner
+        from core.agents.session import AgentSession
+        from core.agents.tools import build_tools_for_agent
+
+        tool_specs = build_tools_for_agent("analyst")
+        config = load_agent_config("analyst", tool_specs=tool_specs)
+        config.max_turns = 20
+        session = AgentSession.create("analyst", metadata={
+            "company": company, "product": product, "type": "executive_summary",
+        })
+        runner = AgentRunner(config)
+
+        queue: _asyncio.Queue = _asyncio.Queue()
+        SENTINEL = object()
+        stop_event = _threading.Event()
+        loop = _asyncio.get_event_loop()
+
+        def _thread_push(item):
+            # Thread-safe enqueue onto the main event loop's asyncio.Queue.
+            # Called from the producer thread.
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, item)
+            except RuntimeError:
+                # Loop already closed (client disconnected + handler exited) — drop.
+                pass
+
+        # Run the agent's async stream in a DEDICATED thread with its own loop.
+        # The analyst agent uses the SYNC Anthropic client, whose blocking HTTP
+        # reads would otherwise freeze uvicorn's main event loop — killing
+        # heartbeats AND preventing the consumer below from draining the queue.
+        # See tasks/lessons.md 2026-04-19 entry; mirrors memo_generate_stream's
+        # ThreadPoolExecutor offload (backend/agents.py).
+        def _producer_thread():
+            import asyncio as _a
+            t_loop = _a.new_event_loop()
+            _a.set_event_loop(t_loop)
+            try:
+                async def _drain():
+                    async for event in runner.stream(prompt, session):
+                        if stop_event.is_set():
+                            break
+                        _thread_push(event)
+                t_loop.run_until_complete(_drain())
+            except Exception as e:
+                _thread_push(("__error__", e))
+            finally:
+                _thread_push(SENTINEL)
+                try:
+                    t_loop.close()
+                except Exception:
+                    pass
+
+        producer_thread = _threading.Thread(target=_producer_thread, daemon=True)
+        producer_thread.start()
+        HEARTBEAT_INTERVAL_S = 20
+        full_text: list = []
+        agent_done_data: dict = {}
+        stream_error: Optional[str] = None
+        emitted_result = False
+
+        # Announce the stream immediately — gives the client something to
+        # render (status chip, elapsed timer) while the first Claude turn spins up.
+        yield f"event: start\ndata: {json.dumps({'company': company, 'product': product, 'snapshot': snap_key})}\n\n"
+        last_yield = _time.monotonic()
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    stop_event.set()
+                    return
+
+                try:
+                    event = await _asyncio.wait_for(queue.get(), timeout=0.5)
+                except _asyncio.TimeoutError:
+                    if _time.monotonic() - last_yield >= HEARTBEAT_INTERVAL_S:
+                        yield ": keepalive\n\n"
+                        last_yield = _time.monotonic()
+                    continue
+
+                if event is SENTINEL:
+                    break
+
+                if isinstance(event, tuple) and event and event[0] == "__error__":
+                    stream_error = f"{type(event[1]).__name__}: {event[1]}"
+                    yield f"event: error\ndata: {json.dumps({'message': stream_error})}\n\n"
+                    last_yield = _time.monotonic()
+                    continue
+
+                # StreamEvent from the agent runtime
+                if event.type == "text":
+                    full_text.append(event.data.get("delta", ""))
+
+                if event.type == "done":
+                    # Agent finished (no more tool calls). Parse the
+                    # accumulated text, cache, emit our structured result,
+                    # then fall through so the outer done below summarises
+                    # metadata — we swallow the runtime's done because it
+                    # duplicates meaning.
+                    agent_done_data = dict(event.data or {})
+
+                    response_text = "".join(full_text).strip()
+                    if response_text.startswith("```"):
+                        response_text = re.sub(r"^```(?:json)?\s*", "", response_text)
+                        response_text = re.sub(r"\s*```$", "", response_text)
+
+                    try:
+                        parsed = json.loads(response_text)
+                        if isinstance(parsed, list):
+                            narrative = None
+                            findings = parsed
+                        else:
+                            narrative = parsed.get("narrative")
+                            findings = parsed.get("findings", [])
+                    except json.JSONDecodeError:
+                        narrative = None
+                        findings = [{
+                            "rank": 1, "severity": "warning",
+                            "title": "Summary generated (unparsed)",
+                            "explanation": response_text or "(empty response)",
+                            "data_points": [], "tab": "overview",
+                        }]
+
+                    # Layer 2.5 citations — same as sync endpoint
+                    _asset_class_sources: list = []
+                    try:
+                        _mind_ctx = build_mind_context(company, product, "executive_summary")
+                        _asset_class_sources = _mind_ctx.asset_class_sources or []
+                    except Exception as _mind_err:
+                        logger.debug("exec_summary_stream: asset_class_sources fetch failed: %s", _mind_err)
+
+                    result_payload = {
+                        "narrative": narrative,
+                        "findings": findings,
+                        "generated_at": datetime.now().isoformat(),
+                        "as_of_date": as_of_date or snap_date,
+                        "mode": "agent",
+                        "asset_class_sources": _asset_class_sources,
+                    }
+
+                    try:
+                        _ai_cache_put(cache_path, result_payload)
+                        log_activity(
+                            AI_EXECUTIVE_SUMMARY, company, product,
+                            f"Generated streaming executive summary for {snap_key}",
+                        )
+                    except Exception as _cache_err:
+                        logger.warning("exec_summary_stream: cache write failed: %s", _cache_err)
+
+                    yield f"event: result\ndata: {json.dumps(result_payload, default=str)}\n\n"
+                    last_yield = _time.monotonic()
+                    emitted_result = True
+                    # Swallow the runtime's done — we emit a single terminal
+                    # `done` in the finally block so the client has one place
+                    # to hang "stream complete" UI off.
+                    continue
+
+                # Pass through every other event (text, tool_call, tool_result,
+                # budget_warning, error) exactly as the runtime emitted it.
+                yield event.to_sse()
+                last_yield = _time.monotonic()
+        finally:
+            # Internal session — no persistence. Safe-delete best-effort.
+            try:
+                session.delete()
+            except Exception:
+                pass
+            # Signal the producer thread to stop. It'll push SENTINEL and
+            # exit on its next iteration. We don't join here — the thread is
+            # daemon + best-effort; a lingering request to Anthropic will
+            # unwind on its own.
+            stop_event.set()
+
+        # Terminal done — merges agent metadata when we have it.
+        done_payload = {
+            "ok": emitted_result and stream_error is None,
+            "turns_used": agent_done_data.get("turns_used"),
+            "total_input_tokens": agent_done_data.get("total_input_tokens"),
+            "total_output_tokens": agent_done_data.get("total_output_tokens"),
+        }
+        if stream_error:
+            done_payload["error"] = stream_error
+        yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream", headers=_sse_headers)
 
 
 @app.get("/companies/{company}/products/{product}/ai-tab-insight")
