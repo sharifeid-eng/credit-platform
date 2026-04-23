@@ -9,7 +9,7 @@ All endpoints are under /api/integration/.
 import uuid
 import os
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -82,7 +82,7 @@ def _upsert_invoice_in_snapshot(db: Session, *, org: Organization, prod: Product
         existing.invoice_date = item.invoice_date
         existing.due_date = item.due_date
         existing.extra_data = item.extra_data
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return existing, False
     inv = Invoice(
         id=uuid.uuid4(),
@@ -247,7 +247,7 @@ def update_invoice(
         if hasattr(inv, key):
             setattr(inv, key, value)
 
-    inv.updated_at = datetime.utcnow()
+    inv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(inv)
     return InvoiceResponse.from_orm_invoice(inv)

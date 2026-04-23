@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -513,7 +513,7 @@ class AnalyticsSnapshotEngine:
         Returns:
             List of document record dicts stored/updated.
         """
-        now_str = datetime.utcnow().strftime("%Y-%m-%d")
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         stored: list[dict] = []
 
         tabs = {
@@ -588,11 +588,11 @@ class AnalyticsSnapshotEngine:
             "id": str(uuid.uuid4()),
             "filename": filename,
             "doc_type": doc_type,
-            "snapshot_date": snapshot_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            "snapshot_date": snapshot_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "snapshot_filename": snapshot_filename,
             "tab_slug": tab_slug,
             "text_representation": text,
-            "parsed_at": datetime.utcnow().isoformat(),
+            "parsed_at": datetime.now(timezone.utc).isoformat(),
             "source": "platform_ai",
         }
 
@@ -675,10 +675,10 @@ class AnalyticsSnapshotEngine:
             "id": str(uuid.uuid4()),
             "filename": filename,
             "doc_type": doc_type,
-            "snapshot_date": snapshot_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            "snapshot_date": snapshot_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "snapshot_filename": snapshot_filename,
             "text_representation": text,
-            "parsed_at": datetime.utcnow().isoformat(),
+            "parsed_at": datetime.now(timezone.utc).isoformat(),
             "source": "platform_analytics",
         }
 

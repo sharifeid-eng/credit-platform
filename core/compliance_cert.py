@@ -3,7 +3,7 @@ core/compliance_cert.py
 Borrowing Base Certificate (BBC) PDF generation.
 Pure computation — no FastAPI, no I/O beyond writing the PDF bytes.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 
 from reportlab.lib.pagesizes import A4
@@ -143,7 +143,7 @@ def generate_compliance_cert(
     normal, heading, sub, cert = _style()
     W = A4[0] - 1.3 * inch   # usable width
 
-    now   = datetime.utcnow()
+    now   = datetime.now(timezone.utc)
     today = now.strftime('%d %B %Y')
     kpis  = bb_data.get('kpis', {})
     snap  = bb_data.get('snapshot', today)

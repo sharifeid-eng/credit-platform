@@ -29,7 +29,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from .templates import get_template, MEMO_TEMPLATES
@@ -381,7 +381,7 @@ class MemoGenerator:
             "citations": parsed["citations"],
             "generated_by": "ai",
             "source": section_def.get("source"),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "generation_meta": gen_meta,
         }
 
@@ -411,7 +411,7 @@ class MemoGenerator:
             "citations": [],
             "generated_by": "placeholder",
             "source": section_def.get("source"),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def _generate_auto_section(self, company: str, product: str,
@@ -421,7 +421,7 @@ class MemoGenerator:
             "## Data Sources Used in This Memo\n",
             f"**Company:** {company}",
             f"**Product:** {product}",
-            f"**Generated:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n",
+            f"**Generated:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n",
         ]
         try:
             from core.loader import get_snapshots
@@ -452,7 +452,7 @@ class MemoGenerator:
             "citations": [],
             "generated_by": "auto",
             "source": "auto",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     # ── Stage 2+3: parallel structured + auto ───────────────────────────────
@@ -1269,7 +1269,7 @@ class MemoGenerator:
             "sections": final_sections,
             "errors": all_errors,
             "version": 1,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "snapshot": snapshot,
             "currency": currency,
             "generation_mode": "hybrid-v1",

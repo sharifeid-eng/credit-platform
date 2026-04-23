@@ -57,7 +57,7 @@ def get_or_create_live_snapshot(db, product: Product, as_of: Optional[date] = No
         name=name,
         source='live',
         taken_at=as_of,
-        ingested_at=datetime.utcnow(),
+        ingested_at=datetime.now(timezone.utc).replace(tzinfo=None),
         row_count=0,
         notes='Rolling daily live snapshot, populated by Integration API writes.',
     )

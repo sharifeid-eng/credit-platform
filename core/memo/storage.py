@@ -15,7 +15,7 @@ Status transitions: draft -> review -> final -> archived
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -144,8 +144,8 @@ class MemoStorage:
                 "title": memo.get("title", ""),
                 "status": memo.get("status", "draft"),
                 "current_version": version,
-                "created_at": memo.get("created_at", datetime.utcnow().isoformat()),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": memo.get("created_at", datetime.now(timezone.utc).isoformat()),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
                 # Hybrid pipeline metadata (additive, safely absent on legacy memos)
                 "generation_mode": memo.get("generation_mode"),
                 "polished": memo.get("polished", False),
@@ -158,7 +158,7 @@ class MemoStorage:
             # Existing memo — increment version
             version = meta.get("current_version", 0) + 1
             meta["current_version"] = version
-            meta["updated_at"] = datetime.utcnow().isoformat()
+            meta["updated_at"] = datetime.now(timezone.utc).isoformat()
             # Update title/status if changed in the memo
             if "title" in memo:
                 meta["title"] = memo["title"]
@@ -343,7 +343,7 @@ class MemoStorage:
             )
 
         meta["status"] = new_status
-        meta["updated_at"] = datetime.utcnow().isoformat()
+        meta["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         self._write_meta(memo_dir, meta)
         logger.info("Memo %s status changed: %s -> %s",
@@ -382,7 +382,7 @@ class MemoStorage:
                 if new_metrics is not None:
                     section["metrics"] = new_metrics
                 section["generated_by"] = "manual_edit"
-                section["edited_at"] = datetime.utcnow().isoformat()
+                section["edited_at"] = datetime.now(timezone.utc).isoformat()
                 section_found = True
                 break
 
