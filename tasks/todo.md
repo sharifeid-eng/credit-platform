@@ -74,7 +74,20 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ## Active
 
-_Nothing in progress._
+**Three chips queued / in flight after session-30 continuation EoD (`34a9b14`):**
+
+1. **.gitignore Mind-store clarification** — in progress on a task branch. Formalise the split: Master Mind files tracked (shared institutional knowledge, no UUID refs), per-company + per-asset-class + pending-review stores gitignored (have per-machine UUIDs). Small ~5-10 line `.gitignore` edit + 1 lesson. Triggered by session 30's `framework_evolution.jsonl` commit emitting a confusing "paths ignored" warning that still went through because the file predated the gitignore rule.
+
+2. **Klaim email response parked session** — spawned as a ready-to-receive session. When Klaim replies to the email asking about Account Debtor column + status hygiene + Pending status + Collection days so far negatives, paste their response as the first user message and the session will classify the answer against the 4-option Account Debtor menu, write Mind entries, and recommend platform actions.
+
+3. **Deprecation cleanup (queued, not running)** — chipped earlier today. Mechanical migration: 12× `datetime.utcnow()` → `datetime.now(timezone.utc)` across `core/memo/*`, `core/db_loader.py`, `backend/integration.py` + Pydantic class Config → ConfigDict in `backend/auth_routes.py`. Self-contained, ~30-40 LOC total. Expected to drop pytest warning count from 158 to ~15. Run whenever you have ~20 min of bandwidth.
+
+**Prod-host maintenance completed end-of-session (not git-tracked):**
+
+- **Kernel upgrade** — rolled forward from 6.8.0-71 to 6.8.0-110 via `ssh root@... "reboot"`. All 3 containers auto-recovered via `restart: always` policy within 25s. HTTP 200 externally and internally verified post-reboot.
+- **libxfixes3 installed on prod host** — unblocks Playwright PDF report generation path. Backend container image already had it from the earlier rebuild; this install was for the host layer. Install pulled 5 X11 transitive deps (libxau6, libxdmcp6, libxcb1, libx11-data, libx11-6). No container restart needed.
+
+---
 
 ---
 
