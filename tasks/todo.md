@@ -3,6 +3,75 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Session 30 continuation — 5 follow-up tasks shipped + deploy + Mind sync (2026-04-22)
+
+After the initial session 30 foundation (validation + dual-view WAL + Provider + method tagging + DataChat fix) landed on main, ran a batch of 5 spawned follow-up tasks end-to-end. All merged to main, deployed to prod, and Mind institutional knowledge synced.
+
+**5 spawned tasks landed (merge-sequence order):**
+
+1. **`dae0d02`** — `fix(frontend)`: CovenantCard dual-path display fix.
+   - WAL covenant card was showing nonsensical "Breach projected: 9 Feb 2025 / -436d" and "✓ -78 days headroom" lines when compliant via Path B carve-out. Purely a rendering-logic bug; numbers underneath were all correct.
+   - Implementer chose Option A (suppress Path A projection/headroom when `compliance_path === 'Path B (carve-out)'`, replace with muted single-line "Compliant via carve-out" note). ~15 LOC + 1 contract test.
+   - Landed as part of Session 31 deployment cycle (main-branch auto-merge).
+
+2. **`2abf3b9`** — `feat(klaim)`: curve-based close-age fallback in `_klaim_wal_total`.
+   - Added a Tier 2 fallback: when `Collection days so far` is missing/negative on a completed deal, walk the 13 `Actual in X days` curve columns and use the last 30-day bucket with positive cash delta as the close-age estimate. Falls through to `Expected collection days` only if curves are absent.
+   - New method tag `collection_days_so_far_with_curve_fallback` fires when curves fill gaps.
+   - On Apr 15 Klaim: 58 corrupted-primary rows (19 negative + 39 NaN/missing) now resolve to observed close-age; WAL Total 137.17d (up ~0.5d from pre-fix). Active WAL + Path B carve-out unchanged.
+   - 7 new tests in `TestCurveCloseAgeFallback` + 1 Apr 15 acceptance pin.
+
+3. **`80fd0a1`** — `feat(klaim)`: cash-flow-weighted duration (Macaulay) metric.
+   - New `compute_klaim_cash_duration` compute function in `core/analysis.py`. PV-weighted Macaulay-style duration across the 13 bucket curve columns — weights each cash tranche by the day it arrived, so early-paying deals score lower (distinct from WAL which just measures time on book).
+   - Backend endpoint `GET /charts/cash-duration` wired alongside DTFC. Methodology entry registered as L2 at fractional order 3.5 (no renumbering of existing entries).
+   - Framework Section 12 auto-regenerated via `sync_framework_registry.py`; collateral cleanup picked up CDR/CCR + Facility-Mode PD entries that had drifted out of the registry (transparent disclosure in commit message, not scope creep).
+   - 3 new tests in `TestCashDuration`. Display surface deferred per task spec.
+
+4. **`b527ed2` + `6cf5978`** — `feat(klaim)`: Operational WAL + Stale Exposure (Tape vs Portfolio split).
+   - New `classify_klaim_deal_stale` helper (3 categories: loss_completed, stuck_active, denial_dominant_active), `compute_klaim_operational_wal` (PV-weighted age on clean book), `compute_klaim_stale_exposure` (category breakdown + top-25 offenders). Two new backend endpoints.
+   - Frontend: new `StaleExposurePanel.jsx` component (4-tile metric row + category bars + click-to-expand top-25 + methodology footnote). Surgical edits to `TapeAnalytics.jsx` — Capital Life section between Credit Quality and Leading Indicators, Stale Exposure panel below. Portfolio Analytics untouched (covenant WAL card renders byte-identical pre-change).
+   - On Apr 15 Klaim (browser-verified): Operational WAL 79d / Realized WAL 65d / Stale Exposure 16.5% (AMBER chip) / 926 stale deals / top offender is the 1,184-day VALIANT deal originated 2023-01-17. On Mar 3 (backend-verified): graceful degradation with `confidence=C, method=elapsed_only, realized_wal_days=null`.
+   - 24 new tests. Diff 1,051 lines (~30% over 600-800 target — overage is test coverage + polished UX, both defensible). Flagged one pre-existing bug out of scope: `/snapshots` endpoint vs `_load()` filename mismatch → task #5 fixes it.
+
+5. **`6867c85`** — `fix(platform)`: snapshot-filename match — kill silent fallback to latest.
+   - Silent data-correctness bug: `/snapshots` returned DB-backed snapshot names without `.csv`, but `_load()` matched filesystem filenames with `.csv`. UI snapshot switcher silently fell back to latest. Analysts were looking at the wrong snapshot's data and didn't know it.
+   - New `_match_snapshot()` helper consolidates resolution contract: exact filename → extension-stripped filename → single-date match → HTTP 400 with "Available: …" list. Both `_load()` and `_resolve_snapshot()` delegate to it. `snapshot=None` still returns latest (intentional default); unknown named identifier now 400s instead of silently serving latest.
+   - End-to-end proof: on Klaim `/summary` with DB-style names — BEFORE fix: Sept 23 / Dec 8 / Mar 3 all silently returned 7,697 deals (latest). AFTER fix: 6,290 / 4,988 / 7,697 respectively. Distinct data per snapshot.
+   - 12 new tests including `test_unknown_snapshot_raises_400_never_silent_latest` as the load-bearing sentinel.
+
+**Plus 2 accompanying commits:**
+
+6. **`5aa246f`** — `test`: accept upgraded `wal_total_method` after curve fallback.
+   - Task #2's curve-based fallback legitimately upgraded the method tag from `collection_days_so_far` to `collection_days_so_far_with_curve_fallback` when curves fill gaps. Session-31 test in `test_db_snapshots.py` was pinned to the old value; accepting both keeps the regression guard without over-specifying which tier fired.
+   - Cross-file test invariant — task #2's implementer couldn't see this because the pinned assertion lived in a different test file out of their scope. Caught at merge time via `pytest`.
+
+7. **`e15d8aa`** — `eod`: add warning-drift check to Step 2 + document 158 baseline.
+   - Pytest warning count had grown to 158 without being flagged in any prior EoD — dominated by 12 `datetime.utcnow()` deprecations + 1 Pydantic class-based Config. New mandatory Step 2 sub-check compares current count against documented 158 baseline; flags top 3 categories if count jumps by >10.
+   - Baseline + known-background-warnings list live at the top of Step 2 and get updated after significant refactors (up or down).
+
+**Merge-sequence notes:**
+
+- Task #1 was already merged before the batch (Session 31 deployment cycle). Remaining 4 tasks merged in order: #2 → #3 → #4 → #5.
+- Task #3 + #4 both added new endpoints + test classes + methodology entries → expected conflicts in `backend/main.py`, `tests/test_analysis_klaim.py`. Resolution: keep both blocks with separate prologues (git's 3-way merge had collapsed the identical `df, sel = _load(...)` prologue into one, creating a mixed-signature conflict). See lesson 2026-04-22.
+- Task #5 added `_match_snapshot` helper in `backend/main.py` (different region than #4's new endpoints) → auto-merged clean.
+- Task #2 test-catchup (`5aa246f`) landed between #2 merge and #3 merge after `pytest` surfaced the pinned assertion in `test_db_snapshots.py`.
+
+**Final state of main:** `e15d8aa` — 8 commits ahead of where session 30 continuation started.
+
+**Deploy + sync completed:**
+- `git push origin main` → origin at `e15d8aa`
+- `ssh root@204.168.252.26 "cd /opt/credit-platform && ./deploy.sh"` — backend rebuilt, frontend rebuilt, alembic migrations clean, dataroom registries aligned, all containers healthy
+- 3 Mind JSONL files synced to prod via SCP (Klaim `findings.jsonl`, `healthcare_receivables.jsonl`, `framework_evolution.jsonl`)
+- **Tests:** 630 passing, 158 warnings (unchanged throughout all 5 task merges)
+- Site live at https://laithanalytics.ai
+
+**Surfaced during deploy (non-blocking):**
+- Playwright host validation warning: prod server missing `libxfixes3`. Only affects Playwright-driven PDF report generation on host; regular analytics / AI / dashboards unaffected. One-line fix: `ssh root@204.168.252.26 "apt-get update && apt-get install -y libxfixes3"`.
+
+**Queued for next session:**
+- Deprecation cleanup task (chipped): migrate 12 `datetime.utcnow()` → `datetime.now(timezone.utc)` + Pydantic class Config → ConfigDict in auth_routes. Expected to drop pytest warnings from 158 to ~15. Self-contained, ~30-40 LOC total.
+
+---
+
 ## Active
 
 _Nothing in progress._

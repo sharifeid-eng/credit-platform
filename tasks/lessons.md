@@ -3,6 +3,35 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Semantic upgrades to compute-function outputs need cross-file test grep, not just in-module
+
+**Problem:** Task #2 (curve-based close-age fallback) legitimately upgraded the `wal_total_method` tag from `collection_days_so_far` to `collection_days_so_far_with_curve_fallback` when curves fill gaps for any completed-deal row. The implementer added tests for the new tag in `tests/test_analysis_klaim.py` (their scope) and verified 97 Klaim tests green locally. But a Session 31 test in a DIFFERENT file (`tests/test_db_snapshots.py::TestSnapshotIsolation::test_apr15_wal_total_resolves_mar3_wal_total_is_none`) was pinned to the OLD exact-string value via `assert apr_wal['wal_total_method'] == 'collection_days_so_far'`. Task #2's own suite passed; the cross-file pin only fired at merge time when the full `pytest tests/ -q` ran on integrated main. One-line fix (`in ('old_value', 'new_value')`) but a preventable friction.
+
+**Rule:** When a compute function's output contract changes even in a strictly additive / semantically-upgraded way (new tag value, new optional field, wider enum set), the implementer must grep the WHOLE test tree for hardcoded assertions against the old value — not just within the module's own test file. Pinned string/enum assertions in cross-module tests are the most common failure mode because they're out of the implementer's mental model of "my scope".
+
+**How to apply:**
+- When a spawned task prompt involves "add a new value to an enum" / "add a new method tag" / "return a new optional field", explicitly instruct the implementer to run `git grep -n "<old_exact_value>"` across `tests/` as part of their pre-commit check. Not just `pytest tests/test_<mymodule>.py` — the full `pytest tests/ -q` on their worktree.
+- If they find pinned assertions in other test files, the fix is usually accepting both old + new values (set-membership check) rather than flipping the assertion to the new value — keeps the regression guard alive for any code path that still legitimately emits the old value (e.g. older tapes without the new column).
+- If the prompt's "don't modify other modules" guardrail would prohibit that fix, the implementer should flag it in their summary as a known test-catchup task rather than silently leaving a future merge-time failure.
+- Verification at merge: always run the FULL `pytest tests/ -q` after each task merges before moving to the next. We did this today; it caught the pinned assertion at task #2 merge and prevented it from compounding under tasks #3/#4/#5.
+
+---
+
+## 2026-04-22 — `git` 3-way merge collapses identical prologues across parallel additions, synthesising mixed conflicts
+
+**Problem:** Tasks #3 and #4 both added new FastAPI endpoints at the same region of `backend/main.py` in their respective branches. Each endpoint had an identical 4-line prologue (`df, sel = _load(company, product, snapshot); df = filter_by_date(df, as_of_date); config, disp = _currency(company, product, currency); mult = apply_multiplier(config, disp)`). When merging task #4 after task #3, git's 3-way merge saw the prologue as "unchanged" in both branches and collapsed it into a single copy — then flagged the DIFFERENT docstring+signature above and the DIFFERENT `return` statement below as conflicts. The resulting conflict region looked mangled: `<<<<<<< HEAD` (task #3's `cash-duration` signature + docstring), then `=======`, then task #4's `operational-wal` signature, then `>>>>>>>`, then the SHARED prologue (only one copy of it), then another conflict block for the return statements. Naively resolving by picking one side would silently drop one endpoint's function body or merge them into a Frankenstein function with the wrong signature.
+
+Correct resolution: rewrite the region so each endpoint has its OWN complete function body with its OWN prologue. Three endpoints, three prologues, no shared lines.
+
+**Rule:** When git reports a conflict that includes "auto-merged" shared context lines between conflict markers in adjacent regions, don't trust the structure git produced — read the FULL function(s) the conflict sits inside and rewrite as if you were authoring the intended final state directly. For function-level additions where each branch contributed a full new function that happens to share prologue/epilogue patterns, the resolution is always "N independent complete functions", never "one blended function with interleaved pieces".
+
+**How to apply:**
+- Detect the shape early: if a conflict region inside a `.py` file has MULTIPLE conflict marker pairs separated by a few lines of non-marker code, and the non-marker code looks like it could appear in either branch's function body (because it's identical stock boilerplate), assume git mis-collapsed a shared prologue. Read the function boundaries (start of `def` to next `def` or blank line) on BOTH branches via `git show <branch>:<file>` to see what the intended function bodies are.
+- Resolution strategy: don't edit inside the conflict markers. Delete the entire conflicted region, then paste in N complete intended functions side-by-side, each with its own full body. Remove the markers. Re-verify with `grep -n '<<<<<<<\|=======\|>>>>>>>' <file>` returning empty.
+- When spawning parallel tasks that will add new endpoints / new routes / new test classes to the same files, warn the implementers in the prompt that the merge will likely conflict in those regions and document the expected resolution pattern (both blocks kept, adjacent, each complete).
+
+---
+
 ## 2026-04-22 — Ask "is this latent elsewhere?" BEFORE fixing a user-reported bug
 
 **Problem:** User reported Aajil Executive Summary rendering raw markdown instead of structured narrative. My instinct was to fix the specific symptom — hardened the sync-path prompt and JSON parser. That shipped. Then the same user saw a new failure mode, then another, then another. Each fix exposed the next layer:
