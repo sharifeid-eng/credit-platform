@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -21,6 +21,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     email: str
     name: str
@@ -28,9 +30,6 @@ class UserOut(BaseModel):
     is_active: bool
     created_at: Optional[str] = None
     last_login_at: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class UserCreate(BaseModel):
