@@ -22,6 +22,7 @@ from core.analysis import (
     compute_expected_loss, compute_loss_triangle, compute_group_performance,
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
     compute_par, compute_segment_analysis,
+    compute_klaim_cash_duration,
 )
 from core.validation import validate_tape
 from core.consistency import run_consistency_check
@@ -1094,3 +1095,77 @@ class TestCovenantMethodTagging:
         # Legacy missing-method: don't penalise, count as consecutive
         assert pvd['eod_triggered'] is True
         assert pvd['consecutive_breaches'] == 2
+
+
+# ── Cash-Flow-Weighted Duration tests ───────────────────────────────────────
+
+class TestCashDuration:
+    def test_apr15_returns_available_and_sensible(self, apr15_df):
+        """Apr 15 tape has 13 curve columns — compute should work."""
+        result = compute_klaim_cash_duration(apr15_df, 1, as_of_date='2026-04-15')
+        assert result['available'] is True
+        assert 'portfolio' in result
+        assert 'by_vintage' in result
+        assert 'method_note' in result
+        # Sensible bounds: duration between 1 day and 390 days (the outer bucket).
+        dur_all = result['portfolio']['duration_days']
+        dur_completed = result['portfolio']['duration_days_completed_only']
+        assert dur_all is not None and 1 < dur_all < 390, f'portfolio duration {dur_all} out of range'
+        assert dur_completed is not None and 1 < dur_completed < 390, f'completed duration {dur_completed} out of range'
+        # Completed-only should be HIGHER than all-deals: active deals' curves are partial-life,
+        # so their per-deal duration skews lower (cash they haven't received yet isn't in the numerator).
+        assert dur_completed >= dur_all - 1.0, (
+            f'completed={dur_completed} should be >= all={dur_all} (minus tolerance) — '
+            "active-deal curves are incomplete and should understate duration"
+        )
+        # by_vintage should be populated
+        assert len(result['by_vintage']) > 0
+        for v in result['by_vintage']:
+            assert 'vintage' in v and 'duration_days' in v and 'deal_count' in v and 'pv' in v
+            assert 1 < v['duration_days'] < 390
+
+    def test_older_tape_without_curves_returns_unavailable(self, mar03_df):
+        """Mar 3 tape has curves; older tapes don't. Use Sep 2025 tape via direct load."""
+        # Sep 2025 tape has no curve columns — load it explicitly.
+        from core.loader import load_snapshot
+        sep_path = os.path.join(DATA_DIR, '2025-09-23_uae_healthcare.csv')
+        if not os.path.exists(sep_path):
+            pytest.skip('Sep 2025 tape not present')
+        sep_df = load_snapshot(sep_path)
+        result = compute_klaim_cash_duration(sep_df, 1, as_of_date='2025-09-23')
+        assert result['available'] is False
+        # Contract: fields exist even when unavailable, so callers can access them safely.
+        assert result['portfolio']['duration_days'] is None
+        assert result['portfolio']['duration_days_completed_only'] is None
+        assert result['by_vintage'] == []
+        assert isinstance(result['method_note'], str) and len(result['method_note']) > 0
+
+    def test_early_cash_has_lower_duration_than_late_cash(self):
+        """Synthetic test: a deal paying cash on day 30 has lower duration than one paying on day 270."""
+        # Build a minimal frame with two synthetic deals, each PV=100, one paid at day 30, one at day 270.
+        curve_cols = [f'Actual in {d} days' for d in [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390]]
+        # Early deal: 100 cash arrives by day 30, stays at 100 thereafter.
+        early_row = {c: 100.0 for c in curve_cols}
+        # Late deal: 0 until day 270, then 100 and flat.
+        late_row = {c: (100.0 if int(c.split()[2]) >= 270 else 0.0) for c in curve_cols}
+        df = pd.DataFrame([
+            {'Deal date': pd.Timestamp('2025-01-01'), 'Purchase value': 100.0, 'Status': 'Completed', **early_row},
+            {'Deal date': pd.Timestamp('2025-01-01'), 'Purchase value': 100.0, 'Status': 'Completed', **late_row},
+        ])
+        # Individually:
+        df_early = df.iloc[[0]].reset_index(drop=True)
+        df_late = df.iloc[[1]].reset_index(drop=True)
+        r_early = compute_klaim_cash_duration(df_early, 1, as_of_date='2026-01-01')
+        r_late = compute_klaim_cash_duration(df_late, 1, as_of_date='2026-01-01')
+        assert r_early['available'] and r_late['available']
+        dur_early = r_early['portfolio']['duration_days']
+        dur_late = r_late['portfolio']['duration_days']
+        # Early deal: all 100 in the 30-day bucket → duration == 30.
+        assert dur_early == pytest.approx(30.0, abs=0.1)
+        # Late deal: all 100 in the 270-day bucket → duration == 270.
+        assert dur_late == pytest.approx(270.0, abs=0.1)
+        # Ordering assertion from the spec — early < late.
+        assert dur_early < dur_late
+        # PV-weighted mix of the two: both PV=100, so mean = 150.
+        r_mix = compute_klaim_cash_duration(df, 1, as_of_date='2026-01-01')
+        assert r_mix['portfolio']['duration_days'] == pytest.approx(150.0, abs=0.1)

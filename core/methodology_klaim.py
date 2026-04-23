@@ -25,7 +25,7 @@ def register_klaim_methodology():
         compute_cohort_loss_waterfall, compute_recovery_analysis,
         compute_vintage_loss_curves, compute_loss_categorization,
         compute_loss_triangle, compute_stress_test, compute_expected_loss,
-        compute_dtfc, compute_dso, compute_hhi_for_snapshot,
+        compute_dtfc, compute_dso, compute_klaim_cash_duration, compute_hhi_for_snapshot,
         compute_concentration, compute_group_performance,
         compute_owner_breakdown, compute_collections_timing,
         compute_underwriting_drift, compute_segment_analysis,
@@ -115,6 +115,38 @@ def register_klaim_methodology():
                 {'title': 'Cash Collection Breakdown', 'prose': 'Completed deals are grouped by how long they took to collect into six time buckets (0-30d, 31-60d, 61-90d, 91-120d, 121-180d, 181+d). This chart only includes completed deals; active deals still collecting are excluded.', 'metrics': [], 'tables': [], 'notes': []},
                 {'title': 'Collection Curves (Expected vs Actual)', 'prose': 'When curve columns are available (30-day intervals up to 390 days), the platform plots expected vs actual cumulative collection as a percentage of purchase value. Available at both portfolio aggregate and per-vintage levels.', 'metrics': [], 'tables': [], 'notes': []},
             ],
+        },
+        # ── 3b. Cash-Flow-Weighted Duration (L2) ──
+        {
+            'function': 'compute_klaim_cash_duration',
+            'section': 'Cash-Flow-Weighted Duration',
+            'title': 'Cash Duration',
+            'level': 2,
+            'tab': 'overview',
+            'analysis_type': 'klaim',
+            'order': 3.5,
+            'required_columns': ['Deal date', 'Purchase value'],
+            'optional_columns': ['Actual in 30 days', 'Actual in 60 days', 'Actual in 90 days'],
+            'denominator': 'total',
+            'confidence': 'B',
+            'prose': 'Macaulay-style duration of cash arrival, PV-weighted across the book. Complements WAL Active (covenant, outstanding-weighted mean age) and WAL Total (IC view, PV-weighted mean age) by weighting each arriving cash tranche by the day it arrived — so a deal that collected 90% on day 30 scores far lower than one that collected 90% on day 360. WAL numbers treat those identically once the deal closes.',
+            'metrics': [
+                {'name': 'Cash Duration (portfolio)', 'formula': 'Duration_D = Σ_t (t × cash_in_bucket_t) / total_cash, where cash_in_bucket_t = Actual(t) - Actual(t-30) for t ∈ {30, 60, ..., 390}. Portfolio = Σ_D (PV_D × Duration_D) / Σ_D PV_D.', 'rationale': 'Captures the true cash-weighted time-to-money of the portfolio. A lower duration means capital recycles faster — tighter IRR, more reinvestment capacity. Distinct from WAL (age-on-book) because it is sensitive to WHEN within a deal\'s life the cash arrived, not just the total lifespan.'},
+                {'name': 'Cash Duration (completed only)', 'formula': 'Same formula, restricted to Status = "Completed" deals', 'rationale': 'Stable full-life view — completed deals have observed their entire payment stream, so per-deal duration is final. Confidence A. Use as the benchmark when comparing across snapshots.'},
+            ],
+            'tables': [
+                {'title': 'Confidence Grades', 'headers': ['View', 'Grade', 'Rationale'], 'rows': [
+                    ['duration_days_completed_only', 'A', 'All inputs observed; deals closed, curves capture full life.'],
+                    ['duration_days (all deals)', 'B', 'Active deals\' curves represent partial life — their per-deal duration is a lower-bound estimate against an unfinished payment stream.'],
+                ]},
+            ],
+            'notes': [
+                'Requires at least 3 "Actual in X days" columns (Mar 2026+ tapes). Older tapes return available=False.',
+                'Uses bucket UPPER-BOUND (30, 60, ..., 390) as the representative time — no centroid interpolation. Same convention as curve-based close-age.',
+                'Deals excluded: total cash ≤ 0 (no cash arrived yet), elapsed < 30 days (too fresh for a meaningful curve), missing PV.',
+                'by_vintage rollup uses identical PV-weighting within each origination month.',
+            ],
+            'subsections': [],
         },
         # ── 4. Health Classification (L3) ──
         {
