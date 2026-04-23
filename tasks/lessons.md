@@ -3,6 +3,22 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Container and host are separate filesystems — installing a dep on one doesn't install it on the other
+
+**Problem:** Deploy today surfaced a Playwright "host system missing libxfixes3" warning during the backend container build. I ran `apt-get install libxfixes3` on the prod host and declared the issue fixed. Then — confidently but incorrectly — I said "the backend container image already has libxfixes3 from the earlier rebuild" when the same warning fired again on the next deploy. User ran `docker exec credit-platform-backend-1 ldconfig -p | grep libxfixes` which returned empty — the container was still missing the library despite the host install. The real fix was adding `libxfixes3` to `docker/backend.Dockerfile`'s apt install list, rebuilding the image, redeploying. Two confident wrong answers from me in one sequence; the actual root cause was a basic confusion between host and container dependency scopes.
+
+**Rule:** Containers have their own filesystems. Installing a system library on the host (`apt-get install` on the VM / bare metal) does NOT make that library available to processes running inside containers. Processes inside a container only see the union of (a) the container image's layers, (b) mounted volumes. Host-level system libraries are invisible unless explicitly bind-mounted (unusual and fragile). For any missing-runtime-library failure inside Docker, the fix belongs in the Dockerfile, not on the host — unless there's a specific reason the dep needs to be usable by host-level processes too.
+
+**How to apply:**
+- When debugging "X library missing" errors that manifest inside a container, verify AT THE CONTAINER LEVEL first: `docker exec <container> ldconfig -p | grep -i <libname>`. Do NOT verify at the host level (`apt list --installed | grep <libname>` on the host) — that tells you about the host, not the container, and gives false confidence.
+- When the verification reveals the library is absent from the container, the fix goes in the Dockerfile's `RUN apt-get install -y ...` list. Rebuild the image (via `docker compose build` or a full deploy), then re-verify at the container level.
+- A host-level `apt-get install` of the same library is only useful if (a) a non-containerized process on the host also needs it, or (b) the container bind-mounts host `/usr/lib` (unusual). Neither applies for a typical Playwright-in-container setup.
+- `grep` is case-sensitive by default. X11 libraries use mixed case (`libXfixes`, `libXrandr`, `libXcomposite`) while Debian package names use lowercase (`libxfixes3`, `libxrandr2`, `libxcomposite1`). Use `grep -i` when searching ldconfig output against package names, or you'll get a false-empty result like I did today even after the library was correctly installed.
+- Symptom in the wild: a missing-library error that keeps recurring after each deploy despite "fixing" it. Nine times out of ten this means you're fixing the host or installing the lib in the wrong image stage. Trust `docker exec <container>` over anything else — the running container is the only source of truth for what the running container sees.
+- See `docker/backend.Dockerfile` commit `78c6f81` for the Playwright-specific fix pattern (list libxfixes3 alongside the other Chromium deps in the RUN apt-get install line).
+
+---
+
 ## 2026-04-22 — Directory-level .gitignore + pre-existing tracked files = ambiguous state; split the policy explicitly
 
 **Problem:** `.gitignore` had `data/_master_mind/` as a blanket exclude, but 4 files in that directory (`framework_evolution.jsonl`, `ic_norms.jsonl`, `preferences.jsonl`, `writing_style.jsonl`) were already tracked from before the rule was added. Git's tracking-precedence kept them tracked, so commits succeeded — but every `git add` emitted "the following paths are ignored" warnings, and any analyst following the warning at face value would assume the file wasn't being committed. Session 30's Framework codification candidate commit hit this and only worked because the committer ignored the warning. A different analyst could easily have fought the gitignore ("why won't git add my file?") or, worse, `git rm --cached`'d the tracked files to "fix" the warning — breaking every other machine that pulls main.
