@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCompany } from '../contexts/CompanyContext'
 import useBreakpoint from '../hooks/useBreakpoint'
-import { generatePDFReport, getParChart, getDtfcChart, getSummary, getCollectionVelocityChart, getDeploymentChart } from '../services/api'
+import { generatePDFReport, getParChart, getDtfcChart, getSummary, getCollectionVelocityChart, getDeploymentChart, getOperationalWal, getStaleExposure } from '../services/api'
+import StaleExposurePanel from '../components/StaleExposurePanel'
 
 import KpiCard       from '../components/KpiCard'
 import AICommentary  from '../components/AICommentary'
@@ -492,9 +493,11 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
 
   const { snapshots } = useCompany()
 
-  // Fetch PAR, DTFC, and sparkline data
+  // Fetch PAR, DTFC, Operational WAL, Stale Exposure, and sparkline data
   const [par,             setPar]             = useState(null)
   const [dtfc,            setDtfc]            = useState(null)
+  const [opWal,           setOpWal]           = useState(null)
+  const [staleExp,        setStaleExp]        = useState(null)
   const [prevSummary,     setPrevSummary]     = useState(null)
   const [collSparkline,   setCollSparkline]   = useState(null)
   const [deploySparkline, setDeploySparkline] = useState(null)
@@ -503,6 +506,8 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
     if (!product || !snapshot) return
     getParChart(company, product, snapshot, currency, asOfDate).then(setPar).catch(() => setPar(null))
     getDtfcChart(company, product, snapshot, currency, asOfDate).then(setDtfc).catch(() => setDtfc(null))
+    getOperationalWal(company, product, snapshot, currency, asOfDate).then(setOpWal).catch(() => setOpWal(null))
+    getStaleExposure(company, product, snapshot, currency, asOfDate).then(setStaleExp).catch(() => setStaleExp(null))
     getCollectionVelocityChart(company, product, snapshot, currency, asOfDate)
       .then(res => {
         const monthly = res.monthly ?? []
@@ -561,6 +566,32 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
     { label: 'DTFC (P90)',    value: `${dtfc.p90_dtfc.toFixed(0)}d`, sub: 'slowest 10%',                  color: dtfc.p90_dtfc > 90 ? 'red' : 'gold', confidence: dtfcConfidence },
   ] : []
 
+  // Capital Life (Operational WAL + Realized WAL) — Klaim Tape-side only.
+  // Strips the zombie tail from the covenant-facing WAL Total (which lives on
+  // Portfolio Covenants and stays unchanged per MMA Art. 21). Operational WAL =
+  // "how long is capital deployed in the live book?". Realized WAL =
+  // "how long did completed-clean deals actually take to resolve?".
+  const walKpis = opWal?.available ? [
+    {
+      label: 'Operational WAL',
+      value: `${opWal.operational_wal_days.toFixed(0)}d`,
+      sub: opWal.confidence === 'C'
+        ? `Degraded — active-clean only (tape lacks close-age)`
+        : `Clean book · excludes ${opWal.stale_deal_count} stale deals (${((opWal.stale_pv / opWal.total_pv) * 100).toFixed(1)}% of PV)`,
+      color: 'gold',
+      confidence: opWal.confidence,
+      stale: bd,
+    },
+    ...(opWal.realized_wal_days != null ? [{
+      label: 'Realized WAL',
+      value: `${opWal.realized_wal_days.toFixed(0)}d`,
+      sub: 'Completed-clean · PV-weighted close-age',
+      color: 'teal',
+      confidence: opWal.confidence,
+      stale: bd,
+    }] : []),
+  ] : []
+
   const showSkeleton = summaryLoading || !summary
 
   return (
@@ -603,6 +634,36 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
         </div>
       )}
 
+      {/* Capital Life — Operational WAL + Realized WAL (clean book view) */}
+      {walKpis.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+              Capital Life
+            </span>
+            <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.7 }}>
+              Clean book · excludes zombie tail
+            </span>
+            {opWal?.confidence === 'C' && (
+              <span style={{
+                fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                background: 'rgba(201,168,76,0.1)', color: 'var(--accent-gold)',
+                border: '1px dashed rgba(201,168,76,0.3)',
+              }}>
+                Degraded on this tape — active only
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+            {walKpis.map((k, i) => (
+              <div key={`wal-${i}`} style={opWal?.confidence === 'C' ? { borderStyle: 'dashed' } : undefined}>
+                <KpiCard {...k} index={i} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Leading Indicators — DTFC section */}
       {dtfcKpis.length > 0 && (
         <div>
@@ -613,6 +674,11 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
             {dtfcKpis.map((k, i) => <KpiCard key={`dtfc-${i}`} {...k} index={i} />)}
           </div>
         </div>
+      )}
+
+      {/* Stale Exposure — zombie-tail PV with category breakdown + top-25 offenders drill-down */}
+      {staleExp?.available && (
+        <StaleExposurePanel data={staleExp} ccy={ccy} />
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>

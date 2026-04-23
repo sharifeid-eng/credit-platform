@@ -27,6 +27,7 @@ from core.analysis import (
     compute_seasonality, compute_loss_categorization,
     compute_methodology_log, compute_hhi_for_snapshot,
     compute_cdr_ccr,
+    compute_klaim_operational_wal, compute_klaim_stale_exposure,
 )
 from core.migration import compute_roll_rates
 from core.validation import validate_tape
@@ -1471,6 +1472,37 @@ def get_cash_duration(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult = apply_multiplier(config, disp)
     return compute_klaim_cash_duration(df, mult, as_of_date=as_of_date or sel['date'])
+
+
+# ── Operational WAL / Stale Exposure (Klaim Tape-side Capital Life) ─────────
+# These pair with the covenant-facing WAL in core.portfolio (untouched). The
+# Tape-side metrics strip stale/zombie exposure to show "how does the live
+# product behave" rather than "how long does the operational tail take".
+
+@app.get("/companies/{company}/products/{product}/charts/operational-wal")
+def get_operational_wal(company: str, product: str,
+                        snapshot: Optional[str] = None, currency: Optional[str] = None,
+                        as_of_date: Optional[str] = None):
+    """Operational WAL — PV-weighted age on the clean (non-stale) Klaim book."""
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_klaim_operational_wal(df, mult, ref_date=as_of_date or sel['date'])
+
+
+@app.get("/companies/{company}/products/{product}/charts/stale-exposure")
+def get_stale_exposure(company: str, product: str,
+                       snapshot: Optional[str] = None, currency: Optional[str] = None,
+                       as_of_date: Optional[str] = None):
+    """Stale Exposure — zombie-tail PV + count with category breakdown and top-25 offenders."""
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    facility_params = _load_facility_params(company, product)
+    return compute_klaim_stale_exposure(df, mult, ref_date=as_of_date or sel['date'],
+                                        facility_params=facility_params)
 
 # ── Cohort Loss Waterfall ────────────────────────────────────────────────────
 

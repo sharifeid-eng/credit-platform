@@ -177,6 +177,12 @@ export const getParChart              = (co, prod, snap, cur, asOf) =>
 export const getDtfcChart             = (co, prod, snap, cur, asOf) =>
   api.get(`/companies/${co}/products/${prod}/charts/dtfc`,              { params: p(snap, cur, asOf) }).then(r => r.data);
 
+// ── Tape-side Capital Life (Klaim only — Operational WAL + Stale Exposure) ──
+export const getOperationalWal        = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/operational-wal`,   { params: p(snap, cur, asOf) }).then(r => r.data);
+export const getStaleExposure         = (co, prod, snap, cur, asOf) =>
+  api.get(`/companies/${co}/products/${prod}/charts/stale-exposure`,    { params: p(snap, cur, asOf) }).then(r => r.data);
+
 // ── Ejari summary ───────────────────────────────────────────────────────────
 export const getEjariSummary          = (co, prod, snap) =>
   api.get(`/companies/${co}/products/${prod}/ejari-summary`, { params: { snapshot: snap } }).then(r => r.data);

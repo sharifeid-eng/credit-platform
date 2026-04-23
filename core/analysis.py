@@ -2524,6 +2524,28 @@ def compute_methodology_log(df, as_of_date=None):
         **wal_total_proxy,
     })
 
+    # Stale / zombie classification thresholds used by compute_klaim_operational_wal
+    # and compute_klaim_stale_exposure. Confidence B — the three rules introduce
+    # judgement (what counts as "stuck" / "dominated by denial"). Documented here
+    # so the IC audit trail and methodology page stay aligned with runtime behaviour.
+    adjustments.append({
+        'type': 'stale_classification',
+        'target_metric': 'operational_wal_days / stale_exposure',
+        'description': ('Three stale-deal rules filter the zombie tail from Tape-side '
+                        'learning metrics. (1) loss_completed — Completed AND Denied > 50% '
+                        'of PV. (2) stuck_active — Executed AND elapsed > ineligibility_age_days '
+                        'AND outstanding < 10% of PV. (3) denial_dominant_active — Executed AND '
+                        'Denied > 50% of PV. OR-reduced into any_stale for the clean-book mask.'),
+        'thresholds': {
+            'ineligibility_age_days': 91,
+            'loss_denial_pct':        0.50,
+            'stuck_outstanding_pct':  0.10,
+            'denial_dominant_pct':    0.50,
+        },
+        'available': True,
+        'confidence': 'B',
+    })
+
     # Data quality summary
     total_rows = len(df)
     null_rates = {}
@@ -2555,6 +2577,348 @@ def separate_portfolio(df, mult=1):
     pv = df['Purchase value']
     loss_mask = den > (pv * 0.5)
     return df[~loss_mask].copy(), df[loss_mask].copy()
+
+
+# ── Klaim Stale / Zombie Filter ──────────────────────────────────────────────
+# Classifies deals that would never be pledged to the facility (loss tail,
+# economically-done active deals, denial-dominated active deals). Used to
+# strip zombie exposure from Tape-side learning metrics without modifying the
+# covenant-facing WAL in core/portfolio.py. See ANALYSIS_FRAMEWORK.md Section 15
+# (Separation Principle) for the design rationale.
+
+def _klaim_age_for_wal(df, ref_date):
+    """Per-deal age used by Operational WAL.
+
+    Active deals:    age = elapsed (snapshot - Deal date).
+    Completed deals: age = Collection days so far (observed, clipped to [0, elapsed])
+                           fallback: Expected collection days (contractual)
+                           fallback: elapsed (degraded — tapes before Apr 2026).
+
+    Mirrors the age construction in core.portfolio._klaim_wal_total so Operational
+    and Total WAL stay apples-to-apples. A future refactor may extract a shared
+    helper once the curve-based close-age-fallback task lands on Total WAL.
+
+    Returns (age_series, method) where method ∈ {'collection_days_so_far',
+    'expected_collection_days', 'elapsed_only'}.
+    """
+    if ref_date is None:
+        ref = pd.Timestamp.now().normalize()
+    else:
+        ref = pd.to_datetime(ref_date)
+
+    deal_dates = pd.to_datetime(df['Deal date'], errors='coerce') if 'Deal date' in df.columns else pd.Series(pd.NaT, index=df.index)
+    elapsed = (ref - deal_dates).dt.days.clip(lower=0).fillna(0).astype(float)
+
+    age = elapsed.copy()
+    has_cdsf = 'Collection days so far' in df.columns
+    has_exp  = 'Expected collection days' in df.columns
+    completed = df['Status'] == 'Completed' if 'Status' in df.columns else pd.Series(False, index=df.index)
+
+    if completed.any() and (has_cdsf or has_exp):
+        close_age = pd.Series(np.nan, index=df.index)
+        if has_cdsf:
+            cdsf = pd.to_numeric(df['Collection days so far'], errors='coerce')
+            close_age = close_age.where(~(cdsf >= 0), cdsf)
+        if has_exp:
+            exp = pd.to_numeric(df['Expected collection days'], errors='coerce')
+            close_age = close_age.fillna(exp.where(exp >= 0))
+        close_age = close_age.fillna(elapsed)
+        age.loc[completed] = np.minimum(np.maximum(close_age[completed], 0), elapsed[completed])
+
+    if has_cdsf:
+        method = 'collection_days_so_far'
+    elif has_exp:
+        method = 'expected_collection_days'
+    else:
+        method = 'elapsed_only'
+
+    return age, method
+
+
+def classify_klaim_deal_stale(df, ref_date=None, ineligibility_age_days=91):
+    """Flag Klaim deals that don't represent live portfolio behaviour.
+
+    Three rules (a deal may satisfy more than one):
+      - loss_completed:          Status == 'Completed' AND Denied > 50% of PV.
+                                 Reuses the separate_portfolio() loss convention —
+                                 these deals have been resolved as writeoffs.
+      - stuck_active:            Status == 'Executed' AND elapsed > ineligibility_age_days
+                                 AND outstanding < 10% of PV.
+                                 Economically complete (outstanding near zero) but
+                                 the row has not been marked Completed — drifts any
+                                 time-based metric upward every calendar day.
+      - denial_dominant_active:  Status == 'Executed' AND Denied > 50% of PV.
+                                 Still-open but mostly denied by the payer.
+
+    `ineligibility_age_days` defaults to 91 (MMA Page 81) — the contractual
+    threshold beyond which a deal is ineligible to pledge to the facility. Reusing
+    the same number keeps Tape-side "what is stale" aligned with Portfolio-side
+    "what is ineligible" so the two views stay consistent.
+
+    Returns a dict of Series (all indexed identically to df):
+      - loss_completed, stuck_active, denial_dominant_active: per-category bool masks
+      - any_stale:                                           OR-reduction (deduped)
+      - ineligibility_age_days:                              int threshold used
+    """
+    idx = df.index
+
+    def _col(name, default=0.0):
+        if name in df.columns:
+            return pd.to_numeric(df[name], errors='coerce').fillna(default)
+        return pd.Series(default, index=idx, dtype=float)
+
+    pv = _col('Purchase value')
+    denied = _col('Denied by insurance')
+    collected = _col('Collected till date')
+    status = df['Status'] if 'Status' in df.columns else pd.Series('', index=idx)
+
+    if 'Deal date' in df.columns:
+        ref = pd.Timestamp.now().normalize() if ref_date is None else pd.to_datetime(ref_date)
+        deal_dates = pd.to_datetime(df['Deal date'], errors='coerce')
+        elapsed = (ref - deal_dates).dt.days.clip(lower=0).fillna(0)
+    else:
+        elapsed = pd.Series(0, index=idx)
+
+    outstanding = (pv - collected - denied).clip(lower=0)
+    completed = status == 'Completed'
+    active    = status == 'Executed'
+    has_pv    = pv > 0
+
+    loss_completed         = completed & (denied > 0.5 * pv) & has_pv
+    stuck_active           = active    & (elapsed > ineligibility_age_days) & (outstanding < 0.1 * pv) & has_pv
+    denial_dominant_active = active    & (denied > 0.5 * pv) & has_pv
+    any_stale              = loss_completed | stuck_active | denial_dominant_active
+
+    return {
+        'loss_completed':         loss_completed,
+        'stuck_active':           stuck_active,
+        'denial_dominant_active': denial_dominant_active,
+        'any_stale':              any_stale,
+        'ineligibility_age_days': int(ineligibility_age_days),
+    }
+
+
+def compute_klaim_operational_wal(df, mult, ref_date=None):
+    """PV-weighted age across the clean (non-stale) Klaim book.
+
+    Excludes the zombie tail surfaced by classify_klaim_deal_stale. Stale deals
+    would never be pledged to the facility and drift WAL upward every calendar
+    day they remain in stale status — filtering them out produces a signal that
+    tracks how the product actually behaves, not how long the operational tail
+    takes to clean up.
+
+    Distinct from core.portfolio._klaim_wal_total: Total WAL includes every deal
+    and feeds covenant compliance (Confidence A/B). Operational WAL is a
+    Tape-side learning metric — Confidence B because the stale-book filter
+    introduces judgement (the three classification thresholds).
+
+    Realized WAL is a stricter view: completed-clean deals only, PV-weighted
+    close-age. It strips out active-deal age accrual to show "how long did the
+    clean book actually take to resolve".
+
+    Degraded mode (tapes before Apr 2026): when neither `Collection days so far`
+    nor `Expected collection days` is on the tape, completed deals have no
+    close-age proxy. We restrict the clean mask to active deals only — active
+    age = elapsed is meaningful — and return Realized WAL as None. Operational
+    WAL in this mode represents "PV-weighted age of the live active clean book"
+    and is labelled Confidence C with method='elapsed_only'.
+
+    Returns:
+      {
+        'available': bool,
+        'operational_wal_days': float,
+        'realized_wal_days':    float | None,
+        'method': str,                              # mirrors _klaim_age_for_wal
+        'confidence': 'B' | 'C',                    # C when elapsed-only fallback
+        'clean_pv':         float,                  # display-currency
+        'clean_deal_count': int,
+        'total_pv':         float,                  # display-currency
+        'total_deal_count': int,
+        'stale_pv':         float,                  # display-currency, for context
+        'stale_deal_count': int,
+        'ineligibility_age_days': int,
+      }
+    """
+    if 'Deal date' not in df.columns or 'Purchase value' not in df.columns or 'Status' not in df.columns:
+        return {'available': False}
+    if len(df) == 0:
+        return {'available': False}
+
+    pv = pd.to_numeric(df['Purchase value'], errors='coerce').fillna(0) * mult
+    total_pv = float(pv.sum())
+    if total_pv <= 0:
+        return {'available': False}
+
+    # Ensure Deal date is datetime without mutating caller's df.
+    df = df.copy()
+    df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
+
+    age, method = _klaim_age_for_wal(df, ref_date)
+    stale = classify_klaim_deal_stale(df, ref_date=ref_date)
+    clean_mask = ~stale['any_stale']
+
+    degraded = method == 'elapsed_only'
+    if degraded:
+        # No close-age proxy for completed deals. Using elapsed for completed
+        # would wildly overstate (a deal funded 2yr ago and closed in 60d would
+        # report 730d). Restrict to active-clean — active-deal age = elapsed is
+        # the correct semantic. Realized WAL becomes unavailable.
+        active = df['Status'] == 'Executed'
+        clean_mask = clean_mask & active
+
+    clean_pv = pv[clean_mask]
+    clean_age = age[clean_mask]
+    if clean_pv.sum() <= 0:
+        return {'available': False}
+
+    operational_wal = float(np.average(clean_age, weights=clean_pv))
+
+    # Realized WAL — completed + clean only (PV-weighted close-age). Unavailable
+    # in degraded mode because completed deals have no close-age proxy.
+    realized_wal = None
+    if not degraded:
+        completed = df['Status'] == 'Completed'
+        completed_clean = completed & clean_mask
+        if completed_clean.any():
+            rpv  = pv[completed_clean]
+            rage = age[completed_clean]
+            if rpv.sum() > 0:
+                realized_wal = round(float(np.average(rage, weights=rpv)), 2)
+
+    confidence = 'B' if not degraded else 'C'
+
+    return {
+        'available':            True,
+        'operational_wal_days': round(operational_wal, 2),
+        'realized_wal_days':    realized_wal,
+        'method':               method,
+        'confidence':           confidence,
+        'clean_pv':             round(float(clean_pv.sum()), 2),
+        'clean_deal_count':     int(clean_mask.sum()),
+        'total_pv':             round(total_pv, 2),
+        'total_deal_count':     int(len(df)),
+        'stale_pv':             round(float(pv[stale['any_stale']].sum()), 2),
+        'stale_deal_count':     int(stale['any_stale'].sum()),
+        'ineligibility_age_days': stale['ineligibility_age_days'],
+    }
+
+
+def compute_klaim_stale_exposure(df, mult, ref_date=None, facility_params=None):
+    """Stale/zombie exposure on the Klaim book — category breakdown + top offenders.
+
+    Surfaces the portion of book PV that is sitting in stale status (see
+    classify_klaim_deal_stale). Share > 10% is an amber portfolio-hygiene signal;
+    > 20% is red — it means the active tail dwarfs new origination.
+
+    `facility_params`: optional dict that may carry `ineligibility_age_days`.
+    Defaults to 91 (MMA Page 81) when absent.
+
+    top_offenders is capped at 25. Each entry carries a primary category tag
+    (loss_completed > stuck_active > denial_dominant_active precedence when a
+    deal hits multiple rules), plus Group and Provider attribution when those
+    columns are on the tape.
+
+    L5 signal (forward-looking): unresolved tail is predictive of future
+    writeoffs, reopens, or recoveries.
+    """
+    if 'Deal date' not in df.columns or 'Purchase value' not in df.columns or 'Status' not in df.columns:
+        return {'available': False}
+    if len(df) == 0:
+        return {'available': False}
+
+    age_threshold = 91
+    if facility_params:
+        try:
+            age_threshold = int(facility_params.get('ineligibility_age_days', 91) or 91)
+        except (TypeError, ValueError):
+            age_threshold = 91
+
+    df = df.copy()
+    df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
+
+    pv = pd.to_numeric(df['Purchase value'], errors='coerce').fillna(0) * mult
+    total_pv = float(pv.sum())
+    if total_pv <= 0:
+        return {'available': False}
+
+    stale = classify_klaim_deal_stale(df, ref_date=ref_date, ineligibility_age_days=age_threshold)
+
+    ref = pd.Timestamp.now().normalize() if ref_date is None else pd.to_datetime(ref_date)
+    elapsed = (ref - df['Deal date']).dt.days.clip(lower=0).fillna(0).astype(int)
+
+    # Per-category breakdown: count, PV, share, PV-weighted elapsed age.
+    categories = []
+    for cat_key in ('loss_completed', 'stuck_active', 'denial_dominant_active'):
+        mask = stale[cat_key]
+        cat_count = int(mask.sum())
+        cat_pv    = float(pv[mask].sum())
+        if cat_count > 0 and cat_pv > 0:
+            cat_age = float(np.average(elapsed[mask], weights=pv[mask]))
+        else:
+            cat_age = 0.0
+        categories.append({
+            'category':             cat_key,
+            'count':                cat_count,
+            'pv':                   round(cat_pv, 2),
+            'pv_share':             round(cat_pv / total_pv, 6),
+            'pv_weighted_age_days': round(cat_age, 1),
+        })
+
+    # Top-25 offenders, largest PV first, with primary-category tag.
+    any_stale = stale['any_stale']
+    top_offenders = []
+    if any_stale.any():
+        has_id       = 'ID' in df.columns
+        has_ref      = 'Reference' in df.columns
+        has_group    = 'Group' in df.columns
+        has_provider = 'Provider' in df.columns
+
+        stale_df = df.loc[any_stale].copy()
+        stale_df['_pv']  = pv[any_stale].values
+        stale_df['_age'] = elapsed[any_stale].values
+
+        # Primary category per row — vectorised via priority ordering.
+        cat = pd.Series('denial_dominant_active', index=stale_df.index)
+        cat = cat.where(~stale['stuck_active'].loc[stale_df.index], 'stuck_active')
+        cat = cat.where(~stale['loss_completed'].loc[stale_df.index], 'loss_completed')
+        stale_df['_cat'] = cat.values
+
+        stale_df = stale_df.sort_values('_pv', ascending=False).head(25)
+
+        for _, row in stale_df.iterrows():
+            if has_id and pd.notna(row.get('ID')):
+                did = str(row['ID'])
+            elif has_ref and pd.notna(row.get('Reference')):
+                did = str(row['Reference'])
+            else:
+                did = str(row.name)
+            entry = {
+                'id':        did,
+                'deal_date': row['Deal date'].strftime('%Y-%m-%d') if pd.notna(row['Deal date']) else None,
+                'age_days':  int(row['_age']),
+                'pv':        round(float(row['_pv']), 2),
+                'category':  row['_cat'],
+            }
+            if has_group:
+                entry['group']    = str(row['Group'])    if pd.notna(row.get('Group'))    else None
+            if has_provider:
+                entry['provider'] = str(row['Provider']) if pd.notna(row.get('Provider')) else None
+            top_offenders.append(entry)
+
+    stale_pv    = float(pv[any_stale].sum())
+    stale_count = int(any_stale.sum())
+
+    return {
+        'available':             True,
+        'total_stale_pv':        round(stale_pv, 2),
+        'total_stale_count':     stale_count,
+        'stale_pv_share':        round(stale_pv / total_pv, 6),
+        'total_pv':              round(total_pv, 2),
+        'total_deal_count':      int(len(df)),
+        'by_category':           categories,
+        'top_offenders':         top_offenders,
+        'ineligibility_age_days': age_threshold,
+    }
 
 
 # ── HHI Time Series ──────────────────────────────────────────────────────────
