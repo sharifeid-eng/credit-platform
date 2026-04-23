@@ -22,7 +22,7 @@ Run `pytest tests/ -q` from the project root. Report pass/fail counts. If any te
 
 **Warning-drift check (mandatory — do not skip):** also capture the pytest warning count from the final line (`N passed, M warnings in …`). Compare against the baseline below:
 
-> **Last recorded baseline: 158 warnings (session 30, 2026-04-22)**
+> **Last recorded baseline: 0 warnings (session 30 tail, 2026-04-22, post-deprecation-cleanup `6805cec`)**
 
 If the current count is within ±5 of baseline, proceed without comment. If it jumped by >10, this means today's work introduced new deprecations or code smells worth flagging. Extract the top 3 warning categories:
 
@@ -32,9 +32,7 @@ pytest tests/ -q 2>&1 | Select-String -Pattern "DeprecationWarning|UserWarning|P
 
 Flag any new category in the EoD summary ("+N new deprecations in <category>"). Don't require fixing them in this session — just surface the jump so new deprecations don't hide in existing background noise. After significant refactors (either up or down), update the baseline number at the top of this step.
 
-Known background warnings as of the last baseline:
-- 12× `datetime.utcnow()` deprecation in `core/memo/*`, `core/db_loader.py`, `backend/integration.py`
-- 1× Pydantic `class Config` deprecation in `backend/auth_routes.py`
+Known background warnings as of the last baseline: **none.** All internal `datetime.utcnow()` and Pydantic class-based `Config` occurrences were cleared in the session-30-tail deprecation cleanup merge (`6805cec`). Any new warning that appears is introduced by today's work.
 
 ## Step 3 — Safety check: confirm .env is not tracked
 

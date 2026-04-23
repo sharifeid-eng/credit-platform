@@ -74,15 +74,15 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ## Active
 
-**Two chips outstanding after session-30 continuation tail:**
+**One chip outstanding after session-30 continuation tail:**
 
 1. **Klaim email response parked session** — spawned as a ready-to-receive session. When Klaim replies to the email asking about Account Debtor column + status hygiene + Pending status + Collection days so far negatives, paste their response as the first user message and the session will classify the answer against the 4-option Account Debtor menu, write Mind entries, and recommend platform actions.
-
-2. **Deprecation cleanup (queued, not running)** — chipped earlier today. Mechanical migration: 12× `datetime.utcnow()` → `datetime.now(timezone.utc)` across `core/memo/*`, `core/db_loader.py`, `backend/integration.py` + Pydantic class Config → ConfigDict in `backend/auth_routes.py`. Self-contained, ~30-40 LOC total. Expected to drop pytest warning count from 158 to ~15. Run whenever you have ~20 min of bandwidth.
 
 **Session-30-late completed (merged after the session-30 continuation EoD `34a9b14`):**
 
 - **`c7c7cde`** — `.gitignore` Mind-store clarification merged. Removed the blanket `data/_master_mind/` rule (Master Mind files are shared institutional knowledge, already tracked in git, no UUID pointers to per-machine state → should stay tracked). Kept per-company `**/mind/*.jsonl` + `data/_asset_class_mind/` + `data/_pending_review/` gitignored (these have per-machine graph relations). CLAUDE.md Mind architecture sections gained tracking-policy bullets. `tasks/lessons.md` gained a top lesson on directory-level `.gitignore` ambiguity with the content-model question to ask before deciding tracked vs per-machine. 630 tests still passing, 158 warnings unchanged (expected — pure config + docs, no code change).
+
+- **`6805cec`** — Deprecation cleanup merged. Migrated 12× `datetime.utcnow()` → `datetime.now(timezone.utc)` across `core/memo/*`, `core/db_loader.py`, `backend/integration.py`, `backend/cf_auth.py`, `core/compliance_cert.py`, `core/dataroom/analytics_snapshot.py`, `core/models.py` + Pydantic class Config → ConfigDict in `backend/auth_routes.py`. 2 commits on task branch (`36de2bf` datetime, `009fb58` Pydantic), 83 lines real change across 9 files. Implementer found 4 additional call sites I hadn't listed in the original prompt's inventory (cf_auth, compliance_cert, analytics_snapshot, models) by running `git grep` rather than trusting my bullet list. **Warning count: 158 → 0** (better than the ~15 target). 630 tests still pass, 0 skipped, 0 warnings. EoD warning-drift baseline updated 158 → 0 in the same-session commit following this one. Backend code changed but behavior is identical pre/post — naive-datetime semantics preserved via `_utcnow_naive()` helper in `core/models.py` (SQLAlchemy columns declared `DateTime` without `timezone=True`, schema unchanged) and inline `.replace(tzinfo=None)` at 3 other naive-column callers. ISO string `+00:00` suffix change verified non-breaking — all consumers use `strftime` (format-agnostic) or `fromisoformat` (handles both on Py 3.11+; we're on 3.14). Production redeploy optional — no functional behavior change.
 
 **Prod-host maintenance completed end-of-session (not git-tracked):**
 
