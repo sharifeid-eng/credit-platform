@@ -3,6 +3,26 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-22 — Directory-level .gitignore + pre-existing tracked files = ambiguous state; split the policy explicitly
+
+**Problem:** `.gitignore` had `data/_master_mind/` as a blanket exclude, but 4 files in that directory (`framework_evolution.jsonl`, `ic_norms.jsonl`, `preferences.jsonl`, `writing_style.jsonl`) were already tracked from before the rule was added. Git's tracking-precedence kept them tracked, so commits succeeded — but every `git add` emitted "the following paths are ignored" warnings, and any analyst following the warning at face value would assume the file wasn't being committed. Session 30's Framework codification candidate commit hit this and only worked because the committer ignored the warning. A different analyst could easily have fought the gitignore ("why won't git add my file?") or, worse, `git rm --cached`'d the tracked files to "fix" the warning — breaking every other machine that pulls main.
+
+Content-model check after the fact confirmed the tracked files were CORRECTLY tracked: Master Mind JSONL entries are self-contained text records (Framework candidates, IC norms, fund preferences, writing style) with no UUID pointers to per-machine stores. They're institutional knowledge that should converge across machines. The `.gitignore` line was written at a time when Master Mind was expected to be per-machine (like Company Mind), but that assumption never held.
+
+**Rule:** When a directory has mixed content — some files meant to be tracked, some per-machine state — a single directory-level rule is always ambiguous. Either:
+1. Split the per-machine content into a clearly-named sibling directory (e.g., `data/_master_mind/` shared + `data/_master_mind_local/` per-machine), and gitignore the sibling; OR
+2. Keep the directory shared by default (no rule) and add specific sub-path exclusions for any per-machine files that land inside.
+
+Pick option 2 unless the per-machine content is going to dominate — the shared-by-default posture matches git's own conventions (tracked unless proven otherwise).
+
+**How to apply:**
+- Before writing a `data/X/` rule, ask: does EVERY file that could land in this directory share the same tracking policy? If no, use specific sub-paths.
+- Before writing a rule for a directory that already contains tracked files, run `git ls-files <dir>` — if the output is non-empty, the rule is mis-scoped. Either keep those files tracked and narrow the rule, or untrack them explicitly with `git rm --cached` in the same commit (surfaces the intent, avoids the "ignored but tracked" trap).
+- The content-model question to ask before deciding: does this file reference UUIDs / state that only exists locally (relations.json → entities.jsonl IDs, for example)? If yes, per-machine. If no, shared.
+- For existing ambiguous state: don't retroactively `git rm --cached` files that have propagated across machines — it breaks everyone's local state. Clarify the rule instead.
+
+---
+
 ## 2026-04-22 — Semantic upgrades to compute-function outputs need cross-file test grep, not just in-module
 
 **Problem:** Task #2 (curve-based close-age fallback) legitimately upgraded the `wal_total_method` tag from `collection_days_so_far` to `collection_days_so_far_with_curve_fallback` when curves fill gaps for any completed-deal row. The implementer added tests for the new tag in `tests/test_analysis_klaim.py` (their scope) and verified 97 Klaim tests green locally. But a Session 31 test in a DIFFERENT file (`tests/test_db_snapshots.py::TestSnapshotIsolation::test_apr15_wal_total_resolves_mar3_wal_total_is_none`) was pinned to the OLD exact-string value via `assert apr_wal['wal_total_method'] == 'collection_days_so_far'`. Task #2's own suite passed; the cross-file pin only fired at merge time when the full `pytest tests/ -q` ran on integrated main. One-line fix (`in ('old_value', 'new_value')`) but a preventable friction.

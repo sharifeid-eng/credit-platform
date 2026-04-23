@@ -781,11 +781,13 @@ Two-tier knowledge system that makes every AI output smarter over time.
 - Fund-level knowledge: analytical preferences, IC norms, cross-company patterns, writing style
 - Seeded from ANALYSIS_FRAMEWORK.md principles and existing CLAUDE.md lessons
 - Feeds into ALL AI prompts as Layer 2 (between Framework and Methodology)
+- **Tracking policy:** `*.jsonl` files are TRACKED in git — shared institutional knowledge, no per-machine UUIDs. Master Mind content converges across all machines via `main`.
 
 **Company Mind** (`data/{co}/mind/`):
 - Per-company: corrections, memo edits, research findings, IC feedback, data quality notes
 - Auto-populated: legal findings, data quality discoveries, analyst corrections
 - Feeds into AI prompts as Layer 4 (most specific context)
+- **Tracking policy:** gitignored — holds UUIDs referenced by per-machine `relations.json`, mutates under the event bus on every tape/document ingest. Per-machine by construction.
 
 **4-Layer Prompt Context:**
 1. Analysis Framework (codified rules) — always included

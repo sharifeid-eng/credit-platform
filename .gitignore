@@ -18,8 +18,13 @@ data/*/dataroom/*
 # Agent session state (regenerated at runtime, per-machine)
 data/_agent_sessions/
 
-# Living Mind JSONL files (accumulate over time, machine-specific)
-data/_master_mind/
+# Mind stores — Master Mind (data/_master_mind/*.jsonl) holds shared
+# institutional knowledge with no per-machine UUIDs; TRACKED in git so every
+# machine converges on the same Framework codification candidates, IC norms,
+# preferences, and writing style. Per-company mind dirs hold UUIDs referenced
+# by relations.json and mutate under the event bus — per-machine, gitignored.
+# If a per-machine subdir ever lands under _master_mind/, add a specific rule
+# for that path here rather than re-ignoring the whole directory.
 **/mind/*.jsonl
 **/mind/consolidated.json
 **/mind/style_guide.md
