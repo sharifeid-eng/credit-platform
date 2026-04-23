@@ -20,7 +20,7 @@ from core.analysis import (
     compute_stress_test, compute_expected_loss, compute_loss_triangle,
     compute_group_performance,
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
-    compute_par, compute_dtfc,
+    compute_par, compute_dtfc, compute_klaim_cash_duration,
     compute_cohort_loss_waterfall, compute_recovery_analysis,
     compute_vintage_loss_curves, compute_underwriting_drift,
     compute_segment_analysis, compute_collections_timing,
@@ -1454,6 +1454,23 @@ def get_dtfc(company: str, product: str,
     config, disp = _currency(company, product, currency)
     mult = apply_multiplier(config, disp)
     return compute_dtfc(df, mult, as_of_date=as_of_date or sel['date'])
+
+# ── Cash-Flow-Weighted Duration ──────────────────────────────────────────────
+
+@app.get("/companies/{company}/products/{product}/charts/cash-duration")
+def get_cash_duration(company: str, product: str,
+                      snapshot: Optional[str] = None, currency: Optional[str] = None,
+                      as_of_date: Optional[str] = None):
+    """Cash-flow-weighted duration — PV-weighted Macaulay-style mean payment time.
+
+    Distinct from WAL Active / WAL Total: weights each arriving cash tranche by
+    the day it arrived, so early-paying deals score lower. Klaim only.
+    """
+    df, sel = _load(company, product, snapshot)
+    df = filter_by_date(df, as_of_date)
+    config, disp = _currency(company, product, currency)
+    mult = apply_multiplier(config, disp)
+    return compute_klaim_cash_duration(df, mult, as_of_date=as_of_date or sel['date'])
 
 # ── Cohort Loss Waterfall ────────────────────────────────────────────────────
 

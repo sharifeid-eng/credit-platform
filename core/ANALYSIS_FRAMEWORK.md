@@ -534,6 +534,7 @@ This section is **auto-generated** from the metric registry. Run `python scripts
 | Portfolio Overview Metrics | L1 | overview | total | A | Deal date, Status, Purchase value, Purchase price, ... |
 | Collection Performance | L2 | actual-vs-expected | total | A | Deal date, Purchase value, Collected till date, Expected total |
 | Collection Analysis | L2 | collection | total | A | Deal date, Purchase value, Collected till date, Status |
+| Cash-Flow-Weighted Duration | L2 | overview | total | B | Deal date, Purchase value |
 | Health Classification | L3 | ageing | active | A | Deal date, Status, Purchase value, Collected till date, ... |
 | Portfolio at Risk (PAR) | L3 | overview | active | B | Status, Purchase value, Collected till date, Denied by insurance |
 | Cohort Analysis | -- | cohort-analysis | total | A | Deal date, Purchase value, Purchase price, Collected till date, ... |
@@ -545,6 +546,8 @@ This section is **auto-generated** from the metric registry. Run `python scripts
 | Expected Loss Model | L4 | risk-migration | active | B | Status, Purchase value, Collected till date, Denied by insurance |
 | Roll-Rate Migration | L3 | risk-migration | active | B | Deal date, Status |
 | Advanced Analytics | -- | collections-timing | total | A | Deal date, Purchase value |
+| CDR / CCR | L3 | cdr-ccr | total | A | Deal date, Purchase value, Collected till date |
+| Facility-Mode PD | L5 | facility-pd | active | B | Deal date, Status, Purchase value |
 | Data Quality Validation | -- | data-integrity | -- | -- |  |
 
 ### SILQ

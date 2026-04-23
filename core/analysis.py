@@ -1812,6 +1812,124 @@ def _dtfc_by_vintage(df, curve_cols, today):
     return results
 
 
+# ── Cash-Flow-Weighted Duration ──────────────────────────────────────────────
+
+def compute_klaim_cash_duration(df, mult, as_of_date=None):
+    """PV-weighted Macaulay-style duration of cash arrival on Klaim deals.
+
+    WAL Active and WAL Total measure mean age on book — one age number per deal,
+    weighted across the book. They don't distinguish between a deal that paid 90%
+    on day 30 and 10% on day 360 versus one that paid 10% on day 30 and 90% on
+    day 360 (same total age when the deal finally closed). This metric weights
+    each arriving cash tranche by the day it arrived, so early-paying deals
+    score lower.
+
+    Per-deal cash duration:
+        cash_in_bucket(t) = Actual(t) - Actual(t-30)   (Actual(0) := 0)
+        total_cash = Actual(390) or max available terminal bucket
+        duration_D = Σ_t (t × cash_in_bucket(t)) / total_cash  for t ∈ {30, 60, …, 390}
+
+    Portfolio rollup is PV-weighted:
+        Duration_Portfolio = Σ_D (PV_D × duration_D) / Σ_D PV_D
+
+    Exclusions: deals with total_cash ≤ 0 (no cash arrived), deals with
+    elapsed < 30 days (too fresh for a meaningful curve), deals with missing PV.
+
+    Confidence grading (per ANALYSIS_FRAMEWORK.md §10):
+      • duration_days_completed_only — Confidence A (all inputs observed,
+        deals are closed so curves capture full life).
+      • duration_days — Confidence B (active deals' curves represent partial
+        life; their per-deal duration is a lower-bound estimate against an
+        unfinished payment stream).
+
+    Returns available=False when fewer than 3 curve columns are present
+    (older tapes like Sep 2025, Feb 2026), keeping every field stable so
+    callers can `if not res['available']` safely.
+    """
+    curve_cols_present = [c for c in CURVE_INTERVALS if f'Actual in {c} days' in df.columns]
+    if len(curve_cols_present) < 3 or 'Deal date' not in df.columns or 'Purchase value' not in df.columns:
+        return {
+            'available': False,
+            'portfolio': {'duration_days': None, 'duration_days_completed_only': None},
+            'by_vintage': [],
+            'method_note': 'Cash duration requires ≥3 "Actual in X days" curve columns and Deal date + Purchase value.',
+        }
+
+    today = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.now()
+    pv = pd.to_numeric(df['Purchase value'], errors='coerce').fillna(0) * mult
+    elapsed = (today - pd.to_datetime(df['Deal date'], errors='coerce')).dt.days
+    has_status = 'Status' in df.columns
+
+    # Build per-deal duration. Cumulative curves: cash_in_bucket_t = Actual(t) − Actual(t−30).
+    prev_cum = pd.Series(0.0, index=df.index)
+    weighted_time = pd.Series(0.0, index=df.index)
+    terminal_cash = pd.Series(0.0, index=df.index)
+    for days in curve_cols_present:
+        col = pd.to_numeric(df[f'Actual in {days} days'], errors='coerce').fillna(0) * mult
+        bucket_cash = (col - prev_cum).clip(lower=0)  # guard against non-monotone noise
+        weighted_time = weighted_time + bucket_cash * days
+        terminal_cash = col  # last iteration wins → max available terminal bucket
+        prev_cum = col
+
+    # Mask: need cash > 0, PV > 0, elapsed ≥ 30d so at least the 30-day bucket is meaningful.
+    include = (terminal_cash > 0) & (pv > 0) & (elapsed >= 30)
+    duration = pd.Series(np.nan, index=df.index)
+    duration.loc[include] = weighted_time.loc[include] / terminal_cash.loc[include]
+
+    def _pv_weighted(mask):
+        w = pv.loc[mask].astype(float)
+        d = duration.loc[mask].astype(float)
+        keep = d.notna() & (w > 0)
+        if not keep.any() or float(w[keep].sum()) <= 0:
+            return None
+        return round(float((w[keep] * d[keep]).sum() / w[keep].sum()), 1)
+
+    all_mask = include
+    completed_mask = include & (df['Status'] == 'Completed') if has_status else include & False
+
+    portfolio = {
+        'duration_days': _pv_weighted(all_mask),
+        'duration_days_completed_only': _pv_weighted(completed_mask),
+    }
+
+    # Per-vintage rollup (cheap — already have duration per row).
+    by_vintage = []
+    if all_mask.any():
+        tmp = pd.DataFrame({
+            'vintage': pd.to_datetime(df['Deal date'], errors='coerce').dt.to_period('M').astype(str),
+            'pv': pv,
+            'duration': duration,
+            'include': all_mask,
+        })
+        tmp = tmp[tmp['include'] & tmp['vintage'].ne('NaT')]
+        for vintage, grp in tmp.groupby('vintage'):
+            w = grp['pv']
+            d = grp['duration']
+            total_w = float(w.sum())
+            if total_w <= 0:
+                continue
+            by_vintage.append({
+                'vintage':       str(vintage),
+                'duration_days': round(float((w * d).sum() / total_w), 1),
+                'deal_count':    int(len(grp)),
+                'pv':            round(total_w, 2),
+            })
+        by_vintage.sort(key=lambda v: v['vintage'])
+
+    method_note = (
+        'PV-weighted mean of per-deal cash duration using 30-day bucket upper-bounds (30, 60, …, 390). '
+        'Confidence A on completed-only value; Confidence B on all-deals value (active curves are partial-life, '
+        'so their contribution is a lower-bound estimate).'
+    )
+
+    return {
+        'available': True,
+        'portfolio': portfolio,
+        'by_vintage': by_vintage,
+        'method_note': method_note,
+    }
+
+
 # ── Cohort Loss Waterfall ────────────────────────────────────────────────────
 
 def compute_cohort_loss_waterfall(df, mult, as_of_date=None):
