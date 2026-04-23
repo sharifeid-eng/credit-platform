@@ -613,31 +613,64 @@ def _klaim_deal_age_days(df, ref_date=None):
     return (ref_date - df['Deal date']).dt.days.clip(lower=0)
 
 
+def _klaim_curve_close_age(df):
+    """
+    Observed close-age (days) derived from the 13 cumulative collection-curve columns
+    ('Actual in 30 days' … 'Actual in 390 days').
+
+    For each row, the LAST 30-day bucket X where cumulative Actual increased (i.e.
+    Actual_in_X > Actual_in_{X-30}, treating Actual_in_0 = 0) is the last observed
+    cash-arrival moment. Returns X as an upper-bound close-age — honest statement of
+    "closed on or before day X" at ±30d precision. Rows with no positive bucket delta
+    (no curve data / no cash) return NaN so the caller can fall through.
+
+    Returns a Series indexed like df, or None when any curve column is missing.
+    """
+    buckets = list(range(30, 391, 30))  # 30, 60, …, 390 (13 entries)
+    cols = [f'Actual in {b} days' for b in buckets]
+    if not all(c in df.columns for c in cols):
+        return None
+    curves = df[cols].apply(pd.to_numeric, errors='coerce').fillna(0).to_numpy()
+    zero_prefix = np.zeros((curves.shape[0], 1))
+    deltas = curves - np.hstack([zero_prefix, curves[:, :-1]])
+    positive = deltas > 0
+    any_positive = positive.any(axis=1)
+    # argmax on reversed columns returns the LAST True in the original (first in reversed).
+    last_idx = positive.shape[1] - 1 - positive[:, ::-1].argmax(axis=1)
+    close_age = (last_idx + 1) * 30  # bucket index 0 → 30d, 12 → 390d
+    return pd.Series(np.where(any_positive, close_age, np.nan), index=df.index)
+
+
 def _klaim_wal_total(df, ref_date, mult):
     """
     Weighted-average life across the whole book (active + completed), PV-weighted.
 
     Active deals (still accumulating age):  age = snapshot_date − Deal date.
-    Completed deals (bounded life):         age = Collection days so far, clipped to
-                                                  [0, elapsed]. Falls back to
-                                                  Expected collection days when the
-                                                  observed column is missing/NaN/negative.
+    Completed deals (bounded life):         age = close-age estimate, clipped to
+                                                  [0, elapsed].
 
-    Rationale: "Collection days so far" is the observed collection duration — the most
-    faithful close-date proxy available. Fallback to contractual "Expected collection
-    days" when the observed value is absent or corrupted (e.g. some completed rows
-    carry negative/zero Collection days so far). Values above `elapsed` are clipped so
-    we never project into the future of the snapshot.
+    Close-age fallback chain for completed rows (highest → lowest precision):
+      Tier 1: Collection days so far (observed scalar)
+      Tier 2: Curve-derived bucket — LAST 30d window where cumulative Actual
+              increased; observed-via-curves, ±30d precision. Only applied when
+              Tier 1 is primary (cdsf present) and has gaps curves can fill;
+              tapes without curves skip Tier 2 and fall through.
+      Tier 3: Expected collection days (contractual term)
+      Tier 4: elapsed (ultimate)
 
-    Weighting is Purchase value (face-value, life-of-deal) because this is the IC
-    "how long is a dollar deployed?" view — distinct from Active WAL which is
-    outstanding-weighted for covenant purposes.
+    Weighting is Purchase value (face-value, life-of-deal) — the IC "how long is a
+    dollar deployed?" view; distinct from Active WAL (outstanding-weighted, covenant).
 
     Active WAL is Framework Confidence A (observed); Total WAL is Confidence B
     (observed for active, observed-with-fallback for completed). Proxy choice is
     recorded in compute_methodology_log().
 
-    Returns (wal_total_days, proxy_method) or (None, 'unavailable').
+    Returns (wal_total_days, proxy_method) or (None, 'unavailable'). Method tag
+    reports the HIGHEST-precision tier used for ≥1 row:
+      - 'collection_days_so_far'                       — Tier 1 only
+      - 'collection_days_so_far_with_curve_fallback'   — Tier 1 primary + Tier 2 filled gaps
+      - 'expected_collection_days'                     — Tier 3 primary (cdsf absent)
+      - 'unavailable'                                  — no proxy column present
     """
     if 'Deal date' not in df.columns or 'Purchase value' not in df.columns or 'Status' not in df.columns:
         return None, 'unavailable'
@@ -655,23 +688,39 @@ def _klaim_wal_total(df, ref_date, mult):
 
     # Start from elapsed; override completed rows with the observed/inferred close age.
     age = elapsed.astype(float).copy()
+    used_curves_as_fallback = False
     if completed.any():
         close_age = pd.Series(np.nan, index=df.index)
+        # Tier 1: observed scalar — keep non-negative values.
         if has_cdsf:
             cdsf = pd.to_numeric(df['Collection days so far'], errors='coerce')
-            # Treat negatives as corrupted; keep non-negative observed values.
             close_age = close_age.where(~(cdsf >= 0), cdsf)
+        # Tier 2: observed via curves — only kicks in when Tier 1 is primary and has gaps.
+        if has_cdsf:
+            curve_age = _klaim_curve_close_age(df)
+            if curve_age is not None:
+                gaps_before = int(close_age[completed].isna().sum())
+                close_age = close_age.fillna(curve_age)
+                if int(close_age[completed].isna().sum()) < gaps_before:
+                    used_curves_as_fallback = True
+        # Tier 3: contractual term — fill any rows still missing.
         if has_exp:
             exp = pd.to_numeric(df['Expected collection days'], errors='coerce')
-            # Fill remaining NaN rows (where CDSF was missing/negative) with contractual term.
             close_age = close_age.fillna(exp.where(exp >= 0))
-        # Final fallback to elapsed (so graceful on any stray row still-NaN).
+        # Tier 4: elapsed — graceful fallback for any stray row still NaN.
         close_age = close_age.fillna(elapsed)
-        # Clip to [0, elapsed] so completed-deal age can never exceed what's physically possible.
+        # Clip so completed-deal age can never exceed the physical elapsed time.
         age.loc[completed] = np.minimum(np.maximum(close_age[completed], 0), elapsed[completed])
 
     wal = float(np.average(age, weights=pv))
-    method = 'collection_days_so_far' if has_cdsf else 'expected_collection_days'
+    if has_cdsf:
+        method = (
+            'collection_days_so_far_with_curve_fallback'
+            if used_curves_as_fallback
+            else 'collection_days_so_far'
+        )
+    else:
+        method = 'expected_collection_days'
     return wal, method
 
 

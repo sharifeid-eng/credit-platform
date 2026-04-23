@@ -2357,13 +2357,28 @@ def compute_methodology_log(df, as_of_date=None):
     has_cdsf = 'Collection days so far' in df.columns
     has_exp  = 'Expected collection days' in df.columns
     if has_cdsf:
+        has_curves = curve_count > 0
+        if has_curves:
+            description = (
+                'Completed-deal close age = Collection days so far (observed). '
+                'Where the scalar is missing/negative, the LAST 30d bucket in which '
+                'cumulative Actual increased is used as observed close age '
+                '(curve-derived, ±30d precision). Remaining rows fall through to '
+                'Expected collection days (contractual), then elapsed. Clipped to '
+                '[0, elapsed]. Active deals use elapsed (snapshot − Deal date).'
+            )
+        else:
+            description = (
+                'Completed-deal close age = Collection days so far (observed), '
+                'clipped to [0, elapsed]; falls back to Expected collection days '
+                'where the observed value is missing or negative. Active deals use '
+                'elapsed (snapshot − Deal date).'
+            )
         wal_total_proxy = {
-            'description': 'Completed-deal close age = Collection days so far (observed), '
-                           'clipped to [0, elapsed]; falls back to Expected collection days '
-                           'where the observed value is missing or negative. Active deals use '
-                           'elapsed (snapshot − Deal date).',
+            'description': description,
             'column': 'Collection days so far',
             'fallback_column': 'Expected collection days' if has_exp else None,
+            'curve_fallback_available': has_curves,
             'available': True,
             'confidence': 'B',
         }

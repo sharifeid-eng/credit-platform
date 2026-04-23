@@ -659,10 +659,22 @@ class TestDualViewWAL:
 
     def test_total_wal_method_documented(self, apr15_df):
         w = self._wal(apr15_df, '2026-04-15')
-        # Apr 15 has Collection days so far, so observed proxy should win
-        assert w['wal_total_method'] == 'collection_days_so_far'
+        # Apr 15 has Collection days so far AND collection curves. Some completed
+        # rows carry corrupted (negative) CDSF; the curve-derived Tier 2 fallback
+        # fills those gaps with observed last-bucket arrival, so the method tag
+        # upgrades from 'collection_days_so_far' to the curve-fallback variant.
+        assert w['wal_total_method'] == 'collection_days_so_far_with_curve_fallback'
         assert w['wal_active_confidence'] == 'A'
         assert w['wal_total_confidence'] == 'B'
+
+    def test_total_wal_stays_near_prior_value_on_apr15(self, apr15_df):
+        """
+        Acceptance: Tier 2 upgrade is an incremental precision improvement (small
+        share of PV touched), not a redefinition. Pre-Tier-2 WAL Total was 137d;
+        new value must stay within a few days of that.
+        """
+        w = self._wal(apr15_df, '2026-04-15')
+        assert w['wal_total_days'] == pytest.approx(137, abs=3)
 
     def test_total_wal_graceful_degradation_on_older_tape(self, mar03_df):
         """Mar 3 tape lacks Collection days so far AND Expected collection days → wal_total=None."""
@@ -723,6 +735,9 @@ class TestDualViewWAL:
         assert proxy_apr[0]['available'] is True
         assert proxy_apr[0]['column'] == 'Collection days so far'
         assert proxy_apr[0]['target_metric'] == 'wal_total_days'
+        # Apr 15 has collection curves → Tier 2 fallback documented.
+        assert proxy_apr[0]['curve_fallback_available'] is True
+        assert 'curve-derived' in proxy_apr[0]['description']
 
         ml_mar = compute_methodology_log(mar03_df)
         proxy_mar = [a for a in ml_mar['adjustments'] if a.get('type') == 'close_date_proxy']
@@ -743,6 +758,131 @@ class TestDualViewWAL:
         assert ca_mar['Expected collection days'] is False
         assert ca_mar['Collection days so far'] is False
         assert ca_mar['Provider'] is False
+
+
+class TestCurveCloseAgeFallback:
+    """
+    Tier 2 of the _klaim_wal_total fallback chain: when 'Collection days so far'
+    is corrupted (missing/negative) for a completed row, use the LAST 30d bucket
+    in which cumulative Actual increased as the observed close age — strictly
+    better than contractual 'Expected collection days'.
+    """
+
+    def _synthetic_row(self, cdsf, exp, bucket_actuals, status='Completed', deal_days_ago=200, pv=1_000_000):
+        """Build a one-row DataFrame with the columns _klaim_wal_total expects."""
+        ref = pd.Timestamp('2026-04-15')
+        row = {
+            'Deal date': ref - pd.Timedelta(days=deal_days_ago),
+            'Purchase value': pv,
+            'Status': status,
+            'Collection days so far': cdsf,
+            'Expected collection days': exp,
+        }
+        # 13 curve buckets at 30-day intervals. bucket_actuals is a dict
+        # {bucket_days: cumulative_value}; unspecified buckets carry forward
+        # the last value (curves are cumulative, non-decreasing).
+        last = 0.0
+        for b in range(30, 391, 30):
+            if b in bucket_actuals:
+                last = bucket_actuals[b]
+            row[f'Actual in {b} days'] = last
+        return pd.DataFrame([row])
+
+    def test_curve_tier_overrides_contractual_for_corrupted_primary(self):
+        """
+        Corrupted CDSF (-10) + contractual 94d + curves showing the 60-90 bucket
+        as the last positive delta → Tier 2 should stamp close-age = 90d,
+        NOT the 94d contractual value. WAL is PV-weighted over the single row,
+        so the WAL reading IS the close-age applied.
+        """
+        from core.portfolio import _klaim_wal_total
+        df = self._synthetic_row(
+            cdsf=-10,
+            exp=94,
+            bucket_actuals={30: 0, 60: 100, 90: 150, 120: 150},
+            deal_days_ago=200,
+        )
+        wal, method = _klaim_wal_total(df, '2026-04-15', 1)
+        assert wal == pytest.approx(90, abs=0.01), (
+            f"Curve-derived close age should be 90d (upper bound of the last "
+            f"positive-delta bucket), not contractual 94d. Got {wal}"
+        )
+        assert method == 'collection_days_so_far_with_curve_fallback'
+
+    def test_curve_tier_skipped_when_primary_is_clean(self):
+        """
+        When CDSF is valid for every row, curves are not used; method tag stays
+        on the legacy 'collection_days_so_far' value.
+        """
+        from core.portfolio import _klaim_wal_total
+        df = self._synthetic_row(
+            cdsf=80,
+            exp=94,
+            bucket_actuals={30: 0, 60: 100, 90: 150},
+            deal_days_ago=200,
+        )
+        wal, method = _klaim_wal_total(df, '2026-04-15', 1)
+        assert wal == pytest.approx(80, abs=0.01)
+        assert method == 'collection_days_so_far'
+
+    def test_curve_tier_skipped_when_curves_absent(self):
+        """
+        Tape with CDSF but without curve columns — function still works, falls
+        through to contractual fallback when CDSF is corrupted.
+        """
+        from core.portfolio import _klaim_wal_total
+        ref = pd.Timestamp('2026-04-15')
+        df = pd.DataFrame([{
+            'Deal date': ref - pd.Timedelta(days=200),
+            'Purchase value': 1_000_000,
+            'Status': 'Completed',
+            'Collection days so far': -10,
+            'Expected collection days': 94,
+        }])
+        wal, method = _klaim_wal_total(df, '2026-04-15', 1)
+        # Corrupted CDSF → no Tier 2 (no curves) → Tier 3 contractual = 94d
+        assert wal == pytest.approx(94, abs=0.01)
+        assert method == 'collection_days_so_far'
+
+    def test_curve_tier_returns_last_positive_bucket_not_first(self):
+        """
+        The curve-derived close-age must be the LAST bucket with a positive
+        delta (i.e. last observed cash arrival), not the first. A row with
+        cash arriving in both the 30–60 and 180–210 buckets closes at 210d.
+        """
+        from core.portfolio import _klaim_curve_close_age
+        ref = pd.Timestamp('2026-04-15')
+        buckets = {30: 0, 60: 50, 90: 50, 120: 50, 150: 50, 180: 50, 210: 120}
+        row = {
+            'Deal date': ref - pd.Timedelta(days=300),
+            'Purchase value': 1_000_000,
+            'Status': 'Completed',
+        }
+        last = 0.0
+        for b in range(30, 391, 30):
+            if b in buckets:
+                last = buckets[b]
+            row[f'Actual in {b} days'] = last
+        df = pd.DataFrame([row])
+        ages = _klaim_curve_close_age(df)
+        assert ages.iloc[0] == 210
+
+    def test_curve_tier_returns_nan_when_no_cash_ever_arrived(self):
+        """Row with all-zero curves should return NaN so the caller falls through."""
+        from core.portfolio import _klaim_curve_close_age
+        ref = pd.Timestamp('2026-04-15')
+        row = {'Deal date': ref - pd.Timedelta(days=120), 'Purchase value': 100, 'Status': 'Completed'}
+        for b in range(30, 391, 30):
+            row[f'Actual in {b} days'] = 0.0
+        df = pd.DataFrame([row])
+        ages = _klaim_curve_close_age(df)
+        assert pd.isna(ages.iloc[0])
+
+    def test_curve_helper_returns_none_when_any_bucket_column_missing(self):
+        """If the tape lacks any of the 13 curve columns, helper returns None."""
+        from core.portfolio import _klaim_curve_close_age
+        df = pd.DataFrame([{'Actual in 30 days': 100, 'Actual in 60 days': 150}])
+        assert _klaim_curve_close_age(df) is None
 
 
 # ── Provider wiring (Part 2) ──────────────────────────────────────────────────
