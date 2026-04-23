@@ -260,6 +260,47 @@ class _TapeCache(_OrderedDict):
 _tape_cache = _TapeCache()
 
 
+_SNAPSHOT_EXTS = ('.csv', '.xlsx', '.ods', '.json')
+
+
+def _strip_snapshot_ext(name: str) -> str:
+    for ext in _SNAPSHOT_EXTS:
+        if name.endswith(ext):
+            return name[: -len(ext)]
+    return name
+
+
+def _match_snapshot(snaps, snapshot):
+    """Resolve a snapshot identifier against the filesystem snapshot list.
+
+    `snapshot=None` preserves the caller-has-no-preference default: return
+    latest. Any non-empty identifier must resolve exactly — filename, then
+    extension-stripped filename (the DB `/snapshots` endpoint returns names
+    without extension while filesystem names carry one), then single-date
+    match. A non-matching identifier raises HTTP 400. NEVER silently falls
+    back to latest on mismatch — that previously masked a silent
+    data-correctness bug where analysts thought they were viewing an older
+    snapshot but got the latest tape.
+    """
+    if not snapshot:
+        return snaps[-1]
+    for s in snaps:
+        if s['filename'] == snapshot:
+            return s
+    snap_stripped = _strip_snapshot_ext(snapshot)
+    for s in snaps:
+        if _strip_snapshot_ext(s['filename']) == snap_stripped:
+            return s
+    date_matches = [s for s in snaps if s['date'] == snapshot]
+    if len(date_matches) == 1:
+        return date_matches[0]
+    if len(date_matches) > 1:
+        names = [s['filename'] for s in date_matches]
+        raise HTTPException(status_code=400, detail=f"Ambiguous snapshot date '{snapshot}' matches {len(date_matches)} files: {', '.join(names)}. Please specify by filename.")
+    available = ', '.join(s['filename'] for s in snaps)
+    raise HTTPException(status_code=400, detail=f"Snapshot '{snapshot}' not found for this product. Available: {available}")
+
+
 def _load(company, product, snapshot):
     """Load and return the selected snapshot DataFrame + snapshot metadata."""
     _validate_path_param(company, "company")
@@ -267,14 +308,7 @@ def _load(company, product, snapshot):
     snaps = get_snapshots(company, product)
     if not snaps:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    # Prefer exact filename match, then date match
-    sel = next((s for s in snaps if s['filename'] == snapshot), None)
-    if sel is None:
-        date_matches = [s for s in snaps if s['date'] == snapshot]
-        if len(date_matches) > 1:
-            names = [s['filename'] for s in date_matches]
-            raise HTTPException(status_code=400, detail=f"Ambiguous snapshot date '{snapshot}' matches {len(date_matches)} files: {', '.join(names)}. Please specify by filename.")
-        sel = date_matches[0] if date_matches else snaps[-1]
+    sel = _match_snapshot(snaps, snapshot)
     # Cache loaded tapes to avoid re-parsing the same file per page load
     _cache_key = sel['filepath']
     if _cache_key in _tape_cache:
@@ -499,7 +533,7 @@ def _resolve_snapshot(company, product, snapshot):
     snaps = get_snapshots(company, product)
     if not snaps:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    return next((s for s in snaps if s['filename'] == snapshot or s['date'] == snapshot), snaps[-1])
+    return _match_snapshot(snaps, snapshot)
 
 def _silq_load(company, product, snapshot, as_of_date, currency):
     """Load SILQ data (multi-sheet) with currency multiplier applied.
