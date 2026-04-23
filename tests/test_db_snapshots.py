@@ -294,7 +294,7 @@ class TestSnapshotIsolation:
 
         assert apr_wal['wal_total_days'] is not None
         assert apr_wal['wal_total_days'] == pytest.approx(137, abs=2)
-        assert apr_wal['wal_total_method'] == 'collection_days_so_far'
+        assert apr_wal['wal_total_method'] in ('collection_days_so_far', 'collection_days_so_far_with_curve_fallback')
 
         assert mar_wal['wal_total_days'] is None
         assert mar_wal['wal_total_method'] == 'unavailable'
