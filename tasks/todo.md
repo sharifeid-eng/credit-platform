@@ -74,13 +74,15 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ## Active
 
-**Three chips queued / in flight after session-30 continuation EoD (`34a9b14`):**
+**Two chips outstanding after session-30 continuation tail:**
 
-1. **.gitignore Mind-store clarification** — in progress on a task branch. Formalise the split: Master Mind files tracked (shared institutional knowledge, no UUID refs), per-company + per-asset-class + pending-review stores gitignored (have per-machine UUIDs). Small ~5-10 line `.gitignore` edit + 1 lesson. Triggered by session 30's `framework_evolution.jsonl` commit emitting a confusing "paths ignored" warning that still went through because the file predated the gitignore rule.
+1. **Klaim email response parked session** — spawned as a ready-to-receive session. When Klaim replies to the email asking about Account Debtor column + status hygiene + Pending status + Collection days so far negatives, paste their response as the first user message and the session will classify the answer against the 4-option Account Debtor menu, write Mind entries, and recommend platform actions.
 
-2. **Klaim email response parked session** — spawned as a ready-to-receive session. When Klaim replies to the email asking about Account Debtor column + status hygiene + Pending status + Collection days so far negatives, paste their response as the first user message and the session will classify the answer against the 4-option Account Debtor menu, write Mind entries, and recommend platform actions.
+2. **Deprecation cleanup (queued, not running)** — chipped earlier today. Mechanical migration: 12× `datetime.utcnow()` → `datetime.now(timezone.utc)` across `core/memo/*`, `core/db_loader.py`, `backend/integration.py` + Pydantic class Config → ConfigDict in `backend/auth_routes.py`. Self-contained, ~30-40 LOC total. Expected to drop pytest warning count from 158 to ~15. Run whenever you have ~20 min of bandwidth.
 
-3. **Deprecation cleanup (queued, not running)** — chipped earlier today. Mechanical migration: 12× `datetime.utcnow()` → `datetime.now(timezone.utc)` across `core/memo/*`, `core/db_loader.py`, `backend/integration.py` + Pydantic class Config → ConfigDict in `backend/auth_routes.py`. Self-contained, ~30-40 LOC total. Expected to drop pytest warning count from 158 to ~15. Run whenever you have ~20 min of bandwidth.
+**Session-30-late completed (merged after the session-30 continuation EoD `34a9b14`):**
+
+- **`c7c7cde`** — `.gitignore` Mind-store clarification merged. Removed the blanket `data/_master_mind/` rule (Master Mind files are shared institutional knowledge, already tracked in git, no UUID pointers to per-machine state → should stay tracked). Kept per-company `**/mind/*.jsonl` + `data/_asset_class_mind/` + `data/_pending_review/` gitignored (these have per-machine graph relations). CLAUDE.md Mind architecture sections gained tracking-policy bullets. `tasks/lessons.md` gained a top lesson on directory-level `.gitignore` ambiguity with the content-model question to ask before deciding tracked vs per-machine. 630 tests still passing, 158 warnings unchanged (expected — pure config + docs, no code change).
 
 **Prod-host maintenance completed end-of-session (not git-tracked):**
 
