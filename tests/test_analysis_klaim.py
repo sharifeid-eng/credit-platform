@@ -22,6 +22,8 @@ from core.analysis import (
     compute_expected_loss, compute_loss_triangle, compute_group_performance,
     compute_collection_curves, compute_owner_breakdown, compute_vat_summary,
     compute_par, compute_segment_analysis,
+    classify_klaim_deal_stale, compute_klaim_operational_wal,
+    compute_klaim_stale_exposure, compute_methodology_log,
 )
 from core.validation import validate_tape
 from core.consistency import run_consistency_check
@@ -954,3 +956,212 @@ class TestCovenantMethodTagging:
         # Legacy missing-method: don't penalise, count as consecutive
         assert pvd['eod_triggered'] is True
         assert pvd['consecutive_breaches'] == 2
+
+
+# ── Klaim Stale Filter + Operational WAL + Stale Exposure ─────────────────────
+# Empirical targets from manual measurement on the Apr 15 tape:
+#   WAL Total (covenant, all deals, core.portfolio):  137.2d
+#   Operational WAL (clean book, new):                  78.6d
+#   Realized WAL (completed-clean, new):                64.9d
+#   Stale share:                                        16.5%  (926 deals)
+#   Mar 3 tape (older, no close-age columns):           Operational WAL degraded
+
+class TestClassifyKlaimDealStale:
+    """Boolean-mask classifier used by Operational WAL and Stale Exposure."""
+
+    def test_returns_all_expected_keys(self, apr15_df):
+        masks = classify_klaim_deal_stale(apr15_df, ref_date='2026-04-15')
+        assert set(masks.keys()) == {
+            'loss_completed', 'stuck_active', 'denial_dominant_active',
+            'any_stale', 'ineligibility_age_days',
+        }
+
+    def test_any_stale_is_or_reduction(self, apr15_df):
+        masks = classify_klaim_deal_stale(apr15_df, ref_date='2026-04-15')
+        expected = masks['loss_completed'] | masks['stuck_active'] | masks['denial_dominant_active']
+        assert (masks['any_stale'] == expected).all()
+
+    def test_apr15_category_counts(self, apr15_df):
+        masks = classify_klaim_deal_stale(apr15_df, ref_date='2026-04-15')
+        # Empirical counts on Apr 15: 152 / 770 / 21 → any_stale 926
+        assert 140 <= int(masks['loss_completed'].sum())         <= 170
+        assert 720 <= int(masks['stuck_active'].sum())           <= 820
+        assert 15  <= int(masks['denial_dominant_active'].sum()) <= 35
+        assert 900 <= int(masks['any_stale'].sum())              <= 950
+
+    def test_threshold_parameter_tightens_stuck_set(self, apr15_df):
+        loose = classify_klaim_deal_stale(apr15_df, ref_date='2026-04-15', ineligibility_age_days=91)
+        tight = classify_klaim_deal_stale(apr15_df, ref_date='2026-04-15', ineligibility_age_days=30)
+        # Lower threshold → more deals flagged stuck_active
+        assert int(tight['stuck_active'].sum()) >= int(loose['stuck_active'].sum())
+        # loss_completed and denial_dominant_active are threshold-independent
+        assert (tight['loss_completed'] == loose['loss_completed']).all()
+        assert (tight['denial_dominant_active'] == loose['denial_dominant_active']).all()
+
+    def test_mar03_compute_without_curve_columns(self, mar03_df):
+        # Mar 3 lacks Collection days so far AND Expected collection days, but
+        # all three stale rules only need Status, Deal date, PV, Denied, Collected.
+        masks = classify_klaim_deal_stale(mar03_df, ref_date='2026-03-03')
+        assert int(masks['any_stale'].sum()) > 0
+
+
+class TestKlaimOperationalWAL:
+    """Operational WAL — PV-weighted age on clean (non-stale) book."""
+
+    def test_apr15_operational_wal_around_79_days(self, apr15_df):
+        res = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        assert res['available'] is True
+        assert 78 <= res['operational_wal_days'] <= 80, \
+            f"Expected ~79d (empirical 78.6), got {res['operational_wal_days']}"
+
+    def test_apr15_realized_wal_around_65_days(self, apr15_df):
+        res = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        assert res['realized_wal_days'] is not None
+        assert 64 <= res['realized_wal_days'] <= 66, \
+            f"Expected ~65d (empirical 64.9), got {res['realized_wal_days']}"
+
+    def test_apr15_strictly_less_than_covenant_wal_total(self, apr15_df):
+        # Zombie exclusion must lower the PV-weighted mean. Baseline comes from
+        # core.portfolio._klaim_wal_total which is NOT changed by this task.
+        from core.portfolio import _klaim_wal_total
+        df = apr15_df.copy()
+        df['Deal date'] = pd.to_datetime(df['Deal date'], errors='coerce')
+        wal_total, _ = _klaim_wal_total(df, pd.Timestamp('2026-04-15'), 1.0)
+
+        op = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        assert op['operational_wal_days'] < wal_total, \
+            f"Operational {op['operational_wal_days']}d must be < Total {wal_total}d"
+
+    def test_apr15_realized_less_than_operational(self, apr15_df):
+        # Completed-clean ages are bounded; active-clean ages keep accruing.
+        # Strictly Realized < Operational on a live book.
+        res = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        assert res['realized_wal_days'] < res['operational_wal_days']
+
+    def test_apr15_method_is_cdsf(self, apr15_df):
+        res = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        assert res['method'] == 'collection_days_so_far'
+        assert res['confidence'] == 'B'
+
+    def test_mar03_degrades_to_active_clean_only(self, mar03_df):
+        # No close-age proxy → active-clean only, Realized WAL unavailable,
+        # method=elapsed_only, confidence C. Operational WAL must still be a
+        # real number (not raise, not return available=False).
+        res = compute_klaim_operational_wal(mar03_df, 1.0, ref_date='2026-03-03')
+        assert res['available'] is True
+        assert res['method'] == 'elapsed_only'
+        assert res['confidence'] == 'C'
+        assert res['realized_wal_days'] is None
+        assert res['operational_wal_days'] > 0
+
+    def test_currency_multiplier_does_not_affect_age(self, apr15_df):
+        # Days are unitless — multiplier only scales PV fields.
+        res_aed = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        res_usd = compute_klaim_operational_wal(apr15_df, 0.2723, ref_date='2026-04-15')
+        assert res_aed['operational_wal_days'] == pytest.approx(res_usd['operational_wal_days'], abs=0.01)
+        assert res_aed['realized_wal_days']    == pytest.approx(res_usd['realized_wal_days'],    abs=0.01)
+        # But PV fields scale.
+        assert res_usd['clean_pv'] == pytest.approx(res_aed['clean_pv'] * 0.2723, rel=0.01)
+
+    def test_does_not_mutate_input_df(self, apr15_df):
+        before = pd.util.hash_pandas_object(apr15_df, index=True).sum()
+        _ = compute_klaim_operational_wal(apr15_df, 1.0, ref_date='2026-04-15')
+        _ = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        after = pd.util.hash_pandas_object(apr15_df, index=True).sum()
+        assert before == after, "compute must not mutate caller's df"
+
+
+class TestKlaimStaleExposure:
+    """Stale exposure — category breakdown + top-25 offenders."""
+
+    def test_apr15_stale_share_around_16_percent(self, apr15_df):
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        assert res['available'] is True
+        # Empirical 16.5% → accept 15.5-17.5%
+        assert 0.155 <= res['stale_pv_share'] <= 0.175, \
+            f"Expected ~16.5%, got {res['stale_pv_share']*100:.1f}%"
+
+    def test_apr15_stale_count_around_926(self, apr15_df):
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        assert 900 <= res['total_stale_count'] <= 950, \
+            f"Expected ~926 stale deals, got {res['total_stale_count']}"
+
+    def test_apr15_all_three_categories_populated(self, apr15_df):
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        by = {c['category']: c for c in res['by_category']}
+        assert by['loss_completed']['count']         > 0
+        assert by['stuck_active']['count']           > 0
+        assert by['denial_dominant_active']['count'] > 0
+
+    def test_apr15_category_shares_sum_to_total(self, apr15_df):
+        # Categories MAY overlap (a deal hitting multiple rules is counted in
+        # each raw category). Any-stale PV ≤ sum of category PVs, ≥ max of them.
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        cat_pv_sum = sum(c['pv']    for c in res['by_category'])
+        cat_count_sum = sum(c['count'] for c in res['by_category'])
+        # Sum-of-categories >= unique any_stale (overlap inflates sum)
+        assert cat_pv_sum    >= res['total_stale_pv']
+        assert cat_count_sum >= res['total_stale_count']
+
+    def test_apr15_top_offenders_sorted_desc_by_pv(self, apr15_df):
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        pvs = [o['pv'] for o in res['top_offenders']]
+        assert pvs == sorted(pvs, reverse=True)
+        assert 1 <= len(res['top_offenders']) <= 25
+
+    def test_apr15_includes_1184_day_deal(self, apr15_df):
+        # The 1,184-day-old AED 4M PV deal still Executed should be the #1
+        # offender on Apr 15. Its deal ID is stable.
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        ids = [o['id'] for o in res['top_offenders']]
+        assert '63c640a0dcf9dec878b44b0b' in ids
+        # And it should be the top entry (largest stale PV on the book)
+        assert res['top_offenders'][0]['id'] == '63c640a0dcf9dec878b44b0b'
+        assert res['top_offenders'][0]['category'] == 'stuck_active'
+
+    def test_apr15_top_offender_has_group_and_provider(self, apr15_df):
+        # Apr 15 tape has both Group and Provider columns — offender rows should carry them.
+        res = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15')
+        first = res['top_offenders'][0]
+        assert 'group'    in first
+        assert 'provider' in first
+
+    def test_mar03_computes_gracefully(self, mar03_df):
+        # Mar 3 lacks Collection days so far + Expected collection days + Provider.
+        # stuck_active + loss_completed + denial_dominant_active all still compute
+        # (they only need Status/Deal date/PV/Denied/Collected).
+        res = compute_klaim_stale_exposure(mar03_df, 1.0, ref_date='2026-03-03')
+        assert res['available'] is True
+        assert res['total_stale_count'] > 0
+        # Provider missing on Mar 3 → top_offenders rows should NOT carry provider.
+        for o in res['top_offenders']:
+            assert 'provider' not in o
+
+    def test_facility_params_threshold_override(self, apr15_df):
+        # Tighter ineligibility_age_days → more deals flagged stuck_active → more stale.
+        loose = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15',
+                                             facility_params={'ineligibility_age_days': 91})
+        tight = compute_klaim_stale_exposure(apr15_df, 1.0, ref_date='2026-04-15',
+                                             facility_params={'ineligibility_age_days': 30})
+        assert tight['total_stale_count'] >= loose['total_stale_count']
+        assert tight['ineligibility_age_days'] == 30
+
+    def test_empty_df_returns_unavailable(self, apr15_df):
+        empty = apr15_df.iloc[0:0].copy()
+        res = compute_klaim_stale_exposure(empty, 1.0, ref_date='2026-04-15')
+        assert res['available'] is False
+
+
+class TestStaleClassificationMethodologyLog:
+    """compute_methodology_log should surface the stale thresholds for audit."""
+
+    def test_stale_entry_present(self, apr15_df):
+        log = compute_methodology_log(apr15_df)
+        entries = [a for a in log['adjustments'] if a.get('type') == 'stale_classification']
+        assert len(entries) == 1
+        e = entries[0]
+        assert e['thresholds']['ineligibility_age_days'] == 91
+        assert e['thresholds']['loss_denial_pct']        == 0.5
+        assert e['thresholds']['stuck_outstanding_pct']  == 0.1
+        assert e['thresholds']['denial_dominant_pct']    == 0.5
+        assert e['confidence'] == 'B'

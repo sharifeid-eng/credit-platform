@@ -31,6 +31,7 @@ def register_klaim_methodology():
         compute_underwriting_drift, compute_segment_analysis,
         compute_seasonality, compute_cdr_ccr, compute_methodology_log,
         compute_hhi, compute_facility_pd,
+        compute_klaim_operational_wal, compute_klaim_stale_exposure,
     )
 
     SECTIONS = [
@@ -520,6 +521,87 @@ def register_klaim_methodology():
                 'Default is defined as denial exceeding 50% of purchase value, consistent with the Loss Waterfall definition.',
                 'Without multi-snapshot transition data, the matrix is estimated from completed deal outcomes at each DPD depth rather than observed bucket-to-bucket movements.',
                 'This endpoint has a backend computation but no dedicated frontend tab component yet. The methodology is documented for completeness and future rendering.',
+            ],
+            'subsections': [],
+        },
+        # ── 16a. Operational WAL (L2 Cash Conversion — Tape-side Capital Life) ──
+        {
+            'function': 'compute_klaim_operational_wal',
+            'section': 'Capital Life (Operational WAL)',
+            'title': 'Operational WAL & Realized WAL',
+            'level': 2,
+            'tab': 'overview',
+            'analysis_type': 'klaim',
+            'order': 16.5,
+            'required_columns': ['Deal date', 'Status', 'Purchase value', 'Collected till date', 'Denied by insurance'],
+            'optional_columns': ['Collection days so far', 'Expected collection days'],
+            'denominator': 'clean-book PV',
+            'confidence': 'B',
+            'prose': ('Operational WAL is the PV-weighted age of the Klaim book after '
+                      'filtering out stale/zombie deals — the deals that would never be '
+                      'pledged to the ACP facility but keep drifting time-based metrics '
+                      'upward. It answers "how long is capital deployed in the live '
+                      'product?" rather than "how long does the operational tail take to '
+                      'clean up?". Distinct from the covenant-facing WAL in Portfolio '
+                      'Analytics (which includes every deal per MMA Art. 21).'),
+            'metrics': [],
+            'tables': [
+                {'title': 'Two Views', 'headers': ['Metric', 'Subset', 'Use Case'], 'rows': [
+                    ['Operational WAL', 'Clean book (active + completed, stale excluded)', 'Primary Tape-side capital-life signal'],
+                    ['Realized WAL',    'Completed-clean only, PV-weighted close-age',       'How long did the clean book actually take to resolve'],
+                ]},
+                {'title': 'Stale Filter Rules', 'headers': ['Rule', 'Condition', 'Intent'], 'rows': [
+                    ['loss_completed',          'Status=Completed AND Denied > 50% of PV',                                           'Resolved writeoffs'],
+                    ['stuck_active',            'Status=Executed AND elapsed > 91d AND outstanding < 10% of PV',                     'Economically done but status open'],
+                    ['denial_dominant_active',  'Status=Executed AND Denied > 50% of PV',                                            'Still open but mostly denied'],
+                ]},
+                {'title': 'Age Construction', 'headers': ['Deal State', 'Age Formula', 'Fallback Chain'], 'rows': [
+                    ['Active (Executed)',  'elapsed = snapshot − Deal date',                                    '—'],
+                    ['Completed',          'Collection days so far (observed), clipped to [0, elapsed]',       'Expected collection days → elapsed'],
+                ]},
+            ],
+            'notes': [
+                'On Apr 15 Klaim: Operational WAL ≈ 79d, Realized WAL ≈ 65d, vs WAL Total (covenant) ≈ 137d. The 58-day gap is the zombie tail — 16.5% of book PV sitting in stale status that drifts the covenant metric upward but tells you nothing about live product behaviour.',
+                '91 days is the contractual ineligibility threshold from the MMA (Page 81). Reusing it keeps Tape-side "what is stale" aligned with Portfolio-side "what is ineligible".',
+                'Confidence B — the three stale rules introduce judgement thresholds. Methodology log records every threshold in use so IC can audit.',
+                'Degraded mode: tapes before Apr 2026 lack Collection days so far and Expected collection days. In this case Operational WAL is restricted to the active-clean subset (active-deal age = elapsed is unambiguous) and Realized WAL is unavailable. Method tag becomes elapsed_only with Confidence C.',
+            ],
+            'subsections': [],
+        },
+        # ── 16b. Stale Exposure (L5 Forward Signals — unresolved tail) ──
+        {
+            'function': 'compute_klaim_stale_exposure',
+            'section': 'Stale Exposure',
+            'title': 'Zombie-tail PV + Top-25 Offenders',
+            'level': 5,
+            'tab': 'overview',
+            'analysis_type': 'klaim',
+            'order': 16.6,
+            'required_columns': ['Deal date', 'Status', 'Purchase value', 'Collected till date', 'Denied by insurance'],
+            'optional_columns': ['ID', 'Reference', 'Group', 'Provider'],
+            'denominator': 'total originated PV',
+            'confidence': 'B',
+            'prose': ('Stale Exposure surfaces the PV of deals classified as stale under '
+                      'the three-rule filter (see Operational WAL). It is a forward signal '
+                      'because unresolved tails convert into writeoffs, denials, or '
+                      'recoveries — they do not stay ambiguous forever. Share > 10% is an '
+                      'amber signal; > 20% is red (the active tail is dwarfing new '
+                      'origination).'),
+            'metrics': [],
+            'tables': [
+                {'title': 'Category Precedence (when a deal hits multiple rules)', 'headers': ['Priority', 'Category', 'Reason'], 'rows': [
+                    ['1', 'loss_completed',          'Resolved writeoffs are the cleanest classification'],
+                    ['2', 'stuck_active',            'Status inertia — most common stale cause'],
+                    ['3', 'denial_dominant_active',  'Open but denied — hardest to forecast outcome'],
+                ]},
+                {'title': 'Thresholds', 'headers': ['Metric', 'Amber', 'Red'], 'rows': [
+                    ['stale_pv_share', '> 10%', '> 20%'],
+                ]},
+            ],
+            'notes': [
+                'Top-25 offenders are the largest stale deals by Purchase value, tagged with Group and Provider attribution when those columns are on the tape. On Apr 15: the largest stuck_active offender is a 1,184-day-old (3.2 year) deal worth AED 4M still flagged Executed.',
+                'ineligibility_age_days is read from facility_params when available (MMA default = 91). Changing the parameter changes the stuck_active boundary — a smaller threshold surfaces more deals as stale.',
+                'This endpoint exists on the Tape side only. Portfolio Analytics covenants are unaffected — the Total WAL covenant card continues to compute on the full book per MMA Art. 21.',
             ],
             'subsections': [],
         },
