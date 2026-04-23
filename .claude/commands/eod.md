@@ -106,6 +106,25 @@ git push origin <feature-branch>
 git checkout main
 ```
 
+**Task-branch hygiene sweep** (no-op if nothing was merged this session):
+
+After all merges land, list any remaining `claude/*` branches that are now fully merged to main — these are stragglers from prior work that never got cleaned during their merge:
+
+```powershell
+git branch --merged main | Select-String "^  claude/"
+```
+
+For each listed branch, release its worktree and delete the branch:
+
+```powershell
+git worktree remove --force .claude/worktrees/<name>
+git branch -D claude/<name>
+```
+
+If `worktree remove` fails with Windows "permission denied" (a process holds the directory — another Claude Code session, VS Code, a terminal cd'd inside, Explorer window), verify git's metadata is already released via `git worktree list | Select-String "<name>"` — empty output means metadata is gone and `git branch -D` will succeed regardless. The empty directory on disk clears at next reboot or when the holding process exits. Don't hunt it if it persists — cosmetic, not functional.
+
+Per-merge cleanup during the merge sequence is the better discipline; this sweep only catches stragglers that slipped through.
+
 ## Step 11 — Production redeploy reminder
 
 If this session changed any backend, frontend, core/, or data/ files (not just docs/CLAUDE.md/todo.md), remind the user:
