@@ -16,9 +16,25 @@ git ls-files --others --exclude-standard -- "data/*/dataroom/registry.json" "dat
 ```
 If any results appear, stage them — they represent work product that won't survive worktree cleanup.
 
-## Step 2 — Run tests
+## Step 2 — Run tests + warning-drift check
 
 Run `pytest tests/ -q` from the project root. Report pass/fail counts. If any tests fail, fix them before proceeding — do not commit broken code.
+
+**Warning-drift check (mandatory — do not skip):** also capture the pytest warning count from the final line (`N passed, M warnings in …`). Compare against the baseline below:
+
+> **Last recorded baseline: 158 warnings (session 30, 2026-04-22)**
+
+If the current count is within ±5 of baseline, proceed without comment. If it jumped by >10, this means today's work introduced new deprecations or code smells worth flagging. Extract the top 3 warning categories:
+
+```
+pytest tests/ -q 2>&1 | Select-String -Pattern "DeprecationWarning|UserWarning|PendingDeprecationWarning" -Context 0,1 | Group-Object Line | Sort-Object Count -Descending | Select-Object -First 3
+```
+
+Flag any new category in the EoD summary ("+N new deprecations in <category>"). Don't require fixing them in this session — just surface the jump so new deprecations don't hide in existing background noise. After significant refactors (either up or down), update the baseline number at the top of this step.
+
+Known background warnings as of the last baseline:
+- 12× `datetime.utcnow()` deprecation in `core/memo/*`, `core/db_loader.py`, `backend/integration.py`
+- 1× Pydantic `class Config` deprecation in `backend/auth_routes.py`
 
 ## Step 3 — Safety check: confirm .env is not tracked
 
