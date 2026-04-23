@@ -17,7 +17,7 @@ and Phase 4 (snapshots — DB as authoritative, snapshotted source of truth):
   snapshot-independent.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column, String, DateTime, Date, ForeignKey, Numeric,
     Text, Index, Boolean, Integer, UniqueConstraint
@@ -25,6 +25,15 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from core.database import Base
+
+
+def _utcnow_naive() -> datetime:
+    """Naive-UTC default for DateTime columns (no timezone=True).
+
+    Replaces the deprecated `datetime.utcnow`. Strips tzinfo so values match
+    the existing naive DB schema — avoids a column-wide aware-migration.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -35,7 +44,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default="viewer")  # 'admin' or 'viewer'
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow_naive)
     last_login_at = Column(DateTime, nullable=True)
 
 
@@ -45,7 +54,7 @@ class Organization(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), unique=True, nullable=False)
     api_key_hash = Column(String(255), nullable=True)  # Phase 2B
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow_naive)
 
     products = relationship("Product", back_populates="organization", cascade="all, delete-orphan")
 
@@ -59,7 +68,7 @@ class Product(Base):
     currency = Column(String(3), nullable=False)        # ISO 4217: AED, SAR, USD
     analysis_type = Column(String(50), nullable=False)  # "klaim" or "silq"
     facility_limit = Column(Numeric(18, 2), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow_naive)
 
     organization = relationship("Organization", back_populates="products")
     snapshots = relationship("Snapshot", back_populates="product", cascade="all, delete-orphan")
@@ -90,7 +99,7 @@ class Snapshot(Base):
     name = Column(String(255), nullable=False)           # "2026-04-15_uae_healthcare" or "live-2026-04-21"
     source = Column(String(20), nullable=False)          # 'tape' | 'live' | 'manual'
     taken_at = Column(Date, nullable=False)              # Asset-date the snapshot represents
-    ingested_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ingested_at = Column(DateTime, default=_utcnow_naive, nullable=False)
     row_count = Column(Integer, nullable=False, default=0)
     notes = Column(Text, nullable=True)
 
@@ -122,8 +131,8 @@ class Invoice(Base):
     invoice_date = Column(Date, nullable=True)                # "Deal date" (Klaim) or "Disbursement_Date" (SILQ)
     due_date = Column(Date, nullable=True)
     extra_data = Column(JSONB, nullable=True)                 # Every non-core tape column lands here — read back in db_loader
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow_naive)
+    updated_at = Column(DateTime, default=_utcnow_naive, onupdate=_utcnow_naive)
 
     snapshot = relationship("Snapshot", back_populates="invoices")
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
@@ -148,7 +157,7 @@ class Payment(Base):
     currency = Column(String(3), nullable=False)
     payment_date = Column(Date, nullable=True)
     transaction_id = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow_naive)
 
     invoice = relationship("Invoice", back_populates="payments")
     snapshot = relationship("Snapshot", back_populates="payments")
@@ -171,7 +180,7 @@ class BankStatement(Base):
     account_type = Column(String(50), nullable=True)    # cash-account, collection, savings
     statement_date = Column(Date, nullable=False)
     file_path = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow_naive)
 
     snapshot = relationship("Snapshot", back_populates="bank_statements")
 
@@ -191,6 +200,6 @@ class FacilityConfig(Base):
     advance_rates = Column(JSONB, nullable=True)          # {"UAE": 0.90} per facility agreement
     concentration_limits = Column(JSONB, nullable=True)   # [{name, threshold, ...}]
     covenants = Column(JSONB, nullable=True)              # [{name, threshold, operator, ...}]
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=_utcnow_naive, onupdate=_utcnow_naive)
 
     product = relationship("Product", back_populates="facility_config")

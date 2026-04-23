@@ -10,7 +10,7 @@ import os
 import json
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import jwt
@@ -118,7 +118,7 @@ def _get_or_create_user(db: Session, email: str) -> User:
     """Find existing user or auto-provision as viewer."""
     user = db.query(User).filter(User.email == email).first()
     if user:
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
         return user
 
@@ -130,7 +130,7 @@ def _get_or_create_user(db: Session, email: str) -> User:
         email=email.lower(),
         name=name,
         role=role,
-        last_login_at=datetime.utcnow(),
+        last_login_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(user)
     db.commit()
