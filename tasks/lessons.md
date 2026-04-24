@@ -3,6 +3,58 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-24 — Build walkers before eyeballing audits; per-company audits miss cross-company propagation
+
+**Problem:** Session 34 Framework §17 audit enumerated gaps company-by-company from tables I built by hand. After the sweep I declared it complete with 0 regressions and 0 new gaps surfaced. The user then pointed at the SILQ Credit Quality dashboard and asked: "why is PAR only shown vs Active Outstanding here, when the same dual was added for Aajil?" The SILQ PAR dual-view miss was visible to a human staring at the UI but invisible to my manual per-company walkthrough.
+
+Session 35 built a systematic walker (`tests/test_population_discipline_meta_audit.py`) that introspects every compute function's return dict and flags rate-like fields without §17 disclosure. **First run found 45 gaps** across Klaim/SILQ/Aajil — an order of magnitude more than I would have enumerated by eye. Fixed all 45. Walker now runs on every test pass, so future sessions can't quietly reintroduce gaps.
+
+**Rule:** When a platform-wide discipline is declared (every metric must carry X + Y), write the walker FIRST. Manually enumerated audits systematically miss cross-company propagation because human attention is per-company, not per-pattern.
+
+**How to apply:**
+- For any new platform-wide contract (§17 population/confidence, audit trail fields, covenant EoD history, etc.), build a walker as the FIRST commit, not the last. The walker's output becomes the audit gap list.
+- Walker structure: introspect returns from every compute function against a minimal synthetic tape, walk the top-level dict, apply heuristics for "fields that need the contract" (name patterns + value-range checks for rate-likes), report findings with function + field names so the fix target is obvious from CI output.
+- Add the walker BEFORE touching any compute function. Run it to generate the gap list. Then fix. The first fix commit has the walker passing, subsequent commits keep it passing.
+- Reference: session 35 walker surfaced 45 gaps; manual audit (session 34) missed the SILQ PAR / SILQ delinquency / Aajil summary collection_rate / cdr_ccr portfolio / stale_exposure zombie_subset / stress_test recovery / cohort_loss_waterfall totals gaps. Every one of those would have been a "user finds it in production later" moment.
+- Corollary for propagation tests: when a dual-view exists on company A, write a propagation test that asserts the same dual exists on B, C, D. Session 35's `TestMetaAuditDualPropagation` is the pattern. Locks in "if you added it for A, you MUST add it for B before CI passes."
+
+---
+
+## 2026-04-24 — Summary fns must mirror compute fns on dual-view surfaces
+
+**Problem:** Session 34 P1-4 added 3-population collection rate dual to `compute_aajil_collections` (blended + realised + clean). But `compute_aajil_summary` kept only the blended `collection_rate`. Analyst reading the Overview card saw the ambiguous blended view; only analysts drilling into the Collections tab saw the population-honest duals. Surfaced by session 35 walker.
+
+**Rule:** If a compute function gains a dual view, the summary function (if any exists) MUST surface the same dual. Overview cards are the analyst-facing layer; detail pages are the implementation layer. Both need the dual for the analyst to see it.
+
+**How to apply:**
+- When adding `<field>_realised` / `<field>_clean` / `<field>_lifetime` to a compute_X fn, grep the codebase for `compute_X_summary` (or `compute_{type}_summary` for read-only types) — if it exists and cites the base `<field>`, add the duals there too.
+- Add a propagation test: given a metric exists in both places, assert both places have the dual.
+- Reference: session 35 `TestMetaAuditDualPropagation.test_summary_collection_rate_dual_consistency` for the pattern. Aajil gap caught, fixed in `compute_aajil_summary` to now return `collection_rate` + `collection_rate_realised` + `collection_rate_clean` + the three populations.
+
+---
+
+## 2026-04-24 — Three dual-view patterns, not one; pick the right one per asset class
+
+**Problem:** Session 34 implemented dual-view PAR differently across asset classes:
+- Klaim: lifetime as primary, active as secondary (IC view dominates)
+- Aajil: active install-count as primary + par_primary (days-based) as fallback + lifetime as alternate
+- SILQ (session 35 fix): active as primary, lifetime as context
+
+All three are correct for their asset class. But there was no codified guide for which pattern to pick. Next onboarding would have guessed.
+
+**Rule:** Three dual-view patterns exist, each for a specific asset-class economic context:
+- **Pattern 1 — Single-primary + context** (lending-style): active pool IS the live book, so active is primary; lifetime is sanity-check context. Example: SILQ PAR, Aajil Operational WAL.
+- **Pattern 2 — Parallel-equal** (factoring-style): active is covenant-bound, lifetime is IC-bound, neither dominates. Both headline. Example: Klaim PAR.
+- **Pattern 3 — N-way comparison** (yield-style): 3+ populations each answer a distinct question. Example: Aajil yield (blended/realised/active), Aajil collections (blended/realised/clean).
+
+**How to apply:**
+- At onboarding time, declare the asset-class economics in `config.json` (lending / factoring / yield-style / read-only).
+- Pick the dual-view pattern that matches.
+- Framework §17 "Dual-view pattern taxonomy" subsection (session 35 addition) codifies the when-to-use guidance.
+- Reference: `core/ANALYSIS_FRAMEWORK.md` §17 after "Backwards compat for dual-view rollout" / "Principle propagation discipline" / "Dual-view pattern taxonomy" — codified during session 35.
+
+---
+
 ## 2026-04-24 — Audit-first, implement-second: turn ambiguity into doctrine BEFORE the code changes, not after
 
 **Problem (inverted, i.e. what went right worth codifying):** Session 30 surfaced Klaim WAL as having four legitimate values (148d Active / 137d Total / 79d Operational / 65d Realized), each answering a different question. The impulse is to pick one, call it "WAL", and move on. The better move — which session 34 took — was to pause, audit every compute function across all 5 companies for the same class of population-mismatch problem, draft a Framework section capturing the doctrine, and only THEN implement. The audit report predicted 6 P0s, 8 P1s, 5 P2s, 3 UNCERTAINs; the implementation found exactly those, plus zero new gaps. That's the signal the audit was worth doing.

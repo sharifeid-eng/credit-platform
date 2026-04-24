@@ -429,6 +429,9 @@ credit-platform/
 │   ├── test_integration_snapshots.py # Session 31 — Integration API UPSERT by (snapshot, invoice_number), 409 on tape/prior-day-live, payment inheritance (10 tests)
 │   ├── test_exec_summary_stream.py  # Session 32-33 — SSE event contract + analytics_coverage pass-through + parser tests (16 tests)
 │   ├── test_exec_summary_prompt.py  # Session 33 — prompt-contract tests locking in the 5 binding rule sections (arithmetic, compute-don't-estimate, section/findings discipline, severity calibration) (20 tests)
+│   ├── test_population_discipline_guard.py  # Session 34 — §17 covenant+limit dict shape contract (9 tests)
+│   ├── test_population_discipline_meta_audit.py # Session 35 — §17 rate-field disclosure walker + dual-view propagation + taxonomy freshness (8 tests)
+│   ├── test_population_audit_2026_04_22.py  # Session 34+35 — P0/P1/P2/UNCERTAIN-gap regression tests from the original audit (100+ tests)
 ├── scripts/
 │   ├── seed_db.py          # Legacy CLI (replaced by ingest_tape.py for tape-snapshot ingest)
 │   ├── ingest_tape.py      # CLI to create one Snapshot per tape file; extra_data preserves all non-core columns
@@ -1028,6 +1031,28 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
     1. Semantic upgrades to compute-function outputs need cross-file test grep, not just in-module (task #2 test-catchup caught at merge time, one-line fix).
     2. `git` 3-way merge collapses identical prologues across parallel additions (tasks #3 + #4 both added endpoints with identical `df, sel = _load(...)` prologues — resolution: N independent complete functions, never one blended function).
   - **Surfaced during deploy, not fixed:** prod host missing `libxfixes3` (Playwright PDF-report dep). One-line `apt-get install -y libxfixes3` on server when convenient. Non-blocking.
+- ✅ **Session 35 — §17 meta-audit walker + 45 rate-field disclosure fixes + propagation doctrine (2026-04-24):**
+  - **User feedback triggered session:** after session 34 declared §17 complete, user looked at SILQ Credit Quality dashboard and flagged that PAR cards showed only active-denominator view while Aajil had a dual-view treatment. This had slipped past session 34's per-company manual audit because per-company audits systematically miss cross-company propagation.
+  - **Three commits landed** on main (`1377ae3..666bb28`):
+    1. **`1377ae3`** — committed the Apr 15 Klaim tape (had been on disk since Apr 20 but never `git add`'d; all prior Klaim tapes ARE tracked in git) + fixed EoD skill's incorrect "tapes are gitignored" claim. Closes the Tape-vs-Portfolio Analytics data-freshness gap on prod.
+    2. **`1793ec4`** — SILQ PAR dual-view (the user-flagged gap). `compute_silq_summary` gains par30_amount/60/90 (absolute SAR), lifetime_par30/60/90 (total_disbursed denominator), total_active_outstanding, par_lifetime_population='total_originated'. Frontend Credit Quality subtitle now uses the actual at-risk amount (not the broken `par% × total_outstanding` math) + shows "· Lifetime: X.XX%" as dual-view context. **SILQ keeps active as PRIMARY** (lending product where live book IS the IC metric) — different primary-view pattern from Klaim (factoring, promotes lifetime to primary).
+    3. **`666bb28`** — systematic §17 meta-audit walker + 45 rate-field fixes + Framework §17 additions.
+  - **The walker** (`tests/test_population_discipline_meta_audit.py`, 700+ lines): introspects every compute_* function on every asset class, identifies rate-like fields via 50+ canonical names + suffixes, checks 5 disclosure modes (per-field, dict-level, par_confidence prefix, hhi_confidence prefix, sub-dict like yield_confidence). First run surfaced 45 gaps.
+  - **45 rate-field disclosure fixes**: Klaim 17 (compute_summary + compute_returns_analysis + compute_denial_funnel + compute_par BOTH direct+derived branches + compute_cohort_loss_waterfall.totals + compute_klaim_stale_exposure + compute_stress_test + compute_cdr_ccr.portfolio), SILQ 17 (compute_silq_summary + compute_silq_delinquency with NEW lifetime dual + compute_silq_yield + compute_silq_cohort_loss_waterfall.totals + compute_silq_cdr_ccr.portfolio), Aajil 11 (compute_aajil_summary with NEW 3-pop collection_rate dual + compute_aajil_concentration + compute_aajil_loss_waterfall).
+  - **8 new meta-tests in 3 classes**:
+    - `TestMetaAuditRateFieldDisclosure` (1): walker enforcement; future rate-field additions without §17 tags fail CI with function+field name in error.
+    - `TestMetaAuditDualPropagation` (6): PAR lifetime dual on every live-tape company, HHI clean dual on every company, collection_rate_realised on SILQ+Aajil, primitive-set completeness (separate+classify+operational_wal+methodology_log) on every live-tape company, summary-fn-must-mirror-compute-fn rule.
+    - `TestMetaAuditTaxonomyFreshness` (1): emitted population codes must be pre-approved; forces explicit vote-in of new vocabulary.
+  - **Framework §17 doctrine additions** (`core/ANALYSIS_FRAMEWORK.md`):
+    - NEW "Principle propagation discipline" subsection: 4 rules codifying platform-wide dual-view rollout, summary-mirror-compute rule, primitive-completeness for live-tape asset classes, read-only exemption declaration.
+    - NEW "Dual-view pattern taxonomy" subsection: 3 patterns with when-to-use guidance — Pattern 1 single-primary+context (lending: SILQ PAR, Aajil Operational WAL), Pattern 2 parallel-equal (factoring: Klaim PAR), Pattern 3 N-way comparison (yield-style: Aajil yield, Aajil collections). Prevents future pattern mismatch at onboarding time.
+  - **Audit document**: `reports/session_35_meta_rethink_2026-04-24.md` documents the rethink process, findings by phase, meta-tests added, Framework §17 additions, and onboarding implications.
+  - **3 new lessons** in `tasks/lessons.md`:
+    1. Build walkers before eyeballing audits (walker found 45 gaps I couldn't have enumerated by hand).
+    2. Summary fns must mirror compute fns on dual-view surfaces (the Aajil summary gap).
+    3. Three dual-view patterns, not one (picking the wrong pattern creates analyst confusion).
+  - **Tests: 780 passing** (was 772 + 8 new), 82 skipped, 0 warnings (baseline maintained), 0 regressions at every commit.
+  - **Platform state: §17 walker passes cleanly across all 3 live-tape asset classes.** New compute functions + new asset classes onboarded in future sessions will automatically be walked by the meta-audit — any rate field without §17 tags fails CI before commit. No more "user finds gap in prod later".
 - ✅ **Session 34 — Framework §17 Population Discipline codified + full platform implementation (2026-04-22 audit, 2026-04-24 implementation + follow-up sweep):**
   - **Audit output** (`reports/metric_population_audit_2026-04-22.md`, 732 lines): 52 compute_* functions across Klaim + SILQ + Aajil + Tamara + Ejari classified by numerator / denominator / population (7 §17 codes) / confidence (A/B/C) / dual-view availability / gap flag. 6 P0, 8 P1, 5 P2, 3 UNCERTAIN.
   - **Initial sweep** (12 commits `a4d0d34..03192d0`): all 6 P0s + 8 P1s + 5 P2s + 3 UNCERTAIN resolutions + §17 Framework codification + methodology updates + Mind entry codified. 627 passing (baseline 548 + 79 new).
@@ -1647,6 +1672,21 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `classifier_llm.py` cache is sha256-keyed cross-company — re-running `classify --only-other` is free on a re-ingest.
 -----
 ## Known Gaps & Next Steps
+
+**Session 35 — Systematic §17 meta-audit walker + 45 rate-field fixes ✅ COMPLETE (2026-04-24):**
+- [x] **Apr 15 Klaim tape tracked** (`1377ae3`) — pre-session gap closed. Tape had been on disk 4 days without being `git add`'d; EoD skill's policy claim corrected in same commit.
+- [x] **SILQ PAR dual-view** (`1793ec4`) — user-flagged session 34 miss. compute_silq_summary gains par*_amount + lifetime_par* + total_active_outstanding + par_lifetime_population. Frontend Credit Quality subtitle arithmetic fixed + lifetime context appended.
+- [x] **§17 meta-audit walker** (`666bb28`) — `tests/test_population_discipline_meta_audit.py` introspects every compute_* function, identifies rate-like fields via 50+ canonical names + 5 disclosure modes. First run found 45 gaps across Klaim/SILQ/Aajil.
+- [x] **45 rate-field disclosure fixes** (`666bb28`) — every top-level compute function now declares §17 disclosure for its rate fields (dict-level confidence+population, per-field variants for lifetime/clean duals, or explicit exemption for descriptive stats).
+- [x] **SILQ compute_silq_delinquency lifetime PAR dual** (`666bb28`) — closes the Delinquency tab gap that the summary-only fix hadn't covered.
+- [x] **Aajil compute_aajil_summary 3-population collection_rate dual** (`666bb28`) — mirrors compute_aajil_collections P1-4 pattern. Closes the summary-fn-must-mirror-compute-fn gap.
+- [x] **TestMetaAuditDualPropagation** (6 tests in `666bb28`) — asserts dual views exist on every applicable asset class (PAR lifetime, HHI clean, collection_rate_realised, operational_wal triad, methodology_log, summary-mirror rule). Locks in cross-company propagation.
+- [x] **TestMetaAuditTaxonomyFreshness** — new population codes must be voted into _ALLOWED_POPULATIONS_PREFIX before compute functions can emit them.
+- [x] **Framework §17 principle propagation discipline** codified in `core/ANALYSIS_FRAMEWORK.md` — 4 rules: dual-view platform-wide rollout, summary-mirror-compute, primitive-completeness for live-tape companies, read-only exemption declaration.
+- [x] **Framework §17 dual-view pattern taxonomy** codified — 3 patterns (single-primary+context lending-style, parallel-equal factoring-style, N-way yield-style) with when-to-use guidance.
+- [x] **Audit report** `reports/session_35_meta_rethink_2026-04-24.md`.
+- [x] **3 lessons in `tasks/lessons.md`** — build walkers before eyeballing audits, summary-mirror-compute, three dual-view patterns not one.
+- [x] **780 tests passing** (was 772 + 8 new), 82 skipped, 0 warnings, 0 regressions.
 
 **Session 34 — Framework §17 Population Discipline audit + full platform implementation ✅ COMPLETE (2026-04-22 audit / 2026-04-24 implementation + follow-up sweep):**
 - [x] **Audit artifact** — `reports/metric_population_audit_2026-04-22.md` (732 lines, commit `4e14b59`). 52 compute_* functions across all 5 companies classified by numerator / denominator / population / confidence / dual-view / gap flag. 6 P0, 8 P1, 5 P2, 3 UNCERTAIN.
