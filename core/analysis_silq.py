@@ -1143,6 +1143,113 @@ def compute_silq_underwriting_drift(df, mult=1, ref_date=None):
 
 # ── 13. CDR / CCR ─────────────────────────────────────────────────────────────
 
+def compute_silq_methodology_log(df, ref_date=None):
+    """Return a log of data corrections/adjustments applied during SILQ analysis.
+
+    Platform-consistent analog to core.analysis.compute_methodology_log
+    (Klaim) — surfaces the column availability, proxy decisions, and
+    separation thresholds that drive SILQ compute outputs. Feeds the
+    Data Integrity tab + IC audit trail.
+
+    Returns: {
+        'adjustments': [{type, target_metric, description, thresholds,
+                         available, confidence}, ...],
+        'column_availability': {col: bool, ...},
+        'data_quality_summary': {total_rows, null_rates},
+    }
+    """
+    adjustments = []
+
+    # Stale classification thresholds (Framework §17 primitive)
+    adjustments.append({
+        'type': 'stale_classification',
+        'target_metric': 'operational_wal_days / classify_silq_deal_stale',
+        'description': ('Three stale-deal rules for SILQ. '
+                        '(1) loss_closed_outstanding — Closed AND Outstanding > 0 '
+                        '(charge-off, not recovered). '
+                        '(2) stuck_active — Active AND Outstanding < 10% of Disbursed AND DPD > 0 '
+                        '(economically complete but still open). '
+                        '(3) deep_dpd_active — Active AND DPD > 90 (deep delinquency). '
+                        'OR-reduced into any_stale for the clean-book mask.'),
+        'thresholds': {
+            'ineligibility_days':     180,
+            'stuck_outstanding_pct':  0.10,
+            'deep_dpd_days':          90,
+        },
+        'available': True,
+        'confidence': 'B',
+    })
+
+    # Clean-book separation (consumed by separate_silq_portfolio + HHI dual)
+    adjustments.append({
+        'type': 'clean_book_separation',
+        'target_metric': 'repayment_rate_realised / hhi_clean (collections, concentration)',
+        'description': ('separate_silq_portfolio() splits the book into clean '
+                        '(active current + closed-repaid) and loss (Closed with '
+                        'outstanding OR active DPD>90). Clean-book view used for '
+                        'Tape-side learning metrics; blended view preserved for '
+                        'IC-view / backward compat. Framework §17.'),
+        'thresholds': {
+            'closed_outstanding_threshold': 0,
+            'deep_dpd_days':                90,
+        },
+        'available': True,
+        'confidence': 'B',
+    })
+
+    # PAR / Covenant semantics (documents the direct-DPD basis)
+    adjustments.append({
+        'type': 'par_direct_dpd',
+        'target_metric': 'par30 / par60 / par90 (summary, delinquency, covenants)',
+        'description': ('PAR computed as outstanding-weighted share of active deals '
+                        'with DPD > threshold, where DPD = max(0, ref_date - '
+                        'Repayment_Deadline) on active loans. Closed loans have '
+                        'DPD=0 by definition. Confidence A — direct tape observation.'),
+        'thresholds': {'par_days': [30, 60, 90]},
+        'available': C_REPAY_DEADLINE in df.columns,
+        'confidence': 'A',
+    })
+
+    # Collection Ratio maturing-period filter — audit P0-1 doctrine
+    adjustments.append({
+        'type': 'maturing_period_filter',
+        'target_metric': 'Collection Ratio + Repayment at Term (covenants)',
+        'description': ('Population: specific_filter(maturing in period) — loans '
+                        'whose Repayment_Deadline falls in the measurement window, '
+                        'REGARDLESS of Status. Closed-repaid-in-full loans MUST '
+                        'contribute to the denominator or the metric biases toward '
+                        'delinquent-dominated months. Validated against SILQ KSA '
+                        'Dec 2025 cert 95.53%. Audit P0-1.'),
+        'available': True,
+        'confidence': 'A',
+    })
+
+    # Column availability map
+    expected_cols = [C_DISBURSED, C_OUTSTANDING, C_OVERDUE, C_COLLECTABLE,
+                     C_REPAID, C_MARGIN, C_PRINCIPAL, C_SHOP_LIMIT,
+                     C_DEAL_ID, C_SHOP_ID, C_TENURE, C_STATUS, C_PRODUCT,
+                     C_DISB_DATE, C_REPAY_DEADLINE, C_LAST_COLL, C_LOAN_AGE]
+    col_availability = {col: col in df.columns for col in expected_cols}
+
+    # Data quality summary — null rates on first 20 cols (matches Klaim shape)
+    total_rows = len(df)
+    null_rates = {}
+    for col in list(df.columns)[:20]:
+        if total_rows > 0:
+            null_pct = float(df[col].isna().sum() / total_rows * 100)
+            if null_pct > 0:
+                null_rates[col] = round(null_pct, 2)
+
+    return {
+        'adjustments': adjustments,
+        'column_availability': col_availability,
+        'data_quality_summary': {
+            'total_rows': total_rows,
+            'null_rates': null_rates,
+        },
+    }
+
+
 def separate_silq_portfolio(df, ref_date=None):
     """Split a SILQ DataFrame into (clean_df, loss_df) per Framework §17.
 

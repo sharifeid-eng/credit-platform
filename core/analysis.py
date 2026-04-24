@@ -2688,6 +2688,41 @@ def compute_methodology_log(df, as_of_date=None):
         'confidence': 'B',
     })
 
+    # Framework §17 separation primitive — used by compute_cohorts'
+    # collection_rate_clean / denial_rate_clean dual and by compute_hhi's
+    # hhi_clean dual. Confidence B — 50% threshold is a judgement call.
+    adjustments.append({
+        'type': 'clean_book_separation',
+        'target_metric': 'collection_rate_clean / denial_rate_clean / hhi_clean (cohorts, hhi, hhi_for_snapshot)',
+        'description': ('separate_portfolio() splits the book into clean (active + '
+                        'normally completed) and loss (denial > 50% of PV) subsets. '
+                        'Clean-book view used for Tape-side learning metrics; blended '
+                        '(total_originated) view preserved for IC-view / backward compat. '
+                        'Framework §17 dual-view doctrine.'),
+        'thresholds': {'loss_denial_pct': 0.50},
+        'available': True,
+        'confidence': 'B',
+    })
+
+    # Single-payer concentration limit uses Group as a proxy when the tape
+    # lacks a dedicated Payer column. Session 17 data gap — recorded in
+    # data/klaim/legal/debtor_validation.json — documented here so the
+    # methodology trail agrees with core.portfolio._conc_threshold.
+    has_payer_col = 'Payer' in df.columns or 'Insurance company' in df.columns
+    adjustments.append({
+        'type': 'single_payer_proxy',
+        'target_metric': 'single_payer_concentration (Klaim)',
+        'description': ('Single-payer limit measured against Group column (Klaim '
+                        'has 144+ Groups serving as operational counterparties). '
+                        'True payer column (insurance company adjudicating the '
+                        'claim) is not on the tape; limit reads as if Group = Payer. '
+                        'Confidence A when Payer column present, B when Group proxy used.'),
+        'column_present': has_payer_col,
+        'proxy_column': 'Group' if not has_payer_col else None,
+        'available': True,
+        'confidence': 'A' if has_payer_col else 'B',
+    })
+
     # Data quality summary
     total_rows = len(df)
     null_rates = {}

@@ -913,6 +913,102 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: Methodology logs extended across platform
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestKlaimMethodologyLogNewEntries:
+    """Audit additions to compute_methodology_log:
+       - clean_book_separation (for compute_cohorts + compute_hhi duals)
+       - single_payer_proxy (Group-as-Payer disclosure)"""
+
+    def test_clean_book_separation_entry_present(self):
+        from core.analysis import compute_methodology_log
+        df = TestP06KlaimCovenantsCarryConfidence()._make_klaim_tape()[0]
+        res = compute_methodology_log(df)
+        types = [a['type'] for a in res['adjustments']]
+        assert 'clean_book_separation' in types
+
+    def test_single_payer_proxy_entry_present(self):
+        from core.analysis import compute_methodology_log
+        df = TestP06KlaimCovenantsCarryConfidence()._make_klaim_tape()[0]
+        res = compute_methodology_log(df)
+        types = [a['type'] for a in res['adjustments']]
+        assert 'single_payer_proxy' in types
+
+    def test_single_payer_proxy_B_when_no_payer_column(self):
+        """Klaim tapes today don't have a Payer column — entry should mark
+        Confidence B with proxy_column='Group'."""
+        from core.analysis import compute_methodology_log
+        df = TestP06KlaimCovenantsCarryConfidence()._make_klaim_tape()[0]
+        res = compute_methodology_log(df)
+        payer = next(a for a in res['adjustments'] if a['type'] == 'single_payer_proxy')
+        assert payer['confidence'] == 'B'
+        assert payer['proxy_column'] == 'Group'
+
+
+class TestSILQMethodologyLog:
+    """compute_silq_methodology_log — the new SILQ analog."""
+
+    def test_returns_expected_shape(self):
+        from core.analysis_silq import compute_silq_methodology_log
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_methodology_log(df, ref_date=today)
+        assert 'adjustments' in res
+        assert 'column_availability' in res
+        assert 'data_quality_summary' in res
+
+    def test_contains_stale_classification_entry(self):
+        from core.analysis_silq import compute_silq_methodology_log
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_methodology_log(df, ref_date=today)
+        types = [a['type'] for a in res['adjustments']]
+        assert 'stale_classification' in types
+        assert 'clean_book_separation' in types
+        assert 'par_direct_dpd' in types
+        assert 'maturing_period_filter' in types
+
+    def test_par_direct_dpd_confidence_A(self):
+        from core.analysis_silq import compute_silq_methodology_log
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_methodology_log(df, ref_date=today)
+        par = next(a for a in res['adjustments'] if a['type'] == 'par_direct_dpd')
+        assert par['confidence'] == 'A'
+
+
+class TestAajilMethodologyLog:
+    """compute_aajil_methodology_log — the new Aajil analog."""
+
+    def test_returns_expected_shape(self):
+        from core.analysis_aajil import compute_aajil_methodology_log
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_methodology_log(df)
+        assert 'adjustments' in res
+        assert 'column_availability' in res
+        assert 'data_quality_summary' in res
+
+    def test_contains_aajil_specific_entries(self):
+        from core.analysis_aajil import compute_aajil_methodology_log
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_methodology_log(df)
+        types = [a['type'] for a in res['adjustments']]
+        assert 'stale_classification' in types
+        assert 'clean_book_separation' in types
+        assert 'par_install_count_proxy' in types
+        assert 'yield_over_writeoffs' in types
+
+    def test_clean_book_separation_confidence_A_for_direct_status(self):
+        """Aajil loss classifier is direct (Status=='Written Off'), not
+        threshold-judgement — Confidence A at entry level (vs SILQ/Klaim
+        which use 50%-denial/outstanding judgement → B)."""
+        from core.analysis_aajil import compute_aajil_methodology_log
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_methodology_log(df)
+        sep = next(a for a in res['adjustments'] if a['type'] == 'clean_book_separation')
+        assert sep['confidence'] == 'A'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FOLLOW-UP: Platform-wide HHI clean-book duals (UNCERTAIN 3 full resolution)
 # ══════════════════════════════════════════════════════════════════════════════
 

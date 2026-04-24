@@ -885,6 +885,104 @@ def compute_aajil_customer_segments(df, mult=1, ref_date=None, aux=None):
     }
 
 
+def compute_aajil_methodology_log(df, ref_date=None):
+    """Return a log of data corrections/adjustments applied during Aajil analysis.
+
+    Platform-consistent analog to core.analysis.compute_methodology_log
+    (Klaim) + core.analysis_silq.compute_silq_methodology_log (SILQ).
+    Feeds Aajil's Data Notes tab + IC audit trail.
+    """
+    adjustments = []
+
+    # Stale classification (Framework §17)
+    adjustments.append({
+        'type': 'stale_classification',
+        'target_metric': 'operational_wal_days / classify_aajil_deal_stale',
+        'description': ('Three stale-deal rules for Aajil. '
+                        '(1) loss_written_off — Status == "Written Off" (direct tape flag). '
+                        '(2) stuck_active — Accrued AND Overdue Installments >= Total '
+                        'Installments (matured with no payment). '
+                        '(3) overdue_dominant_active — Accrued AND Sale Overdue > 50% '
+                        'of Principal (overdue dominates underwritten face).'),
+        'thresholds': {
+            'ineligibility_age_days':    180,
+            'overdue_dominant_pct':      0.50,
+        },
+        'available': True,
+        'confidence': 'B',
+    })
+
+    # Clean-book separation (Framework §17 primitive)
+    adjustments.append({
+        'type': 'clean_book_separation',
+        'target_metric': 'overall_rate_clean / hhi_customer_clean (collections, summary)',
+        'description': ('separate_aajil_portfolio() strips Status == "Written Off" '
+                        'from the book. Clean portfolio = Realised + Accrued. '
+                        'Direct classification — Aajil tape carries explicit WO flag, '
+                        'no heuristic needed.'),
+        'available': True,
+        'confidence': 'A',  # direct status flag, no judgement threshold
+    })
+
+    # PAR measurement — install-count proxy (audit P0-3 doctrine)
+    adjustments.append({
+        'type': 'par_install_count_proxy',
+        'target_metric': 'par_{1,2,3}_inst / par_{1,2,3}_inst_lifetime',
+        'description': ('Aajil tape lacks contractual DPD — PAR measured as '
+                        'outstanding-weighted share of active deals with N+ '
+                        'overdue installments (rounded integer). NOT days-based. '
+                        'When aux Current_DPD_New Cohorts sheet is present, '
+                        'par_primary surfaces days-based DPD% (Confidence A); '
+                        'install-count view remains as fallback (Confidence B).'),
+        'available': True,
+        'confidence': 'B',
+        'primary_available': bool(C_INSTALLMENTS in df.columns),
+    })
+
+    # Yield averaging — blends WO deals in the default view
+    adjustments.append({
+        'type': 'yield_over_writeoffs',
+        'target_metric': 'avg_total_yield (compute_aajil_yield)',
+        'description': ('avg_total_yield is averaged over all deals including '
+                        'Written Off (Confidence B). Analyst-facing dashboards '
+                        'should prefer avg_total_yield_realised (completed-only, '
+                        'Confidence A) or avg_total_yield_active (live book, '
+                        'Confidence A). Pre-existing blended field preserved for '
+                        'backward compatibility; see Framework §17.'),
+        'available': True,
+        'confidence': 'B',
+    })
+
+    # Column availability
+    expected_cols = [C_TXN_ID, C_DEAL_TYPE, C_INVOICE_DATE, C_CUSTOMER_ID,
+                     C_BILL, C_MARGIN, C_ORIG_FEE, C_SALE_NOTIONAL, C_SALE_VAT,
+                     C_SALE_TOTAL, C_REALISED, C_RECEIVABLE, C_WRITTEN_OFF,
+                     C_WO_VAT, C_WO_DATE, C_STATUS, C_INSTALLMENTS,
+                     C_DUE_INST, C_PAID_INST, C_OVERDUE_INST,
+                     C_SALE_DUE, C_SALE_PAID, C_SALE_OVERDUE,
+                     C_MONTHLY_YIELD, C_TOTAL_YIELD, C_ADMIN_FEE,
+                     C_TENURE, C_INDUSTRY, C_PRINCIPAL, C_EXPECTED_END]
+    col_availability = {col: col in df.columns for col in expected_cols}
+
+    # Data quality
+    total_rows = len(df)
+    null_rates = {}
+    for col in list(df.columns)[:20]:
+        if total_rows > 0:
+            null_pct = float(df[col].isna().sum() / total_rows * 100)
+            if null_pct > 0:
+                null_rates[col] = round(null_pct, 2)
+
+    return {
+        'adjustments': adjustments,
+        'column_availability': col_availability,
+        'data_quality_summary': {
+            'total_rows': total_rows,
+            'null_rates': null_rates,
+        },
+    }
+
+
 def classify_aajil_deal_stale(df, ref_date=None, ineligibility_age_days=180):
     """Flag Aajil deals that don't represent live portfolio behaviour.
 
