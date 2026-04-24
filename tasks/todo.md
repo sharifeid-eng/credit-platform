@@ -3,6 +3,106 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Tamara Q1-2026 Investor Pack ingest — ACTIVE (2026-04-24)
+
+**Context:** User delivered two new Tamara documents — `2026-04-16_credit_risk_portfolio_update.pdf` (narrative credit update, 17 pages) and `2. 1Q2026 Tamara Cons. Investor Pack.xlsx` (structured 10-sheet investor pack, 27 months of monthly data through Mar-26). Analysis confirmed the Excel follows the SAME 10-sheet template as 4 prior files in the dataroom (Nov'25, Dec'25 ×2, Jan'26) — recurring quarterly reporting, not one-off.
+
+**Branch:** `claude/tamara-investor-pack-ingest`
+
+**Architectural choices (explicit assumptions — flag if wrong):**
+- **Storage pattern:** `data/Tamara/investor_packs/YYYY-MM-DD_investor_pack.json` — NEW subfolder, one JSON per pack (consolidates KSA + UAE + Cons since they live in the same Excel). Keeps existing `data/Tamara/{KSA,UAE}/YYYY-MM-DD_tamara_*.json` snapshot files untouched.
+- **Pack date identification:** extract from filename (1Q2026 → pack_date = 2026-04-16 assumed; last-covered-month-end + 2 weeks heuristic), fallback file mtime, override via CLI `--pack-date YYYY-MM-DD`.
+- **Classifier:** new `DocumentType.QUARTERLY_INVESTOR_PACK` distinct from `INVESTOR_REPORT` (HSBC narrative) and `FINANCIAL_MODEL`. Matches filenames `Investor Monthly Reporting` + `\d[Qq]20\d{2}.*Investor.?Pack` + sheet-name rule for the 10-sheet template.
+- **Integration point:** `parse_tamara_data()` in `core/analysis_tamara.py` loads primary snapshot as before AND latest investor pack from `investor_packs/`, merges pack data under new `quarterly_pack` top-level key. Downstream endpoints get the new data for free.
+- **Scope:** Jobs A (ingest), B (classifier), C (parser script), D (enrichment). No frontend tab (Job E), no thesis wiring (Job F) — user deferred those.
+
+### Jobs
+- [ ] **Job A — File hygiene + dataroom ingest**
+  - [x] Verify both files in place: `Portfolio Investor Reporting/2026-04-16_credit_risk_portfolio_update.pdf` + `Financials/54.2.2 Management Financials/2. 1Q2026 Tamara Cons. Investor Pack.xlsx` (user moved ✓)
+  - [ ] Run `dataroom_ctl audit --company Tamara` (baseline)
+  - [ ] Run `dataroom_ctl ingest --company Tamara` (processes new files + dedupes registry)
+  - [ ] Verify registry alignment after ingest
+
+- [ ] **Job B — Classifier: new QUARTERLY_INVESTOR_PACK type**
+  - [ ] Add enum value in `core/dataroom/classifier.py`
+  - [ ] Add `_FILENAME_RULES` entry BEFORE `INVESTOR_REPORT` rule (ordering matters)
+  - [ ] Add `_SHEET_RULES` entry for the 10-sheet template signature
+  - [ ] Add `CATEGORY_CONFIG` entry in `frontend/src/pages/research/DocumentLibrary.jsx`
+  - [ ] Reclassify via `dataroom_ctl classify --only-other --use-llm` or re-ingest; verify all 5 historical+new files (Nov'25, 2× Dec'25, Jan'26, Q1-2026) flip to the new type
+
+- [ ] **Job C — Parser script `scripts/ingest_tamara_investor_pack.py`**
+  - [ ] CLI: `--file <path> [--pack-date YYYY-MM-DD] [--dry-run] [--force]`
+  - [ ] Parses 10 sheets: identifies template, extracts KPIs (3 country cuts), Financials (3 country cuts, dual Management/Statutory views), Performance vs Budget
+  - [ ] Output structure: `{ meta, kpis: {cons,ksa,uae}, financials: {cons,ksa,uae}, budget_variance, snapshot_months: [...] }`
+  - [ ] Writes to `data/Tamara/investor_packs/YYYY-MM-DD_investor_pack.json`
+  - [ ] Idempotent: re-running on same file produces same output (no timestamps in content)
+
+- [ ] **Job D — Extend `core/analysis_tamara.py`**
+  - [ ] Load latest investor pack from `investor_packs/` directory (latest by filename date)
+  - [ ] Enrichment: MoM deltas on key metrics, QoQ deltas, budget variance %, derived unit economics
+  - [ ] Merge into `parse_tamara_data()` output under `quarterly_pack` key
+  - [ ] Graceful degradation: works fine when `investor_packs/` folder is empty (existing deployments unaffected)
+
+- [ ] **Tests (6-8 new)**
+  - [ ] Classifier recognizes investor pack by filename + by sheet names
+  - [ ] Parser script: template identification (10 sheets), date range detection
+  - [ ] Parser script: KPI line item extraction (sample rows from KPIs cons)
+  - [ ] Parser script: FS dual-view extraction (Management Net Revenue vs Statutory Net Revenue differ)
+  - [ ] Parser script: budget variance calculation correctness
+  - [ ] Enrichment: MoM delta computed correctly from 2-month series
+  - [ ] Enrichment: missing pack folder doesn't break `parse_tamara_data()`
+
+- [ ] **Verify + commit**
+  - [ ] Run all 683 tests — no regressions
+  - [ ] Smoke test with real file: parser produces JSON, loaded by `parse_tamara_data()`, endpoint returns `quarterly_pack` key
+  - [ ] Commit at natural checkpoints (one per Job, or grouped by coherence)
+  - [ ] Update CLAUDE.md "What's Working" + this todo.md review section
+
+### What NOT to do this session
+- No frontend tab (Job E deferred)
+- No thesis pillar wiring (Job F deferred)
+- Don't touch the 3 pre-existing WIP files (`core/analysis.py`, `core/analysis_silq.py`, `tests/test_population_discipline_meta_audit.py`) — these belong to another branch
+- Don't modify `scripts/prepare_tamara_data.py` — the existing one-off ETL stays as-is; the new script is additive
+
+### Review — shipped (2026-04-24)
+
+**Branch:** `claude/tamara-investor-pack-ingest` (not pushed). 4 jobs A→D + tests + one side-effect fix all landed in one cohesive branch.
+
+**Work completed:**
+- **Job A — Dataroom ingest:** 2 new files moved into structured subfolders by user (PDF → `Portfolio Investor Reporting/`, Excel → `Financials/54.2.2 Management Financials/`). Ran `dataroom_ctl ingest --company Tamara` — ingest processed 137 files, added 129 registry entries, auto-pruned 135 stale orphan chunks (registry.json had been deleted pre-session). Final audit: `registry=129 chunks=129 missing=0 orphan=0 unclassified=0 index=ok`.
+- **Job B — Classifier:** new `DocumentType.QUARTERLY_INVESTOR_PACK` enum value in `core/dataroom/classifier.py`. Filename rule catches `Investor Monthly Reporting_*`, `{N}Q{YYYY} *Investor Pack`, and `Cons*Investor Pack` patterns — sits BEFORE `INVESTOR_REPORT` for ordering win. Sheet-name rule matches the 10-sheet signature as fallback. Frontend `CATEGORY_CONFIG` in `DocumentLibrary.jsx` gets a new gold-accented pill to signal first-class recurring data input. Verified on registry: 4 files correctly flipped (Nov'25, Dec'25, Jan'26, Q1-2026 Cons); the new credit-risk PDF stays as `investor_report` (correctly — it's narrative, not a structured pack).
+- **Job C — Parser:** new `scripts/ingest_tamara_investor_pack.py` parses the 10-sheet template into structured JSON. CLI: `--file --pack-date --out-dir --dry-run --force`. Template validation (raises on missing sheets), 3-tier pack-date resolution (CLI > heuristic from data range > file mtime), deterministic output (sorted JSON, no embedded timestamps in content). Ran against real file: extracted 74/49/49 KPI line items + 118/91/89 FS line items + 7 budget variance rows across 27 months. Wrote `data/Tamara/investor_packs/2026-04-15_investor_pack.json` (424KB).
+- **Job D — Enrichment:** `core/analysis_tamara.py` gains `_find_latest_investor_pack()`, `_mom_delta()`, `_build_headline_deltas()`, `_summarise_budget_variance()`, `_enrich_quarterly_pack()`. Called from `parse_tamara_data()`. Merges latest pack under `quarterly_pack` key with headline MoM deltas per country (13 FS items + 12 KPI items) and 6-metric YTD budget variance summary. Graceful no-op when `investor_packs/` folder missing. Real-data smoke test produced meaningful deltas (Mar-26 Statutory Net Profit -42% MoM, YTD EBTDA +124% vs budget).
+- **Tests:** new `tests/test_tamara_investor_pack.py` — 16 tests across 3 classes (classifier rules, parser correctness, enrichment behaviour). All pass. Caught one edge-case bug (`_mom_delta` returned None for single-month series instead of populating `latest` with `prior=None`) — fixed before landing.
+- **Side-effect fix:** `investor_packs/` subfolder was being auto-detected as a Tamara product by `core/loader.py:21 _NON_PRODUCT_DIRS`. Added to the exclusion set alongside `dataroom`, `mind`, `legal`, etc.
+
+**Full test suite:** 797 passing (was 781 pre-session — baseline 683 in CLAUDE.md was stale; pre-existing WIP files already brought it up). No regressions. 16 new tests added.
+
+**Surfaced but deferred (not blocking):**
+- The initial dataroom ingest ran with the OLD classifier (rule added after process start → old code cached in memory). Caused 4 investor-pack files to land as `investor_report`/`company_presentation`. Fixed via a direct-edit re-classify script that re-read the registry, re-ran `classify_document()` on each entry, and wrote back. First pass over-classified 15 unrelated files to `other` (my re-classify script skipped the text-preview phase); reverted those with an explicit whitelist. Lesson: for bulk reclassification, need `dataroom_ctl reclassify --force-rules-reload` that replays the original (text+filename+sheet) classification pipeline. Adding that tool is a follow-up, not in this branch.
+- Frontend tab for `quarterly_pack` data (Job E) — backend surface is ready, dashboard still needs a tab to render headline FS/KPI MoM cards + budget variance table. User deferred this.
+- Thesis integration (Job F) — `quarterly_pack` fields are ripe for pillars ("statutory profitability > 0", "YTD GMV above budget", etc). User deferred.
+
+**Docs touched:**
+- `tasks/todo.md` (this file) — plan + review
+- `tasks/lessons.md` — new lesson: "Long-running Python process won't pick up classifier-module edits — plan reclassify as a post-edit step". (Pending write.)
+- `CLAUDE.md` "What's Working" + "Project Structure" — should note new script + new enum + new JSON subfolder + recurring quarterly ingest pattern. (Pending write.)
+
+**Files changed this branch (7):**
+1. `core/dataroom/classifier.py` (+12) — new enum + filename rule + sheet rule
+2. `core/analysis_tamara.py` (+~180) — enrichment helpers + `_enrich_quarterly_pack` hook
+3. `core/loader.py` (+0, 1 token) — `_NON_PRODUCT_DIRS` += `investor_packs`
+4. `frontend/src/pages/research/DocumentLibrary.jsx` (+4) — CATEGORY_CONFIG entry
+5. `scripts/ingest_tamara_investor_pack.py` (new, ~310 lines) — parser CLI
+6. `tests/test_tamara_investor_pack.py` (new, ~285 lines) — 16 regression tests
+7. `tasks/todo.md` — plan + review (this section)
+
+Plus untracked data output (not committed):
+- `data/Tamara/dataroom/registry.json` + 129 chunks + index.pkl (gitignored)
+- `data/Tamara/investor_packs/2026-04-15_investor_pack.json` (424KB — gitignored per Tamara pattern; server authoritative)
+
+---
+
 ## Session 30 continuation — 5 follow-up tasks shipped + deploy + Mind sync (2026-04-22)
 
 After the initial session 30 foundation (validation + dual-view WAL + Provider + method tagging + DataChat fix) landed on main, ran a batch of 5 spawned follow-up tasks end-to-end. All merged to main, deployed to prod, and Mind institutional knowledge synced.

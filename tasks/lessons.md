@@ -3,6 +3,21 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-24 — Long-running Python process won't pick up in-flight module edits — plan reclassify as a post-edit step
+
+**Problem:** During the Tamara investor-pack branch I ran `dataroom_ctl ingest --company Tamara` as a background job (137 files, ~12 min). While it was running I edited `core/dataroom/classifier.py` to add a new `QUARTERLY_INVESTOR_PACK` rule. Intuitively I expected the running process to pick it up. It didn't — Python's module cache locked the import at process start, so the 4 investor-pack files got classified with the OLD rules (INVESTOR_REPORT / COMPANY_PRESENTATION). Ingest reported success with no indication classification was stale.
+
+Had to write a post-ingest reclassify script that re-read the registry, re-ran `classify_document()` against each entry, and wrote back. The first pass over-classified 15 unrelated files to `other` because I only passed `filepath` + `sheet_names` and skipped the text-preview phase — 15 files that had relied on `_TEXT_RULES` for their original classification lost it. Had to reconstruct the original types from my own tool-call transcript to revert. Two mistakes compounding.
+
+**Rule:** Treat classifier / enrichment / schema edits landed during a long-running background process as invalidating that process's output. Either (a) wait for the process to finish BEFORE editing, or (b) after editing, explicitly replay classification on affected entries. Never assume hot-reload.
+
+**How to apply:**
+- When editing classifier rules: `ps` the background process first. If a relevant process is running, wait for it OR plan to re-run against finished output.
+- When re-classifying from a script: replay the FULL classification pipeline — filepath + text_preview (from chunks) + sheet_names. Don't shortcut by passing only subsets, or you'll collapse text-only-classified files to OTHER.
+- If the platform already ships a `dataroom_ctl classify --only-other` mode, that only catches new-OTHER classifications. For "re-apply a new rule that supersedes an existing type," we need a new tool (`dataroom_ctl reclassify --force` or similar) that replays the full classification pipeline on every registry entry. Filed as follow-up from `claude/tamara-investor-pack-ingest` branch.
+
+---
+
 ## 2026-04-24 — Build walkers before eyeballing audits; per-company audits miss cross-company propagation
 
 **Problem:** Session 34 Framework §17 audit enumerated gaps company-by-company from tables I built by hand. After the sweep I declared it complete with 0 regressions and 0 new gaps surfaced. The user then pointed at the SILQ Credit Quality dashboard and asked: "why is PAR only shown vs Active Outstanding here, when the same dual was added for Aajil?" The SILQ PAR dual-view miss was visible to a human staring at the UI but invisible to my manual per-company walkthrough.

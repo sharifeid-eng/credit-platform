@@ -39,6 +39,11 @@ class DocumentType(Enum):
     CAP_TABLE = "cap_table"
     BOARD_PACK = "board_pack"
     KYC_COMPLIANCE = "kyc_compliance"
+    # Session 35 — recurring quarterly/monthly investor packs with structured
+    # 10-sheet template (KPIs cons/KSA/UAE + FS cons/KSA/UAE + Performance vs
+    # Budget). Distinct from INVESTOR_REPORT (HSBC narrative PDFs) because
+    # these are machine-parseable workbooks that feed the dashboard directly.
+    QUARTERLY_INVESTOR_PACK = "quarterly_investor_pack"
     # "other" = rule-based classifier had no confident match.
     # "unknown" = LLM fallback ran and was also unconfident (confidence < 0.6).
     OTHER = "other"
@@ -52,6 +57,14 @@ class DocumentType(Enum):
 _FILENAME_RULES = [
     # Facility / loan agreements
     (re.compile(r"(facility|agreement|loan.?doc|credit.?agreement|term.?sheet|indenture)"), DocumentType.FACILITY_AGREEMENT),
+    # Quarterly/monthly investor packs — structured Excel workbooks that follow
+    # a recurring template (KPIs + FS + Budget). MUST come before INVESTOR_REPORT
+    # and COMPANY_PRESENTATION rules because both match "investor pack" too loosely.
+    # Matches:
+    #   - "Investor Monthly Reporting_Nov'25.xlsx"         (Tamara historical)
+    #   - "2. 1Q2026 Tamara Cons. Investor Pack.xlsx"      (Tamara quarterly)
+    #   - "3Q25 Cons Investor Pack.xlsx"                   (future cadence)
+    (re.compile(r"(investor.?monthly.?reporting|\bcons\b.*investor.?pack|investor.?pack.*\bcons\b|\d\s*q\s*20\d{2}.*investor.?pack)"), DocumentType.QUARTERLY_INVESTOR_PACK),
     # Investor reports (monthly/quarterly reporting)
     (re.compile(r"(investor.?report|monthly.?report|quarterly.?report|hsbc|trustee.?report)"), DocumentType.INVESTOR_REPORT),
     # Financial due diligence
@@ -130,6 +143,12 @@ _TEXT_RULES = [
 # encode intent in tab names ("Covenant Test", "Vintage Analysis") far more
 # consistently than in file names.
 _SHEET_RULES = [
+    # Quarterly investor pack — the 10-sheet template has VERY specific tab
+    # names. If we see "KPIs cons" or "FS Cons" alongside "Performance v
+    # Budget" it's the Tamara-style investor pack regardless of filename.
+    # Keep this rule FIRST — high-specificity signal wins before the more
+    # generic financial-statement rule below.
+    (re.compile(r"(kpis\s*cons|kpis\s*ksa|kpis\s*uae|fs\s*cons|fs\s*ksa|fs\s*uae|performance\s*v\s*budget)", re.IGNORECASE), DocumentType.QUARTERLY_INVESTOR_PACK),
     (re.compile(r"(vintage|cohort|loss.?curve|dpd.?bucket|roll.?rate)", re.IGNORECASE), DocumentType.VINTAGE_COHORT),
     (re.compile(r"(covenant|trigger|waterfall|borrowing.?base)", re.IGNORECASE), DocumentType.FACILITY_AGREEMENT),
     (re.compile(r"(cap.?table|shareholder|equity)", re.IGNORECASE), DocumentType.CAP_TABLE),

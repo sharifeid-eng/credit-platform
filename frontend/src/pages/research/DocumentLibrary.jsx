@@ -15,7 +15,10 @@ const CATEGORY_CONFIG = {
   facility_agreement:    { label: 'Facility Agreement',    color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
   legal_document:        { label: 'Legal Document',        color: '#F0C040', bg: 'rgba(240,192,64,0.12)' },
 
-  // Investor / reporting
+  // Investor / reporting — quarterly_investor_pack is gold because it's a
+  // first-class recurring data input that feeds the dashboard directly
+  // (not just RAG-searchable narrative).
+  quarterly_investor_pack: { label: 'Quarterly Investor Pack', color: '#C9A84C', bg: 'rgba(201,168,76,0.18)' },
   investor_report:       { label: 'Investor Report',       color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
   company_presentation:  { label: 'Company Presentation',  color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
   board_pack:            { label: 'Board Pack',            color: '#5B8DEF', bg: 'rgba(91,141,239,0.12)' },
