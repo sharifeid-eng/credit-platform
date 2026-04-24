@@ -101,6 +101,47 @@ Plus untracked data output (not committed):
 - `data/Tamara/dataroom/registry.json` + 129 chunks + index.pkl (gitignored)
 - `data/Tamara/investor_packs/2026-04-15_investor_pack.json` (424KB — gitignored per Tamara pattern; server authoritative)
 
+### Review — Jobs E+F (deferred follow-up, same branch, 2026-04-24)
+
+Three additional commits landed on `claude/tamara-investor-pack-ingest`:
+- `e333595` — feat: Jobs E+F (Quarterly Financials tab + thesis pillars + auto-drift)
+- `e75bfb5` — 13 regression tests for E+F
+- `56dce47` — dataroom_ctl classify CLI hardening (from the 2026-04-24 reclassify lesson) + 2 tests
+
+**Full test suite:** 812 passing (was 797 pre-session; +13 thesis tests + 2 classify tests). Zero regressions.
+
+**Job E — Quarterly Financials frontend tab:**
+- Config entries in both KSA + UAE config.json (slug `quarterly-financials`)
+- `TamaraDashboard.jsx` gains 4 sub-components: `ThesisSummaryCard` (pillar status grid), `QuarterlyHeadlineCard` (MoM delta), `BudgetVarianceRow` (YTD + monthly var), `QuarterlyFinancialsPanel` (3-country toggle, 10 FS cards + 8 KPI cards + 6-metric budget table)
+- Graceful "no pack ingested" fallback with CLI instruction
+
+**Job F — Thesis pillars + auto-drift:**
+- `build_thesis_metrics_from_pack()` in `core/analysis_tamara.py` — 21 flat metric keys (FS × 9 + derived × 2 + KPI × 5 + budget var × 5)
+- `_load_thesis_summary()` — read-only payload for dashboard (soft-imports ThesisTracker)
+- `parse_tamara_data()` attaches `thesis_summary` to output
+- `scripts/seed_tamara_thesis.py` — 8 pillars (statutory profitability, CM expansion, EBTDA positive, GMV/Revenue vs budget, ECL coverage, LTV/CAC, BNPL+ mix). Idempotent; preserves `created_at` + pillar IDs on re-seed
+- `scripts/ingest_tamara_investor_pack.py` gains `--no-update-thesis` flag (default off = drift check fires). New `_run_thesis_drift_check()` prints alert summary to stderr; failures don't fail the ingest
+
+**Smoke test:** Real Apr-2026 pack ran end-to-end: all 8 pillars transitioned `holding` → `strengthening` (>20% headroom on every threshold). Conviction 66 → 68. Dashboard payload carries both `quarterly_pack` AND `thesis_summary` in one endpoint response.
+
+**Classify CLI hardening** (commit `56dce47`, closing the 2026-04-24 lesson):
+- Passes `sheet_names` for xlsx files (new sheet rules now fire during re-classify)
+- `--dry-run` flag to preview before writing
+- Help recommends `--use-llm` (skipping silently regresses ~13 Tamara docs originally classified by LLM fallback)
+- Recommended flow: `classify --company X --use-llm --dry-run` → review → drop `--dry-run`
+
+**Housekeeping:**
+- `.gitignore` adds `**/mind/thesis.json` (per-machine per Company Mind convention — pillar IDs are per-seed UUIDs that mutate on every drift check)
+- `data/Tamara/investor_packs/` remains gitignored (pre-existing rule)
+
+**Branch pollution incident (learned the hard way again):**
+Mid-session, ambient activity on the shared checkout silently switched branches between `claude/tamara-investor-pack-ingest`, `claude/followup-8-gap-sweep`, and `main`, wiping my uncommitted E/F edits at least once. Recovered via stash of surviving untracked artifacts + branch reset + re-applying edits. Lesson: on a shared checkout with concurrent agent sessions, commit aggressively — feature-sized work should land in ≤5 minutes of the last edit. Both E+F features committed as one atomic unit to prevent recurrence.
+
+**Deferred indefinitely:**
+- Frontend test for QuarterlyFinancialsPanel (no React Testing Library setup in the codebase; would be a meaningful addition on its own)
+- Per-country thesis variants (currently per-company; UAE-specific pillars like "UAE GMV vs forecast ≥ -10%" would need a thesis-variants design)
+- `POST /api/tamara/investor-pack/refresh` endpoint to trigger ingest + drift from the frontend (currently CLI-only)
+
 ---
 
 ## Session 30 continuation — 5 follow-up tasks shipped + deploy + Mind sync (2026-04-22)
