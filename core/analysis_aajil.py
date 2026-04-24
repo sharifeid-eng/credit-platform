@@ -700,6 +700,13 @@ def compute_aajil_underwriting(df, mult=1, ref_date=None, aux=None):
     return {
         'vintages': drift,
         'available': True,
+        # Framework §17 — per-vintage underwriting stats (mean deal size, mean
+        # yield, EMI mix) computed over total_originated in that quarter. These
+        # are descriptive stats per vintage; Confidence A (direct aggregation).
+        'population':          'total_originated',
+        'confidence':          'A',
+        'vintages_population': 'total_originated',
+        'vintages_confidence': 'A',
     }
 
 
@@ -811,6 +818,13 @@ def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
         'by_deal_type': by_type,
         'by_vintage': vintage_yield,
         'available': True,
+        # Framework §17 — per-row rate disclosure for by_deal_type[] and
+        # by_vintage[]. Both use total_originated per-segment as the
+        # denominator (per-deal-type disbursed and per-vintage bill).
+        'by_deal_type_population': 'total_originated',
+        'by_deal_type_confidence': 'B',  # blended across WO + active
+        'by_vintage_population':   'total_originated',
+        'by_vintage_confidence':   'B',
     }
 
 

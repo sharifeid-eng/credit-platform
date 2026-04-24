@@ -87,6 +87,72 @@ def _fmt_money(v, ccy="USD"):
     return f"{ccy} {n:,.0f}"
 
 
+def _get_disclosure(dct, field_name: str) -> tuple:
+    """Return (confidence, population, method) for a rate field, using the
+    Framework §17 disclosure modes that compute_* functions emit.
+
+    Resolution order:
+      1. Per-field `{field}_confidence` / `{field}_population`
+      2. Family-level — `par_confidence` + `par_population`/`par_lifetime_population`
+         (covers par30/par60/par90, lifetime_par*, par_1_inst_*, etc.)
+      3. Family-level — `hhi_confidence` + `hhi_population` (covers hhi, hhi_clean)
+      4. Dict-level `confidence` + `population`
+
+    Returns `(None, None, None)` triple if nothing found — caller then
+    skips attaching §17 fields to the metric entry.
+    """
+    if not isinstance(dct, dict) or not field_name:
+        return (None, None, None)
+    conf = dct.get(f'{field_name}_confidence')
+    pop = dct.get(f'{field_name}_population')
+    # Family: par*
+    if field_name.startswith('par') or field_name.startswith('lifetime_par'):
+        conf = conf or dct.get('par_confidence')
+        if 'lifetime' in field_name:
+            pop = (pop
+                   or dct.get('par_lifetime_population')
+                   or dct.get('par_population_lifetime'))
+        else:
+            pop = (pop
+                   or dct.get('par_population')
+                   or dct.get('par_population_active'))
+    # Family: hhi*
+    if field_name.startswith('hhi'):
+        if 'clean' in field_name:
+            conf = conf or dct.get('hhi_clean_confidence') or dct.get('hhi_confidence')
+            pop = pop or dct.get('hhi_clean_population') or dct.get('hhi_population')
+        else:
+            conf = conf or dct.get('hhi_confidence')
+            pop = pop or dct.get('hhi_population')
+    # Family: collection_rate_*
+    if field_name.startswith('collection_rate') or field_name.startswith('repayment_rate') \
+            or field_name.startswith('overall_rate'):
+        # compute_*_collections uses dict-level population/confidence per dual
+        conf = conf or dct.get('confidence')
+        pop = pop or dct.get('population')
+    # Dict-level fallback
+    conf = conf or dct.get('confidence')
+    pop = pop or dct.get('population')
+    method = dct.get(f'{field_name}_method') or dct.get('method')
+    return (conf, pop, method)
+
+
+def _attach_disclosure(metric: dict, dct, field_name: str) -> dict:
+    """Enrich a metric entry with §17 disclosure fields pulled from dct.
+
+    No-op if dct has no disclosure for field_name. Returns the (same)
+    mutated metric for chaining.
+    """
+    conf, pop, method = _get_disclosure(dct, field_name)
+    if conf is not None:
+        metric['confidence'] = conf
+    if pop is not None:
+        metric['population'] = pop
+    if method is not None and method not in ('direct', 'proxy', None):
+        metric['method'] = method
+    return metric
+
+
 class AnalyticsBridge:
     """Pulls live analytics from tape/portfolio endpoints into memo sections.
 
@@ -406,18 +472,22 @@ class AnalyticsBridge:
                 {"label": "Total Deals",
                  "value": f"{summary.get('total_deals', 0):,}",
                  "assessment": "neutral"},
-                {"label": "Collection Rate",
-                 "value": _fmt_pct(summary.get("collection_rate")),
-                 "assessment": (
-                     "healthy" if (summary.get("collection_rate") or 0) > 80
-                     else "warning"
-                 )},
-                {"label": "Delinquency Rate",
-                 "value": _fmt_pct(summary.get("delinquency_rate")),
-                 "assessment": (
-                     "healthy" if (summary.get("delinquency_rate") or 0) < 10
-                     else "warning"
-                 )},
+                _attach_disclosure({
+                    "label": "Collection Rate",
+                    "value": _fmt_pct(summary.get("collection_rate")),
+                    "assessment": (
+                        "healthy" if (summary.get("collection_rate") or 0) > 80
+                        else "warning"
+                    )},
+                    summary, "collection_rate"),
+                _attach_disclosure({
+                    "label": "Delinquency Rate",
+                    "value": _fmt_pct(summary.get("delinquency_rate")),
+                    "assessment": (
+                        "healthy" if (summary.get("delinquency_rate") or 0) < 10
+                        else "warning"
+                    )},
+                    summary, "delinquency_rate"),
             ])
         elif is_aajil:
             from core.analysis_aajil import compute_aajil_summary
@@ -436,11 +506,13 @@ class AnalyticsBridge:
                 {"label": "Total Customers",
                  "value": f"{summary.get('total_customers', 0):,}",
                  "assessment": "neutral"},
-                {"label": "Collection Rate",
-                 "value": _fmt_pct(collection_pct),
-                 "assessment": (
-                     "healthy" if collection_pct > 80 else "warning"
-                 )},
+                _attach_disclosure({
+                    "label": "Collection Rate",
+                    "value": _fmt_pct(collection_pct),
+                    "assessment": (
+                        "healthy" if collection_pct > 80 else "warning"
+                    )},
+                    summary, "collection_rate"),
                 {"label": "Outstanding",
                  "value": _fmt_money(summary.get("total_receivable"), ccy),
                  "assessment": "neutral"},
@@ -468,18 +540,22 @@ class AnalyticsBridge:
                 {"label": "Total Deals",
                  "value": f"{summary.get('total_deals', 0):,}",
                  "assessment": "neutral"},
-                {"label": "Collection Rate",
-                 "value": _fmt_pct(summary.get("collection_rate")),
-                 "assessment": (
-                     "healthy" if (summary.get("collection_rate") or 0) > 80
-                     else "warning"
-                 )},
-                {"label": "Denial Rate",
-                 "value": _fmt_pct(summary.get("denial_rate")),
-                 "assessment": (
-                     "healthy" if (summary.get("denial_rate") or 0) < 5
-                     else "warning"
-                 )},
+                _attach_disclosure({
+                    "label": "Collection Rate",
+                    "value": _fmt_pct(summary.get("collection_rate")),
+                    "assessment": (
+                        "healthy" if (summary.get("collection_rate") or 0) > 80
+                        else "warning"
+                    )},
+                    summary, "collection_rate"),
+                _attach_disclosure({
+                    "label": "Denial Rate",
+                    "value": _fmt_pct(summary.get("denial_rate")),
+                    "assessment": (
+                        "healthy" if (summary.get("denial_rate") or 0) < 5
+                        else "warning"
+                    )},
+                    summary, "denial_rate"),
                 {"label": "Active Deals",
                  "value": f"{summary.get('active_deals', 0):,}",
                  "assessment": "neutral"},
@@ -521,7 +597,9 @@ class AnalyticsBridge:
                     if not label or "Current" in label or active_bal == 0:
                         continue
                     pct = balance / active_bal * 100
-                    metrics.append({
+                    # Aajil delinquency inherits par_confidence + par_population_active
+                    # for bucket-level shares (denominator = active balance).
+                    metrics.append(_attach_disclosure({
                         "label": label,
                         "value": _fmt_pct(pct),
                         "assessment": (
@@ -529,7 +607,7 @@ class AnalyticsBridge:
                             else "warning" if pct < 15
                             else "critical"
                         ),
-                    })
+                    }, delq, "par_1_inst"))  # par family inheritance
             except Exception as e:
                 logger.warning("Aajil delinquency computation failed: %s", e)
         elif not is_silq:
@@ -541,7 +619,10 @@ class AnalyticsBridge:
                         data = par.get(bucket, {})
                         pct = data.get("balance_pct", 0)
                         label = bucket.upper().replace("_", " ")
-                        metrics.append({
+                        # Each PAR bucket inherits par_confidence + par_population
+                        # from the top-level compute_par dict.
+                        field_name = bucket.replace("_", "")  # 'par_30' -> 'par30'
+                        metrics.append(_attach_disclosure({
                             "label": label,
                             "value": _fmt_pct(pct),
                             "assessment": (
@@ -549,7 +630,7 @@ class AnalyticsBridge:
                                 else "warning" if pct < 15
                                 else "critical"
                             ),
-                        })
+                        }, par, field_name))
             except Exception as e:
                 logger.warning("PAR computation failed: %s", e)
 
@@ -567,7 +648,7 @@ class AnalyticsBridge:
             totals = lw.get("totals", {})
             if totals:
                 net_loss_rate = totals.get("net_loss_rate", 0)
-                metrics.append({
+                metrics.append(_attach_disclosure({
                     "label": "Net Loss Rate",
                     "value": _fmt_pct(net_loss_rate),
                     "assessment": (
@@ -575,16 +656,16 @@ class AnalyticsBridge:
                         else "warning" if (net_loss_rate or 0) < 5
                         else "critical"
                     ),
-                })
+                }, totals, "net_loss_rate"))
                 recovery_rate = totals.get("recovery_rate", 0)
-                metrics.append({
+                metrics.append(_attach_disclosure({
                     "label": "Recovery Rate",
                     "value": _fmt_pct(recovery_rate),
                     "assessment": (
                         "healthy" if (recovery_rate or 0) > 50
                         else "warning"
                     ),
-                })
+                }, totals, "recovery_rate"))
         except Exception as e:
             logger.warning("Loss waterfall computation failed: %s", e)
 
@@ -646,7 +727,7 @@ class AnalyticsBridge:
             if is_aajil:
                 hhi_val = conc.get("hhi_customer")
                 if hhi_val is not None:
-                    metrics.append({
+                    metrics.append(_attach_disclosure({
                         "label": "HHI (Customer)",
                         "value": f"{hhi_val:,.0f}",
                         "assessment": (
@@ -654,7 +735,7 @@ class AnalyticsBridge:
                             else "warning" if hhi_val < 2500
                             else "critical"
                         ),
-                    })
+                    }, conc, "hhi_customer"))
                 # Top5/Top10 share are decimals (0-1); convert to percent
                 t5 = (conc.get("top5_share") or 0) * 100
                 t10 = (conc.get("top10_share") or 0) * 100
@@ -696,7 +777,9 @@ class AnalyticsBridge:
                 hhi_data = conc.get("hhi", {})
                 hhi_val = hhi_data.get("hhi")
                 if hhi_val is not None:
-                    metrics.append({
+                    # Klaim/SILQ compute_concentration returns hhi as a nested
+                    # dict with its own population/confidence. Attach those.
+                    metrics.append(_attach_disclosure({
                         "label": "HHI (Group)",
                         "value": f"{hhi_val:,.0f}",
                         "assessment": (
@@ -704,7 +787,7 @@ class AnalyticsBridge:
                             else "warning" if hhi_val < 2500
                             else "critical"
                         ),
-                    })
+                    }, hhi_data, "hhi"))
                     classification = hhi_data.get("classification", "")
                     metrics.append({
                         "label": "Concentration",
@@ -777,17 +860,18 @@ class AnalyticsBridge:
             charts_data["stress_test"] = stress
 
             base_rate = stress.get("base_collection_rate", 0)
-            metrics.append({
+            metrics.append(_attach_disclosure({
                 "label": "Base Collection Rate",
                 "value": _fmt_pct(base_rate),
                 "assessment": "neutral",
-            })
+            }, stress, "base_collection_rate"))
 
             scenarios = stress.get("scenarios", [])
             for sc in scenarios:
                 name = sc.get("scenario", "")
                 impact = sc.get("impact_pct", 0)
-                metrics.append({
+                # Scenarios inherit the stress function's dict-level disclosure.
+                metrics.append(_attach_disclosure({
                     "label": f"Stress: {name}",
                     "value": _fmt_pct(impact),
                     "assessment": (
@@ -795,7 +879,7 @@ class AnalyticsBridge:
                         else "warning" if abs(impact or 0) < 10
                         else "critical"
                     ),
-                })
+                }, stress, "impact_pct"))
         except Exception as e:
             logger.warning("Stress test computation failed: %s", e)
 
@@ -805,7 +889,7 @@ class AnalyticsBridge:
 
             portfolio = el.get("portfolio", {})
             el_rate = portfolio.get("el_rate", 0)
-            metrics.append({
+            metrics.append(_attach_disclosure({
                 "label": "Expected Loss Rate",
                 "value": _fmt_pct(el_rate),
                 "assessment": (
@@ -813,7 +897,7 @@ class AnalyticsBridge:
                     else "warning" if (el_rate or 0) < 5
                     else "critical"
                 ),
-            })
+            }, portfolio, "el_rate"))
         except Exception as e:
             logger.warning("Expected loss computation failed: %s", e)
 

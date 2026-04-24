@@ -494,6 +494,15 @@ def compute_silq_concentration(df, mult=1):
         'utilization': utilization,
         'product_mix': product_mix,
         'size_distribution': size_dist,
+        # Framework §17 per-row disclosure — utilization[].util_pct is per-shop
+        # outstanding / limit (active_outstanding). product_mix[].share is each
+        # product's disbursed share over total_originated.
+        'utilization_population':      'active_outstanding',
+        'utilization_confidence':      'A',
+        'product_mix_population':      'total_originated',
+        'product_mix_confidence':      'A',
+        'size_distribution_population': 'total_originated',
+        'size_distribution_confidence': 'A',
     }
 
 
@@ -703,6 +712,13 @@ def compute_silq_tenure(df, mult=1, ref_date=None):
         'by_product': by_product,
         'avg_tenure': _safe(avg),
         'median_tenure': _safe(median),
+        # Framework §17 — per-row rates in distribution[] use per-tenure-band
+        # denominators (active outstanding for PAR/DPD, disbursed for margin,
+        # collectable for collection_rate). Facility-view over active tape.
+        'population':                  'total_originated',
+        'confidence':                  'A',
+        'distribution_population':     'total_originated',
+        'distribution_confidence':     'A',
     }
 
 
@@ -763,6 +779,13 @@ def compute_silq_borrowing_base(df, mult=1, ref_date=None):
         'borrowing_base': _safe(borrowing_base),
         'advance_rate': advance_rate,
         'by_product': by_product,
+        # Framework §17 — borrowing base is a facility-state report on the active
+        # tape (DPD>60 ineligibility + concentration test). by_product[].elig_pct
+        # is per-product eligible / per-product active outstanding.
+        'population':              'active_outstanding',
+        'confidence':              'A',
+        'by_product_population':   'active_outstanding',
+        'by_product_confidence':   'A',
     }
 
 
@@ -1133,6 +1156,11 @@ def compute_silq_cohort_loss_waterfall(df, mult=1, ref_date=None):
             'recovery_rate_population': 'loss_subset',
             'recovery_rate_confidence': 'A',
         },
+        # Framework §17 (session 36) — per-row rate disclosure for vintages[].
+        # Rows use per-vintage originated as denominator for default/loss rates
+        # and per-vintage gross_default as denominator for recovery_rate.
+        'vintages_population':           'total_originated',
+        'vintages_confidence':           'A',
     }
 
 

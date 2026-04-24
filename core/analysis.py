@@ -1429,6 +1429,15 @@ def compute_facility_pd(df, mult, as_of_date=None):
         'total_deals': total,
         'active_deals': int(len(active)),
         'completed_deals': int(len(completed)),
+        # Framework §17 — per-row rate disclosure for transition_matrix[].to_default_pct
+        # and distribution[].pct. `to_default_pct` uses completed-deals-in-or-below-bucket
+        # as denominator; `distribution.pct` is per-bucket share over all deals.
+        'transition_matrix_population': 'completed_only',
+        'transition_matrix_confidence': 'B' if has_expected else 'C',
+        'distribution_population': 'total_originated',
+        'distribution_confidence': 'A',
+        'facility_pd_population': 'active_outstanding',
+        'facility_pd_confidence': 'B' if has_expected else 'C',
     }
 
 
@@ -2179,7 +2188,13 @@ def compute_cohort_loss_waterfall(df, mult, as_of_date=None):
             'confidence':               'A',
             'recovery_rate_population': 'loss_subset',
             'recovery_rate_confidence': 'A',
-        }
+        },
+        # Framework §17 (session 36): per-row rate disclosure for vintages[].
+        # Each row's gross_default_rate/net_loss_rate use per-vintage originated
+        # as denominator (total_originated semantic, restricted to that vintage).
+        # recovery_rate uses per-vintage loss_subset.
+        'vintages_population':          'total_originated',
+        'vintages_confidence':          'A',
     }
 
 

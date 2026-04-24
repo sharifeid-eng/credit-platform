@@ -675,6 +675,183 @@ class TestMetaAuditDualPropagation:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Per-row list walker — session 36 gap 2
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# The top-level walker above only audits scalar rate fields at the root of
+# compute_* return dicts. But many compute functions expose rate fields
+# inside nested list-of-dict structures (cohort_loss_waterfall.vintages[],
+# yield.by_product[], delinquency.monthly[]). Session 35's 45-gap sweep
+# caught scalar fields but not per-row ones — a user could look at a cohort
+# table and not know what denominator the per-row rates use.
+#
+# Acceptance modes for per-row rate disclosure (any one satisfies §17):
+#   1. Parent dict has dict-level `population` + `confidence` covering the
+#      whole computation (inheritance).
+#   2. Parent dict has `<listname>_population` + `<listname>_confidence`
+#      declaring the list's uniform population semantic.
+#   3. Each row carries row-level `confidence` + `population` (expensive;
+#      useful when per-row populations differ).
+#   4. Each row carries per-field `<field>_confidence` (rare but allowed).
+#   5. `(function, list_name, field)` tuple is in `_ROW_DISCLOSURE_EXEMPT`.
+#
+# Top-level list returns (compute_cohorts returns a bare list) are
+# exempted at the function level because they have no parent dict to
+# carry a declaration — changing their signature would churn 5+ callers.
+# Their per-row rates are already audited by the dedicated cohort-population
+# test in `tests/test_population_audit_2026_04_22.py`.
+
+
+_ROW_DISCLOSURE_EXEMPT: Set[Tuple[str, str, str]] = {
+    # stages[].pct = stage amount / total_portfolio — the parent dict's
+    # dict-level population declares the denominator; audited at parent level.
+    # (Covered by inheritance, but listed here for documentation.)
+    # ('compute_denial_funnel', 'stages', 'pct'),
+
+    # SILQ delinquency.monthly[].overdue_rate / par30_rate — each month's
+    # rate is vs. that month's total cohort; parent's dict-level declaration
+    # covers it (inherited).
+    # (Covered by inheritance.)
+
+    # Aajil delinquency.by_deal_type[].overdue_pct — vs. per-deal-type
+    # active_count; parent's par_population_active/par_confidence covers.
+    # (Covered by inheritance via par_* declaration.)
+}
+
+
+_FUNCTION_RETURNS_LIST_EXEMPT: Set[str] = {
+    # compute_cohorts returns a bare list of cohort dicts. Changing its
+    # signature breaks 5+ callers (backend/main.py, agents/tools, tests).
+    # Each row already has numerator + denominator fields side-by-side
+    # (collected / purchase_value → collection_rate), making population
+    # self-evident. Cohort-level population discipline is audited by
+    # `tests/test_population_audit_2026_04_22.py::TestComputeCohortsPopulation`.
+    'compute_cohorts',
+}
+
+
+def _walk_list_rows(result: Dict[str, Any], function_name: str) -> List[Dict]:
+    """Recurse into dict-nested lists, audit per-row rate-like fields."""
+    if not isinstance(result, dict):
+        return []
+    if result.get('available') is False:
+        return []
+    if function_name in _FUNCTION_RETURNS_LIST_EXEMPT:
+        return []
+    findings = []
+    parent_has_dict_level = (
+        'population' in result and 'confidence' in result
+    )
+    for list_name, lst in result.items():
+        if not isinstance(lst, list) or not lst:
+            continue
+        # List-level declaration on parent
+        list_has_declaration = (
+            f'{list_name}_population' in result
+            and f'{list_name}_confidence' in result
+        )
+        # Special inheritance keys — par_population_{active,lifetime} +
+        # par_confidence cover delinquency sub-lists carrying PAR-style rates
+        par_family_inherits = (
+            list_name.startswith('par') or
+            ('par_confidence' in result and
+             any(k in result for k in ('par_population', 'par_population_active',
+                                       'par_population_lifetime')))
+        )
+        inherits = (
+            parent_has_dict_level
+            or list_has_declaration
+            or par_family_inherits
+        )
+        for idx, row in enumerate(lst):
+            if not isinstance(row, dict):
+                continue
+            row_has_row_level = (
+                'confidence' in row and 'population' in row
+            )
+            for k, v in row.items():
+                if not _is_rate_like(k):
+                    continue
+                if v is None or not isinstance(v, (int, float)):
+                    continue
+                if (function_name, list_name, k) in _ROW_DISCLOSURE_EXEMPT:
+                    continue
+                if row_has_row_level:
+                    continue
+                if f'{k}_confidence' in row:
+                    continue
+                if inherits:
+                    continue
+                findings.append({
+                    'function': function_name,
+                    'list': list_name,
+                    'row_index': idx,
+                    'field': k,
+                    'value': v,
+                    'reason': 'per-row rate-like field without §17 disclosure',
+                })
+                # One finding per list is enough for this (function, list, field)
+                # triple — all rows in the list share the same disclosure gap.
+                break
+    return findings
+
+
+class TestMetaAuditPerRowRateFieldDisclosure:
+    """Walk dict-nested list returns; flag per-row rate fields that lack
+    §17 disclosure.
+
+    The scalar walker above caught 45 gaps during session 35 but left
+    per-row rates in `vintages[]` and similar structures unaudited.
+    This walker closes that gap.
+    """
+
+    def test_walk_and_collect_findings(self):
+        findings_by_company: Dict[str, List[Dict]] = {}
+        for company, fns in _all_functions().items():
+            per_company: List[Dict] = []
+            for name, call in fns:
+                try:
+                    result = call()
+                except Exception:  # pragma: no cover
+                    continue
+                per_company.extend(_walk_list_rows(result, name))
+            findings_by_company[company] = per_company
+
+        total = sum(len(v) for v in findings_by_company.values())
+        if total == 0:
+            return
+
+        lines = [
+            f"\n§17 per-row meta-audit: {total} list-nested rate fields lack "
+            "population/confidence disclosure.",
+            "",
+            "Each finding = a rate-like per-row field inside a dict-nested list",
+            "where the parent dict carries NO dict-level, list-level, or par-family",
+            "disclosure that would cover it via inheritance.",
+            "",
+        ]
+        for company, findings in findings_by_company.items():
+            if not findings:
+                continue
+            lines.append(f"{company.upper()} — {len(findings)} gap(s):")
+            for f in findings:
+                lines.append(
+                    f"  {f['function']}.{f['list']}[{f['row_index']}].{f['field']}"
+                    f" = {f['value']!r}  → {f['reason']}"
+                )
+            lines.append('')
+        lines.append(
+            "To fix: in each compute function, either (a) add dict-level "
+            "`population` + `confidence` to the return dict, (b) add "
+            "`<listname>_population` + `<listname>_confidence` keys, "
+            "(c) add row-level `confidence`+`population` to each row, or "
+            "(d) add the (function, list, field) tuple to "
+            "_ROW_DISCLOSURE_EXEMPT in this test file with a documented reason."
+        )
+        pytest.fail('\n'.join(lines))
+
+
 class TestMetaAuditTaxonomyFreshness:
     """The §17 population taxonomy is frozen at 10 codes. If a compute
     function starts emitting a new code (e.g., `eligible_pool`), it must
