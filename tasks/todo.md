@@ -74,9 +74,59 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ## Active
 
-**One chip outstanding after session-30 continuation tail:**
+**One chip outstanding:**
 
 1. **Klaim email response parked session** — spawned as a ready-to-receive session. When Klaim replies to the email asking about Account Debtor column + status hygiene + Pending status + Collection days so far negatives, paste their response as the first user message and the session will classify the answer against the 4-option Account Debtor menu, write Mind entries, and recommend platform actions.
+
+---
+
+## Completed — 2026-04-24 (Session 34: Framework §17 Population Discipline audit + full platform implementation)
+
+**Audit artifact first** — surveyed 52 compute_* functions across Klaim + SILQ + Aajil + Tamara + Ejari (5 companies, 6 files). Classified each by numerator / denominator / population (7 §17 codes) / Confidence (A/B/C) / dual-view availability / gap flag. 6 P0 (correctness), 8 P1 (analyst views missing), 5 P2 (cleanup), 3 UNCERTAIN items surfaced. Written as `reports/metric_population_audit_2026-04-22.md` (732 lines), committed as `4e14b59`.
+
+**Initial sweep — 11 commits, `a4d0d34..03192d0`** (all P0/P1/P2/UNCERTAIN items + Framework §17 codification + methodology updates + Mind entry codified):
+
+- `a4d0d34` P0-6: confidence grading on every covenant + concentration limit (27 tests). NEW `method_to_confidence()` helper in `core/analysis.py`. SILQ covenants A/A/A/A/B; Klaim covenants B/B/C/A-or-B/B for the dual-path WAL retains pre-existing A/B sub-grades.
+- `f782b44` P0-1: SILQ Coll Ratio + RAT maturing-period filter doctrine (documentation + 4 regression tests asserting closed-repaid loans contribute to denominator; no logic change — filter was right, disclosure was missing).
+- `ac93cdf` P0-2 + P2-3: Aajil yield 3-population dual (avg_total_yield_realised + avg_total_yield_active alongside blended); by_deal_type adds margin_rate_pv_weighted.
+- `eae201c` P0-3 + P1-5: Aajil PAR measurement declaration (par_measurement='installments_overdue', par_confidence='B', par_primary pointer to aux DPD sheet) + lifetime denominator dual.
+- `f04523b` P1-1: separate_silq_portfolio + separate_aajil_portfolio primitives (8 tests).
+- `0eb466a` P1-2: classify_aajil_deal_stale + compute_aajil_operational_wal (10 tests).
+- `def244a` P1-3 + P1-4: SILQ + Aajil collections realised/clean duals.
+- `58f8ca5` P1-6 + P1-7 + P1-8 + all P2 + all UNCERTAIN: Klaim cohort clean dual, Tamara structural_data_limitation declaration, SILQ summary population labels, loss_triangle + silq waterfall docstring cleanup, Tamara heatmap scale_type disclosure, Klaim stress_test separation note, Aajil HHI clean dual.
+- `0dec8ae` NEW **ANALYSIS_FRAMEWORK.md §17** "Population Discipline & the Tape-vs-Portfolio Duality" — 7 standard populations, Tape-vs-Portfolio duality (Klaim WAL 148/137/79/65 as canonical illustration), diagnostic ratio, confidence grading, primitives catalogue, 10-row decision table. Renumbered 17→18 (Legal), 18→19 (Data Room), 19→20 (Research), 20→21 (Memo), 21→22 (Intelligence). FRAMEWORK_INDEX.md Section Map + Core Principles expanded 10→12 items. methodology_klaim.py + methodology_silq.py gain "Population & Confidence Declarations" static sections.
+- `ab5773e` Mind entry `6e0978f7-7df4-4768-bd4c-a04909807029` marked codified with dual-schema fields: platform-standard (`codified_in_framework`, `codification_commit`, `codification_section`, `codified_at`, `codified_by`) AND user-spec aliases (`codified`, `codified_commit`, `codified_section`). `promoted: true`. `codification_status: codified`. `second_data_point_sources` array documenting SILQ Coll Ratio + Aajil yield + Aajil PAR as the 2nd/3rd cases that unblocked codification.
+- `03192d0` Implementation summary → `reports/metric_population_audit_2026-04-22_IMPLEMENTATION.md`.
+
+**Follow-up sweep — 11 commits, `7549312..cce1c9b`** (all 8 gaps from the rethink + 3 budget-lifted additions):
+
+- `7549312` SILQ `classify_silq_deal_stale` + `compute_silq_operational_wal` — Framework §17 consistency. All 3 live-tape asset classes now have the full primitive set (separate_*_portfolio + classify_*_deal_stale + compute_*_operational_wal). 11 tests.
+- `f0b68b3` Platform-wide HHI clean-book duals (Klaim + SILQ) — finishes UNCERTAIN 3. Aajil already had it. 6 tests.
+- `0b8417e` §17 audit guard meta-test (`tests/test_population_discipline_guard.py`) — walks every covenant + concentration-limit dict, asserts confidence ∈ {A,B,C} + population matches 10-token taxonomy. Pins method→confidence mapping + taxonomy prefix set as frozen contracts. Prevents silent regression when new covenants land. 9 tests.
+- `74447f9` compute_methodology_log extensions — Klaim extended with `clean_book_separation` + `single_payer_proxy` entries; new `compute_silq_methodology_log` + `compute_aajil_methodology_log` following same schema. All 3 asset classes now uniform. 9 tests.
+- `c8a2fcd` Aajil methodology page — NEW `core/methodology_aajil.py` (~500 lines, 15 sections). Wired via `backend/main.py register_aajil_methodology()`. Frontend Methodology.jsx is data-driven so no frontend code change needed. Removed the hard 404 fallback at `/methodology/aajil` in favour of registry-based path. 3 tests.
+- `6896d91` Memo engine §17 prompts + analytics_bridge transmission — Executive Summary prompt + IC memo section prompt both get new POPULATION & CONFIDENCE DISCIPLINE blocks instructing the model to cite dual views + end sections with Methodology: footers. analytics_bridge.format_as_memo_block appends `[Confidence X, pop=Y]` tags. Backward compat preserved. 7 tests.
+- `761f7ea` Intelligence System: §17 into Layer 1 mind context. `MasterMind.load_framework_context()` always appends a 25-line §17 guidance block after Core Principles. EVERY AI call (memo, exec summary, chat, thesis, research, briefing) now sees §17 via Layer 1 automatically. 5 tests.
+- `78a7035` frontend ConfidenceBadge + PopulationPill components — reusable UI primitives. A/B/C letter pill with rich hover tooltip (plain-english grade + population code with human-readable label + method + note). KpiCard refactored to use it (BC preserved + new `population` / `confidenceNote` props). Vite build verified.
+- `232236f` Wire ConfidenceBadge into CovenantCard + LimitCard. Klaim Single Payer limit discloses `proxy_column: 'Group'` in tooltip when Payer column absent (B grade). WAL covenant renders dual sub-grades in tooltip ("Active Confidence A; Total Confidence B").
+- `0b2ae91` Close-out: CLAUDE.md (new Session 34 entry + Key Architectural Decisions entry); `reports/blended_field_deprecation_plan_2026-04-24.md` tracks blended-field candidates for removal with 3-memo promotion rule; `backend/operator.py::_compute_framework_17_coverage()` adds §17 primitive-presence check to the Health Matrix surface. 5 tests.
+- `cce1c9b` Final summary → `reports/metric_population_audit_2026-04-22_FOLLOWUP_SWEEP.md`.
+
+**Final state:**
+- **683 tests passing**, 82 skipped, 0 warnings, 0 regressions at every commit (baseline 548 → +135 new tests; 79 in the initial sweep, 56 in the follow-up).
+- **23 commits** on branch `claude/objective-mendel-7c5b74` since `a72025f` baseline.
+- **Diff totals:** 2,173 initial impl + 2,227 follow-up impl + 732 audit report + 164 initial summary + 131 follow-up summary = **5,296 lines**.
+- **All 3 live-tape asset classes uniform**: Klaim/SILQ/Aajil each have separate_*_portfolio + classify_*_deal_stale + compute_*_operational_wal + compute_*_methodology_log.
+- **Aajil methodology page exists** — previously inline-only, now a proper structured registration matching Klaim/SILQ.
+- **UI disclosure complete**: ConfidenceBadge on KpiCard + CovenantCard + LimitCard; tooltips name population + method + proxy column.
+- **AI disclosure complete**: §17 guidance injected via Layer 1 for every AI call + task-specific elaboration in memo + exec summary prompts.
+- **Audit guard in place**: new covenants without §17 fields fail CI.
+- **Deprecation plan documented**: `reports/blended_field_deprecation_plan_2026-04-24.md` tracks removal criteria.
+- **Framework Mind entry codified**: `6e0978f7-…` marked with both audit-field schemas, `promoted=true`.
+
+**Zero BLOCKED items. Zero new audit gaps surfaced during implementation.**
+
+---
 
 **Session-30-late completed (merged after the session-30 continuation EoD `34a9b14`):**
 

@@ -270,8 +270,9 @@ credit-platform/
 │   │   ├── kb_query.py        # Unified search across all knowledge stores
 │   │   └── framework_codification.py  # Session 28 D6 — surfaces framework_evolution queue + mark_codified flag
 │   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
-│   ├── methodology_klaim.py # Klaim methodology metadata (16 sections, 29 metrics, 13 tables)
-│   ├── methodology_silq.py # SILQ methodology metadata (15 sections, 23 metrics, 2 tables)
+│   ├── methodology_klaim.py # Klaim methodology metadata (17 sections incl §17 declarations)
+│   ├── methodology_silq.py # SILQ methodology metadata (16 sections incl §17 declarations)
+│   ├── methodology_aajil.py # Aajil methodology metadata (15 sections; session 34 — closes biggest §17 user-facing gap)
 │   ├── analysis.py         # All pure Klaim data computation functions (no I/O) — 40+ compute functions
 │   ├── analysis_silq.py    # SILQ-specific analysis functions (9 compute functions)
 │   ├── analysis_ejari.py   # Ejari ODS workbook parser (read-only summary, 12 sections)
@@ -342,7 +343,8 @@ credit-platform/
 │   │   ├── components/
 │   │   │   ├── ProtectedRoute.jsx       # Auth route guard (redirects if not authenticated/not admin)
 │   │   │   ├── Sidebar.jsx              # Persistent nav — 240px desktop, slide-in drawer on mobile
-│   │   │   ├── KpiCard.jsx              # Framer Motion stagger + hover effects + optional sparklineData prop
+│   │   │   ├── KpiCard.jsx              # Framer Motion stagger + hover effects + optional sparklineData prop + confidence + population props
+│   │   │   ├── ConfidenceBadge.jsx      # Framework §17 disclosure primitive — A/B/C letter pill + hover tooltip (population + method + note). Companion: PopulationPill for explicit population-only badges.
 │   │   │   ├── Navbar.jsx               # Responsive — hamburger menu on mobile, contains LaithLogo + UserMenu
 │   │   │   ├── AICommentary.jsx         # Slide-up animation on commentary
 │   │   │   ├── DataChat.jsx
@@ -1645,6 +1647,36 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
   - `classifier_llm.py` cache is sha256-keyed cross-company — re-running `classify --only-other` is free on a re-ingest.
 -----
 ## Known Gaps & Next Steps
+
+**Session 34 — Framework §17 Population Discipline audit + full platform implementation ✅ COMPLETE (2026-04-22 audit / 2026-04-24 implementation + follow-up sweep):**
+- [x] **Audit artifact** — `reports/metric_population_audit_2026-04-22.md` (732 lines, commit `4e14b59`). 52 compute_* functions across all 5 companies classified by numerator / denominator / population / confidence / dual-view / gap flag. 6 P0, 8 P1, 5 P2, 3 UNCERTAIN.
+- [x] **P0-1** — SILQ covenant maturing-period doctrine (documentation + 4 tests; no logic change — filter was correct, disclosure was missing). Commit `f782b44`.
+- [x] **P0-2** — Aajil yield 3-population dual (blended + realised + active) + PV-weighted deal-type margin (P2-3 piggyback). Commit `ac93cdf`.
+- [x] **P0-3** — Aajil PAR measurement declaration (`par_measurement='installments_overdue'`, `par_confidence='B'`, `par_primary` pointer) + P1-5 lifetime dual. Commit `eae201c`.
+- [x] **P0-4 + P0-5** — Klaim covenant confidence grading (PAR30/60 = B age_pending, Collection Ratio = C cumulative) subsumed into P0-6 cross-platform confidence sweep. Commit `a4d0d34`.
+- [x] **P0-6** — Confidence grading on every covenant + concentration limit (Klaim + SILQ, both portfolio.py + analysis_silq.py paths). NEW `method_to_confidence()` helper. 27 tests. Commit `a4d0d34`.
+- [x] **P1-1** — `separate_silq_portfolio` + `separate_aajil_portfolio` primitives. Commit `f04523b`.
+- [x] **P1-2** — Aajil `classify_aajil_deal_stale` + `compute_aajil_operational_wal`. Commit `0eb466a`.
+- [x] **P1-3 + P1-4** — SILQ collections + Aajil collections 3-population duals. Commit `def244a`.
+- [x] **P1-6 + P1-7 + P1-8 + all P2 + all UNCERTAIN** — Klaim cohort clean dual, Tamara structural_data_limitation, SILQ summary population labels, loss_triangle + silq waterfall docstring cleanup, Tamara heatmap scale_type disclosure, Klaim stress_test separation note, Aajil HHI clean dual. Commit `58f8ca5`.
+- [x] **Framework §17 codification** — NEW `core/ANALYSIS_FRAMEWORK.md` §17 "Population Discipline & the Tape-vs-Portfolio Duality" (after §16). 7 standard populations, Tape-vs-Portfolio duality with Klaim WAL 148/137/79/65 as canonical illustration, diagnostic ratio, confidence grading mandatory, platform primitives catalogue, 10-row decision table. Sections 17→18 (Legal), 18→19 (Data Room), 19→20 (Research), 20→21 (Memo), 21→22 (Intelligence) renumbered. FRAMEWORK_INDEX.md Section Map + Core Principles expanded 10→12 items. methodology_klaim.py + methodology_silq.py gain "Population & Confidence Declarations" static sections. Commit `0dec8ae`.
+- [x] **Mind entry codified** — `data/_master_mind/framework_evolution.jsonl` entry `6e0978f7-…` marked with dual-schema audit fields: platform-standard (`codified_in_framework`, `codification_commit`, `codification_section`, `codified_at`, `codified_by`) + user-spec aliases (`codified`, `codified_commit`, `codified_section`). `promoted: true`. `codification_status: codified`. Commit `ab5773e`.
+- [x] **Initial sweep summary** — `reports/metric_population_audit_2026-04-22_IMPLEMENTATION.md`. Commit `03192d0`.
+- [x] **Follow-up #1 — SILQ `classify_silq_deal_stale` + `compute_silq_operational_wal`** (Framework §17 consistency). All 3 live-tape asset classes now have the full primitive set. 11 tests. Commit `7549312`.
+- [x] **Follow-up #2 — Platform-wide HHI clean-book duals** (Klaim + SILQ) — finishes UNCERTAIN 3 platform-wide. Aajil already had it. 6 tests. Commit `f0b68b3`.
+- [x] **Follow-up #3 — §17 audit guard meta-test** — `tests/test_population_discipline_guard.py` walks every covenant + limit dict on every test run. Pins method→confidence mapping + 10-token taxonomy prefix set as frozen contracts. 9 tests. Commit `0b8417e`.
+- [x] **Follow-up #4 — Full methodology_log across platform** — Klaim `compute_methodology_log` extended with `clean_book_separation` + `single_payer_proxy` entries; new `compute_silq_methodology_log` + `compute_aajil_methodology_log`. All 3 asset classes now uniform. 9 tests. Commit `74447f9`.
+- [x] **Follow-up #5 — Aajil methodology page** — NEW `core/methodology_aajil.py` (~500 lines, 15 sections covering all 11 compute_aajil_* functions + 3 static sections). Wired via `backend/main.py register_aajil_methodology()`. Frontend Methodology.jsx is data-driven so no frontend code change needed. Commit `c8a2fcd`.
+- [x] **Follow-up #6 — Memo engine §17 prompts + analytics_bridge transmission** — Executive Summary prompt + IC memo section prompt both get new POPULATION & CONFIDENCE DISCIPLINE blocks. `analytics_bridge.format_as_memo_block` appends `[Confidence X, pop=Y]` tags on metrics carrying the fields. 7 tests. Commit `6896d91`.
+- [x] **Follow-up #7 — Intelligence System: §17 into Layer 1 mind context** — `MasterMind.load_framework_context()` always appends 25-line §17 guidance after Core Principles. EVERY AI call (memo, exec summary, chat, thesis, research, briefing) sees §17 via Layer 1 automatically. 5 tests. Commit `761f7ea`.
+- [x] **Follow-up #8 — ConfidenceBadge + PopulationPill UI components** — `frontend/src/components/ConfidenceBadge.jsx` (180 lines). A/B/C letter pill with rich hover tooltip (plain-english grade + population code + method + note). KpiCard refactored to use it; new `population` / `confidenceNote` props. Commit `78a7035`.
+- [x] **Follow-up #9 — Dashboard wiring** — ConfidenceBadge wired into CovenantCard + LimitCard. Klaim Single Payer limit discloses `proxy_column: 'Group'` in tooltip when Payer column absent. WAL covenant tooltip shows dual sub-grades ("Active A; Total B"). Commit `232236f`.
+- [x] **Follow-up #10 — Close-out docs** — CLAUDE.md Session 34 entry + new Key Architectural Decisions entry; `reports/blended_field_deprecation_plan_2026-04-24.md` tracks blended-field candidates with 3-memo promotion rule; `backend/operator.py::_compute_framework_17_coverage()` adds §17 primitive-presence check to Health Matrix. 5 tests. Commit `0b2ae91`.
+- [x] **Follow-up summary** — `reports/metric_population_audit_2026-04-22_FOLLOWUP_SWEEP.md`. Commit `cce1c9b`.
+- [x] **Tests: 683 passing** (baseline 548 + 135 new across both sweeps), 82 skipped, 0 warnings (baseline 0 maintained), 0 regressions at every commit.
+- [x] **23 commits** on `claude/objective-mendel-7c5b74` since `a72025f`. 5,296 total diff lines.
+- [x] **3 new lessons** in `tasks/lessons.md` — audit-first-implement-second, data-transmission-and-consumer-same-commit, meta-test-walker-for-platform-discipline.
+- [x] **Zero BLOCKED items. Zero new audit gaps surfaced during implementation.**
 
 **Session 33 — Executive Summary hardening: Aajil audit + 5 prompt disciplines ✅ COMPLETE (2026-04-22):**
 - [x] **Pass 1 — 3 Aajil tool crashes fixed** (commit `86c12a8`). `_get_covenants` (nonexistent `compute_aajil_covenants`), `_get_deployment` (assumed Klaim's `Month`), `_get_ageing_breakdown` (assumed `Status='Executed'`) now have Aajil branches or graceful skips. 3 regression tests in `TestAajilHandlerSignatures`.

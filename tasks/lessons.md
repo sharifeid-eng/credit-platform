@@ -3,6 +3,54 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-24 — Audit-first, implement-second: turn ambiguity into doctrine BEFORE the code changes, not after
+
+**Problem (inverted, i.e. what went right worth codifying):** Session 30 surfaced Klaim WAL as having four legitimate values (148d Active / 137d Total / 79d Operational / 65d Realized), each answering a different question. The impulse is to pick one, call it "WAL", and move on. The better move — which session 34 took — was to pause, audit every compute function across all 5 companies for the same class of population-mismatch problem, draft a Framework section capturing the doctrine, and only THEN implement. The audit report predicted 6 P0s, 8 P1s, 5 P2s, 3 UNCERTAINs; the implementation found exactly those, plus zero new gaps. That's the signal the audit was worth doing.
+
+**Rule:** When one instance of a structural pattern surfaces (e.g., "this metric has two legitimate populations"), assume the pattern recurs. Build an audit pass over the similar surface area BEFORE fixing the one instance. The audit report becomes the implementation checklist + the Framework doctrine draft + the promotion blocker for the Mind candidate entry that captured the pattern in the first place.
+
+**How to apply:**
+- When a Mind entry is marked `codification_status: "pending_second_data_point"`, THAT is your signal to run the cross-company audit that promotes it. Don't keep accumulating instances — promote once the second case is documented.
+- Audit artifact structure: per-company tables (function / numerator / denominator / population / confidence / dual-view-available / gap-flag), ranked gap list (P0 correctness / P1 missing views / P2 cleanup / UNCERTAIN user-review), doctrine draft as markdown, Mind-entry replacement text. All in one commit as `reports/{topic}_audit_{date}.md`, then the implementation sweep works the audit as its TODO.
+- Doctrine codification happens in the SAME sweep as the fixes — don't split "implement the fixes" from "update the Framework". If a P0 required the doctrine to exist (e.g., "every covenant must declare confidence"), the doctrine addition goes ahead of the fix in the commit sequence, not afterward.
+- See `reports/metric_population_audit_2026-04-22.md` + the 23-commit sequence `4e14b59..cce1c9b` as the reference pattern. 5,296 lines of diff, 135 new tests, 0 regressions at every commit, 0 new audit gaps surfaced during implementation — the audit was a good predictor because it was done at the right level of detail BEFORE coding began.
+
+---
+
+## 2026-04-24 — Data transmission + prompt instruction must land in the same commit, not sequentially
+
+**Problem:** Adding a new field to a compute output dict is only half the work. If downstream consumers (memo prompts, AI chat context, Intelligence System) don't know the field exists, the information never reaches the reader. Session 34 added `confidence` + `population` to every covenant dict in the first sweep but didn't touch the memo prompt or the analytics_bridge. Result: memos generated BEFORE the prompt+bridge commit never cited confidence grades; memos AFTER do. Analysts reading archived memos from the window between the two commits get a degraded experience. The fix is to land data + consumer in the SAME commit or a back-to-back pair, with tests asserting the field flows from compute output → bridge → prompt surface.
+
+**Rule:** For any new dict field meant to be analyst-visible, the same commit (or a tightly-coupled pair) should include:
+1. The compute function change that emits the field.
+2. At least one consumer change (prompt text, bridge transformation, UI component prop) that renders or cites the field.
+3. A regression test asserting the consumer reads the field correctly.
+
+If these land across commits separated by hours or days, the window of "archived memos / cached AI outputs that don't cite the new field" is a silent data-consistency problem — worse than not having the field at all, because it creates two vintages of output with the same timestamp.
+
+**How to apply:**
+- Before adding a new dict field, grep for callers: `grep -rn "\[.covenant.\]" backend/ core/` (or similar). If callers exist, plan the consumer change alongside.
+- In the commit message, explicitly list the end-to-end flow: "compute output → analytics_bridge → memo prompt → UI badge". If you can't describe all four points, you're missing wiring.
+- When back-to-back is unavoidable (e.g., frontend + backend in different repos), ship a no-op renderer first (field present but hidden), then enable rendering in the second commit. This way the audit trail shows both states have the field, not just post-render.
+- Reference: session 34 Step 6 commit `6896d91` bundled the memo prompt + analytics_bridge + tests in ONE commit explicitly because prior confidence-grading commits had deferred that wiring. Lesson reinforces: if I had wired it in the initial sweep (commit `a4d0d34`), there'd be no "generate a pre-commit memo to reproduce" debugging surface later.
+
+---
+
+## 2026-04-24 — Every dict-level discipline (confidence grading, population codes) needs a meta-test walker
+
+**Problem:** Framework §10 declared confidence grading mandatory but only Klaim WAL actually shipped the grade on its output dict. The bug existed for 14+ months because no test asserted "every covenant has a confidence field". Session 34 added `test_population_discipline_guard.py` — a meta-test that walks every covenant and concentration-limit dict emitted by the 4 compute functions and asserts the §17 contract. If a new covenant lands without the fields, the test fails with the covenant name in the error message. This is the discipline-enforcement mechanism that was missing.
+
+**Rule:** For any platform-wide structural discipline (confidence grading, population declaration, audit trail fields, etc.), write a meta-test that walks the surface and asserts the contract. Meta-tests that grep/iterate the codebase or runtime outputs are the insurance policy against "we have the rule documented but no enforcement".
+
+**How to apply:**
+- Meta-test pattern: iterate over every element of a known structure (covenant list, compute function registry, etc.) and assert each element satisfies the contract.
+- Include helpful error messages — `assert 'confidence' in cov, f"Covenant '{cov['name']}' missing 'confidence'"`. The engineer reading the CI failure needs to know WHICH covenant broke the contract.
+- Pin frozen contracts: the set of allowed values (e.g. `{'A', 'B', 'C'}`), the method→confidence mapping, the taxonomy prefix set. Lock these in via explicit `assert == frozenset(...)` so any new code adding a value must explicitly vote the new value in.
+- Run the meta-test before the prose rule in code review. A "discipline" documented only in CLAUDE.md or a Framework section will drift; a meta-test in CI can't drift without someone explicitly removing it (and reviewers see the removal).
+- See `tests/test_population_discipline_guard.py` for the reference pattern.
+
+---
+
 ## 2026-04-22 — Container and host are separate filesystems — installing a dep on one doesn't install it on the other
 
 **Problem:** Deploy today surfaced a Playwright "host system missing libxfixes3" warning during the backend container build. I ran `apt-get install libxfixes3` on the prod host and declared the issue fixed. Then — confidently but incorrectly — I said "the backend container image already has libxfixes3 from the earlier rebuild" when the same warning fired again on the next deploy. User ran `docker exec credit-platform-backend-1 ldconfig -p | grep libxfixes` which returned empty — the container was still missing the library despite the host install. The real fix was adding `libxfixes3` to `docker/backend.Dockerfile`'s apt install list, rebuilding the image, redeploying. Two confident wrong answers from me in one sequence; the actual root cause was a basic confusion between host and container dependency scopes.
