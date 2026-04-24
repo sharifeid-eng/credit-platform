@@ -54,6 +54,46 @@ def add_month_column(df):
     return df
 
 
+# ── Confidence Grading (Framework §10 / §17) ─────────────────────────────────
+
+# Map covenant/metric compute `method` tag to Framework §10 confidence grade.
+# A — Observed: numerator + denominator + filter directly on tape, no proxy.
+# B — Inferred: proxy column; cross-snapshot reconstruction; judgement threshold;
+#                off-tape manual input (observed externally, entered by analyst).
+# C — Derived:  estimated from empirical benchmark, model, or single-snapshot
+#                approximation of a multi-snapshot definition.
+_METHOD_TO_CONFIDENCE = {
+    # Direct observation
+    'direct':                               'A',
+    'observed':                             'A',
+    'collection_days_so_far':               'A',
+    'collection_days_so_far_with_curve_fallback': 'A',
+    # Proxy / inferred
+    'age_pending':                          'B',
+    'proxy':                                'B',
+    'stable':                               'B',
+    'expected_collection_days':             'B',
+    'elapsed_only':                         'B',
+    'manual':                               'B',
+    'empirical_proxy':                      'B',
+    # Derived / model / single-snapshot approximation
+    'cumulative':                           'C',
+    'derived':                              'C',
+    'empirical_benchmark':                  'C',
+}
+
+
+def method_to_confidence(method, default='B'):
+    """Return Framework §10 confidence grade for a compute `method` tag.
+
+    Returns 'A' / 'B' / 'C'. Unknown methods default to 'B' (inferred) —
+    safer than 'A' for analyst-facing output.
+    """
+    if method is None:
+        return default
+    return _METHOD_TO_CONFIDENCE.get(str(method).strip(), default)
+
+
 # ── Portfolio Summary ─────────────────────────────────────────────────────────
 
 def compute_summary(df, config, display_currency, snapshot_date, as_of_date):

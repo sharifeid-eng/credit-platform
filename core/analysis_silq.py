@@ -646,6 +646,8 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
     total_outstanding_active = active[C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
 
     # ── Covenant 1: PAR30 ≤ 10% ──────────────────────────────────────────
+    # Confidence A — direct DPD from Repayment_Deadline column, outstanding-weighted
+    # on the active pool. Population: active_outstanding (Framework §17).
     outstanding_gt30 = active.loc[active_dpd > 30, C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
     par30_ratio = outstanding_gt30 / total_outstanding_active if total_outstanding_active > 0 else 0
     covenants.append({
@@ -658,6 +660,9 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'note': None,
         'breakdown': [
             {'label': 'Outstanding >30 DPD', 'value': _safe(outstanding_gt30)},
@@ -667,6 +672,7 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
     })
 
     # ── Covenant 2: PAR90 ≤ 5% ───────────────────────────────────────────
+    # Confidence A — same derivation as PAR30. Population: active_outstanding.
     outstanding_gt90 = active.loc[active_dpd > 90, C_OUTSTANDING].sum() * mult if C_OUTSTANDING in active.columns else 0
     par90_ratio = outstanding_gt90 / total_outstanding_active if total_outstanding_active > 0 else 0
     covenants.append({
@@ -679,6 +685,9 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'note': None,
         'breakdown': [
             {'label': 'Outstanding >90 DPD', 'value': _safe(outstanding_gt90)},
@@ -727,6 +736,9 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
         'period': f'{month_labels[-1] if month_labels else "N/A"} — {month_labels[0] if month_labels else "N/A"}',
         'available': len(valid_ratios) > 0,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'specific_filter(maturing in period)',
         'note': f'{len(valid_ratios)} of 3 months have maturing loans' if len(valid_ratios) < 3 else None,
         'breakdown': breakdown_coll,
     })
@@ -764,6 +776,9 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
         'period': f'{(ref_date - pd.DateOffset(months=6)).strftime("%b %Y")} — {(ref_date - pd.DateOffset(months=3)).strftime("%b %Y")}',
         'available': rat_available,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'specific_filter(matured in 3-6mo window)',
         'note': 'No qualifying loans in the measurement window' if not rat_available else None,
         'breakdown': rat_breakdown if rat_breakdown else [{'label': 'No qualifying loans', 'value': 0}],
     })
@@ -780,6 +795,9 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
         'period': test_date_str,
         'available': False,
         'partial': True,
+        'method': 'manual',
+        'confidence': 'B',  # manual input once supplied — observed off-tape
+        'population': 'manual(facility + cash balances)',
         'note': 'Requires facility amount and cash balances (corporate-level data not in loan tape)',
         'breakdown': [
             {'label': 'Portfolio Receivables (from tape)', 'value': _safe(total_receivables)},

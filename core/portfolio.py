@@ -20,7 +20,7 @@ from core.analysis_silq import (
     C_DEAL_ID, C_SHOP_ID, C_TENURE, C_STATUS, C_PRODUCT,
     C_DISB_DATE, C_REPAY_DEADLINE, C_LAST_COLL, C_LOAN_AGE,
 )
-from core.analysis import filter_by_date
+from core.analysis import filter_by_date, method_to_confidence
 
 
 # ── Concentration limit tiers (from loan documents) ─────────────────────────
@@ -226,6 +226,8 @@ def compute_concentration_limits(df, mult=1, ref_date=None, facility_params=None
         'compliant': bool(len(breaching) == 0),
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'tier_label': tier_label,
         'worst_shop': worst_shop_id,
         'breaching_shops': breaching,
@@ -251,6 +253,8 @@ def compute_concentration_limits(df, mult=1, ref_date=None, facility_params=None
         'compliant': bool(top5_pct <= top5_threshold),
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'breakdown': [
             {'label': 'Top 5 borrowers outstanding', 'value': _safe(top5.sum() if C_SHOP_ID in active.columns else 0)},
             {'label': 'Total outstanding', 'value': _safe(total_outstanding)},
@@ -278,6 +282,8 @@ def compute_concentration_limits(df, mult=1, ref_date=None, facility_params=None
         'compliant': product_compliant,
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'breakdown': [
             {'label': f'Largest product ({worst_product})', 'value': _safe(worst_product_pct)},
             {'label': 'Threshold', 'value': _safe(product_threshold)},
@@ -298,6 +304,8 @@ def compute_concentration_limits(df, mult=1, ref_date=None, facility_params=None
         'compliant': bool(wav_tenure <= tenure_threshold),
         'unit': 'weeks',
         'format': 'weeks',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'breakdown': [
             {'label': 'Outstanding-weighted avg tenure', 'value': _safe(wav_tenure)},
             {'label': 'Threshold', 'value': _safe(tenure_threshold)},
@@ -359,6 +367,9 @@ def compute_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'note': None,
         'breakdown': [
             {'label': 'Outstanding >30 DPD', 'value': _safe(out_gt30)},
@@ -381,6 +392,9 @@ def compute_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': True,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'note': None,
         'breakdown': [
             {'label': 'Outstanding >90 DPD', 'value': _safe(out_gt90)},
@@ -432,6 +446,9 @@ def compute_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': period_str,
         'available': len(valid_ratios) > 0,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'specific_filter(maturing in period)',
         'note': f'{len(valid_ratios)} of 3 months have maturing loans' if len(valid_ratios) < 3 else None,
         'breakdown': breakdown_coll,
     })
@@ -470,6 +487,9 @@ def compute_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': rat_period,
         'available': rat_available,
         'partial': False,
+        'method': 'direct',
+        'confidence': 'A',
+        'population': 'specific_filter(matured in 3-6mo window)',
         'note': 'No qualifying loans in measurement window' if not rat_available else None,
         'breakdown': rat_breakdown if rat_breakdown else [{'label': 'No qualifying loans', 'value': 0}],
     })
@@ -510,6 +530,9 @@ def compute_covenants(df, mult=1, ref_date=None, facility_params=None):
         'period': test_date_str,
         'available': ltv_available,
         'partial': not ltv_available,
+        'method': 'manual',
+        'confidence': 'B',  # manual input — observed off-tape, analyst-entered
+        'population': 'manual(facility + cash balances)',
         'note': 'Enter facility amount and cash balances on the platform to compute LTV' if not ltv_available else None,
         'breakdown': ltv_breakdown,
     })
@@ -877,6 +900,8 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
         'compliant': bool(max_recv_pct <= single_recv_threshold),
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'breakdown': [
             {'label': 'Largest single receivable', 'value': _safe(max_recv_pct)},
             {'label': 'Limit', 'value': _safe(single_recv_threshold)},
@@ -897,6 +922,8 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
         'compliant': bool(top10_pct <= top10_threshold),
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'breakdown': [
             {'label': 'Top 10 receivables share', 'value': _safe(top10_pct)},
             {'label': 'Limit', 'value': _safe(top10_threshold)},
@@ -923,6 +950,8 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
         'compliant': customer_compliant,
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'breakdown': [
             {'label': f'Largest customer ({worst_customer})', 'value': _safe(worst_customer_pct)},
             {'label': 'Limit', 'value': _safe(customer_threshold)},
@@ -959,6 +988,9 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
                     'pct': _safe(float(pct)),
                 })
 
+    # Single payer: A if tape has explicit Payer column, B when using Group as proxy
+    # (Klaim's current Apr 2026 tape lacks Payer — see Company Mind debtor_validation.json).
+    payer_confidence = 'A' if payer_col in ('Payer', 'Insurance company') else 'B'
     limits.append({
         'name': 'Single payer concentration',
         'current': _safe(worst_payer_pct),
@@ -966,6 +998,10 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
         'compliant': payer_compliant,
         'unit': '%',
         'format': 'pct',
+        'confidence': payer_confidence,
+        'population': 'active_outstanding',
+        'method': 'direct' if payer_confidence == 'A' else 'proxy',
+        'proxy_column': payer_col if payer_confidence == 'B' else None,
         'conc_adjustment': _safe(conc_adjustment),
         'breaches': payer_breaches,
         'breakdown': [
@@ -1005,6 +1041,8 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
         'compliant': bool(ext_age_pct <= ext_age_threshold),
         'unit': '%',
         'format': 'pct',
+        'confidence': 'A',
+        'population': 'active_outstanding',
         'conc_adjustment': _safe(ext_age_adj),
         'wal_days': _safe(wal_days),
         'breach_count': ext_age_breaches,
@@ -1079,6 +1117,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': cash_available,
         'partial': not cash_available,
         'method': 'manual',
+        'confidence': 'B',  # manual — observed off-tape, analyst-entered values
+        'population': 'manual(cash + net_burn)',
         'note': 'Enter cash balance and net cash burn on the platform' if not cash_available else None,
         'breakdown': [
             {'label': 'Consolidated Cash and Cash Equivalents', 'value': _safe(cash)},
@@ -1134,6 +1174,10 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'wal_total_method': wal_total_method,
         'wal_active_confidence': 'A',
         'wal_total_confidence': 'B',
+        'confidence': 'A',  # covenant compliance decision uses wal_active (Confidence A)
+        'population': 'active_outstanding',  # WAL Active is covenant-binding per MMA Art. 21
+        'wal_active_population': 'active_outstanding',
+        'wal_total_population': 'total_pv',
         'threshold': _safe(wal_threshold),
         'compliant': wal_compliant,
         'operator': '<=',
@@ -1184,6 +1228,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': True,
         'partial': False,
         'method': 'age_pending',  # age_active > 90 AND Pending > 0; stable across tapes
+        'confidence': 'B',  # proxy — Klaim lacks contractual DPD, uses operational-age
+        'population': 'active_outstanding',
         'eod_rule': 'single_breach_not_eod',  # MMA 18.3(i): single breach is NOT an EoD
         'note': 'Single breach is not an Event of Default (MMA 18.3(i))',
         'breakdown': [
@@ -1214,6 +1260,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': True,
         'partial': False,
         'method': 'age_pending',  # age_active > 120 AND Pending > 0; stable across tapes
+        'confidence': 'B',  # proxy — same substitution as PAR30
+        'population': 'active_outstanding',
         'eod_rule': 'single_breach_is_eod',  # MMA 18.2(b)(ii): single breach IS an EoD
         'note': 'Calculated on the last day of each calendar month',
         'breakdown': [
@@ -1249,8 +1297,10 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': True,
         'partial': True,
         'method': 'cumulative',  # single-tape approximation; stable across tapes
+        'confidence': 'C',  # derived — single-snapshot approximation of a multi-snapshot definition (P0-5)
+        'population': 'total_originated',
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(ii): 2 consecutive breaches for EoD
-        'note': 'Single-tape approximation: cumulative collected / face value. True period ratio requires two snapshots.',
+        'note': 'Single-tape approximation: cumulative collected / face value. True period ratio requires two snapshots (Framework §17: Confidence C — derived).',
         'breakdown': [
             {'label': 'Collections (period)', 'value': _safe(total_coll if 'total_coll' in dir() else 0)},
             {'label': 'Total A/R (period)', 'value': _safe(total_pv if 'total_pv' in dir() else 0)},
@@ -1286,6 +1336,13 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         amount_paid = period_deals['Collected till date'].sum() * mult if len(period_deals) else 0
         pvd_ratio = amount_paid / amount_due if amount_due > 0 else 0
 
+    # Paid vs Due: confidence tracks the method — 'direct' is A (uses Expected collection days
+    # to filter deals whose payment falls in the period), 'proxy' is B (Deal date proxy).
+    pvd_population = (
+        'specific_filter(expected_payment_date in period)'
+        if pvd_method == 'direct'
+        else 'specific_filter(deal_date <= period_end)'
+    )
     covenants.append({
         'name': 'Paid vs Due Ratio',
         'current': _safe(pvd_ratio),
@@ -1297,6 +1354,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': True,
         'partial': False,
         'method': pvd_method,  # 'direct' uses Expected collection days, 'proxy' uses Deal date
+        'confidence': method_to_confidence(pvd_method),
+        'population': pvd_population,
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(iii): 2 consecutive breaches for EoD
         'note': 'EoD requires 2 consecutive monthly breaches (MMA 18.3(iii))',
         'breakdown': [
@@ -1327,6 +1386,8 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'available': parent_available,
         'partial': not parent_available,
         'method': 'manual',
+        'confidence': 'B',  # manual — observed off-tape, analyst-entered
+        'population': 'manual(parent cash + parent burn)',
         'eod_rule': 'single_breach_is_eod',
         'note': 'Requires manual input — enter Parent cash and burn data on the platform' if not parent_available else None,
         'breakdown': [
