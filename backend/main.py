@@ -57,10 +57,12 @@ from core.validation_silq import validate_silq_tape
 from core.metric_registry import get_methodology, get_registry
 from core.methodology_klaim import register_klaim_methodology
 from core.methodology_silq import register_silq_methodology
+from core.methodology_aajil import register_aajil_methodology
 
 # Register all methodology metadata at import time
 register_klaim_methodology()
 register_silq_methodology()
+register_aajil_methodology()
 from core.portfolio import (
     compute_borrowing_base as portfolio_borrowing_base,
     compute_concentration_limits as portfolio_concentration_limits,
@@ -587,13 +589,18 @@ def get_methodology_endpoint(analysis_type: str):
                     return json.load(f)
         raise HTTPException(status_code=404, detail="Tamara methodology not found")
 
+    # Aajil now registers methodology via core/methodology_aajil.py (same
+    # METRIC_REGISTRY pattern as Klaim/SILQ) — fall through to the generic
+    # path. Legacy static data/Aajil/KSA/methodology.json removed; registry
+    # path is authoritative. If the static file exists we still prefer it
+    # to allow analyst override via file edit (matches Ejari/Tamara pattern).
     if analysis_type == 'aajil':
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         mpath = os.path.join(base, 'data', 'Aajil', 'KSA', 'methodology.json')
         if os.path.exists(mpath):
             with open(mpath, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        raise HTTPException(status_code=404, detail="Aajil methodology not found")
+        # Fall through to registry-based path
 
     result = get_methodology(analysis_type)
     if not result['sections']:

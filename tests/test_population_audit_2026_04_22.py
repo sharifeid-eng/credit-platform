@@ -913,6 +913,55 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: Aajil methodology page registration
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestAajilMethodologyRegistry:
+    """Aajil methodology now registers via core/methodology_aajil.py with the
+    same METRIC_REGISTRY pattern as Klaim and SILQ. Closes the gap flagged in
+    the audit implementation summary."""
+
+    def test_aajil_sections_register_on_import(self):
+        """register_aajil_methodology populates METRIC_REGISTRY (compute-fn
+        sections) and STATIC_SECTIONS (Currency, Data Notes, §17 declarations).
+        Total ≥ 15 Aajil entries expected across both."""
+        from core.metric_registry import METRIC_REGISTRY, STATIC_SECTIONS
+        from core.methodology_aajil import register_aajil_methodology
+        register_aajil_methodology()
+        aajil_dynamic = [s for s in METRIC_REGISTRY   if s.get('analysis_type') == 'aajil']
+        aajil_static  = [s for s in STATIC_SECTIONS   if s.get('analysis_type') == 'aajil']
+        total = len(aajil_dynamic) + len(aajil_static)
+        assert total >= 15, f"Expected ≥ 15 Aajil entries, got dynamic={len(aajil_dynamic)} + static={len(aajil_static)}"
+        # Ensure the compute-fn registrations are the big chunk (≥ 12)
+        assert len(aajil_dynamic) >= 12
+
+    def test_aajil_registry_has_framework_17_section(self):
+        """Population & Confidence Declarations (§17) lives in STATIC_SECTIONS."""
+        from core.metric_registry import STATIC_SECTIONS
+        from core.methodology_aajil import register_aajil_methodology
+        register_aajil_methodology()
+        titles = {s.get('section') for s in STATIC_SECTIONS if s.get('analysis_type') == 'aajil'}
+        assert 'Population & Confidence Declarations' in titles
+        assert 'Data Notes' in titles
+        assert 'Currency Conversion' in titles
+
+    def test_aajil_operational_wal_section_registered(self):
+        """P1-2 audit addition (compute_aajil_operational_wal) is wired to
+        the overview tab in the METRIC_REGISTRY."""
+        from core.metric_registry import METRIC_REGISTRY
+        from core.methodology_aajil import register_aajil_methodology
+        register_aajil_methodology()
+        wal_entries = [
+            s for s in METRIC_REGISTRY
+            if s.get('analysis_type') == 'aajil' and 'Cash Duration' in str(s.get('section'))
+        ]
+        assert len(wal_entries) >= 1, 'Expected Cash Duration (Operational WAL) entry'
+        assert wal_entries[0]['denominator'] == 'clean_book'
+        assert wal_entries[0]['confidence'] == 'B'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FOLLOW-UP: Methodology logs extended across platform
 # ══════════════════════════════════════════════════════════════════════════════
 
