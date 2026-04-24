@@ -913,6 +913,54 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: Intelligence System — §17 injected via Layer 1 framework context
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestMasterMindFrameworkContextCarriesSection17:
+    """MasterMind.load_framework_context always appends §17 guidance so every
+    AI prompt (memo, exec summary, chat, thesis) sees it without per-call-site
+    wiring."""
+
+    def test_framework_context_contains_section_17_header(self):
+        from core.mind.master_mind import MasterMind
+        ctx = MasterMind().load_framework_context()
+        assert 'Framework §17' in ctx or '§17' in ctx
+
+    def test_framework_context_names_population_codes(self):
+        from core.mind.master_mind import MasterMind
+        ctx = MasterMind().load_framework_context()
+        # At minimum, the 4 most-important population codes must be named
+        for pop in ('total_originated', 'active_outstanding', 'clean_book', 'completed_only'):
+            assert pop in ctx, f"Framework context missing population code '{pop}'"
+
+    def test_framework_context_explains_ABC_confidence(self):
+        from core.mind.master_mind import MasterMind
+        ctx = MasterMind().load_framework_context()
+        assert 'Observed' in ctx
+        assert 'Inferred' in ctx
+        assert 'Derived' in ctx
+
+    def test_framework_context_names_dual_view_examples(self):
+        from core.mind.master_mind import MasterMind
+        ctx = MasterMind().load_framework_context()
+        assert 'Dual' in ctx or 'dual' in ctx
+        # Must reference one of the canonical dual-view metric names
+        assert any(k in ctx for k in ('PAR', 'WAL', 'cohort'))
+
+    def test_framework_context_ordering_principles_then_s17(self):
+        """Core Principles come first (FRAMEWORK_INDEX extraction), §17
+        appended afterwards. A prompt reading top-down sees Core Principles
+        before the detailed §17 disclosure."""
+        from core.mind.master_mind import MasterMind
+        ctx = MasterMind().load_framework_context()
+        core_idx = ctx.find('Core Principles')
+        s17_idx = ctx.find('§17')
+        if core_idx >= 0 and s17_idx >= 0:
+            assert core_idx < s17_idx, 'Core Principles must precede §17 guidance'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FOLLOW-UP: Memo engine IC prompts + analytics_bridge disclosure
 # ══════════════════════════════════════════════════════════════════════════════
 

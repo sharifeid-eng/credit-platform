@@ -24,6 +24,35 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _MASTER_DIR = _PROJECT_ROOT / "data" / "_master_mind"
 
+
+# Framework §17 Population Discipline — always injected into Layer 1
+# (framework context) of build_mind_context so every AI prompt sees it.
+# The doctrine was codified in ANALYSIS_FRAMEWORK.md §17 per the
+# 2026-04-22 metric-population audit.
+_FRAMEWORK_SECTION_17_GUIDANCE = """## Framework §17 — Population Discipline (Tape-vs-Portfolio Duality)
+
+Every compute function output carries:
+- `population`: one of 7 standard codes — total_originated, active_outstanding,
+  active_pv, completed_only, clean_book, loss_subset, zombie_subset
+  (or specific_filter(...), manual(...), snapshot_date_state for edge cases)
+- `confidence`: A (Observed), B (Inferred), C (Derived)
+
+When you cite metrics in output:
+- Covenant-facing numbers (Portfolio Analytics) use active_outstanding,
+  facility-document-bound population, no stale filter.
+- Learning numbers (Tape Analytics) prefer clean_book (stale-filtered) —
+  answers "how does the product behave?" not "what's the current exposure?"
+- Dual views (Active + Lifetime PAR; Blended + Clean cohort rate; Operational
+  + Realized WAL) — when present, cite BOTH and name their populations.
+
+Disclosure rule:
+- If the metric is headline AND graded B or C, surface the grade to the reader
+  (e.g. "Collection Ratio 28% [Confidence C — cumulative approximation]").
+- Grade A metrics: don't pollute prose with brackets; reserve brackets for
+  B/C grades on covenant-binding numbers.
+- Per-section memos: end with a one-line 'Methodology:' footer naming the
+  dominant population + confidence for the section's cited metrics."""
+
 # JSONL file names
 _FILES = {
     "preferences": "preferences.jsonl",
@@ -535,9 +564,12 @@ class MasterMind:
         return candidates
 
     def load_framework_context(self) -> str:
-        """Read FRAMEWORK_INDEX.md and extract the Core Principles section.
+        """Read FRAMEWORK_INDEX.md Core Principles + §17 Population Discipline.
 
-        Returns a concise ~10-15 line context block for AI prompts.
+        Returns a concise ~15-25 line context block for AI prompts. The §17
+        summary is always appended so every AI prompt (memo, exec summary,
+        chat, thesis evaluation) sees the population taxonomy and knows to
+        surface confidence grades without per-call-site wiring.
 
         Returns:
             Formatted core principles string, or empty string if file not found.
@@ -545,7 +577,7 @@ class MasterMind:
         index_path = _PROJECT_ROOT / "core" / "FRAMEWORK_INDEX.md"
         if not index_path.exists():
             logger.warning("MasterMind: FRAMEWORK_INDEX.md not found at %s", index_path)
-            return ""
+            return _FRAMEWORK_SECTION_17_GUIDANCE
 
         text = index_path.read_text(encoding="utf-8")
 
@@ -568,18 +600,23 @@ class MasterMind:
 
         if len(result_lines) <= 1:
             # Fallback: return a minimal set of principles
-            return (
-                "## ACP Analysis Framework -- Core Principles\n"
-                "1. Graceful degradation -- hide when unavailable, never estimate without labeling\n"
-                "2. Denominator discipline -- every rate declares total/active/eligible\n"
-                "3. Completed-only margins -- never include active deals in margin calculations\n"
-                "4. Separation principle -- loss portfolio isolated from performance metrics\n"
-                "5. Confidence grading -- A (observed), B (inferred), C (derived)\n"
-                "6. Three clocks -- Origination Age, Contractual DPD, Operational Delay\n"
-                "7. Asset-class-centric -- methodology organized by asset class, not company name"
-            )
+            result_lines = [
+                "## ACP Analysis Framework -- Core Principles",
+                "1. Graceful degradation -- hide when unavailable, never estimate without labeling",
+                "2. Population discipline -- every metric declares one of 7 populations (§17); dual views when the same metric serves two questions",
+                "3. Denominator discipline -- every rate declares total/active/eligible",
+                "4. Completed-only margins -- never include active deals in margin calculations",
+                "5. Separation principle -- loss portfolio isolated from performance metrics",
+                "6. Confidence grading is mandatory -- A (observed) / B (inferred) / C (derived)",
+                "7. Tape-vs-Portfolio duality -- covenant-facing metrics go on Portfolio unfiltered; learning metrics go on Tape with clean-book preference",
+                "8. Three clocks -- Origination Age, Contractual DPD, Operational Delay",
+                "9. Asset-class-centric -- methodology organized by asset class, not company name",
+            ]
 
-        return "\n".join(result_lines)
+        # Always append §17 population-discipline guidance so every AI prompt
+        # sees the taxonomy + confidence-grade doctrine.
+        core_principles = "\n".join(result_lines)
+        return core_principles + "\n\n" + _FRAMEWORK_SECTION_17_GUIDANCE
 
     def load_methodology_context(self, company: str, product: str) -> str:
         """Load methodology for a company/product and extract key formulas and caveats.
