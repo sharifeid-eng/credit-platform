@@ -1,0 +1,47 @@
+# Line-ending policy — ensures content identity across Windows laptop, Linux
+# prod server, and cloud session environments.
+#
+# Without this file, Windows git's default `core.autocrlf=true` adds \r\n to
+# working-tree files on checkout. Any tool that reads bytes directly (SCP, file
+# manager copy, curl -F) will carry CRLF to servers, causing byte-level diffs
+# against what git stores (LF). Session 35 hit this with the Apr 15 Klaim tape:
+# the SCP'd prod copy had CRLF while the git-committed version had LF — byte-
+# identical content but `git pull` refused to overwrite the untracked file.
+#
+# Rule: force LF for text formats analysts SCP or deploy; let git autodetect
+# for source code (which is eol-agnostic).
+
+# Loan tapes + analyst data — always LF (deploy.sh ships these via git pull,
+# and SCP'd copies must match for the collision-detector in deploy.sh to
+# auto-resolve cleanly).
+*.csv      text eol=lf
+*.json     text eol=lf
+*.jsonl    text eol=lf
+*.md       text eol=lf
+*.yaml     text eol=lf
+*.yml      text eol=lf
+
+# Shell + deploy scripts — must be LF so they execute on Linux
+*.sh       text eol=lf
+
+# Binary formats — explicit so git doesn't try to convert
+*.xlsx     binary
+*.xlsm     binary
+*.ods      binary
+*.pdf      binary
+*.docx     binary
+*.pptx     binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.ico      binary
+*.pkl      binary
+
+# Python, JSX, CSS, HTML — let git autodetect (standard behaviour is fine)
+*.py       text
+*.jsx      text
+*.js       text
+*.tsx      text
+*.ts       text
+*.css      text
+*.html     text
