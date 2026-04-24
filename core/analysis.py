@@ -138,6 +138,12 @@ def compute_summary(df, config, display_currency, snapshot_date, as_of_date):
         'date_range':         {'min': min_date, 'max': max_date},
         'total_expected':     float(total_expected),
         'avg_discount':       round(avg_discount, 4),
+        # Framework §17 (session 35 meta-audit): dict-level disclosure covering
+        # collection_rate / denial_rate / pending_rate — all computed against
+        # Σ purchase value of all deals (total_originated). Confidence A
+        # (directly observed tape numerators + denominators).
+        'population':         'total_originated',
+        'confidence':         'A',
     }
 
 
@@ -698,6 +704,17 @@ def compute_returns_analysis(df, mult):
         'provision_coverage':   round(total_prov / total_denied * 100, 2) if total_denied else 0,
         'total_provisions':     round(total_prov, 2),
         'total_adjustments':    round(total_adj, 2),
+        # Framework §17 (session 35 meta-audit):
+        # expected_margin / capital_recovery / fee_yield / weighted_avg_discount
+        # computed against ALL deals (total_originated); realised_margin /
+        # completed_margin / completed_loss_rate / provision_coverage against
+        # Status=='Completed' only (completed_only). Both Confidence A.
+        'population':                    'total_originated',   # primary view
+        'confidence':                    'A',
+        'completed_loss_rate_population': 'completed_only',
+        'completed_loss_rate_confidence': 'A',
+        'realised_margin_population':    'completed_only',
+        'completed_margin_population':   'completed_only',
     }
 
     # ── Monthly returns (margin based on completed deals per vintage) ──
@@ -1085,6 +1102,13 @@ def compute_denial_funnel(df, mult):
         'net_loss':      round(net_loss, 2),
         'recovery_rate': recovery_rate,
         'unresolved':    round(unresolved, 2),
+        # Framework §17 (session 35 meta-audit): recovery_rate = provisions /
+        # denied on the denied-subset (loss_subset). Stage %s computed against
+        # total_originated. Both Confidence A.
+        'population':              'total_originated',  # stages %s
+        'confidence':              'A',
+        'recovery_rate_population': 'loss_subset',
+        'recovery_rate_confidence': 'A',
     }
 
 
@@ -1761,9 +1785,11 @@ def compute_par(df, mult, as_of_date=None):
         lt_par60_ct = par60_ct / total_deal_count * 100 if total_deal_count > 0 else 0
         lt_par90_ct = par90_ct / total_deal_count * 100 if total_deal_count > 0 else 0
 
+        _method_tag = 'direct' if has_expected_days else 'expected'
+        _confidence = method_to_confidence(_method_tag)  # direct→A, expected→B
         return {
             'available': True,
-            'method': 'direct' if has_expected_days else 'expected',
+            'method': _method_tag,
             # Active perspective (monitoring) — denominator = active outstanding
             'par30': round(par30, 4),
             'par60': round(par60, 4),
@@ -1785,6 +1811,12 @@ def compute_par(df, mult, as_of_date=None):
             'lifetime_par90_count': round(lt_par90_ct, 4),
             'total_originated': round(total_originated, 2),
             'total_deal_count': total_deal_count,
+            # Framework §17 dual-view declarations (session 35 meta-audit)
+            'population':              'active_outstanding',     # primary view
+            'confidence':              _confidence,
+            'par_population':          'active_outstanding',
+            'par_lifetime_population': 'total_originated',
+            'par_confidence':          _confidence,
         }
 
     # Method 2: Option C — Empirical benchmarks from completed deals
@@ -1855,6 +1887,12 @@ def compute_par(df, mult, as_of_date=None):
             'lifetime_par90_count': round(lt_par90_ct, 4),
             'total_originated': round(total_originated, 2),
             'total_deal_count': total_deal_count,
+            # Framework §17 — derived method → Confidence C
+            'population':              'active_outstanding',
+            'confidence':              'C',
+            'par_population':          'active_outstanding',
+            'par_lifetime_population': 'total_originated',
+            'par_confidence':          'C',
         }
 
     # Fallback: neither method available
@@ -2135,6 +2173,12 @@ def compute_cohort_loss_waterfall(df, mult, as_of_date=None):
             'gross_default_rate': round(t_gross / t_orig * 100, 4) if t_orig > 0 else 0,
             'net_loss_rate': round(t_net / t_orig * 100, 4) if t_orig > 0 else 0,
             'recovery_rate': round(t_recov / t_gross * 100, 4) if t_gross > 0 else 0,
+            # Framework §17 (session 35 meta-audit): default/loss rates against
+            # total_originated; recovery_rate against loss_subset (denied >50% PV).
+            'population':               'total_originated',
+            'confidence':               'A',
+            'recovery_rate_population': 'loss_subset',
+            'recovery_rate_confidence': 'A',
         }
     }
 
@@ -3092,6 +3136,11 @@ def compute_klaim_stale_exposure(df, mult, ref_date=None, facility_params=None):
         'stale_pv_share':        round(stale_pv / total_pv, 6),
         'total_pv':              round(total_pv, 2),
         'total_deal_count':      int(len(df)),
+        # Framework §17: stale_pv_share = zombie_subset PV / total_originated PV.
+        # Confidence B — judgement threshold (3 stale rules with denial%/age
+        # cut-offs). Session 35 meta-audit.
+        'population':              'zombie_subset',
+        'confidence':              'B',
         'by_category':           categories,
         'top_offenders':         top_offenders,
         'ineligibility_age_days': age_threshold,
@@ -3209,5 +3258,8 @@ def compute_cdr_ccr(df, mult, as_of_date=None):
             'ccr': round(portfolio_ccr, 4),
             'net_spread': round(portfolio_ccr - portfolio_cdr, 4),
             'avg_vintage_age_months': round(avg_months, 1),
+            # Framework §17 — annualised rates vs originated per vintage
+            'population': 'total_originated',
+            'confidence': 'A',
         },
     }

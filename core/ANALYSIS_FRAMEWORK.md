@@ -875,6 +875,55 @@ When adding a dual view to an existing metric, **keep the pre-existing field nam
 
 This is not optional — silently changing the semantics of a field that IC memos have cited for a year is how methodology drift gets into archived IC documents.
 
+### Principle propagation discipline (session 35 addition)
+
+The audit + implementation pattern session 34 established, and session 35 reinforced after the SILQ PAR gap, is:
+
+**When a dual-view or disclosure pattern is introduced on company A, proactively apply the same pattern to every company where it's analytically meaningful** — OR explicitly declare the company exempt with a documented reason.
+
+Concrete rules:
+
+1. **If `compute_A_collections` gains a `rate_realised` dual, `compute_B_collections` MUST gain the same dual.** Exception: if company B has a structural reason (e.g., Tamara's read-only summary cannot compute `_realised` without a raw tape), flag in `compute_B_methodology_log` as `structural_exemption`.
+
+2. **If company A's summary endpoint surfaces a metric dual (e.g., `collection_rate_clean` + `collection_rate`), companies B/C summaries MUST surface the same dual — not just the underlying compute function.** The summary is the analyst-facing card; the compute function is the implementation. Both layers need the dual for the analyst to see it.
+
+3. **Every live-tape asset class MUST have the full primitive set:** `separate_{type}_portfolio()`, `classify_{type}_deal_stale()`, `compute_{type}_operational_wal()`, `compute_{type}_methodology_log()`. New asset-class onboarding is incomplete until all four exist. Enforced by meta-test `TestMetaAuditDualPropagation.test_operational_wal_across_live_tape_companies` etc.
+
+4. **Read-only summary asset classes (Tamara, Ejari) are exempt from primitives that require raw tape access** but MUST carry a `structural_data_limitation` / `population: 'snapshot_date_state'` declaration so analysts see the exemption is intentional, not missed.
+
+The meta-test `tests/test_population_discipline_meta_audit.py` enforces this propagation:
+- `TestMetaAuditRateFieldDisclosure` — walks every compute function, flags rate fields without population/confidence.
+- `TestMetaAuditDualPropagation` — asserts specific duals (PAR lifetime, HHI clean, collections realised, operational WAL, methodology_log) exist on every applicable asset class.
+- `TestMetaAuditTaxonomyFreshness` — new population codes must be voted into the allowed taxonomy before a compute function can emit them.
+
+If an audit gap surfaces on company A and the fix pattern is adoptable elsewhere, the audit sweep must check every other asset class for the same gap — not wait for a user to flag it.
+
+### Dual-view pattern taxonomy
+
+Three distinct shapes of "dual view" have emerged; each serves a different analytical context. Codify which pattern applies when.
+
+**Pattern 1: Single-primary + secondary context (lending-style)**
+- One population is the "IC-relevant primary" (the headline number).
+- Other populations are context, rendered as a subtitle / tooltip / secondary row.
+- Example: SILQ PAR — active_outstanding is primary (the live book metric for installment lending); lifetime_par30 is context.
+- Example: Aajil Operational WAL — clean_book (stale-filtered) is primary; realized_wal is context.
+- **When to use:** the product has a clear "live book" concept where active is the main facility basis.
+
+**Pattern 2: Parallel-equal (factoring-style)**
+- Both populations are equally important — neither dominates as primary.
+- Frontend renders both with equal visual weight (e.g., two KPI cards side-by-side).
+- Example: Klaim PAR — active is covenant-bound (MMA threshold), lifetime is IC-bound (facility-exposure narrative). Both are headline.
+- **When to use:** the product has a meaningful tension between facility-covenant view and IC-narrative view where neither is clearly dominant.
+
+**Pattern 3: N-way population comparison (yield-style)**
+- Three or more populations each answer a distinct question.
+- Frontend surfaces all N with clear labels; no single primary.
+- Example: Aajil yield — `avg_total_yield` (blended, B), `avg_total_yield_realised` (completed_only, A), `avg_total_yield_active` (active, A).
+- Example: Aajil collections — `overall_rate` (blended, B), `overall_rate_realised` (completed_only, A), `overall_rate_clean` (clean_book, B).
+- **When to use:** the metric inherently has 3+ analytically distinct interpretations (e.g., realised yield vs underwritten yield vs book-weighted yield).
+
+Applying the wrong pattern creates analyst confusion. A platform-wide lending product with Pattern 2 applied would make analysts stare at two equal-weight covenant numbers and not know which to cite. A factoring product with Pattern 1 applied would hide the IC-narrative in a tooltip. Pick the pattern that matches the asset class's underlying economics.
+
 ---
 
 ## 18. Legal Extraction & Facility Params Binding

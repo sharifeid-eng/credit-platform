@@ -115,6 +115,20 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
     collection_rate = total_realised / total_principal if total_principal > 0 else 0
     wo_rate = len(written_off) / n if n > 0 else 0
 
+    # Framework §17 dual view (session 35 meta-audit): matches compute_aajil_collections
+    # P1-4 3-population pattern on the summary surface too.
+    # - collection_rate              = total_originated (blended incl. WO, Confidence B)
+    # - collection_rate_realised     = completed_only (Status=='Realised', Confidence A)
+    # - collection_rate_clean        = clean_book (Realised + Accrued, Confidence B)
+    realised_principal = float(realised[C_PRINCIPAL].sum()) * mult if len(realised) else 0
+    realised_realised  = float(realised[C_REALISED].fillna(0).sum()) * mult if len(realised) else 0
+    collection_rate_realised = realised_realised / realised_principal if realised_principal > 0 else 0
+
+    clean_df_rate = df[df[C_STATUS] != 'Written Off'] if C_STATUS in df.columns else df
+    clean_principal = float(clean_df_rate[C_PRINCIPAL].sum()) * mult if len(clean_df_rate) else 0
+    clean_realised  = float(clean_df_rate[C_REALISED].fillna(0).sum()) * mult if len(clean_df_rate) else 0
+    collection_rate_clean = clean_realised / clean_principal if clean_principal > 0 else 0
+
     # Customer HHI — UNCERTAIN 3 resolution: dual view
     # hhi_customer       = lifetime HHI (all statuses incl. WO), Confidence A
     # hhi_customer_clean = current-exposure HHI (strips Written-Off historical
@@ -143,6 +157,9 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
         'total_customers': customers,
         'avg_deals_per_customer': _safe(n / max(customers, 1)),
         'collection_rate': _safe(collection_rate),
+        # Session 35 meta-audit: propagate 3-population dual from collections fn
+        'collection_rate_realised': _safe(collection_rate_realised),
+        'collection_rate_clean':    _safe(collection_rate_clean),
         'write_off_rate': _safe(wo_rate),
         'realised_count': len(realised),
         'accrued_count': len(accrued),
@@ -168,6 +185,18 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
         },
         'analysis_type': 'aajil',
         'available': True,
+        # Framework §17 (session 35 meta-audit): dict-level disclosure for
+        # collection_rate + write_off_rate. Both computed against Σ principal
+        # across ALL statuses (total_originated). Confidence A.
+        'population':                 'total_originated',
+        'confidence':                 'A',
+        'collection_rate_population': 'total_originated',
+        'write_off_rate_population':  'total_originated',
+        # Dual-view declarations
+        'collection_rate_realised_population': 'completed_only',
+        'collection_rate_clean_population':    'clean_book',
+        'collection_rate_realised_confidence': 'A',
+        'collection_rate_clean_confidence':    'B',
     }
 
 
@@ -633,6 +662,10 @@ def compute_aajil_concentration(df, mult=1, ref_date=None, aux=None):
         'total_customers': int(cust[C_CUSTOMER_ID].nunique()),
         'industry_unknown_pct': _safe(len(df[df[C_INDUSTRY].isna()]) / len(df)),
         'available': True,
+        # Framework §17 (session 35 meta-audit): concentration measured against
+        # Σ principal (total_originated). Confidence A.
+        'population': 'total_originated',
+        'confidence': 'A',
     }
 
 
@@ -820,6 +853,9 @@ def compute_aajil_loss_waterfall(df, mult=1, ref_date=None, aux=None):
         'gross_loss_rate': _safe(total_wo_originated / total_originated if total_originated > 0 else 0),
         'by_vintage': vintage_loss,
         'available': True,
+        # Framework §17 — gross_loss_rate = Σ WO principal / Σ principal (total_originated)
+        'population': 'total_originated',
+        'confidence': 'A',
     }
 
 

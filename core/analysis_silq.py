@@ -191,9 +191,20 @@ def compute_silq_summary(df, mult=1, ref_date=None):
         'par_population': 'active_outstanding',           # primary view
         'par_lifetime_population': 'total_originated',    # dual view (Framework §17)
         'par_confidence': 'A',
+        # Session 35 meta-audit: dict-level disclosure for other rate fields.
+        # collection_rate = total_repaid / total_collectable (total_originated).
+        # overdue_rate = total_overdue / total_outstanding (approximation using
+        # all-statuses outstanding — Confidence B since 'overdue' is defined
+        # against the tape's pre-computed Overdue_Amount column which may lag).
+        # hhi_shop = Σ shop-share² on disbursed (total_originated).
+        'population':                    'total_originated',  # primary view
+        'confidence':                    'A',
         'total_outstanding_population': 'total_originated',
-        'collection_rate_population': 'total_originated',
-        'hhi_shop_population': 'total_originated',
+        'collection_rate_population':   'total_originated',
+        'hhi_shop_population':           'total_originated',
+        'hhi_shop_confidence':           'A',
+        'overdue_rate_population':      'active_outstanding',  # overdue is active-only by tape convention
+        'overdue_rate_confidence':      'B',  # tape's pre-computed overdue column; inferred
     }
 
 
@@ -264,13 +275,39 @@ def compute_silq_delinquency(df, mult=1, ref_date=None):
                 'count': int(row['count']),
             })
 
+    # Session 35 meta-audit: same dual-view pattern as compute_silq_summary
+    # for the Delinquency tab. par30/60/90 are active-outstanding rates;
+    # lifetime denominators computed as PAR numerator / Σ disbursed.
+    par30_amount = float(active.loc[active_dpd > 30, C_OUTSTANDING].sum() * mult) if C_OUTSTANDING in active.columns else 0
+    par60_amount = float(active.loc[active_dpd > 60, C_OUTSTANDING].sum() * mult) if C_OUTSTANDING in active.columns else 0
+    par90_amount = float(active.loc[active_dpd > 90, C_OUTSTANDING].sum() * mult) if C_OUTSTANDING in active.columns else 0
+    total_disb = float(df[C_DISBURSED].sum() * mult) if C_DISBURSED in df.columns else 0
+    lifetime_par30 = par30_amount / total_disb * 100 if total_disb > 0 else 0
+    lifetime_par60 = par60_amount / total_disb * 100 if total_disb > 0 else 0
+    lifetime_par90 = par90_amount / total_disb * 100 if total_disb > 0 else 0
+
     return {
         'buckets': bucket_data,
         'par30': _safe(par30),
         'par60': _safe(par60),
         'par90': _safe(par90),
+        # Dual-view fields (session 35 meta-audit consistency with summary)
+        'par30_amount': _safe(par30_amount),
+        'par60_amount': _safe(par60_amount),
+        'par90_amount': _safe(par90_amount),
+        'lifetime_par30': _safe(lifetime_par30),
+        'lifetime_par60': _safe(lifetime_par60),
+        'lifetime_par90': _safe(lifetime_par90),
+        'total_active_outstanding': _safe(float(total_active_out) * mult),
+        'total_disbursed':           _safe(total_disb),
         'monthly': monthly,
         'top_shops': top_shops,
+        # Framework §17 disclosure
+        'population':              'active_outstanding',     # primary
+        'confidence':              'A',
+        'par_population':          'active_outstanding',
+        'par_lifetime_population': 'total_originated',
+        'par_confidence':          'A',
     }
 
 
@@ -604,6 +641,15 @@ def compute_silq_yield(df, mult=1):
         'by_tenure': by_tenure,
         'monthly': monthly,
         'margin_not_available': margin_not_available,
+        # Framework §17 (session 35 meta-audit): margin_rate over total
+        # disbursed (all statuses) = total_originated; realised_margin_rate
+        # over Closed disbursed only = completed_only. Both Confidence A.
+        'population':                         'total_originated',  # primary view
+        'confidence':                         'A',
+        'margin_rate_population':             'total_originated',
+        'realised_margin_rate_population':    'completed_only',
+        'margin_rate_confidence':             'A',
+        'realised_margin_rate_confidence':    'A',
     }
 
 
@@ -1081,6 +1127,11 @@ def compute_silq_cohort_loss_waterfall(df, mult=1, ref_date=None):
             'default_rate': _safe(round(total_default / total_originated * 100, 2)) if total_originated > 0 else 0,
             'recovery_rate': _safe(round(total_recovery / total_default * 100, 2)) if total_default > 0 else 0,
             'net_loss_rate': _safe(round(total_net_loss / total_originated * 100, 2)) if total_originated > 0 else 0,
+            # Framework §17 — default/loss vs total_originated; recovery vs loss_subset
+            'population':               'total_originated',
+            'confidence':               'A',
+            'recovery_rate_population': 'loss_subset',
+            'recovery_rate_confidence': 'A',
         },
     }
 
@@ -1537,5 +1588,8 @@ def compute_silq_cdr_ccr(df, mult=1, ref_date=None):
             'ccr': _safe(round(portfolio_ccr, 4)),
             'net_spread': _safe(round(portfolio_ccr - portfolio_cdr, 4)),
             'avg_vintage_age_months': round(avg_months, 1),
+            # Framework §17 — annualised rates vs originated per vintage
+            'population': 'total_originated',
+            'confidence': 'A',
         },
     }
