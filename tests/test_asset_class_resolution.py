@@ -25,15 +25,14 @@ from core.mind.asset_class_mind import AssetClassMind
 
 
 @pytest.fixture
-def isolated_asset_class_dir(tmp_path, monkeypatch):
-    """Redirect AssetClassMind storage to a tmp dir so tests don't touch
-    the real data/_asset_class_mind/ jsonl files."""
-    ac_dir = tmp_path / "_asset_class_mind"
-    ac_dir.mkdir()
-    monkeypatch.setattr(
-        "core.mind.asset_class_mind._BASE_DIR", ac_dir
-    )
-    return ac_dir
+def isolated_asset_class_dir(isolated_data_dir):
+    """Thin shim over the shared `isolated_data_dir` fixture — returns the
+    `_asset_class_mind` subdir. The shared fixture also patches
+    CompanyMind/MasterMind/ThesisTracker/DataRoomEngine, which
+    `build_mind_context` touches transitively when invoked with
+    fabricated company names.
+    """
+    return isolated_data_dir / "_asset_class_mind"
 
 
 @pytest.fixture

@@ -80,6 +80,34 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ---
 
+## Completed — 2026-04-24 (Session 37: Test-fixture leakage fix)
+
+User showed a screenshot of their local `data/` dir flagging unfamiliar folders (`anyco`, `ghost`, `legacy_co`, `nonexistent`). Root-caused and fixed.
+
+**What was leaking:**
+- `CompanyMind.__init__`, `MasterMind.__init__`, `DataRoomEngine._dataroom_dir`, and `ThesisTracker.__init__` all call `mkdir(parents=True, exist_ok=True)` unconditionally on construction. Pytest tests that pass fabricated company names to exercise error paths (`"nonexistent"` in `test_agent_tools.py`, `"anyco"` / `"ghost"` / `"legacy_co"` in `test_asset_class_resolution.py`) materialized empty `data/{name}/mind/` folders as a side effect before the test body even ran.
+- Existing `isolated_asset_class_dir` fixture in `test_asset_class_resolution.py` only patched `core.mind.asset_class_mind._BASE_DIR`; CompanyMind + ThesisTracker's own `_PROJECT_ROOT` constants were untouched, so `build_mind_context("anyco", ...)` still leaked.
+- `test_external_intelligence.py` already had a near-complete `isolated_project` fixture — same pattern, but missing `ThesisTracker` and `DataRoomEngine` coverage.
+
+**Fix (1 commit, 3 files):**
+
+1. **New `tests/conftest.py`** — shared `isolated_data_dir` fixture that monkeypatches every module-level `_PROJECT_ROOT` / `_BASE_DIR` / `_MASTER_DIR` / `_DEFAULT_PATH` across `core.mind.{company_mind, master_mind, asset_class_mind, thesis, promotion}`, `core.external.pending_review`, and wraps `DataRoomEngine.__init__` so no-arg instantiation lands in tmp. Modeled on `test_external_intelligence.isolated_project` + extended coverage for the two classes that were missing.
+
+2. **`tests/test_asset_class_resolution.py`** — local `isolated_asset_class_dir` fixture replaced with a thin shim that delegates to `isolated_data_dir` and returns the `_asset_class_mind` subdir. Test bodies unchanged; the 4 tests using it now get full transitive isolation (CompanyMind + ThesisTracker + AssetClassMind + MasterMind).
+
+3. **`tests/test_agent_tools.py`** — 3 error-path tests (`test_search_nonexistent_returns_string`, `test_thesis_nonexistent_returns_string`, `test_facility_params_nonexistent`) now take `isolated_data_dir`.
+
+**Cleanup:** `rm -rf data/{anyco,ghost,legacy_co,nonexistent}` on both the worktree and main repo. Both dirs now clean.
+
+**Verification:** 743 passed, 38 skipped (DB tests skip without DATABASE_URL in worktree venv), **0 warnings**, zero stray folders created during the full suite run.
+
+**Surfaced during implementation (not fixed — flagged for awareness):**
+- **Concurrent-session tool-path gotcha.** I initially routed Edit/Write tool calls to the main repo path (`C:\Users\SharifEid\credit-platform\tests\`) while pytest ran from the worktree (`.claude\worktrees\modest-bhabha-b2a227\tests\`). Absolute-path tool calls bypass the worktree cwd. Spent a few verification cycles debugging "why isn't the monkeypatch firing" before spotting the mismatch. Lesson recorded. While I was doing this, another Claude Code session was also running in the main repo — its test runs kept recreating stray folders there, which confused my diagnostics. Per CLAUDE.md session 36 lesson on concurrent sessions sharing tree state, this is expected friction on multi-session days.
+
+**Root-cause note for future sessions:** the on-construction mkdir in mind/dataroom classes is a library-level smell — readers shouldn't materialize storage. A cleaner long-term fix would be lazy-mkdir on first write. Out of scope for this session per surgical-change discipline; flagged here so it's not forgotten.
+
+---
+
 ## Completed — 2026-04-24 (Session 36: 8-gap follow-up sweep after §17 audit waves)
 
 After sessions 34 + 35 landed the initial §17 population-discipline audit + walker-driven fixes, a gap review identified 7 smaller items that weren't covered plus 1 user-directed change (flip Credit Quality PAR primacy across all companies to lifetime-primary).

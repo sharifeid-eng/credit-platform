@@ -250,7 +250,7 @@ class TestDataroomTools:
         assert "query" in tool.input_schema["properties"]
         assert "query" in tool.input_schema["required"]
 
-    def test_search_nonexistent_returns_string(self):
+    def test_search_nonexistent_returns_string(self, isolated_data_dir):
         tool = registry.get("dataroom.search")
         result = tool.handler(company="nonexistent", product="nonexistent", query="test")
         assert isinstance(result, str)
@@ -274,7 +274,7 @@ class TestMindTools:
         assert "query" in tool.input_schema["properties"]
         assert "query" in tool.input_schema["required"]
 
-    def test_thesis_nonexistent_returns_string(self):
+    def test_thesis_nonexistent_returns_string(self, isolated_data_dir):
         tool = registry.get("mind.get_thesis")
         result = tool.handler(company="nonexistent", product="nonexistent")
         assert isinstance(result, str)
@@ -330,7 +330,7 @@ class TestComplianceTools:
         for name in expected:
             assert registry.get(name) is not None, f"Missing tool: {name}"
 
-    def test_facility_params_nonexistent(self):
+    def test_facility_params_nonexistent(self, isolated_data_dir):
         tool = registry.get("compliance.get_facility_params")
         result = tool.handler(company="nonexistent", product="nonexistent")
         assert isinstance(result, str)
