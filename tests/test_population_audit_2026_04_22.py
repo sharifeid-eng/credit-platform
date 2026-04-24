@@ -409,6 +409,129 @@ class TestP01SILQCollectionRatioIncludesClosedLoans:
         assert coll['population'] == 'specific_filter(maturing in period)'
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# P0-2 — Aajil yield completed-only dual
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_aajil_yield_tape():
+    """5 realised + 3 accrued + 1 WO — yields diverge across populations."""
+    today = pd.Timestamp('2026-04-15')
+    rows = []
+    # Realised: clean yield ~25%
+    for i in range(5):
+        rows.append({
+            'Transaction ID': f'R{i}',
+            'Deal Type': 'EMI', 'Invoice Date': today - pd.Timedelta(days=180),
+            'Unique Customer Code': 100 + i,
+            'Bill Notional': 100_000, 'Total Margin': 20_000,
+            'Origination Fee': 5_000, 'Sale Notional': 125_000,
+            'Sale VAT': 18_750, 'Sale Total': 143_750,
+            'Realised Amount': 143_750, 'Receivable Amount': 0,
+            'Written Off Amount': 0, 'Written Off VAT Recovered Amount': 0,
+            'Write Off Date': None, 'Realised Status': 'Realised',
+            'Total No. of Installments': 4, 'Due No of Installments': 4,
+            'Paid No of Installments': 4, 'Overdue No of Installments': 0,
+            'Sale Due Amount': 143_750, 'Sale Paid Amount': 143_750,
+            'Sale Overdue Amount': 0, 'Monthly Yield %': 5.5,
+            'Total Yield %': 25.0, 'Admin Fee %': 1.0,
+            'Deal Tenure': 4.5, 'Customer Industry': 'Manufacturing',
+            'Principal Amount': 100_000,
+            'Expected Completion': today - pd.Timedelta(days=30),
+        })
+    # Active: mid-life, not yet closed; contractual yield ~22%
+    for i in range(3):
+        rows.append({
+            'Transaction ID': f'A{i}',
+            'Deal Type': 'EMI', 'Invoice Date': today - pd.Timedelta(days=60),
+            'Unique Customer Code': 200 + i,
+            'Bill Notional': 100_000, 'Total Margin': 22_000,
+            'Origination Fee': 3_000, 'Sale Notional': 125_000,
+            'Sale VAT': 18_750, 'Sale Total': 143_750,
+            'Realised Amount': 50_000, 'Receivable Amount': 93_750,
+            'Written Off Amount': 0, 'Written Off VAT Recovered Amount': 0,
+            'Write Off Date': None, 'Realised Status': 'Accrued',
+            'Total No. of Installments': 4, 'Due No of Installments': 2,
+            'Paid No of Installments': 2, 'Overdue No of Installments': 0,
+            'Sale Due Amount': 70_000, 'Sale Paid Amount': 50_000,
+            'Sale Overdue Amount': 0, 'Monthly Yield %': 4.9,
+            'Total Yield %': 22.0, 'Admin Fee %': 1.0,
+            'Deal Tenure': 4.5, 'Customer Industry': 'Contracting',
+            'Principal Amount': 100_000,
+            'Expected Completion': today + pd.Timedelta(days=60),
+        })
+    # Written-off: realised yield 0
+    rows.append({
+        'Transaction ID': 'WO1', 'Deal Type': 'Bullet',
+        'Invoice Date': today - pd.Timedelta(days=300),
+        'Unique Customer Code': 999, 'Bill Notional': 100_000,
+        'Total Margin': 20_000, 'Origination Fee': 5_000,
+        'Sale Notional': 125_000, 'Sale VAT': 18_750,
+        'Sale Total': 143_750, 'Realised Amount': 0,
+        'Receivable Amount': 0, 'Written Off Amount': 143_750,
+        'Written Off VAT Recovered Amount': 18_750,
+        'Write Off Date': today - pd.Timedelta(days=30),
+        'Realised Status': 'Written Off',
+        'Total No. of Installments': 1, 'Due No of Installments': 1,
+        'Paid No of Installments': 0, 'Overdue No of Installments': 1,
+        'Sale Due Amount': 143_750, 'Sale Paid Amount': 0,
+        'Sale Overdue Amount': 143_750, 'Monthly Yield %': 0.0,
+        'Total Yield %': 0.0, 'Admin Fee %': 1.0,
+        'Deal Tenure': 6, 'Customer Industry': 'Wholesale',
+        'Principal Amount': 100_000,
+        'Expected Completion': today - pd.Timedelta(days=150),
+    })
+    return pd.DataFrame(rows)
+
+
+class TestP02AajilYieldDual:
+    def test_avg_total_yield_realised_reports_completed_only(self):
+        from core.analysis_aajil import compute_aajil_yield
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_yield(df, mult=1)
+        # 5 realised at 25%, 3 active at 22%, 1 WO at 0%.
+        # Realised-only → 25.0; Active-only → 22.0; All → ~21.1
+        assert res['avg_total_yield_realised'] == pytest.approx(25.0, abs=0.01)
+        assert res['avg_total_yield_active']   == pytest.approx(22.0, abs=0.01)
+        # Pre-existing mixed view — verifies WO drags it down
+        assert res['avg_total_yield'] < res['avg_total_yield_realised']
+
+    def test_realised_yield_confidence_is_A(self):
+        from core.analysis_aajil import compute_aajil_yield
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_yield(df, mult=1)
+        assert res['yield_confidence']['avg_total_yield_realised'] == 'A'
+        assert res['yield_confidence']['avg_total_yield_active']   == 'A'
+        assert res['yield_confidence']['avg_total_yield']          == 'B'  # mixes WO
+
+    def test_realised_and_active_counts_present(self):
+        from core.analysis_aajil import compute_aajil_yield
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_yield(df, mult=1)
+        assert res['realised_yield_count'] == 5
+        assert res['active_yield_count']   == 3
+
+    def test_backward_compat_all_prior_fields_preserved(self):
+        from core.analysis_aajil import compute_aajil_yield
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_yield(df, mult=1)
+        for field in (
+            'total_margin', 'total_fees', 'total_revenue', 'revenue_over_gmv',
+            'avg_total_yield', 'median_total_yield', 'avg_monthly_yield',
+            'yield_distribution', 'by_deal_type', 'by_vintage', 'available',
+        ):
+            assert field in res, f"BC broken: '{field}' missing"
+
+    def test_by_deal_type_adds_pv_weighted_margin_rate(self):
+        """P2-3 cleanup — by_deal_type now carries PV-weighted margin rate."""
+        from core.analysis_aajil import compute_aajil_yield
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_yield(df, mult=1)
+        for entry in res['by_deal_type']:
+            assert 'margin_rate_pv_weighted' in entry
+            assert entry['margin_rate_pv_weighted'] is not None
+
+
 class TestP01KlaimCollRatioDifferentDefinition:
     """Klaim's Collection Ratio is a CUMULATIVE approximation (method=
     'cumulative', Confidence C), not the same 'maturing in period' covenant

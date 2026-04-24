@@ -564,27 +564,58 @@ def compute_aajil_underwriting(df, mult=1, ref_date=None, aux=None):
 
 
 def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
-    """Revenue decomposition and yield analysis."""
+    """Revenue decomposition and yield analysis.
+
+    Dual view per Framework §17 — avg yield is reported on three populations:
+      - avg_total_yield           — total_originated (all statuses, incl. WO).
+                                    Confidence B: includes WO deals that
+                                    realise zero/low yield, dragging the mean.
+      - avg_total_yield_realised  — completed_only (Status='Realised'). This
+                                    is the realised-yield view; Confidence A.
+      - avg_total_yield_active    — active_outstanding (Status='Accrued').
+                                    The underwritten-yield-on-live-book view;
+                                    Confidence A.
+    Same three populations for monthly yield. by_deal_type also gets
+    PV-weighted margin rate (P2-3) because unweighted means collapse across
+    very different deal sizes between EMI (count-heavier) and Bullet.
+
+    Backwards-compat: avg_total_yield / avg_monthly_yield / median_total_yield
+    / yield_distribution are preserved verbatim. New fields are additive.
+    """
     total_margin = df[C_MARGIN].fillna(0).sum() * mult
     total_fees = df[C_ORIG_FEE].fillna(0).sum() * mult
     total_principal = df[C_PRINCIPAL].sum() * mult
     total_revenue = total_margin + total_fees
 
-    # Distribution of yields
+    # Populations — audit P0-2 dual.
+    realised_mask = df[C_STATUS] == 'Realised'
+    active_mask   = df[C_STATUS] == 'Accrued'
+
+    # Distribution of yields (kept for backward compat)
     yields = df[C_TOTAL_YIELD].dropna()
     monthly_yields = df[C_MONTHLY_YIELD].dropna()
 
-    # By Deal Type
+    # New dual view — same column dropped-NA pattern, restricted to each pop.
+    realised_yields = df.loc[realised_mask, C_TOTAL_YIELD].dropna()
+    active_yields   = df.loc[active_mask,   C_TOTAL_YIELD].dropna()
+    realised_monthly_yields = df.loc[realised_mask, C_MONTHLY_YIELD].dropna()
+    active_monthly_yields   = df.loc[active_mask,   C_MONTHLY_YIELD].dropna()
+
+    # By Deal Type — add PV-weighted margin rate (P2-3 cleanup)
     by_type = []
     for dt in df[C_DEAL_TYPE].dropna().unique():
         sub = df[df[C_DEAL_TYPE] == dt]
+        sub_margin = sub[C_MARGIN].fillna(0).sum() * mult
+        sub_principal = sub[C_PRINCIPAL].sum() * mult
         by_type.append({
             'deal_type': dt,
-            'avg_total_yield': _safe(sub[C_TOTAL_YIELD].dropna().mean()),
-            'avg_monthly_yield': _safe(sub[C_MONTHLY_YIELD].dropna().mean()),
-            'total_margin': _safe(sub[C_MARGIN].fillna(0).sum() * mult),
-            'total_fees': _safe(sub[C_ORIG_FEE].fillna(0).sum() * mult),
-            'count': len(sub),
+            'avg_total_yield':      _safe(sub[C_TOTAL_YIELD].dropna().mean()),
+            'avg_monthly_yield':    _safe(sub[C_MONTHLY_YIELD].dropna().mean()),
+            'total_margin':         _safe(sub_margin),
+            'total_fees':           _safe(sub[C_ORIG_FEE].fillna(0).sum() * mult),
+            'count':                len(sub),
+            # P2-3: PV-weighted margin_rate — comparable across EMI vs Bullet.
+            'margin_rate_pv_weighted': _safe(sub_margin / sub_principal if sub_principal > 0 else 0),
         })
 
     # By vintage
@@ -601,14 +632,35 @@ def compute_aajil_yield(df, mult=1, ref_date=None, aux=None):
                       'margin_rate': _safe(r['margin'] / r['bill'] if r['bill'] > 0 else 0)}
                      for _, r in by_vintage.iterrows()]
 
+    # Per-population confidence declarations
+    yield_confidence = {
+        'avg_total_yield':          'B',  # includes WO — pre-existing behaviour
+        'avg_total_yield_realised': 'A',
+        'avg_total_yield_active':   'A',
+    }
+
     return {
         'total_margin': _safe(total_margin),
         'total_fees': _safe(total_fees),
         'total_revenue': _safe(total_revenue),
         'revenue_over_gmv': _safe(total_revenue / total_principal if total_principal > 0 else 0),
+        # Pre-existing — ALL deals (Confidence B)
         'avg_total_yield': _safe(yields.mean()),
         'median_total_yield': _safe(yields.median()),
         'avg_monthly_yield': _safe(monthly_yields.mean()),
+        'avg_total_yield_population': 'total_originated',
+        'avg_total_yield_confidence': 'B',
+        # NEW (P0-2) — completed_only realised view
+        'avg_total_yield_realised':   _safe(realised_yields.mean())   if len(realised_yields) else None,
+        'median_total_yield_realised':_safe(realised_yields.median()) if len(realised_yields) else None,
+        'avg_monthly_yield_realised': _safe(realised_monthly_yields.mean()) if len(realised_monthly_yields) else None,
+        'realised_yield_count':       int(len(realised_yields)),
+        # NEW (P0-2) — active_outstanding underwritten-yield view
+        'avg_total_yield_active':     _safe(active_yields.mean())   if len(active_yields) else None,
+        'median_total_yield_active':  _safe(active_yields.median()) if len(active_yields) else None,
+        'avg_monthly_yield_active':   _safe(active_monthly_yields.mean()) if len(active_monthly_yields) else None,
+        'active_yield_count':         int(len(active_yields)),
+        'yield_confidence': yield_confidence,
         'yield_distribution': {
             'min': _safe(yields.min()),
             'p25': _safe(yields.quantile(0.25)) if len(yields) > 0 else None,
