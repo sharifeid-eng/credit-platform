@@ -415,6 +415,7 @@ credit-platform/
 │   │       └── api.js
 │   └── package.json
 ├── tests/
+│   ├── conftest.py             # Shared test fixtures — `isolated_data_dir` redirects every module-level data-dir constant (mind + dataroom + pending_review + promotion + thesis) to tmp_path so fabricated-name tests don't leak real data/{co}/ folders. Session 37.
 │   ├── test_analysis_klaim.py  # Integration tests for Klaim analytics
 │   ├── test_analysis_silq.py   # Integration tests for SILQ analytics
 │   ├── test_analysis_aajil.py  # Integration tests for Aajil analytics (38 tests)
@@ -1019,6 +1020,18 @@ Typography: Inter for UI, IBM Plex Mono for numbers/data.
 - Framework: `res.content` (markdown string)
 -----
 ## What's Working
+- ✅ **Session 37 — Test-fixture leakage fix (2026-04-24):**
+  - **Trigger:** user screenshot of local `data/` flagged 4 unfamiliar empty folders (`anyco`, `ghost`, `legacy_co`, `nonexistent`). All were test-fixture leakage from prior pytest runs.
+  - **Root cause:** `CompanyMind.__init__` ([core/mind/company_mind.py:144](core/mind/company_mind.py:144)), `MasterMind.__init__` ([core/mind/master_mind.py:168](core/mind/master_mind.py:168)), `ThesisTracker.__init__` ([core/mind/thesis.py:194](core/mind/thesis.py:194)), and `DataRoomEngine._dataroom_dir` ([core/dataroom/engine.py:141](core/dataroom/engine.py:141)) all call `mkdir(parents=True, exist_ok=True)` unconditionally on construction. Tests that pass fabricated company names to exercise error paths (`tool.handler(company="nonexistent", ...)` in `test_agent_tools.py`, `build_mind_context("anyco", ...)` in `test_asset_class_resolution.py`) materialize empty `data/{name}/mind/` folders as a side effect before the test body even runs.
+  - **Partial prior coverage:** `test_external_intelligence.py` already had an `isolated_project` fixture patching 6 module-level roots but missing `ThesisTracker` and `DataRoomEngine` — because those tests don't touch them. When `build_mind_context` got called with a fabricated name in `test_asset_class_resolution.py`, the local `isolated_asset_class_dir` fixture only patched `_BASE_DIR`, so CompanyMind + ThesisTracker's own `_PROJECT_ROOT` constants were untouched. Three different test files, each addressing part of the problem, none globally.
+  - **Fix (1 commit, 3 files):**
+    - **NEW `tests/conftest.py`** — shared `isolated_data_dir` fixture lifting the `isolated_project` pattern and extending it. Monkeypatches `core.mind.{company_mind, master_mind, asset_class_mind, thesis, promotion}._PROJECT_ROOT`, `core.external.pending_review.{_PROJECT_ROOT, _DEFAULT_PATH}`, `master_mind._MASTER_DIR`, `asset_class_mind._BASE_DIR`, and wraps `DataRoomEngine.__init__` so no-arg instantiation lands in tmp (DataRoomEngine computes its default inside `__init__` via `Path(__file__).resolve()` — can't be patched at the module level).
+    - **`tests/test_asset_class_resolution.py:27-35`** — local `isolated_asset_class_dir` fixture replaced with a thin shim that delegates to `isolated_data_dir` and returns the `_asset_class_mind` subdir. The 4 tests using it get full transitive isolation without test-body changes.
+    - **`tests/test_agent_tools.py`** — 3 error-path tests using `company="nonexistent"` now take `isolated_data_dir`: `test_search_nonexistent_returns_string`, `test_thesis_nonexistent_returns_string`, `test_facility_params_nonexistent`.
+  - **Cleanup:** `rm -rf data/{anyco,ghost,legacy_co,nonexistent}` on both worktree and main repo. Both dirs now clean.
+  - **Verification:** 743 passed, 38 skipped (DB tests require DATABASE_URL), **0 warnings**, zero stray folders across full-suite run.
+  - **Root-cause note for future:** the on-construction `mkdir` is a library-level smell — readers materializing storage. Long-term fix is lazy mkdir on first write, which would remove the need for the defensive test fixture entirely. Out of scope for this session per surgical-change discipline; flagged in `tasks/todo.md` and `tasks/lessons.md`.
+  - **Lesson:** 3 new entries in `tasks/lessons.md` — (1) absolute-path tool calls from a worktree session land in the main repo, not the worktree (ate ~3 verification cycles debugging a monkeypatch that "wasn't firing" when it actually was — just in a different working tree); (2) unconditional `mkdir` in constructors turns readers into writers and leaks into real data/; (3) an existing near-complete isolation fixture is not a signal that the problem is solved globally — lift to conftest and extend.
 - ✅ **Session 36 — 8-gap follow-up sweep after §17 audit waves (2026-04-24):**
   - **Driver:** after sessions 34 + 35 landed the initial §17 audit + walker-driven fixes, a gap review identified 7 smaller items that weren't covered plus 1 user-directed change (flip Credit Quality PAR primacy across all companies to lifetime-primary).
   - **4 commits landed on `main`** (`f7ef580..074f430`):

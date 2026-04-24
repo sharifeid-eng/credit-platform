@@ -3,6 +3,54 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-24 — Absolute-path tool calls from a worktree session land in the main repo, not the worktree
+
+**Problem:** Working in a worktree at `C:\Users\SharifEid\credit-platform\.claude\worktrees\modest-bhabha-b2a227`, I passed absolute paths like `C:\Users\SharifEid\credit-platform\tests\conftest.py` to the Write/Edit tools. Those paths point at the **main repo**, not the worktree. Pytest runs from the worktree's cwd, so my edits and my verification runs were passing through each other — my "fix" appeared to do nothing because pytest was reading untouched files. Spent multiple verification cycles debugging a monkeypatch that "wasn't firing" when it actually was, just in a different working tree. Only caught it when I ran `pwd` + `ls tests/conftest.py` side-by-side with `ls /c/Users/SharifEid/credit-platform/tests/conftest.py` and saw the conftest existed in one but not the other.
+
+Compounding factor: another Claude Code session was active in the main repo. Its test runs kept recreating the stray folders I'd just deleted, feeding back into my diagnostic confusion.
+
+**Rule:** When working inside a git worktree, every file edit must go to the worktree path. Absolute paths in tool calls should be prefixed with the worktree directory, OR use worktree-relative paths.
+
+**How to apply:**
+- The conversation's system prompt states the worktree path explicitly — read it once at session start and hold it.
+- Before any Write/Edit, mentally check: does this absolute path start with `.claude\worktrees\<name>\`? If not, and I'm in a worktree session, redirect.
+- Easier: use relative paths (`tests/conftest.py`) — these resolve against the Bash tool's cwd, which sticks to the worktree by default.
+- Early verification: after the first edit, run `git status` in the worktree. If it shows "working tree clean," you just wrote to the wrong tree.
+- Reference: session 37 test-fixture leakage fix, ~3 verification cycles wasted before path mismatch was caught.
+
+---
+
+## 2026-04-24 — Unconditional `mkdir()` in constructors turns readers into writers and leaks into real `data/`
+
+**Problem:** `CompanyMind.__init__`, `MasterMind.__init__`, `ThesisTracker.__init__`, and `DataRoomEngine._dataroom_dir()` all call `mkdir(parents=True, exist_ok=True)` on construction. Tests that pass fabricated company names to exercise error paths (e.g., `tool.handler(company="nonexistent", ...)` to check graceful degradation) create empty `data/{name}/mind/` folders as a side effect before the test body even runs. On a busy session the user saw 4 stray folders in `data/` (`anyco`, `ghost`, `legacy_co`, `nonexistent`) — all from tests that never intended to write anything.
+
+The issue doubles as a runtime code smell: if a user does `CompanyMind("typo_co", "typo_prod")` by mistake, an empty `data/typo_co/mind/` dir appears silently. Readers shouldn't materialize storage.
+
+**Rule:** For any class whose constructor calls `mkdir`, either (a) defer mkdir to the first actual write, or (b) ensure every test that passes a fabricated name through that constructor uses an isolation fixture that monkeypatches the module-level root to `tmp_path`.
+
+**How to apply:**
+- Prefer (a) — lazy mkdir on first write — when touching the class for unrelated reasons. One small refactor in `_append_entry` / `_save_registry` removes the need for defensive test isolation entirely.
+- For existing constructors, conftest-level `isolated_data_dir` in `tests/conftest.py` is the band-aid. Cover every module-level root: `core.mind.{company_mind, master_mind, asset_class_mind, thesis, promotion}._PROJECT_ROOT`, `core.external.pending_review._PROJECT_ROOT`, and `DataRoomEngine.__init__`'s default-arg resolution (which reads `__file__` at call time, so you have to patch `__init__` itself).
+- When you grep a test file for `company=` / `"nonexistent"` / similar fabricated names, every match is a leak candidate. Audit the handler chain — does any constructor mkdir? Yes → needs the fixture.
+- Reference: session 37 `tests/conftest.py` + 4 test methods wired up. Before fix: 4 stray folders per test run. After fix: 0 leakage across 743-test suite.
+
+---
+
+## 2026-04-24 — An existing near-complete isolation fixture is not a signal that the problem is solved globally
+
+**Problem:** `tests/test_external_intelligence.py` already had an `isolated_project` fixture that patched 6 module-level roots. A reasonable reading at a glance: "leakage is handled, don't re-solve it." But the fixture was local to that test file and missed two classes (`ThesisTracker`, `DataRoomEngine`) — because the external-intelligence tests don't touch them. When a second leak manifested elsewhere in the suite (sessions using `build_mind_context` transitively instantiate `ThesisTracker`), the existing fixture didn't generalize, and the leaks persisted silently.
+
+**Rule:** When you see an "existing-fixture-that-almost-covers-it" pattern, don't copy-paste it into the new test file. Lift the fixture into `tests/conftest.py`, extend it to cover the new class, and refactor the original caller to use the shared version.
+
+**How to apply:**
+- The first duplication of an isolation concern is the signal. Conftest lives in `tests/` so every test file auto-inherits.
+- Audit the fixture's coverage against the class hierarchy it's supposed to isolate. Any class whose constructor does I/O needs a monkeypatch line.
+- Cross-reference with every call site of `build_mind_context` — that function alone touches Master + Company + AssetClass + Thesis mind stores. A "mind isolation" fixture that misses Thesis is incomplete.
+- Leave the original local fixture in place if refactoring risks breaking unrelated tests — just ensure the new conftest fixture is strictly stronger.
+- Reference: session 37 extracted `isolated_data_dir` to `tests/conftest.py`, covered `ThesisTracker` + `DataRoomEngine` that the existing `isolated_project` missed.
+
+---
+
 ## 2026-04-24 — Walkers that only audit top-level fields miss per-row disclosures in nested lists
 
 **Problem:** Session 35 built the §17 meta-audit walker and declared "every rate field now has population + confidence." It found 45 top-level scalar gaps and fixed them. But the walker only inspected the root of each compute function's return dict — it never recursed into list-valued fields like `vintages[]`, `by_product[]`, `transition_matrix[]`. Session 36's gap-review extension added a per-row walker and surfaced **19 additional gaps in 7 compute functions** — per-row rates (e.g., `vintages[].gross_default_rate`, `by_product[].margin_rate`) that inherit no discipline from their parent dict.
