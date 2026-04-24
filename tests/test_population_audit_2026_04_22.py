@@ -913,6 +913,47 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: Operator Center framework_17 coverage surface
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestOperatorFramework17Coverage:
+    """_compute_framework_17_coverage() — exposes §17 primitive presence on
+    each company for the Health Matrix. Complete = all 4 primitives exist
+    (separate_*_portfolio, classify_*_deal_stale, compute_*_operational_wal,
+    compute_*_methodology_log)."""
+
+    def test_klaim_coverage_complete(self):
+        from backend.operator import _compute_framework_17_coverage
+        cov = _compute_framework_17_coverage('klaim')
+        assert cov['applicable'] is True
+        assert cov['status'] == 'complete'
+        assert cov['coverage'] == '4/4'
+
+    def test_silq_coverage_complete(self):
+        from backend.operator import _compute_framework_17_coverage
+        cov = _compute_framework_17_coverage('silq')
+        assert cov['applicable'] is True
+        assert cov['status'] == 'complete'
+
+    def test_aajil_coverage_complete(self):
+        from backend.operator import _compute_framework_17_coverage
+        cov = _compute_framework_17_coverage('aajil')
+        assert cov['applicable'] is True
+        assert cov['status'] == 'complete'
+
+    def test_tamara_not_applicable(self):
+        from backend.operator import _compute_framework_17_coverage
+        cov = _compute_framework_17_coverage('tamara_summary')
+        assert cov['applicable'] is False
+
+    def test_ejari_not_applicable(self):
+        from backend.operator import _compute_framework_17_coverage
+        cov = _compute_framework_17_coverage('ejari_summary')
+        assert cov['applicable'] is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FOLLOW-UP: Intelligence System — §17 injected via Layer 1 framework context
 # ══════════════════════════════════════════════════════════════════════════════
 

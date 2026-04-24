@@ -141,6 +141,11 @@ def _compute_company_health(company: str, product: str, config: dict) -> dict:
     gaps = _detect_gaps(company, product, config, snaps, legal_extracted,
                         dataroom_docs, mind_total, days_stale, product_path)
 
+    # Framework §17 coverage — discipline status for the Health Matrix.
+    # Each asset class has 3 primitives: separate_portfolio, classify_deal_stale,
+    # compute_operational_wal. Plus methodology_log for audit trail.
+    framework_17 = _compute_framework_17_coverage(analysis_type)
+
     return {
         "company": company,
         "product": product,
@@ -158,7 +163,69 @@ def _compute_company_health(company: str, product: str, config: dict) -> dict:
         "mind_entries": mind_counts,
         "mind_total": mind_total,
         "ai_cache": ai_cached,
+        "framework_17": framework_17,
         "gaps": gaps,
+    }
+
+
+def _compute_framework_17_coverage(analysis_type: str) -> dict:
+    """Framework §17 Population Discipline coverage for a company.
+
+    Checks the presence of the 4 §17 primitives expected for each asset
+    class with a live tape (Klaim, SILQ, Aajil):
+      - separate_*_portfolio()
+      - classify_*_deal_stale()
+      - compute_*_operational_wal()
+      - compute_*_methodology_log()
+    Tamara + Ejari (read-only summaries) are exempt — framework_17 returns
+    `applicable=False` for those.
+    """
+    # Read-only summaries are exempt — no live-tape primitives expected.
+    if analysis_type in ('tamara_summary', 'ejari_summary'):
+        return {
+            'applicable': False,
+            'reason': 'Read-only summary — no live-tape §17 primitives apply',
+        }
+
+    # Fallback if analysis_type isn't one of the three live-tape types
+    if analysis_type not in ('klaim', 'silq', 'aajil'):
+        return {
+            'applicable': False,
+            'reason': f'Unknown analysis_type: {analysis_type}',
+        }
+
+    # Map analysis_type → module + function prefix
+    module_map = {
+        'klaim': ('core.analysis', ''),
+        'silq':  ('core.analysis_silq', 'silq_'),
+        'aajil': ('core.analysis_aajil', 'aajil_'),
+    }
+    mod_name, prefix = module_map[analysis_type]
+    try:
+        import importlib
+        mod = importlib.import_module(mod_name)
+    except ImportError:
+        return {'applicable': True, 'status': 'error', 'reason': f'Cannot import {mod_name}'}
+
+    primitives = {
+        f'separate_{prefix}portfolio' if prefix else 'separate_portfolio':
+            hasattr(mod, f'separate_{prefix}portfolio' if prefix else 'separate_portfolio'),
+        f'classify_{prefix or "klaim_"}deal_stale':
+            hasattr(mod, f'classify_{prefix or "klaim_"}deal_stale'),
+        f'compute_{prefix or "klaim_"}operational_wal':
+            hasattr(mod, f'compute_{prefix or "klaim_"}operational_wal'),
+        f'compute_{prefix}methodology_log' if prefix else 'compute_methodology_log':
+            hasattr(mod, f'compute_{prefix}methodology_log' if prefix else 'compute_methodology_log'),
+    }
+    present = sum(1 for v in primitives.values() if v)
+    total = len(primitives)
+    status = 'complete' if present == total else 'partial' if present > 0 else 'missing'
+
+    return {
+        'applicable': True,
+        'status': status,
+        'primitives': primitives,
+        'coverage': f'{present}/{total}',
     }
 
 
