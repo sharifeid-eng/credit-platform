@@ -164,19 +164,18 @@ If ANY registry.json files appear in the output, remind the user:
 > ```
 > Then redeploy — `deploy.sh` will auto-ingest any datarooms with missing chunks.
 
-**Tape file sync check (mandatory — do not skip):** Raw loan tapes (`data/{company}/{product}/YYYY-MM-DD_*.csv|xlsx|ods`) are gitignored AND not covered by `sync-data.ps1` (that script only walks `dataroom/` folders). If the session added or replaced a tape file, it only exists on the laptop until manually SCP'd. Run:
+**Tape file tracking check (mandatory — do not skip):** Raw loan tapes (`data/{company}/{product}/YYYY-MM-DD_*.csv|xlsx|ods`) ARE tracked in git — they ship to production via `git pull` during `deploy.sh` just like code. There is no gitignore rule for them. An untracked tape is almost always a mistake (tape was copied onto the laptop but never `git add`'d — surfaced once in session 34 when an Apr 15 Klaim tape had been on disk for 4 days without being committed, causing a silent Tape-vs-Portfolio Analytics skew on prod). Run:
 ```
 git ls-files --others --exclude-standard -- "data/*/*/2*.csv" "data/*/*/2*.xlsx" "data/*/*/2*.ods"
 ```
-This lists untracked date-prefixed files in per-product directories. Not every untracked file needs syncing (pre-existing tapes from earlier sessions will also show up), but any file the user referenced, validated, loaded, or analysed during THIS session needs explicit SCP. Cross-reference against the session's activity to decide.
+This lists untracked date-prefixed files in per-product directories. The expected healthy state is empty output — all tape files should be committed. If any file appears, **commit it**:
+```
+git add data/{company}/{product}/YYYY-MM-DD_{name}.csv
+git commit -m "data: add {company} {date} tape (N rows, M cols)"
+```
+Then the existing `deploy.sh` flow ships it to prod via `git pull`. No separate SCP needed.
 
-If any tape files need syncing, remind the user with exact commands per file:
-
-> **Sync new tape file(s) to production.** Run from your laptop PowerShell (one `scp` per file):
-> ```powershell
-> scp -o ServerAliveInterval=30 C:\Users\SharifEid\credit-platform\data\{company}\{product}\YYYY-MM-DD_{name}.csv root@204.168.252.26:/opt/credit-platform/data/{company}/{product}/
-> ```
-> The backend re-reads the data directory on every snapshot request — no restart required. Refresh the dashboard in the browser and the new snapshot will appear in the dropdown.
+**When might a tape legitimately stay untracked?** Only if the file is scratch/experimental and will not be used for analysis. Real tapes destined for IC output must be in git — otherwise prod's Tape Analytics serves the previous snapshot silently (the Postgres DB ingestion path via `scripts/ingest_tape.py` updates Portfolio Analytics, but Tape Analytics still reads files from disk for Klaim). Untracked-tape = tape-vs-portfolio data skew on prod.
 
 If only documentation files changed (CLAUDE.md, tasks/, .claude/), skip this step — no redeploy needed.
 
