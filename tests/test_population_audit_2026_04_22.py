@@ -913,6 +913,98 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: Memo engine IC prompts + analytics_bridge disclosure
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestMemoExecutiveSummaryPromptPopulationDiscipline:
+    """Executive Summary prompt must name Framework §17 population + confidence
+    disclosure rules. Prevents silent drift from memo output."""
+
+    def test_prompt_contains_population_confidence_section(self):
+        from core.agents.prompts import build_executive_summary_prompt
+        prompt = build_executive_summary_prompt('Klaim', 'UAE_healthcare')
+        assert 'POPULATION & CONFIDENCE DISCLOSURE' in prompt
+        assert 'Framework §17' in prompt
+
+    def test_prompt_names_all_seven_populations(self):
+        from core.agents.prompts import build_executive_summary_prompt
+        prompt = build_executive_summary_prompt('Klaim', 'UAE_healthcare')
+        for pop in ('total_originated', 'active_outstanding', 'active_pv',
+                    'completed_only', 'clean_book', 'loss_subset', 'zombie_subset'):
+            assert pop in prompt, f"Prompt must name the '{pop}' population"
+
+    def test_prompt_requires_methodology_footer(self):
+        from core.agents.prompts import build_executive_summary_prompt
+        prompt = build_executive_summary_prompt('Klaim', 'UAE_healthcare')
+        assert 'Methodology:' in prompt
+        assert 'footer' in prompt.lower()
+
+    def test_prompt_calls_out_dual_view_handling(self):
+        from core.agents.prompts import build_executive_summary_prompt
+        prompt = build_executive_summary_prompt('Klaim', 'UAE_healthcare')
+        # Accept any of the three canonical dual-view examples
+        assert ('Active + Lifetime PAR' in prompt or 'Operational + Realized WAL' in prompt
+                or 'blended + clean cohort' in prompt)
+
+
+class TestMemoSectionSystemPromptPopulationDiscipline:
+    """IC memo section-generation system prompt — same discipline as Exec
+    Summary but scoped to per-section generation."""
+
+    def test_section_prompt_contains_population_discipline_block(self):
+        from core.memo.generator import _build_section_system_prompt
+        prompt = _build_section_system_prompt(
+            company='Klaim', product='UAE_healthcare',
+            template_name='credit_memo', mind_context='')
+        assert 'POPULATION & CONFIDENCE DISCIPLINE' in prompt
+        assert 'Framework §17' in prompt
+
+    def test_section_prompt_requires_methodology_footer_in_takeaway(self):
+        from core.memo.generator import _build_section_system_prompt
+        prompt = _build_section_system_prompt(
+            company='Aajil', product='KSA',
+            template_name='monitoring_memo', mind_context='')
+        assert 'Methodology:' in prompt
+        assert 'Takeaway' in prompt
+
+
+class TestAnalyticsBridgeSurfacesConfidenceAndPopulation:
+    """analytics_bridge must transmit the new confidence + population fields
+    downstream so the memo prompt has the discipline data to render."""
+
+    def test_format_as_memo_block_appends_confidence_tags(self):
+        from core.memo.analytics_bridge import AnalyticsBridge
+        bridge = AnalyticsBridge()
+        ctx = {
+            'metrics': [
+                {'label': 'PAR 30', 'value': '2.37%',
+                 'assessment': 'healthy',
+                 'confidence': 'B', 'population': 'active_outstanding'},
+            ]
+        }
+        txt = bridge.format_as_memo_block(ctx, style='narrative')
+        assert 'Confidence B' in txt
+        assert 'pop=active_outstanding' in txt
+
+    def test_format_as_memo_block_omits_tags_when_absent(self):
+        """Backward-compat: pre-existing callers that pass plain metrics
+        (no confidence/population fields) must still produce the original
+        narrative output."""
+        from core.memo.analytics_bridge import AnalyticsBridge
+        bridge = AnalyticsBridge()
+        ctx = {
+            'metrics': [
+                {'label': 'Total Originated', 'value': 'SAR 381M',
+                 'assessment': 'healthy'},
+            ]
+        }
+        txt = bridge.format_as_memo_block(ctx, style='narrative')
+        assert '[' not in txt  # no tag bracket
+        assert 'Confidence' not in txt
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FOLLOW-UP: Aajil methodology page registration
 # ══════════════════════════════════════════════════════════════════════════════
 

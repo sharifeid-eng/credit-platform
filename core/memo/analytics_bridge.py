@@ -871,13 +871,23 @@ class AnalyticsBridge:
                 value_str = f"{actual}" if actual is not None else "--"
                 if threshold is not None:
                     value_str += f" (threshold: {threshold})"
-                metrics.append({
+                # Framework §17 disclosure — transmit population + confidence
+                # to the memo prompt so the model can render Methodology
+                # footers (see _build_section_system_prompt).
+                metric_entry = {
                     "label": name,
                     "value": value_str,
                     "assessment": (
                         "healthy" if status == "compliant" else "critical"
                     ),
-                })
+                }
+                if "confidence" in cov_item:
+                    metric_entry["confidence"] = cov_item["confidence"]
+                if "population" in cov_item:
+                    metric_entry["population"] = cov_item["population"]
+                if "method" in cov_item:
+                    metric_entry["method"] = cov_item["method"]
+                metrics.append(metric_entry)
         except Exception as e:
             logger.warning("Covenant computation failed: %s", e)
 
@@ -968,7 +978,17 @@ class AnalyticsBridge:
         # Default: narrative
         parts = []
         for m in metrics:
-            parts.append(f"{m['label']}: {m['value']}")
+            # Framework §17: append [Conf: X, Pop: Y] tag for metrics carrying
+            # the discipline fields, so the memo prompt can see + render them.
+            entry = f"{m['label']}: {m['value']}"
+            tags = []
+            if m.get('confidence'):
+                tags.append(f"Confidence {m['confidence']}")
+            if m.get('population'):
+                tags.append(f"pop={m['population']}")
+            if tags:
+                entry += f" [{', '.join(tags)}]"
+            parts.append(entry)
         if parts:
             return "Key metrics: " + "; ".join(parts) + "."
         return ""
