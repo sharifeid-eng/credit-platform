@@ -233,10 +233,29 @@ def compute_aajil_traction(df, mult=1, ref_date=None, aux=None):
 
 
 def compute_aajil_delinquency(df, mult=1, ref_date=None, aux=None):
-    """DPD distribution and rolling default rates."""
+    """DPD distribution and rolling default rates.
+
+    P0-3 audit: the bucket/PAR metrics are computed on **overdue-installment
+    count** (not days). The tape has no contractual DPD column; Overdue No
+    of Installments (fractional, rounded) is the operational proxy. This
+    is Confidence B — the field NAMES par_1_inst / par_2_inst / par_3_inst
+    carry the semantics, and the output dict now also carries a top-level
+    `par_measurement: 'installments_overdue'` + `par_confidence: 'B'` so
+    downstream callers can't mistake these for days-based PAR.
+
+    When the aux Current_DPD_New Cohorts sheet is present (`dpd_time_series`
+    available), the dict ALSO emits `par_primary` — days-based DPD% from
+    that pre-computed source. That's Confidence A; analyst-facing dashboards
+    should prefer it over the install-count proxy when available.
+
+    P1-5 audit: adds lifetime PAR dual (denominator = total_originated vs
+    active_outstanding). Session 30 Klaim pattern applied to Aajil.
+    """
     # From Deals sheet: overdue installment counts
     active = df[df[C_STATUS] == 'Accrued'].copy()
     total_active = active[C_RECEIVABLE].fillna(0).sum() * mult
+    # P1-5: Lifetime denominator — all originated principal across all statuses
+    total_originated = df[C_PRINCIPAL].fillna(0).sum() * mult
 
     # Overdue No of Installments can be fractional (proportional overdue).
     # Round to nearest integer for bucketing.
@@ -255,7 +274,7 @@ def compute_aajil_delinquency(df, mult=1, ref_date=None, aux=None):
          'balance': _safe(active.loc[overdue >= 3, C_RECEIVABLE].fillna(0).sum() * mult)},
     ]
 
-    # PAR metrics (using rounded overdue installment count)
+    # PAR metrics — install-count proxy (Confidence B)
     par_1 = active.loc[overdue >= 1, C_SALE_OVERDUE].fillna(0).sum() * mult
     par_2 = active.loc[overdue >= 2, C_SALE_OVERDUE].fillna(0).sum() * mult
     par_3 = active.loc[overdue >= 3, C_SALE_OVERDUE].fillna(0).sum() * mult
@@ -274,20 +293,54 @@ def compute_aajil_delinquency(df, mult=1, ref_date=None, aux=None):
             'overdue_balance': _safe(sub[C_SALE_OVERDUE].fillna(0).sum() * mult),
         })
 
-    # Pre-computed DPD cohorts from aux sheet
+    # Pre-computed DPD cohorts from aux sheet — when present, primary PAR source
     dpd_time_series = None
+    par_primary = None
     if aux and aux.get('dpd_cohorts') is not None:
         dpd_time_series = _parse_dpd_cohorts(aux['dpd_cohorts'], mult)
+        # Extract latest-month DPD% from monthly series (Confidence A)
+        monthly = _parse_dpd_monthly(aux)
+        if monthly and len(monthly) > 0:
+            latest = monthly[-1]
+            par_primary = {
+                'source': 'aux_dpd_cohorts',
+                'measurement': 'days_past_due',
+                'confidence': 'A',
+                'as_of': latest.get('date'),
+                'dpd30_pct': latest.get('dpd30_pct'),
+                'dpd60_pct': latest.get('dpd60_pct'),
+                'dpd90_pct': latest.get('dpd90_pct'),
+            }
 
     return {
         'buckets': buckets,
         'total_active_balance': _safe(total_active),
         'total_overdue_balance': _safe(overdue_amt.sum()),
+        # Install-count proxy PAR — Active-outstanding denominator
         'par_1_inst': _safe(par_1 / total_active if total_active > 0 else 0),
         'par_2_inst': _safe(par_2 / total_active if total_active > 0 else 0),
         'par_3_inst': _safe(par_3 / total_active if total_active > 0 else 0),
+        # P0-3: declare measurement + confidence at dict level so callers
+        # can't mistake install-count for days-based PAR.
+        'par_measurement': 'installments_overdue',
+        'par_measurement_note': (
+            'PAR metrics measure proportion of active-outstanding balance with '
+            '1+/2+/3+ installments overdue (per Aajil tape). Not contractual DPD '
+            'days. When aux Current_DPD_New Cohorts is present, prefer '
+            '`par_primary` (days-based, Confidence A).'
+        ),
+        'par_confidence': 'B',
+        'par_population_active': 'active_outstanding',
+        # P1-5: Lifetime PAR dual — total_originated denominator
+        'par_1_inst_lifetime': _safe(par_1 / total_originated if total_originated > 0 else 0),
+        'par_2_inst_lifetime': _safe(par_2 / total_originated if total_originated > 0 else 0),
+        'par_3_inst_lifetime': _safe(par_3 / total_originated if total_originated > 0 else 0),
+        'par_population_lifetime': 'total_originated',
+        'total_originated_principal': _safe(total_originated),
         'by_deal_type': by_type,
         'dpd_time_series': dpd_time_series,
+        # Days-based PAR from aux sheet when available (Confidence A)
+        'par_primary': par_primary,
         'available': True,
     }
 

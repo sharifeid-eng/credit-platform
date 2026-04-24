@@ -532,6 +532,178 @@ class TestP02AajilYieldDual:
             assert entry['margin_rate_pv_weighted'] is not None
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# P0-3 + P1-5 — Aajil PAR relabel + lifetime dual
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_aajil_delinquency_tape():
+    today = pd.Timestamp('2026-04-15')
+    rows = []
+    # 10 active current (overdue=0), 5 one-inst overdue, 2 three-plus overdue.
+    for i in range(10):
+        rows.append({
+            'Transaction ID': f'A{i}', 'Deal Type': 'EMI',
+            'Invoice Date': today - pd.Timedelta(days=60),
+            'Unique Customer Code': 100 + i,
+            'Bill Notional': 100_000, 'Total Margin': 20_000,
+            'Origination Fee': 5_000, 'Sale Notional': 125_000,
+            'Sale VAT': 18_750, 'Sale Total': 143_750,
+            'Realised Amount': 50_000, 'Receivable Amount': 93_750,
+            'Written Off Amount': 0, 'Written Off VAT Recovered Amount': 0,
+            'Write Off Date': None, 'Realised Status': 'Accrued',
+            'Total No. of Installments': 4, 'Due No of Installments': 2,
+            'Paid No of Installments': 2, 'Overdue No of Installments': 0,
+            'Sale Due Amount': 70_000, 'Sale Paid Amount': 50_000,
+            'Sale Overdue Amount': 0, 'Monthly Yield %': 5.0,
+            'Total Yield %': 22.0, 'Admin Fee %': 1.0, 'Deal Tenure': 4.5,
+            'Customer Industry': 'Manufacturing', 'Principal Amount': 100_000,
+            'Expected Completion': today + pd.Timedelta(days=60),
+        })
+    for i in range(5):
+        rows.append({
+            'Transaction ID': f'B{i}', 'Deal Type': 'EMI',
+            'Invoice Date': today - pd.Timedelta(days=90),
+            'Unique Customer Code': 200 + i,
+            'Bill Notional': 100_000, 'Total Margin': 20_000,
+            'Origination Fee': 5_000, 'Sale Notional': 125_000,
+            'Sale VAT': 18_750, 'Sale Total': 143_750,
+            'Realised Amount': 30_000, 'Receivable Amount': 113_750,
+            'Written Off Amount': 0, 'Written Off VAT Recovered Amount': 0,
+            'Write Off Date': None, 'Realised Status': 'Accrued',
+            'Total No. of Installments': 4, 'Due No of Installments': 2,
+            'Paid No of Installments': 1, 'Overdue No of Installments': 1,
+            'Sale Due Amount': 70_000, 'Sale Paid Amount': 30_000,
+            'Sale Overdue Amount': 40_000, 'Monthly Yield %': 5.0,
+            'Total Yield %': 22.0, 'Admin Fee %': 1.0, 'Deal Tenure': 4.5,
+            'Customer Industry': 'Contracting', 'Principal Amount': 100_000,
+            'Expected Completion': today + pd.Timedelta(days=30),
+        })
+    for i in range(2):
+        rows.append({
+            'Transaction ID': f'C{i}', 'Deal Type': 'Bullet',
+            'Invoice Date': today - pd.Timedelta(days=180),
+            'Unique Customer Code': 300 + i,
+            'Bill Notional': 100_000, 'Total Margin': 20_000,
+            'Origination Fee': 5_000, 'Sale Notional': 125_000,
+            'Sale VAT': 18_750, 'Sale Total': 143_750,
+            'Realised Amount': 0, 'Receivable Amount': 143_750,
+            'Written Off Amount': 0, 'Written Off VAT Recovered Amount': 0,
+            'Write Off Date': None, 'Realised Status': 'Accrued',
+            'Total No. of Installments': 3, 'Due No of Installments': 3,
+            'Paid No of Installments': 0, 'Overdue No of Installments': 3,
+            'Sale Due Amount': 143_750, 'Sale Paid Amount': 0,
+            'Sale Overdue Amount': 143_750, 'Monthly Yield %': 5.0,
+            'Total Yield %': 22.0, 'Admin Fee %': 1.0, 'Deal Tenure': 6,
+            'Customer Industry': 'Wholesale', 'Principal Amount': 100_000,
+            'Expected Completion': today - pd.Timedelta(days=60),
+        })
+    # Plus 3 realised (closed successfully) to exercise lifetime denom
+    for i in range(3):
+        rows.append({
+            'Transaction ID': f'R{i}', 'Deal Type': 'EMI',
+            'Invoice Date': today - pd.Timedelta(days=300),
+            'Unique Customer Code': 400 + i,
+            'Bill Notional': 100_000, 'Total Margin': 20_000,
+            'Origination Fee': 5_000, 'Sale Notional': 125_000,
+            'Sale VAT': 18_750, 'Sale Total': 143_750,
+            'Realised Amount': 143_750, 'Receivable Amount': 0,
+            'Written Off Amount': 0, 'Written Off VAT Recovered Amount': 0,
+            'Write Off Date': None, 'Realised Status': 'Realised',
+            'Total No. of Installments': 4, 'Due No of Installments': 4,
+            'Paid No of Installments': 4, 'Overdue No of Installments': 0,
+            'Sale Due Amount': 143_750, 'Sale Paid Amount': 143_750,
+            'Sale Overdue Amount': 0, 'Monthly Yield %': 5.5,
+            'Total Yield %': 25.0, 'Admin Fee %': 1.0, 'Deal Tenure': 4.5,
+            'Customer Industry': 'Manufacturing', 'Principal Amount': 100_000,
+            'Expected Completion': today - pd.Timedelta(days=120),
+        })
+    return pd.DataFrame(rows)
+
+
+class TestP03AajilPARMeasurementSemantics:
+    def test_par_measurement_field_declares_install_count(self):
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_delinquency(df, mult=1)
+        assert res['par_measurement'] == 'installments_overdue'
+        assert 'not contractual DPD days' in res['par_measurement_note'].lower() or \
+               'not contractual dpd' in res['par_measurement_note'].lower()
+
+    def test_par_confidence_is_B(self):
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_delinquency(df, mult=1)
+        assert res['par_confidence'] == 'B'
+
+    def test_par_population_fields_declare_active_and_lifetime(self):
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_delinquency(df, mult=1)
+        assert res['par_population_active']   == 'active_outstanding'
+        assert res['par_population_lifetime'] == 'total_originated'
+
+
+class TestP15AajilPARLifetimeDual:
+    def test_lifetime_denominator_is_total_originated(self):
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_delinquency(df, mult=1)
+        # 20 deals × 100K principal = 2M originated.
+        # Active denom = 17 active × receivable amounts; smaller than originated.
+        # So lifetime PAR < active PAR (for same overdue set).
+        assert res['total_originated_principal'] == pytest.approx(2_000_000, abs=1)
+        assert res['par_1_inst'] > 0
+        # Active denom (receivables) is smaller than originated (principal),
+        # so active-denominator PAR rate > lifetime PAR rate.
+        assert res['par_1_inst'] > res['par_1_inst_lifetime']
+
+    def test_lifetime_par_same_numerator_different_denom(self):
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_delinquency(df, mult=1)
+        # par_1_inst * total_active_balance == par_1_inst_lifetime * total_originated
+        # Tolerance looser than default because _safe() rounds ratios to 4dp,
+        # which translates to thousands of SAR of rounding error when multiplied
+        # back out by multi-million denominators.
+        active_numer   = res['par_1_inst']          * res['total_active_balance']
+        lifetime_numer = res['par_1_inst_lifetime'] * res['total_originated_principal']
+        assert active_numer == pytest.approx(lifetime_numer, rel=1e-3)
+
+
+class TestP03AajilPARPrimarySurfacesWhenAuxPresent:
+    def test_par_primary_none_when_aux_missing(self):
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_delinquency(df, mult=1, aux=None)
+        assert res['par_primary'] is None
+
+    def test_par_primary_populated_when_aux_has_cohorts(self):
+        """When aux['dpd_cohorts'] is present with a valid monthly layout,
+        par_primary surfaces with Confidence A + measurement='days_past_due'."""
+        from core.analysis_aajil import compute_aajil_delinquency
+        df = _make_aajil_delinquency_tape()
+        # Build a minimal aux DPD cohort sheet matching _parse_dpd_monthly's layout.
+        # Needs shape[1] >= 10; row 0 has dates in cols 8+; rows 2,4,5,7,8,10,11
+        # carry deployed / DPD amounts and percentages.
+        data = [[None] * 12 for _ in range(15)]
+        data[0][8]  = pd.Timestamp('2026-03-01')
+        data[0][9]  = pd.Timestamp('2026-04-01')
+        data[2][8]  = 1_000_000; data[2][9]  = 1_200_000
+        data[4][8]  = 50_000;    data[4][9]  = 70_000       # DPD30+ amt
+        data[5][8]  = 0.05;      data[5][9]  = 0.058        # DPD30+ %
+        data[7][8]  = 20_000;    data[7][9]  = 30_000       # DPD60+ amt
+        data[8][8]  = 0.02;      data[8][9]  = 0.025        # DPD60+ %
+        data[10][8] = 10_000;    data[10][9] = 12_000       # DPD90+ amt
+        data[11][8] = 0.01;      data[11][9] = 0.01         # DPD90+ %
+        aux = {'dpd_cohorts': pd.DataFrame(data)}
+        res = compute_aajil_delinquency(df, mult=1, aux=aux)
+        assert res['par_primary'] is not None
+        assert res['par_primary']['confidence'] == 'A'
+        assert res['par_primary']['measurement'] == 'days_past_due'
+        assert res['par_primary']['as_of'] == '2026-04'
+
+
 class TestP01KlaimCollRatioDifferentDefinition:
     """Klaim's Collection Ratio is a CUMULATIVE approximation (method=
     'cumulative', Confidence C), not the same 'maturing in period' covenant
