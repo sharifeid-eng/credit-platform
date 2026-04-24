@@ -1151,6 +1151,164 @@ def separate_silq_portfolio(df, ref_date=None):
     return df[~loss_mask].copy(), df[loss_mask].copy()
 
 
+def classify_silq_deal_stale(df, ref_date=None, ineligibility_days=180):
+    """Flag SILQ deals that don't represent live portfolio behaviour.
+
+    Three rules (a deal may satisfy more than one):
+      - loss_closed_outstanding: Status == 'Closed' AND Outstanding > 0.
+                                 Charge-off: closed on the tape but balance
+                                 was never recovered.
+      - stuck_active:            Status == 'Active' AND Outstanding < 10% of
+                                 Disbursed_Amount AND DPD > 0.
+                                 Economically complete (balance near zero)
+                                 but the row is still marked Active —
+                                 drifts time-based metrics upward every day.
+      - deep_dpd_active:         Status == 'Active' AND DPD > 90.
+                                 Deep delinquency — expected to resolve as
+                                 charge-off or legal recovery.
+
+    `ineligibility_days` default 180 matches typical SILQ loan tenor; kept
+    as a parameter for future tuning. Currently only stored on result dict
+    (no rule uses it yet — matches `classify_klaim_deal_stale` API shape).
+
+    Framework §17 pattern mirroring Klaim/Aajil equivalents.
+
+    Returns dict of Series (all indexed identically to df):
+      - loss_closed_outstanding, stuck_active, deep_dpd_active: per-rule masks
+      - any_stale:                                              OR-reduction
+      - ineligibility_days:                                     int threshold
+    """
+    idx = df.index
+
+    def _col(name, default=0.0):
+        if name in df.columns:
+            return pd.to_numeric(df[name], errors='coerce').fillna(default)
+        return pd.Series(default, index=idx, dtype=float)
+
+    outstanding = _col(C_OUTSTANDING)
+    disbursed   = _col(C_DISBURSED, default=1.0)
+    status      = df[C_STATUS] if C_STATUS in df.columns else pd.Series('', index=idx)
+    dpd         = _dpd(df, ref_date)
+
+    has_disbursed = disbursed > 0
+
+    loss_closed_outstanding = (status == 'Closed') & (outstanding > 0)
+    stuck_active            = (status == 'Active') & (outstanding < 0.1 * disbursed) & (dpd > 0) & has_disbursed
+    deep_dpd_active         = (status == 'Active') & (dpd > 90)
+    any_stale               = loss_closed_outstanding | stuck_active | deep_dpd_active
+
+    return {
+        'loss_closed_outstanding': loss_closed_outstanding,
+        'stuck_active':            stuck_active,
+        'deep_dpd_active':         deep_dpd_active,
+        'any_stale':               any_stale,
+        'ineligibility_days':      int(ineligibility_days),
+    }
+
+
+def compute_silq_operational_wal(df, mult=1, ref_date=None):
+    """PV-weighted age across the clean (non-stale) SILQ book.
+
+    Framework §17 Tape-side learning metric. Excludes the zombie tail
+    surfaced by classify_silq_deal_stale. Confidence B — the stale filter
+    introduces judgement (three classification thresholds).
+
+    Per-deal age:
+      - Active:          elapsed = ref_date - Disbursement_Date (days)
+      - Closed (clean):  close_age = min(Repayment_Deadline - Disbursement_Date, elapsed)
+                         Clipped to elapsed because close_age can exceed
+                         elapsed on loans extended beyond their original
+                         term — we count only time already experienced.
+
+    Returns:
+      {
+        'available': bool,
+        'operational_wal_days': float,    # clean-book PV-weighted, Confidence B
+        'realized_wal_days':    float|None, # closed-clean only, Confidence B
+        'method': str,                     # 'direct' (Repayment_Deadline
+                                           #   present) or 'elapsed_only'
+                                           #   (degraded — no maturity info)
+        'confidence': 'B' | 'C',
+        'population': 'clean_book',
+        'clean_pv':         float,
+        'clean_deal_count': int,
+        'total_pv':         float,
+        'total_deal_count': int,
+        'stale_pv':         float,
+        'stale_deal_count': int,
+      }
+    """
+    if (C_DISB_DATE not in df.columns
+            or C_DISBURSED not in df.columns
+            or C_STATUS not in df.columns):
+        return {'available': False}
+    if len(df) == 0:
+        return {'available': False}
+
+    pv = pd.to_numeric(df[C_DISBURSED], errors='coerce').fillna(0) * mult
+    total_pv = float(pv.sum())
+    if total_pv <= 0:
+        return {'available': False}
+
+    ref = pd.Timestamp.now().normalize() if ref_date is None else pd.to_datetime(ref_date)
+    df_work = df.copy()
+    df_work[C_DISB_DATE] = pd.to_datetime(df_work[C_DISB_DATE], errors='coerce')
+
+    elapsed = (ref - df_work[C_DISB_DATE]).dt.days.clip(lower=0).fillna(0).astype(float)
+    age = elapsed.copy()
+
+    has_deadline = C_REPAY_DEADLINE in df_work.columns
+    method = 'direct' if has_deadline else 'elapsed_only'
+
+    if has_deadline:
+        deadline = pd.to_datetime(df_work[C_REPAY_DEADLINE], errors='coerce')
+        close_age_days = (deadline - df_work[C_DISB_DATE]).dt.days
+        closed_mask = df_work[C_STATUS] == 'Closed'
+        # Only override for closed loans with valid deadline
+        valid_closed = closed_mask & deadline.notna()
+        age = age.where(~valid_closed, close_age_days.clip(lower=0))
+
+    # Clip to [0, elapsed] — age can never exceed physical elapsed time
+    age = np.minimum(np.maximum(age, 0), elapsed)
+
+    stale = classify_silq_deal_stale(df_work, ref_date=ref_date)
+    clean_mask = ~stale['any_stale']
+
+    clean_pv  = pv[clean_mask]
+    clean_age = age[clean_mask]
+    if clean_pv.sum() <= 0:
+        return {'available': False}
+
+    operational_wal = float(np.average(clean_age, weights=clean_pv))
+
+    # Realized WAL — closed + clean only
+    realized_wal = None
+    closed_clean = (df_work[C_STATUS] == 'Closed') & clean_mask
+    if closed_clean.any() and has_deadline:
+        rpv  = pv[closed_clean]
+        rage = age[closed_clean]
+        if rpv.sum() > 0:
+            realized_wal = round(float(np.average(rage, weights=rpv)), 2)
+
+    confidence = 'B' if has_deadline else 'C'
+
+    return {
+        'available':            True,
+        'operational_wal_days': round(operational_wal, 2),
+        'realized_wal_days':    realized_wal,
+        'method':               method,
+        'confidence':           confidence,
+        'population':           'clean_book',
+        'clean_pv':             round(float(clean_pv.sum()), 2),
+        'clean_deal_count':     int(clean_mask.sum()),
+        'total_pv':             round(total_pv, 2),
+        'total_deal_count':     int(len(df_work)),
+        'stale_pv':             round(float(pv[stale['any_stale']].sum()), 2),
+        'stale_deal_count':     int(stale['any_stale'].sum()),
+        'ineligibility_days':   stale['ineligibility_days'],
+    }
+
+
 def compute_silq_cdr_ccr(df, mult=1, ref_date=None):
     """Conditional Default Rate (CDR) and Conditional Collection Rate (CCR) by vintage.
 

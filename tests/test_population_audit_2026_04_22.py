@@ -913,6 +913,172 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: SILQ stale classifier + Operational WAL (Framework §17 consistency)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_silq_stale_tape():
+    """Tape with clean active, clean closed, + 3 stale rows (1 per rule)."""
+    today = pd.Timestamp('2026-03-01')
+    rows = []
+    # 5 clean active
+    for i in range(5):
+        rows.append({
+            'Deal ID': f'A{i}', 'Shop_ID': f'S{i}',
+            'Disbursed_Amount (SAR)': 100_000,
+            'Outstanding_Amount (SAR)': 80_000,
+            'Overdue_Amount (SAR)': 0,
+            'Total_Collectable_Amount (SAR)': 110_000,
+            'Amt_Repaid': 30_000, 'Margin Collected': 10_000,
+            'Principal Collected': 20_000, 'Shop_Credit_Limit (SAR)': 500_000,
+            'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+            'Disbursement_Date': today - pd.Timedelta(days=30),
+            'Repayment_Deadline': today + pd.Timedelta(days=60),
+            'Last_Collection_Date': today, 'Loan_Age': 30,
+        })
+    # 3 clean closed-repaid
+    for i in range(3):
+        rows.append({
+            'Deal ID': f'C{i}', 'Shop_ID': f'S{i}',
+            'Disbursed_Amount (SAR)': 100_000,
+            'Outstanding_Amount (SAR)': 0,
+            'Overdue_Amount (SAR)': 0,
+            'Total_Collectable_Amount (SAR)': 110_000,
+            'Amt_Repaid': 110_000, 'Margin Collected': 10_000,
+            'Principal Collected': 100_000, 'Shop_Credit_Limit (SAR)': 500_000,
+            'Tenure': 12, 'Loan_Status': 'Closed', 'Product': 'BNPL',
+            'Disbursement_Date': today - pd.Timedelta(days=180),
+            'Repayment_Deadline': today - pd.Timedelta(days=30),
+            'Last_Collection_Date': today - pd.Timedelta(days=20),
+            'Loan_Age': 180,
+        })
+    # 1 loss_closed_outstanding (charged off)
+    rows.append({
+        'Deal ID': 'L1', 'Shop_ID': 'S9',
+        'Disbursed_Amount (SAR)': 100_000,
+        'Outstanding_Amount (SAR)': 80_000,  # closed but not cleared
+        'Overdue_Amount (SAR)': 80_000,
+        'Total_Collectable_Amount (SAR)': 110_000,
+        'Amt_Repaid': 20_000, 'Margin Collected': 0,
+        'Principal Collected': 20_000, 'Shop_Credit_Limit (SAR)': 500_000,
+        'Tenure': 12, 'Loan_Status': 'Closed', 'Product': 'BNPL',
+        'Disbursement_Date': today - pd.Timedelta(days=300),
+        'Repayment_Deadline': today - pd.Timedelta(days=120),
+        'Last_Collection_Date': today - pd.Timedelta(days=180),
+        'Loan_Age': 300,
+    })
+    # 1 stuck_active (outstanding < 10%, past deadline)
+    rows.append({
+        'Deal ID': 'L2', 'Shop_ID': 'S10',
+        'Disbursed_Amount (SAR)': 100_000,
+        'Outstanding_Amount (SAR)': 5_000,  # < 10K = 10%
+        'Overdue_Amount (SAR)': 5_000,
+        'Total_Collectable_Amount (SAR)': 110_000,
+        'Amt_Repaid': 105_000, 'Margin Collected': 9_000,
+        'Principal Collected': 96_000, 'Shop_Credit_Limit (SAR)': 500_000,
+        'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+        'Disbursement_Date': today - pd.Timedelta(days=200),
+        'Repayment_Deadline': today - pd.Timedelta(days=30),  # past due → DPD>0
+        'Last_Collection_Date': today - pd.Timedelta(days=30),
+        'Loan_Age': 200,
+    })
+    # 1 deep_dpd_active
+    rows.append({
+        'Deal ID': 'L3', 'Shop_ID': 'S11',
+        'Disbursed_Amount (SAR)': 100_000,
+        'Outstanding_Amount (SAR)': 100_000,
+        'Overdue_Amount (SAR)': 100_000,
+        'Total_Collectable_Amount (SAR)': 110_000,
+        'Amt_Repaid': 0, 'Margin Collected': 0, 'Principal Collected': 0,
+        'Shop_Credit_Limit (SAR)': 500_000,
+        'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+        'Disbursement_Date': today - pd.Timedelta(days=200),
+        'Repayment_Deadline': today - pd.Timedelta(days=120),  # DPD 120
+        'Last_Collection_Date': None, 'Loan_Age': 200,
+    })
+    return pd.DataFrame(rows), today
+
+
+class TestSILQStaleClassifier:
+    def test_loss_closed_outstanding_rule(self):
+        from core.analysis_silq import classify_silq_deal_stale
+        df, today = _make_silq_stale_tape()
+        stale = classify_silq_deal_stale(df, ref_date=today)
+        assert int(stale['loss_closed_outstanding'].sum()) == 1
+
+    def test_stuck_active_rule(self):
+        from core.analysis_silq import classify_silq_deal_stale
+        df, today = _make_silq_stale_tape()
+        stale = classify_silq_deal_stale(df, ref_date=today)
+        assert int(stale['stuck_active'].sum()) == 1
+
+    def test_deep_dpd_active_rule(self):
+        from core.analysis_silq import classify_silq_deal_stale
+        df, today = _make_silq_stale_tape()
+        stale = classify_silq_deal_stale(df, ref_date=today)
+        assert int(stale['deep_dpd_active'].sum()) == 1
+
+    def test_any_stale_union_equals_three(self):
+        from core.analysis_silq import classify_silq_deal_stale
+        df, today = _make_silq_stale_tape()
+        stale = classify_silq_deal_stale(df, ref_date=today)
+        # 3 stale rows, no overlap in the synthetic tape
+        assert int(stale['any_stale'].sum()) == 3
+
+    def test_ineligibility_days_default(self):
+        from core.analysis_silq import classify_silq_deal_stale
+        df, today = _make_silq_stale_tape()
+        stale = classify_silq_deal_stale(df, ref_date=today)
+        assert stale['ineligibility_days'] == 180
+
+
+class TestSILQOperationalWAL:
+    def test_returns_available_with_mixed_book(self):
+        from core.analysis_silq import compute_silq_operational_wal
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_operational_wal(df, mult=1, ref_date=today)
+        assert res['available'] is True
+
+    def test_confidence_is_B_when_deadline_present(self):
+        from core.analysis_silq import compute_silq_operational_wal
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_operational_wal(df, mult=1, ref_date=today)
+        assert res['confidence'] == 'B'
+        assert res['method']     == 'direct'
+
+    def test_population_is_clean_book(self):
+        from core.analysis_silq import compute_silq_operational_wal
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_operational_wal(df, mult=1, ref_date=today)
+        assert res['population'] == 'clean_book'
+
+    def test_stale_excluded_stale_count_matches(self):
+        from core.analysis_silq import compute_silq_operational_wal
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_operational_wal(df, mult=1, ref_date=today)
+        assert res['stale_deal_count'] == 3
+        assert res['clean_deal_count'] + res['stale_deal_count'] == res['total_deal_count']
+
+    def test_realized_wal_available_for_closed_clean(self):
+        from core.analysis_silq import compute_silq_operational_wal
+        df, today = _make_silq_stale_tape()
+        res = compute_silq_operational_wal(df, mult=1, ref_date=today)
+        # 3 closed-repaid deals with Repayment_Deadline = Disbursement_Date + 150d
+        assert res['realized_wal_days'] is not None
+        assert res['realized_wal_days'] == pytest.approx(150.0, abs=0.5)
+
+    def test_degraded_mode_without_deadline(self):
+        from core.analysis_silq import compute_silq_operational_wal
+        df, today = _make_silq_stale_tape()
+        df = df.drop(columns=['Repayment_Deadline'])
+        res = compute_silq_operational_wal(df, mult=1, ref_date=today)
+        assert res['available'] is True
+        assert res['confidence'] == 'C'
+        assert res['method']     == 'elapsed_only'
+        assert res['realized_wal_days'] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # P1-2 — Aajil Operational WAL + stale classifier
 # ══════════════════════════════════════════════════════════════════════════════
 
