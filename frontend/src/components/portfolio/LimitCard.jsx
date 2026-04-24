@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import ComplianceBadge from './ComplianceBadge'
+import ConfidenceBadge from '../ConfidenceBadge'
 
 export default function LimitCard({ name, current, threshold, compliant, unit, format,
-                                     breaching_shops, breaches, conc_adjustment, breakdown, wal_days }) {
+                                     breaching_shops, breaches, conc_adjustment, breakdown, wal_days,
+                                     // Framework §17 discipline fields
+                                     confidence, population, method, proxy_column }) {
   const [expanded, setExpanded] = useState(false)
   const ratio = Math.min(current / threshold, 1.5)
   const barWidth = Math.min(ratio * 100, 100)
@@ -52,7 +55,18 @@ export default function LimitCard({ name, current, threshold, compliant, unit, f
               display: 'inline-block', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
           )}
         </div>
-        <ComplianceBadge compliant={compliant} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* Framework §17 confidence grade */}
+          {confidence && (
+            <ConfidenceBadge
+              confidence={confidence}
+              population={population}
+              method={method}
+              note={proxy_column ? `Proxy column: ${proxy_column}` : undefined}
+            />
+          )}
+          <ComplianceBadge compliant={compliant} />
+        </div>
       </div>
 
       {/* Value */}

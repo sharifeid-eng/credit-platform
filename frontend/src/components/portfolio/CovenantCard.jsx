@@ -1,4 +1,5 @@
 import ComplianceBadge from './ComplianceBadge'
+import ConfidenceBadge from '../ConfidenceBadge'
 
 const EOD_STYLES = {
   eod_triggered:      { bg: 'rgba(240,96,96,0.15)', border: 'rgba(240,96,96,0.4)', color: '#F06060', label: 'EoD TRIGGERED' },
@@ -10,7 +11,11 @@ const EOD_STYLES = {
 export default function CovenantCard({ covenant, currency = 'AED' }) {
   const { name, current, threshold, compliant, operator, format, period, breakdown,
           previous_value, days_since_previous, eod_rule, eod_status, eod_triggered, consecutive_breaches,
-          view_note, compliance_path, note } = covenant
+          view_note, compliance_path, note,
+          // Framework §17 discipline fields
+          confidence, population, method,
+          // WAL dual-view sub-grades (pre-existing from session 30)
+          wal_active_confidence, wal_total_confidence } = covenant
 
   // WAL covenant has dual-path compliance (MMA Art. 21): Path A (WAL <= limit) OR
   // Path B (Extended Age 70-90d carve-out <= 5%). When Path B is the binding path,
@@ -81,6 +86,20 @@ export default function CovenantCard({ covenant, currency = 'AED' }) {
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* Framework §17 confidence grade (bound to covenant compliance path) */}
+          {confidence && (
+            <ConfidenceBadge
+              confidence={confidence}
+              population={population}
+              method={method}
+              note={
+                // WAL covenant: annotate with both sub-grades if present
+                wal_active_confidence && wal_total_confidence
+                  ? `Active WAL Confidence ${wal_active_confidence}; Total WAL Confidence ${wal_total_confidence}`
+                  : undefined
+              }
+            />
+          )}
           {eod_status && EOD_STYLES[eod_status] && (
             <span style={{
               padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700,
