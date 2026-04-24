@@ -9,22 +9,22 @@
  *   trendLabel string   — optional suffix e.g. "vs prev month"
  *   color      string   — 'gold' | 'teal' | 'red' | 'blue'  (default 'gold')
  *   index      number   — optional index for stagger delay (default 0)
- *   confidence    string   — 'A' | 'B' | 'C' — data confidence grade badge
+ *   confidence    string   — 'A' | 'B' | 'C' — Framework §10 grade badge
  *                           A = Observed (direct tape read)
  *                           B = Inferred (derived with solid methodology)
  *                           C = Derived (estimated/approximated)
+ *   population   string  — optional, §17 population code (shown in confidence
+ *                          badge tooltip when present). E.g. 'active_outstanding',
+ *                          'clean_book', 'total_originated'.
+ *   confidenceNote string — optional, extra disclosure string appended to
+ *                           confidence tooltip.
  *   sparklineData number[] — optional last-N data points for inline sparkline
  */
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import ConfidenceBadge from './ConfidenceBadge'
 
-const CONFIDENCE = {
-  A: { label: 'A', color: 'var(--accent-teal)',  bg: 'rgba(45,212,191,0.12)', title: 'Grade A — Observed: directly measured from tape data' },
-  B: { label: 'B', color: 'var(--accent-gold)',  bg: 'rgba(201,168,76,0.12)', title: 'Grade B — Inferred: derived using a documented methodology' },
-  C: { label: 'C', color: 'var(--text-muted)',   bg: 'rgba(132,148,167,0.12)', title: 'Grade C — Derived: estimated or approximated, use with caution' },
-}
-
-export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false, confidence, sparklineData, index = 0 }) {
+export default function KpiCard({ label, value, sub, trend, trendLabel, color = 'gold', stale = false, confidence, population, confidenceNote, sparklineData, index = 0 }) {
   const [hovered, setHovered] = useState(false)
   const palette = {
     gold: { accent: 'var(--gold)',  muted: 'var(--gold-muted)' },
@@ -147,21 +147,14 @@ export default function KpiCard({ label, value, sub, trend, trendLabel, color = 
         </div>
       )}
 
-      {/* Confidence grade badge */}
-      {confidence && CONFIDENCE[confidence] && (
-        <div
-          title={CONFIDENCE[confidence].title}
-          style={{
-            position: 'absolute', bottom: 8, right: 8,
-            fontSize: 8, fontWeight: 700, letterSpacing: '0.05em',
-            padding: '1px 5px', borderRadius: 4,
-            color: CONFIDENCE[confidence].color,
-            background: CONFIDENCE[confidence].bg,
-            cursor: 'help',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {confidence}
+      {/* Confidence grade badge (Framework §10 + §17) */}
+      {confidence && (
+        <div style={{ position: 'absolute', bottom: 8, right: 8 }}>
+          <ConfidenceBadge
+            confidence={confidence}
+            population={population}
+            note={confidenceNote}
+          />
         </div>
       )}
     </motion.div>
