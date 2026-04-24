@@ -21,6 +21,7 @@
     { "slug": "trigger-trends", "label": "Trigger Trends" },
     { "slug": "facility-structure", "label": "Facility Structure" },
     { "slug": "facility-waterfall", "label": "Payment Waterfall" },
+    { "slug": "quarterly-financials", "label": "Quarterly Financials" },
     { "slug": "notes", "label": "Data Notes" }
   ]
 }

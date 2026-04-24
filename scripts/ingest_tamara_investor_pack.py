@@ -333,6 +333,11 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--dry-run", action="store_true", help="Parse + print summary, don't write output")
     parser.add_argument("--force", action="store_true", help="Overwrite existing output file")
+    parser.add_argument(
+        "--no-update-thesis",
+        action="store_true",
+        help="Skip the auto drift-check against the Tamara investment thesis after writing the pack.",
+    )
     args = parser.parse_args()
 
     try:
@@ -376,7 +381,90 @@ def main() -> int:
     # sort_keys=True makes output deterministic
     out_path.write_text(json.dumps(pack, indent=2, sort_keys=True, default=str), encoding="utf-8")
     print(f"[pack] OK wrote {out_path} ({out_path.stat().st_size:,} bytes)", file=sys.stderr)
+
+    # Auto-fire thesis drift check unless explicitly disabled. We construct a
+    # lightweight enriched "quarterly_pack" view (headline_fs / headline_kpis /
+    # budget_variance_summary) by running the analysis_tamara enrichment helpers
+    # directly — no dashboard round-trip needed.
+    if not args.no_update_thesis:
+        _run_thesis_drift_check(pack)
+
     return 0
+
+
+def _run_thesis_drift_check(pack):
+    """Build the enriched quarterly_pack structure from a raw parsed pack,
+    extract thesis metrics, and run ``ThesisTracker.check_drift``. Prints
+    a summary of alerts on stderr.
+
+    Failures are logged but do NOT fail the ingest — analyst sees the warning
+    and can run the check manually afterwards.
+    """
+    try:
+        # Local imports so pure-parse operations don't pay the import cost
+        # when --no-update-thesis is set.
+        sys.path.insert(0, str(PROJECT_ROOT))
+        from core.analysis_tamara import (
+            build_thesis_metrics_from_pack,
+            _FS_HEADLINE_ITEMS,
+            _KPI_HEADLINE_ITEMS,
+            _build_headline_deltas,
+            _summarise_budget_variance,
+        )
+        from core.mind.thesis import ThesisTracker
+    except ImportError as exc:
+        print(f"[thesis] skipped drift check (import error: {exc})", file=sys.stderr)
+        return
+
+    # The raw pack has {kpis, financials, budget_variance} at top level. The
+    # enrichment helpers expect the same shape used by _enrich_quarterly_pack.
+    financials = pack.get("financials", {}) or {}
+    kpis = pack.get("kpis", {}) or {}
+    budget_block = pack.get("budget_variance", {}) or {}
+
+    enriched_pack = {
+        "pack_date": pack.get("meta", {}).get("pack_date"),
+        "data_range": pack.get("meta", {}).get("data_range", {}),
+        "headline_fs": {
+            country: _build_headline_deltas(financials.get(country, {}), _FS_HEADLINE_ITEMS)
+            for country in ("cons", "ksa", "uae")
+        },
+        "headline_kpis": {
+            country: _build_headline_deltas(kpis.get(country, {}), _KPI_HEADLINE_ITEMS)
+            for country in ("cons", "ksa", "uae")
+        },
+        "budget_variance_summary": _summarise_budget_variance(budget_block),
+    }
+
+    metrics = build_thesis_metrics_from_pack(enriched_pack)
+    if not metrics:
+        print("[thesis] no metrics extracted from pack — skipping drift check", file=sys.stderr)
+        return
+
+    tracker = ThesisTracker(company="Tamara", product="all")
+    if not tracker.load():
+        print("[thesis] no thesis exists for Tamara — run scripts/seed_tamara_thesis.py first. Skipping.", file=sys.stderr)
+        return
+
+    try:
+        alerts = tracker.check_drift(metrics)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[thesis] drift check failed: {exc}", file=sys.stderr)
+        return
+
+    thesis_after = tracker.load()
+    print(f"[thesis] drift check ran against {len(metrics)} metric keys", file=sys.stderr)
+    print(f"[thesis] conviction: {thesis_after.conviction_score}/100 "
+          f"(weakening={len(thesis_after.weakening_pillars)}, broken={len(thesis_after.broken_pillars)})",
+          file=sys.stderr)
+    if alerts:
+        print(f"[thesis] {len(alerts)} alerts fired:", file=sys.stderr)
+        for a in alerts:
+            print(f"  [{a.severity:>8}] {a.claim}", file=sys.stderr)
+            print(f"           {a.metric_key} = {a.actual} vs threshold {a.expected}  ({a.previous_status} -> {a.new_status})",
+                  file=sys.stderr)
+    else:
+        print("[thesis] no pillar status changes", file=sys.stderr)
 
 
 if __name__ == "__main__":

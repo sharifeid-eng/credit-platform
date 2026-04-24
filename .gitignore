@@ -29,6 +29,10 @@ data/_agent_sessions/
 **/mind/consolidated.json
 **/mind/style_guide.md
 **/mind/profile.json
+# Investment thesis — per-machine (pillar IDs are per-seed UUIDs; `last_value`
+# and `last_checked` mutate on every drift check). Re-create on a fresh
+# machine via `scripts/seed_{company}_thesis.py`.
+**/mind/thesis.json
 
 # Asset Class Mind — semantic asset-class jsonl files. Seeded by
 # scripts/seed_asset_class_mind.py on each machine; analyst-approved

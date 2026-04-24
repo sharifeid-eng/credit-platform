@@ -23,6 +23,7 @@
     { "slug": "facility-waterfall", "label": "Payment Waterfall" },
     { "slug": "demographics", "label": "Demographics" },
     { "slug": "financial-performance", "label": "Financial Performance" },
+    { "slug": "quarterly-financials", "label": "Quarterly Financials" },
     { "slug": "business-plan", "label": "Business Plan" },
     { "slug": "bnpl-plus", "label": "BNPL+ Deep Dive" },
     { "slug": "notes", "label": "Data Notes" }

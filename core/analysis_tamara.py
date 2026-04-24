@@ -43,6 +43,11 @@ def parse_tamara_data(filepath):
     _enrich_repayment_behavior(data)
     _enrich_quarterly_pack(data, filepath)
 
+    # Thesis summary (Layer 5 — read-only; drift mutation happens on pack ingest, not here)
+    thesis_summary = _load_thesis_summary(company='Tamara')
+    if thesis_summary:
+        data['thesis_summary'] = thesis_summary
+
     return data
 
 
@@ -578,6 +583,150 @@ def _summarise_budget_variance(budget_block):
         if entry:
             summary[metric] = entry
     return summary
+
+
+def build_thesis_metrics_from_pack(pack):
+    """Flatten a parsed investor pack into a {metric_key: float} dict suitable
+    for ``ThesisTracker.check_drift(...)``.
+
+    Returns a dict with keys like:
+      - cons_statutory_net_profit, cons_ebtda_latest, cons_contribution_margin_pct
+      - cons_ecl_coverage_pct, cons_ltv_cac, cons_churn_rate
+      - ytd_gmv_vs_budget_pct, ytd_revenue_vs_budget_pct, ytd_ebtda_vs_budget_pct
+      - cons_profit_bearing_gmv_pct   (derived: Profit Bearing GMV / Total GMV)
+
+    Values are raw floats (not percentages of 100). Missing data → key omitted.
+    Callers pass the enriched ``quarterly_pack`` dict (not the raw JSON on disk).
+    """
+    metrics = {}
+    if not pack:
+        return metrics
+
+    fs_cons = (pack.get('headline_fs') or {}).get('cons') or {}
+
+    def _latest(key):
+        entry = fs_cons.get(key) or {}
+        val = entry.get('latest')
+        return val if isinstance(val, (int, float)) else None
+
+    cons_gmv = _latest('Total GMV')
+    cons_revenue = _latest('Total Operating Revenue')
+    cons_cm_usd = _latest('Contribution Margin')
+    cons_ebtda = _latest('EBTDA')
+    cons_net_profit = _latest('Statutory Net Profit / (Loss)')
+    cons_cash = _latest('Cash')
+    cons_net_ar = _latest('Net AR')
+    cons_debt = _latest('Debt')
+    cons_coverage = _latest('Coverage Ratio')
+
+    if cons_gmv is not None:
+        metrics['cons_gmv_latest'] = cons_gmv
+    if cons_revenue is not None:
+        metrics['cons_revenue_latest'] = cons_revenue
+    if cons_cm_usd is not None:
+        metrics['cons_contribution_margin_usd'] = cons_cm_usd
+    if cons_ebtda is not None:
+        metrics['cons_ebtda_latest'] = cons_ebtda
+    if cons_net_profit is not None:
+        metrics['cons_statutory_net_profit'] = cons_net_profit
+    if cons_cash is not None:
+        metrics['cons_cash'] = cons_cash
+    if cons_net_ar is not None:
+        metrics['cons_net_ar'] = cons_net_ar
+    if cons_debt is not None:
+        metrics['cons_debt'] = cons_debt
+    if cons_coverage is not None:
+        metrics['cons_ecl_coverage_pct'] = cons_coverage
+
+    # Derived: Contribution Margin % of GMV
+    if cons_cm_usd is not None and cons_gmv and cons_gmv != 0:
+        metrics['cons_contribution_margin_pct'] = cons_cm_usd / cons_gmv
+
+    kpi_cons = (pack.get('headline_kpis') or {}).get('cons') or {}
+
+    def _kpi_latest(key):
+        entry = kpi_cons.get(key) or {}
+        val = entry.get('latest')
+        return val if isinstance(val, (int, float)) else None
+
+    ltv_cac = _kpi_latest('LTV / CAC')
+    churn = _kpi_latest('Churn Rate (1 - Retention Rate)')
+    aov = _kpi_latest('AOV')
+    active_cust = _kpi_latest('# Annual active customers')
+    active_merch = _kpi_latest('# Annual active merchants')
+    pbg = _kpi_latest('Profit Bearing GMV')
+
+    if ltv_cac is not None:
+        metrics['cons_ltv_cac'] = ltv_cac
+    if churn is not None:
+        metrics['cons_churn_rate'] = churn
+    if aov is not None:
+        metrics['cons_aov'] = aov
+    if active_cust is not None:
+        metrics['cons_active_customers'] = active_cust
+    if active_merch is not None:
+        metrics['cons_active_merchants'] = active_merch
+
+    # Derived: BNPL+ / Profit Bearing GMV share of total GMV
+    if pbg is not None and cons_gmv and cons_gmv != 0:
+        metrics['cons_profit_bearing_gmv_pct'] = pbg / cons_gmv
+
+    # Budget variance (YTD %)
+    bvs = pack.get('budget_variance_summary') or {}
+    budget_map = {
+        'Total GMV': 'ytd_gmv_vs_budget_pct',
+        'Total Operating Revenue': 'ytd_revenue_vs_budget_pct',
+        'Contribution Margin / NTM': 'ytd_contribution_margin_vs_budget_pct',
+        'EBTDA': 'ytd_ebtda_vs_budget_pct',
+        'Total Operating Expenses': 'ytd_opex_vs_budget_pct',
+    }
+    for metric_label, key in budget_map.items():
+        entry = bvs.get(metric_label) or {}
+        v = entry.get('ytd_variance_pct')
+        if isinstance(v, (int, float)):
+            metrics[key] = v
+
+    return metrics
+
+
+def _load_thesis_summary(company='Tamara'):
+    """Load current thesis summary for the frontend (read-only, no drift check).
+
+    Returns a small dict {conviction_score, status, pillars: [...]} or None.
+    Soft-imports ThesisTracker to avoid circular import risk.
+    """
+    try:
+        from core.mind.thesis import ThesisTracker
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        tracker = ThesisTracker(company=company, product='all')
+        thesis = tracker.load()
+        if not thesis:
+            return None
+        return {
+            'title': thesis.title,
+            'status': thesis.status,
+            'conviction_score': thesis.conviction_score,
+            'pillars': [
+                {
+                    'id': p.id,
+                    'claim': p.claim,
+                    'status': p.status,
+                    'metric_key': p.metric_key,
+                    'threshold': p.threshold,
+                    'direction': p.direction,
+                    'last_value': p.last_value,
+                    'last_checked': p.last_checked,
+                    'conviction_score': p.conviction_score,
+                }
+                for p in thesis.pillars
+            ],
+            'weakening_count': len(thesis.weakening_pillars),
+            'broken_count': len(thesis.broken_pillars),
+        }
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _enrich_quarterly_pack(data, snapshot_filepath):

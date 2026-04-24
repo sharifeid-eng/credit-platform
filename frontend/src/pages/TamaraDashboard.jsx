@@ -111,6 +111,256 @@ function DataTable({ headers, rows, highlightLast = false }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// QUARTERLY FINANCIALS PANEL (reads data.quarterly_pack + data.thesis_summary)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const QP_FS_ORDER = [
+  { key: 'Total GMV',                       label: 'GMV',                   unit: 'money' },
+  { key: 'Total Operating Revenue',         label: 'Revenue',               unit: 'money' },
+  { key: 'Contribution Margin',             label: 'Contribution Margin',   unit: 'money' },
+  { key: 'EBTDA',                           label: 'EBTDA',                 unit: 'money' },
+  { key: 'Statutory Net Profit / (Loss)',   label: 'Statutory Net Profit',  unit: 'money' },
+  { key: 'Net AR',                          label: 'Net AR',                unit: 'money' },
+  { key: 'Cash',                            label: 'Cash',                  unit: 'money' },
+  { key: 'Debt',                            label: 'Debt',                  unit: 'money' },
+  { key: 'ECL Provisions',                  label: 'ECL Provisions',        unit: 'money' },
+  { key: 'Coverage Ratio',                  label: 'Coverage Ratio',        unit: 'pct' },
+]
+
+const QP_KPI_ORDER = [
+  { key: '# Annual active customers',       label: 'Active Customers',      unit: 'count' },
+  { key: '# Annual active merchants',       label: 'Active Merchants',      unit: 'count' },
+  { key: '# of orders',                     label: '# of Orders',           unit: 'count' },
+  { key: 'AOV',                             label: 'AOV',                   unit: 'money' },
+  { key: 'LTV / CAC',                       label: 'LTV / CAC',             unit: 'x' },
+  { key: 'CAC per customer',                label: 'CAC / Customer',        unit: 'money' },
+  { key: 'Profit Bearing GMV',              label: 'Profit Bearing GMV',    unit: 'money' },
+  { key: 'Churn Rate (1 - Retention Rate)', label: 'Churn Rate',            unit: 'pct' },
+]
+
+const BUDGET_ORDER = [
+  'Total GMV',
+  'Total Operating Revenue',
+  'Total Transaction Costs',
+  'Contribution Margin / NTM',
+  'Total Operating Expenses',
+  'EBTDA',
+]
+
+function QuarterlyHeadlineCard({ label, delta, unit }) {
+  const latest = delta?.latest
+  const pctDelta = delta?.pct_delta
+  const deltaColor = pctDelta == null ? MUTED : (pctDelta >= 0 ? TEAL : RED)
+  const deltaSign = pctDelta >= 0 ? '+' : ''
+
+  let valueStr = '--'
+  if (latest != null) {
+    if (unit === 'pct') valueStr = `${(latest * 100).toFixed(2)}%`
+    else if (unit === 'x') valueStr = `${latest.toFixed(1)}x`
+    else if (unit === 'count') valueStr = fmt(latest)
+    else valueStr = fmt(latest, '$')
+  }
+
+  return (
+    <div style={{
+      background: DEEP, border: `1px solid ${BORDER}`, borderRadius: 8,
+      padding: '12px 14px', minHeight: 84,
+    }}>
+      <div style={{ color: MUTED, fontSize: 11, letterSpacing: 0.3, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ color: '#E8EAF0', fontSize: 22, fontWeight: 600, marginTop: 6, fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>
+        {valueStr}
+      </div>
+      <div style={{ fontSize: 11, marginTop: 4, display: 'flex', gap: 10, alignItems: 'baseline' }}>
+        <span style={{ color: deltaColor, fontWeight: 500 }}>
+          {pctDelta != null ? `${deltaSign}${(pctDelta * 100).toFixed(2)}%` : '--'}
+        </span>
+        <span style={{ color: MUTED }}>MoM · {delta?.latest_month || ''}</span>
+      </div>
+    </div>
+  )
+}
+
+function BudgetVarianceRow({ metric, entry }) {
+  const toMoney = (v) => (v == null ? '--' : fmt(v, '$'))
+  const toPct = (v) => (v == null ? '--' : `${(v * 100).toFixed(1)}%`)
+  const varColor = (v) => (v == null ? '#E8EAF0' : (v >= 0 ? TEAL : RED))
+  return (
+    <tr>
+      <td style={{ padding: '6px 10px', color: '#E8EAF0', borderBottom: `1px solid ${BORDER}` }}>{metric}</td>
+      <td style={{ padding: '6px 10px', color: '#E8EAF0', borderBottom: `1px solid ${BORDER}`, textAlign: 'right', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>{toMoney(entry.actual_ytd)}</td>
+      <td style={{ padding: '6px 10px', color: MUTED, borderBottom: `1px solid ${BORDER}`, textAlign: 'right', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>{toMoney(entry.budget_ytd)}</td>
+      <td style={{ padding: '6px 10px', color: varColor(entry.ytd_variance_pct), borderBottom: `1px solid ${BORDER}`, textAlign: 'right', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontWeight: 500 }}>{toPct(entry.ytd_variance_pct)}</td>
+      <td style={{ padding: '6px 10px', color: varColor(entry.monthly_variance_pct), borderBottom: `1px solid ${BORDER}`, textAlign: 'right', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>{toPct(entry.monthly_variance_pct)}</td>
+    </tr>
+  )
+}
+
+function ThesisSummaryCard({ thesis }) {
+  if (!thesis || !thesis.pillars?.length) return null
+  const statusColor = {
+    strengthening: TEAL, holding: '#E8EAF0', weakening: GOLD, broken: RED, retired: MUTED,
+  }
+  const statusIcon = {
+    strengthening: '↑', holding: '=', weakening: '!', broken: '✕', retired: '·',
+  }
+  return (
+    <ChartPanel
+      title="Investment Thesis"
+      subtitle={`${thesis.title} — Conviction ${thesis.conviction_score}/100`}
+      style={{ marginBottom: 16 }}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10 }}>
+        {thesis.pillars.map(p => (
+          <div key={p.id} style={{ background: DEEP, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '10px 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ color: statusColor[p.status] || '#E8EAF0', fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                {statusIcon[p.status] || '?'} {p.status}
+              </span>
+              <span style={{ color: MUTED, fontSize: 10 }}>conv {p.conviction_score}</span>
+            </div>
+            <div style={{ color: '#E8EAF0', fontSize: 12, lineHeight: 1.4 }}>{p.claim}</div>
+            <div style={{ color: MUTED, fontSize: 10, marginTop: 4, fontFamily: 'var(--font-mono, monospace)' }}>
+              {p.metric_key}{' '}
+              <span style={{ color: '#8494A7' }}>
+                {p.direction === 'above' ? '≥' : p.direction === 'below' ? '≤' : '~'}{' '}
+                {typeof p.threshold === 'number' ? p.threshold : '?'}
+              </span>
+              {p.last_value != null && (
+                <span style={{ color: '#E8EAF0' }}>
+                  {' '}· last={typeof p.last_value === 'number' ? p.last_value.toLocaleString(undefined, { maximumFractionDigits: 4 }) : p.last_value}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </ChartPanel>
+  )
+}
+
+function QuarterlyFinancialsPanel({ pack, thesis }) {
+  const [country, setCountry] = useState('cons')
+
+  if (!pack) {
+    return (
+      <div>
+        <ThesisSummaryCard thesis={thesis} />
+        <ChartPanel title="Quarterly Financials">
+          <div style={{ color: MUTED, padding: 20 }}>
+            No investor pack ingested yet. Run
+            <code style={{ margin: '0 6px', padding: '2px 6px', background: DEEP, borderRadius: 4, fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
+              python scripts/ingest_tamara_investor_pack.py --file &lt;pack.xlsx&gt;
+            </code>
+            to populate this tab.
+          </div>
+        </ChartPanel>
+      </div>
+    )
+  }
+
+  const headlineFs = pack.headline_fs?.[country] || {}
+  const headlineKpis = pack.headline_kpis?.[country] || {}
+  const budgetSummary = pack.budget_variance_summary || {}
+  const packDate = pack.pack_date || ''
+  const dataRange = pack.data_range || {}
+  const sourceFile = pack.source_file || ''
+
+  const COUNTRY_OPTIONS = [
+    { key: 'cons', label: 'Consolidated' },
+    { key: 'ksa',  label: 'KSA' },
+    { key: 'uae',  label: 'UAE' },
+  ]
+
+  return (
+    <div>
+      <ThesisSummaryCard thesis={thesis} />
+
+      {/* Header banner */}
+      <div style={{
+        background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 8,
+        padding: '14px 16px', marginBottom: 16,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+      }}>
+        <div>
+          <div style={{ color: GOLD, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>Quarterly Investor Pack</div>
+          <div style={{ color: '#E8EAF0', fontSize: 14, marginTop: 2 }}>
+            Pack date: <b>{packDate}</b> · Data range: {dataRange.first_month} → {dataRange.last_month} ({dataRange.month_count} months)
+          </div>
+          <div style={{ color: MUTED, fontSize: 11, marginTop: 2 }}>Source: {sourceFile}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {COUNTRY_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setCountry(opt.key)}
+              style={{
+                padding: '6px 14px', fontSize: 12, fontWeight: 500,
+                background: country === opt.key ? GOLD : 'transparent',
+                color: country === opt.key ? DEEP : '#E8EAF0',
+                border: `1px solid ${country === opt.key ? GOLD : BORDER}`,
+                borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >{opt.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <ChartPanel title="Financial Headlines — Latest vs Prior Month" subtitle={`${COUNTRY_OPTIONS.find(o => o.key === country)?.label}, Mgmt / Cohort view`}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {QP_FS_ORDER.map(item => (
+            <QuarterlyHeadlineCard key={item.key} label={item.label} delta={headlineFs[item.key]} unit={item.unit} />
+          ))}
+        </div>
+      </ChartPanel>
+
+      <ChartPanel title="Unit Economics & Growth KPIs" style={{ marginTop: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {QP_KPI_ORDER.map(item => (
+            <QuarterlyHeadlineCard key={item.key} label={item.label} delta={headlineKpis[item.key]} unit={item.unit} />
+          ))}
+        </div>
+      </ChartPanel>
+
+      {country === 'cons' && Object.keys(budgetSummary).length > 0 && (
+        <ChartPanel
+          title="Performance vs. Budget (YTD)"
+          subtitle="Actual vs Base Case — consolidated, Q1-2026"
+          style={{ marginTop: 16 }}
+        >
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {['Metric', 'Actual YTD', 'Budget YTD', 'YTD Variance', 'Monthly Variance'].map((h, i) => (
+                    <th key={i} style={{
+                      padding: '8px 10px', textAlign: i === 0 ? 'left' : 'right', color: GOLD,
+                      borderBottom: `1px solid ${BORDER}`, fontWeight: 600, whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BUDGET_ORDER.map(metric => {
+                  const entry = budgetSummary[metric]
+                  if (!entry) return null
+                  return <BudgetVarianceRow key={metric} metric={metric} entry={entry} />
+                })}
+              </tbody>
+            </table>
+          </div>
+        </ChartPanel>
+      )}
+
+      <div style={{ marginTop: 14, padding: '10px 14px', background: DEEP, border: `1px solid ${BORDER}`, borderRadius: 6, fontSize: 11, color: MUTED }}>
+        Values drawn from <code style={{ color: '#E8EAF0', fontFamily: 'var(--font-mono, monospace)' }}>{sourceFile}</code>.
+        Budget variance compares Q1-2026 actuals against the investor pack's Base Case forecast.
+        MoM deltas compare the latest month to the prior month. Amounts shown are as reported (USD for cons, local for country-specific views where available).
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function TamaraDashboard() {
@@ -150,6 +400,7 @@ export default function TamaraDashboard() {
   const companyOverview = data.company_overview || {}
   const dataNotes = data.data_notes || []
   const investorReporting = data.investor_reporting || {}
+  const quarterlyPack = data.quarterly_pack || null
 
   // ── RENDER SECTION ───────────────────────────────────────────────────────
   const renderSection = () => {
@@ -779,6 +1030,10 @@ export default function TamaraDashboard() {
           </div>
         )
       }
+
+      // ── QUARTERLY FINANCIALS (investor pack data + thesis summary) ──────
+      case 'quarterly-financials':
+        return <QuarterlyFinancialsPanel pack={quarterlyPack} thesis={data.thesis_summary || null} />
 
       // ── BUSINESS PLAN ────────────────────────────────────────────────────
       case 'business-plan': {
