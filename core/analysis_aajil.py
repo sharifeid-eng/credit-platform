@@ -376,7 +376,20 @@ def _parse_dpd_cohorts(raw_df, mult=1):
 
 
 def compute_aajil_collections(df, mult=1, ref_date=None, aux=None):
-    """Collection rates per vintage and monthly collections."""
+    """Collection rates per vintage and monthly collections.
+
+    P1-4 audit: overall_rate = total_realised / total_originated blends
+    collections from Realised (closed) deals with principal from deals in
+    all three statuses (Realised + Accrued + Written Off). Analytically
+    ambiguous. Now reports three populations:
+      - overall_rate           — total_originated (all statuses). Confidence B —
+                                 blends resolved + active + WO; pre-existing field.
+      - overall_rate_realised  — completed_only (Status='Realised'). Confidence A.
+                                 "What fraction of underwritten capital on CLOSED
+                                 deals came back?" — the realised collection rate.
+      - overall_rate_clean     — clean_book (Realised + Accrued). Confidence B —
+                                 strips written-off denominator. Framework §17.
+    """
     df_c = df.copy()
     df_c['vintage'] = df_c[C_INVOICE_DATE].dt.to_period('M')
 
@@ -404,11 +417,36 @@ def compute_aajil_collections(df, mult=1, ref_date=None, aux=None):
     total_collected = df[C_REALISED].fillna(0).sum() * mult
     overall_rate = total_collected / total_originated if total_originated > 0 else 0
 
+    # P1-4 dual — completed_only (Realised) and clean_book views
+    realised_mask = df[C_STATUS] == 'Realised'
+    realised_originated = df.loc[realised_mask, C_PRINCIPAL].sum() * mult
+    realised_collected  = df.loc[realised_mask, C_REALISED].fillna(0).sum() * mult
+    overall_rate_realised = realised_collected / realised_originated if realised_originated > 0 else 0
+
+    clean_mask = df[C_STATUS].isin(['Realised', 'Accrued'])
+    clean_originated = df.loc[clean_mask, C_PRINCIPAL].sum() * mult
+    clean_collected  = df.loc[clean_mask, C_REALISED].fillna(0).sum() * mult
+    overall_rate_clean = clean_collected / clean_originated if clean_originated > 0 else 0
+
     return {
         'monthly': monthly,
         'total_originated': _safe(total_originated),
         'total_collected': _safe(total_collected),
         'overall_rate': _safe(overall_rate),
+        # P1-4 additions
+        'overall_rate_realised': _safe(overall_rate_realised),
+        'realised_originated':   _safe(realised_originated),
+        'realised_collected':    _safe(realised_collected),
+        'overall_rate_clean':    _safe(overall_rate_clean),
+        'clean_originated':      _safe(clean_originated),
+        'clean_collected':       _safe(clean_collected),
+        # Population + confidence declarations per Framework §17
+        'overall_rate_population':          'total_originated',
+        'overall_rate_realised_population': 'completed_only',
+        'overall_rate_clean_population':    'clean_book',
+        'overall_rate_confidence':          'B',  # blends WO
+        'overall_rate_realised_confidence': 'A',
+        'overall_rate_clean_confidence':    'B',  # judgement filter (strips WO)
         'available': True,
     }
 

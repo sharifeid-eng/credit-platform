@@ -533,6 +533,86 @@ class TestP02AajilYieldDual:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# P1-3 — SILQ collections realised dual
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP13SILQCollectionsDual:
+    def _make_tape(self):
+        return TestP06SILQCovenantsCarryConfidence()._make_tape()
+
+    def test_repayment_rate_realised_field_present(self):
+        from core.analysis_silq import compute_silq_collections
+        df, today = self._make_tape()
+        res = compute_silq_collections(df, mult=1)
+        assert 'repayment_rate_realised' in res
+        assert 'repayment_rate_realised_population' in res
+        assert res['repayment_rate_realised_population'] == 'completed_only'
+        assert res['repayment_rate_realised_confidence'] == 'A'
+
+    def test_repayment_rate_realised_uses_closed_only(self):
+        """Tape has 10 Closed deals with 100% repayment, 55 active with partial.
+        Realised rate should be 100% (110K repaid / 110K collectable per deal)."""
+        from core.analysis_silq import compute_silq_collections
+        df, today = self._make_tape()
+        res = compute_silq_collections(df, mult=1)
+        assert res['repayment_rate_realised'] == pytest.approx(100.0, abs=0.1)
+        # Blended rate is lower (includes active partially-paid deals)
+        assert res['repayment_rate'] < res['repayment_rate_realised']
+
+    def test_by_product_includes_rate_realised(self):
+        from core.analysis_silq import compute_silq_collections
+        df, today = self._make_tape()
+        res = compute_silq_collections(df, mult=1)
+        for prod in res['by_product']:
+            assert 'rate_realised' in prod
+            assert 'realised_count' in prod
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P1-4 — Aajil collections populations dual
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP14AajilCollectionsDual:
+    def test_overall_rate_realised_reports_completed_only(self):
+        """5 realised @ 143,750/100K = 143.75%, 3 accrued @ 50K/100K=50%,
+        1 WO @ 0/100K. Realised rate = 143.75%."""
+        from core.analysis_aajil import compute_aajil_collections
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_collections(df, mult=1)
+        assert res['overall_rate_realised'] == pytest.approx(1.4375, rel=0.01)
+
+    def test_overall_rate_clean_strips_writeoffs(self):
+        """Clean = realised + accrued. 5×143,750 + 3×50,000 / 8×100,000 = 81.72%."""
+        from core.analysis_aajil import compute_aajil_collections
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_collections(df, mult=1)
+        expected = (5 * 143_750 + 3 * 50_000) / (8 * 100_000)
+        assert res['overall_rate_clean'] == pytest.approx(expected, rel=0.01)
+
+    def test_overall_rate_blended_lower_than_clean_and_realised(self):
+        """Blended (includes WO) < clean < realised (on this synthetic tape).
+        Actually depends on WO behavior — just assert blended < clean."""
+        from core.analysis_aajil import compute_aajil_collections
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_collections(df, mult=1)
+        # WO deal has 0 collected and 100K originated → drags blended down.
+        assert res['overall_rate'] < res['overall_rate_clean']
+
+    def test_population_and_confidence_fields_present(self):
+        from core.analysis_aajil import compute_aajil_collections
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_collections(df, mult=1)
+        assert res['overall_rate_population']          == 'total_originated'
+        assert res['overall_rate_realised_population'] == 'completed_only'
+        assert res['overall_rate_clean_population']    == 'clean_book'
+        assert res['overall_rate_realised_confidence'] == 'A'
+        assert res['overall_rate_confidence']          == 'B'
+        assert res['overall_rate_clean_confidence']    == 'B'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # P1-1 — separate_portfolio() primitives for SILQ + Aajil
 # ══════════════════════════════════════════════════════════════════════════════
 

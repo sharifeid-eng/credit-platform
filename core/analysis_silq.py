@@ -233,12 +233,32 @@ def compute_silq_delinquency(df, mult=1, ref_date=None):
 # ── 3. Collections ───────────────────────────────────────────────────────────
 
 def compute_silq_collections(df, mult=1):
+    """Collection metrics with P1-3 completed-only dual.
+
+    Returns two parallel views per Framework §17:
+      - repayment_rate            — total_originated (all statuses). Confidence A.
+      - repayment_rate_realised   — completed_only (Status='Closed'). Confidence A.
+    Same dual for by_product. This mirrors compute_silq_yield's
+    (margin_rate, realised_margin_rate) pattern — P1-3 audit finding.
+    Backwards compat: all existing fields preserved verbatim.
+    """
     total_repaid = df[C_REPAID].sum() * mult if C_REPAID in df.columns else 0
     total_collectable = df[C_COLLECTABLE].sum() * mult if C_COLLECTABLE in df.columns else 0
     total_margin = df[C_MARGIN].sum() * mult if C_MARGIN in df.columns else 0
     total_principal = df[C_PRINCIPAL].sum() * mult if C_PRINCIPAL in df.columns else 0
 
     repayment_rate = (total_repaid / total_collectable * 100) if total_collectable else 0
+
+    # P1-3 dual — completed_only (Closed) view
+    if C_STATUS in df.columns:
+        closed = df[df[C_STATUS] == 'Closed']
+        closed_repaid      = closed[C_REPAID].sum() * mult      if C_REPAID      in closed.columns else 0
+        closed_collectable = closed[C_COLLECTABLE].sum() * mult if C_COLLECTABLE in closed.columns else 0
+        closed_count       = int(len(closed))
+    else:
+        closed_repaid = closed_collectable = 0
+        closed_count = 0
+    repayment_rate_realised = (closed_repaid / closed_collectable * 100) if closed_collectable else 0
 
     # Monthly collection trend
     monthly = []
@@ -260,18 +280,30 @@ def compute_silq_collections(df, mult=1):
                 'deals': int(len(grp)),
             })
 
-    # By product type
+    # By product type — dual rates
     by_product = []
     if C_PRODUCT in df.columns:
         for prod, grp in df.groupby(C_PRODUCT):
             p_repaid = grp[C_REPAID].sum() * mult if C_REPAID in grp.columns else 0
             p_collectable = grp[C_COLLECTABLE].sum() * mult if C_COLLECTABLE in grp.columns else 0
+            # Completed-only sub-aggregate
+            if C_STATUS in grp.columns:
+                p_closed = grp[grp[C_STATUS] == 'Closed']
+                p_closed_repaid      = p_closed[C_REPAID].sum() * mult      if C_REPAID      in p_closed.columns else 0
+                p_closed_collectable = p_closed[C_COLLECTABLE].sum() * mult if C_COLLECTABLE in p_closed.columns else 0
+                p_closed_count       = int(len(p_closed))
+            else:
+                p_closed_repaid = p_closed_collectable = 0
+                p_closed_count = 0
             by_product.append({
                 'product': str(prod),
                 'repaid': _safe(p_repaid),
                 'collectable': _safe(p_collectable),
                 'rate': _safe(p_repaid / p_collectable * 100 if p_collectable else 0),
                 'deals': int(len(grp)),
+                # P1-3 additions
+                'rate_realised': _safe(p_closed_repaid / p_closed_collectable * 100 if p_closed_collectable else 0),
+                'realised_count': p_closed_count,
             })
 
     return {
@@ -280,6 +312,15 @@ def compute_silq_collections(df, mult=1):
         'total_margin': _safe(total_margin),
         'total_principal': _safe(total_principal),
         'repayment_rate': _safe(repayment_rate),
+        # P1-3 additions (dual view)
+        'repayment_rate_realised':    _safe(repayment_rate_realised),
+        'closed_repaid':              _safe(closed_repaid),
+        'closed_collectable':         _safe(closed_collectable),
+        'closed_count':               closed_count,
+        'repayment_rate_population':          'total_originated',
+        'repayment_rate_realised_population': 'completed_only',
+        'repayment_rate_confidence':          'A',
+        'repayment_rate_realised_confidence': 'A',
         'monthly': monthly,
         'by_product': by_product,
     }
