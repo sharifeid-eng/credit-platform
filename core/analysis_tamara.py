@@ -7,8 +7,17 @@ and enriches with presentation-layer fields (colors, statuses, derived KPIs).
 Usage:
     from core.analysis_tamara import parse_tamara_data
     data = parse_tamara_data('/path/to/2026-04-09_tamara_ksa.json')
+
+Quarterly investor pack
+-----------------------
+If ``data/Tamara/investor_packs/YYYY-MM-DD_investor_pack.json`` files exist
+(produced by ``scripts/ingest_tamara_investor_pack.py``) the latest one is
+loaded and merged into the output under the ``quarterly_pack`` key. Enrichment
+computes MoM deltas and budget-variance summaries from that data. Empty /
+missing ``investor_packs`` folder is a no-op — nothing breaks.
 """
 
+import glob
 import json
 import os
 
@@ -32,6 +41,12 @@ def parse_tamara_data(filepath):
     _enrich_deloitte_summary(data)
     _enrich_hsbc_summary(data)
     _enrich_repayment_behavior(data)
+    _enrich_quarterly_pack(data, filepath)
+
+    # Thesis summary (Layer 5 — read-only; drift mutation happens on pack ingest, not here)
+    thesis_summary = _load_thesis_summary(company='Tamara')
+    if thesis_summary:
+        data['thesis_summary'] = thesis_summary
 
     return data
 
@@ -397,6 +412,370 @@ def _enrich_repayment_behavior(data):
                 point[f'{safe_tier}_delinquent'] = round(delinquent * 100, 2)
             quarterly_series.append(point)
         data['behavior_summary']['quarterly'] = quarterly_series
+
+
+# ── Quarterly Investor Pack enrichment ────────────────────────────────────────
+# Loads the most recent file from ``data/Tamara/investor_packs/`` (produced by
+# ``scripts/ingest_tamara_investor_pack.py``) and merges a curated slice into
+# the dashboard payload under the ``quarterly_pack`` key. This is the recurring
+# data channel for Tamara going forward — replaces the one-off prepare_tamara_data
+# ETL as the primary refresh loop. Missing folder/files are a no-op.
+
+# Line items to pull for headline MoM/QoQ comparison. Sourced from the
+# consolidated FS sheet (2.1 FS Cons) — these are the canonical names after
+# the Excel template is parsed. Labels match the investor pack verbatim.
+_FS_HEADLINE_ITEMS = [
+    'Total GMV',
+    'Total Operating Revenue',
+    'Contribution Margin',
+    'EBTDA',
+    'Profit before Tax',
+    'Statutory Net Profit / (Loss)',
+    'Statutory Contribution Margin',
+    'Cash',
+    'Net AR',
+    'Total Assets',
+    'Debt',
+    'ECL Provisions',
+    'Coverage Ratio',
+]
+
+_KPI_HEADLINE_ITEMS = [
+    '# Annual active customers',
+    '# Monthly active customers',
+    '# Annual active merchants',
+    '# of orders',
+    'Approval rates (Updated logic)',
+    'Conversion Rates',
+    'AOV',
+    'LTV / CAC',
+    'CAC per customer',
+    'Churn Rate (1 - Retention Rate)',
+    'Profit Bearing GMV',
+    'FTE Headcount',
+]
+
+
+def _find_latest_investor_pack(snapshot_filepath):
+    """
+    Locate the newest investor pack JSON under ``data/Tamara/investor_packs/``.
+
+    ``snapshot_filepath`` is e.g. ``/path/to/data/Tamara/KSA/2026-04-09_tamara_ksa.json`` —
+    we walk up to the ``Tamara/`` root and look for an ``investor_packs/`` sibling.
+
+    Returns the absolute path of the latest pack JSON (by filename-date sort)
+    or None if the folder is missing/empty.
+    """
+    try:
+        ksa_or_uae_dir = os.path.dirname(os.path.abspath(snapshot_filepath))
+        tamara_root = os.path.dirname(ksa_or_uae_dir)
+        packs_dir = os.path.join(tamara_root, 'investor_packs')
+        if not os.path.isdir(packs_dir):
+            return None
+        candidates = sorted(glob.glob(os.path.join(packs_dir, '*_investor_pack.json')))
+        return candidates[-1] if candidates else None
+    except Exception:  # noqa: BLE001
+        # Any path mishap = no pack. Don't break the main pipeline.
+        return None
+
+
+def _mom_delta(series_dict, months_sorted):
+    """
+    Compute month-over-month delta from a {YYYY-MM: value} dict.
+
+    Returns {latest, latest_month, prior, prior_month, abs_delta, pct_delta}.
+    - Empty months list → all fields None (no data).
+    - Single-month series → latest populated, prior/deltas None.
+    - 2+ months → full comparison; non-numeric or None values leave deltas None.
+
+    Callers decide how to render missing values.
+    """
+    out = {
+        'latest': None,
+        'latest_month': None,
+        'prior': None,
+        'prior_month': None,
+        'abs_delta': None,
+        'pct_delta': None,
+    }
+    if not months_sorted:
+        return out
+
+    latest_key = months_sorted[-1]
+    out['latest'] = series_dict.get(latest_key)
+    out['latest_month'] = latest_key
+
+    if len(months_sorted) < 2:
+        return out
+
+    prior_key = months_sorted[-2]
+    out['prior'] = series_dict.get(prior_key)
+    out['prior_month'] = prior_key
+
+    latest_val = out['latest']
+    prior_val = out['prior']
+    # Treat bool as non-numeric here — otherwise True + 1 = 2 etc. (avoid subtle bugs)
+    latest_is_num = isinstance(latest_val, (int, float)) and not isinstance(latest_val, bool)
+    prior_is_num = isinstance(prior_val, (int, float)) and not isinstance(prior_val, bool)
+    if latest_is_num and prior_is_num:
+        out['abs_delta'] = round(latest_val - prior_val, 6)
+        if prior_val != 0:
+            out['pct_delta'] = round((latest_val - prior_val) / prior_val, 6)
+
+    return out
+
+
+def _build_headline_deltas(section_block, wanted_labels):
+    """
+    Given a parsed pack section (KPIs or FS for one country) and a list of
+    desired labels, build {label: mom_delta_dict} for each that has a series.
+    """
+    out = {}
+    months = section_block.get('months') or []
+    line_items = section_block.get('line_items') or {}
+    for label in wanted_labels:
+        series = line_items.get(label)
+        # Skip section-header stubs ({'_section_header': True}) and empty rows
+        if not isinstance(series, dict) or series.get('_section_header'):
+            continue
+        out[label] = _mom_delta(series, months)
+    return out
+
+
+def _summarise_budget_variance(budget_block):
+    """
+    Extract the YTD vs budget variance summary from the Performance v Budget block.
+
+    The sheet stores Actuals, Budget (Base Case), and Variance sections side by
+    side. We pluck the YTD totals + % and a monthly variance for each core metric.
+    """
+    items = budget_block.get('line_items') or {}
+    summary = {}
+    # Metrics the analyst cares about most
+    for metric in ('Total GMV', 'Total Operating Revenue', 'Total Transaction Costs',
+                   'Contribution Margin / NTM', 'Total Operating Expenses', 'EBTDA'):
+        row = items.get(metric)
+        if not isinstance(row, dict):
+            continue
+
+        # Each row is {section_label: {col_key: value}}. Flatten and extract.
+        entry = {}
+        for section, col_map in row.items():
+            if not isinstance(col_map, dict):
+                continue
+            section_lower = (section or '').lower()
+            ytd = col_map.get('YTD')
+            if 'actual' in section_lower and ytd is not None:
+                entry['actual_ytd'] = ytd
+            elif 'budget' in section_lower and 'variance' not in section_lower and ytd is not None:
+                entry['budget_ytd'] = ytd
+            # The variance section exposes "Monthly Budget Variance (%)", "YTD Budget Variance (%)"
+            # as literal column KEYS (not datetime). Pluck those.
+            for key, val in col_map.items():
+                if not isinstance(key, str):
+                    continue
+                key_lower = key.lower()
+                if 'ytd' in key_lower and 'variance' in key_lower and '%' in key_lower:
+                    entry['ytd_variance_pct'] = val
+                elif 'monthly' in key_lower and 'variance' in key_lower and '%' in key_lower:
+                    entry['monthly_variance_pct'] = val
+
+        if entry:
+            summary[metric] = entry
+    return summary
+
+
+def build_thesis_metrics_from_pack(pack):
+    """Flatten a parsed investor pack into a {metric_key: float} dict suitable
+    for ``ThesisTracker.check_drift(...)``.
+
+    Returns a dict with keys like:
+      - cons_statutory_net_profit, cons_ebtda_latest, cons_contribution_margin_pct
+      - cons_ecl_coverage_pct, cons_ltv_cac, cons_churn_rate
+      - ytd_gmv_vs_budget_pct, ytd_revenue_vs_budget_pct, ytd_ebtda_vs_budget_pct
+      - cons_profit_bearing_gmv_pct   (derived: Profit Bearing GMV / Total GMV)
+
+    Values are raw floats (not percentages of 100). Missing data → key omitted.
+    Callers pass the enriched ``quarterly_pack`` dict (not the raw JSON on disk).
+    """
+    metrics = {}
+    if not pack:
+        return metrics
+
+    fs_cons = (pack.get('headline_fs') or {}).get('cons') or {}
+
+    def _latest(key):
+        entry = fs_cons.get(key) or {}
+        val = entry.get('latest')
+        return val if isinstance(val, (int, float)) else None
+
+    cons_gmv = _latest('Total GMV')
+    cons_revenue = _latest('Total Operating Revenue')
+    cons_cm_usd = _latest('Contribution Margin')
+    cons_ebtda = _latest('EBTDA')
+    cons_net_profit = _latest('Statutory Net Profit / (Loss)')
+    cons_cash = _latest('Cash')
+    cons_net_ar = _latest('Net AR')
+    cons_debt = _latest('Debt')
+    cons_coverage = _latest('Coverage Ratio')
+
+    if cons_gmv is not None:
+        metrics['cons_gmv_latest'] = cons_gmv
+    if cons_revenue is not None:
+        metrics['cons_revenue_latest'] = cons_revenue
+    if cons_cm_usd is not None:
+        metrics['cons_contribution_margin_usd'] = cons_cm_usd
+    if cons_ebtda is not None:
+        metrics['cons_ebtda_latest'] = cons_ebtda
+    if cons_net_profit is not None:
+        metrics['cons_statutory_net_profit'] = cons_net_profit
+    if cons_cash is not None:
+        metrics['cons_cash'] = cons_cash
+    if cons_net_ar is not None:
+        metrics['cons_net_ar'] = cons_net_ar
+    if cons_debt is not None:
+        metrics['cons_debt'] = cons_debt
+    if cons_coverage is not None:
+        metrics['cons_ecl_coverage_pct'] = cons_coverage
+
+    # Derived: Contribution Margin % of GMV
+    if cons_cm_usd is not None and cons_gmv and cons_gmv != 0:
+        metrics['cons_contribution_margin_pct'] = cons_cm_usd / cons_gmv
+
+    kpi_cons = (pack.get('headline_kpis') or {}).get('cons') or {}
+
+    def _kpi_latest(key):
+        entry = kpi_cons.get(key) or {}
+        val = entry.get('latest')
+        return val if isinstance(val, (int, float)) else None
+
+    ltv_cac = _kpi_latest('LTV / CAC')
+    churn = _kpi_latest('Churn Rate (1 - Retention Rate)')
+    aov = _kpi_latest('AOV')
+    active_cust = _kpi_latest('# Annual active customers')
+    active_merch = _kpi_latest('# Annual active merchants')
+    pbg = _kpi_latest('Profit Bearing GMV')
+
+    if ltv_cac is not None:
+        metrics['cons_ltv_cac'] = ltv_cac
+    if churn is not None:
+        metrics['cons_churn_rate'] = churn
+    if aov is not None:
+        metrics['cons_aov'] = aov
+    if active_cust is not None:
+        metrics['cons_active_customers'] = active_cust
+    if active_merch is not None:
+        metrics['cons_active_merchants'] = active_merch
+
+    # Derived: BNPL+ / Profit Bearing GMV share of total GMV
+    if pbg is not None and cons_gmv and cons_gmv != 0:
+        metrics['cons_profit_bearing_gmv_pct'] = pbg / cons_gmv
+
+    # Budget variance (YTD %)
+    bvs = pack.get('budget_variance_summary') or {}
+    budget_map = {
+        'Total GMV': 'ytd_gmv_vs_budget_pct',
+        'Total Operating Revenue': 'ytd_revenue_vs_budget_pct',
+        'Contribution Margin / NTM': 'ytd_contribution_margin_vs_budget_pct',
+        'EBTDA': 'ytd_ebtda_vs_budget_pct',
+        'Total Operating Expenses': 'ytd_opex_vs_budget_pct',
+    }
+    for metric_label, key in budget_map.items():
+        entry = bvs.get(metric_label) or {}
+        v = entry.get('ytd_variance_pct')
+        if isinstance(v, (int, float)):
+            metrics[key] = v
+
+    return metrics
+
+
+def _load_thesis_summary(company='Tamara'):
+    """Load current thesis summary for the frontend (read-only, no drift check).
+
+    Returns a small dict {conviction_score, status, pillars: [...]} or None.
+    Soft-imports ThesisTracker to avoid circular import risk.
+    """
+    try:
+        from core.mind.thesis import ThesisTracker
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        tracker = ThesisTracker(company=company, product='all')
+        thesis = tracker.load()
+        if not thesis:
+            return None
+        return {
+            'title': thesis.title,
+            'status': thesis.status,
+            'conviction_score': thesis.conviction_score,
+            'pillars': [
+                {
+                    'id': p.id,
+                    'claim': p.claim,
+                    'status': p.status,
+                    'metric_key': p.metric_key,
+                    'threshold': p.threshold,
+                    'direction': p.direction,
+                    'last_value': p.last_value,
+                    'last_checked': p.last_checked,
+                    'conviction_score': p.conviction_score,
+                }
+                for p in thesis.pillars
+            ],
+            'weakening_count': len(thesis.weakening_pillars),
+            'broken_count': len(thesis.broken_pillars),
+        }
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _enrich_quarterly_pack(data, snapshot_filepath):
+    """
+    Merge the latest investor pack (if present) into ``data['quarterly_pack']``.
+    Safe no-op when no pack is found.
+    """
+    pack_path = _find_latest_investor_pack(snapshot_filepath)
+    if not pack_path:
+        return
+
+    try:
+        with open(pack_path, 'r', encoding='utf-8') as f:
+            pack = json.load(f)
+    except Exception as exc:  # noqa: BLE001
+        # Malformed pack → don't break the dashboard, surface a note instead.
+        data['quarterly_pack'] = {
+            '_error': f'Failed to load investor pack: {exc}',
+            'source_file': os.path.basename(pack_path),
+        }
+        return
+
+    meta = pack.get('meta', {}) or {}
+    kpis = pack.get('kpis', {}) or {}
+    financials = pack.get('financials', {}) or {}
+    budget_block = pack.get('budget_variance', {}) or {}
+
+    enriched = {
+        'meta': meta,
+        'source_file': os.path.basename(pack_path),
+        'pack_date': meta.get('pack_date'),
+        'data_range': meta.get('data_range', {}),
+        'headline_fs': {
+            country: _build_headline_deltas(financials.get(country, {}), _FS_HEADLINE_ITEMS)
+            for country in ('cons', 'ksa', 'uae')
+        },
+        'headline_kpis': {
+            country: _build_headline_deltas(kpis.get(country, {}), _KPI_HEADLINE_ITEMS)
+            for country in ('cons', 'ksa', 'uae')
+        },
+        'budget_variance_summary': _summarise_budget_variance(budget_block),
+        # Pass through raw section data for future tabs (frontend can slice as needed)
+        'raw': {
+            'kpis': kpis,
+            'financials': financials,
+            'budget_variance': budget_block,
+        },
+    }
+    data['quarterly_pack'] = enriched
 
 
 def get_tamara_summary_kpis(data):

@@ -66,6 +66,42 @@ Missing any one of the four creates analyst confusion: framework doc says lifeti
 
 ---
 
+## 2026-04-24 — Shared checkout + concurrent agent sessions: commit aggressively or lose work
+
+**Problem:** The Tamara investor-pack branch session ran concurrently with a `§17 meta-audit` session on the same physical checkout. Three distinct symptoms hit during one session:
+
+1. **Silent branch-switching.** Mid-session I was quietly moved between `claude/tamara-investor-pack-ingest` → `claude/followup-8-gap-sweep` → `main`. `git branch --show-current` returned the expected branch at some points and a different branch at others, with no local command on my end triggering the switch. Likely mechanism: parallel agent's worktree-linked HEAD updates propagate across the shared `.git/` directory in unpredictable ways under concurrent sessions.
+2. **Uncommitted edits wiped.** After a silent branch-switch, uncommitted E/F frontend + backend edits vanished from the working tree. They had never been committed; a `git checkout` or `git stash` from the other session silently cleared them. Recovered only because I'd written non-code artifacts (untracked `.py` files, JSON) that git's branch-switch couldn't discard.
+3. **A commit landed on the wrong branch.** Earlier in the same session, a commit I made while nominally on `claude/tamara-investor-pack-ingest` actually recorded on `claude/followup-8-gap-sweep` — I caught it only because `git log` afterwards showed the commit in the wrong branch. Had to manually `git branch -f` the correct branch and reset the wrong one.
+
+**Rule:** On a shared checkout with concurrent agent sessions, treat uncommitted work as ephemeral. Commit feature-sized work within ~5 minutes of the last edit — anything longer is exposed to silent loss. Re-check `git branch --show-current` and `git log --oneline -1` immediately before and after every commit to catch silent branch switches before they compound into wrong-branch commits.
+
+**How to apply:**
+- After writing code: commit immediately if tests pass on the unit you just added, even if the overall feature isn't complete. Multiple small commits are cheaper than one lost large commit.
+- Before every `git commit`: run `git branch --show-current` and confirm it matches expectations. After every commit: run `git log --oneline -1` and confirm the commit landed.
+- When resuming from a gap (tool call, background job, etc.): verify branch + commit state before continuing. Don't assume the branch you left is the branch you're on.
+- Untracked files (new .py, .json) survive branch switches. Tracked-file edits (modifications to committed files) do NOT — they follow the branch-switch rules. If the other session's branch is on the same file, you lose.
+- If you MUST work unstaged for a while: `git stash push -u -m "<descriptive>"` periodically is cheap insurance. Untracked artifacts (`-u`) included.
+
+Observed evidence this session: 3 commits landed on correct branch, 1 commit required a manual `git branch -f + reset --hard HEAD~1` to move, ~5 minutes of E/F edits wiped once (recovered from stash), ambient commits `d688519` + `074f430` appeared on branches without my action. See tasks/todo.md "Branch pollution incident" for the forensic trace.
+
+---
+
+## 2026-04-24 — Long-running Python process won't pick up in-flight module edits — plan reclassify as a post-edit step
+
+**Problem:** During the Tamara investor-pack branch I ran `dataroom_ctl ingest --company Tamara` as a background job (137 files, ~12 min). While it was running I edited `core/dataroom/classifier.py` to add a new `QUARTERLY_INVESTOR_PACK` rule. Intuitively I expected the running process to pick it up. It didn't — Python's module cache locked the import at process start, so the 4 investor-pack files got classified with the OLD rules (INVESTOR_REPORT / COMPANY_PRESENTATION). Ingest reported success with no indication classification was stale.
+
+Had to write a post-ingest reclassify script that re-read the registry, re-ran `classify_document()` against each entry, and wrote back. The first pass over-classified 15 unrelated files to `other` because I only passed `filepath` + `sheet_names` and skipped the text-preview phase — 15 files that had relied on `_TEXT_RULES` for their original classification lost it. Had to reconstruct the original types from my own tool-call transcript to revert. Two mistakes compounding.
+
+**Rule:** Treat classifier / enrichment / schema edits landed during a long-running background process as invalidating that process's output. Either (a) wait for the process to finish BEFORE editing, or (b) after editing, explicitly replay classification on affected entries. Never assume hot-reload.
+
+**How to apply:**
+- When editing classifier rules: `ps` the background process first. If a relevant process is running, wait for it OR plan to re-run against finished output.
+- When re-classifying from a script: replay the FULL classification pipeline — filepath + text_preview (from chunks) + sheet_names. Don't shortcut by passing only subsets, or you'll collapse text-only-classified files to OTHER.
+- If the platform already ships a `dataroom_ctl classify --only-other` mode, that only catches new-OTHER classifications. For "re-apply a new rule that supersedes an existing type," we need a new tool (`dataroom_ctl reclassify --force` or similar) that replays the full classification pipeline on every registry entry. ✅ **RESOLVED session 37 (`56dce47`)** — `dataroom_ctl classify` now passes `sheet_names` for xlsx + `--dry-run` preview + help text recommends `--use-llm` for rule-edit recovery.
+
+---
+
 ## 2026-04-24 — Build walkers before eyeballing audits; per-company audits miss cross-company propagation
 
 **Problem:** Session 34 Framework §17 audit enumerated gaps company-by-company from tables I built by hand. After the sweep I declared it complete with 0 regressions and 0 new gaps surfaced. The user then pointed at the SILQ Credit Quality dashboard and asked: "why is PAR only shown vs Active Outstanding here, when the same dual was added for Aajil?" The SILQ PAR dual-view miss was visible to a human staring at the UI but invisible to my manual per-company walkthrough.
