@@ -3,6 +3,69 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-24 — Walkers that only audit top-level fields miss per-row disclosures in nested lists
+
+**Problem:** Session 35 built the §17 meta-audit walker and declared "every rate field now has population + confidence." It found 45 top-level scalar gaps and fixed them. But the walker only inspected the root of each compute function's return dict — it never recursed into list-valued fields like `vintages[]`, `by_product[]`, `transition_matrix[]`. Session 36's gap-review extension added a per-row walker and surfaced **19 additional gaps in 7 compute functions** — per-row rates (e.g., `vintages[].gross_default_rate`, `by_product[].margin_rate`) that inherit no discipline from their parent dict.
+
+The walker's coverage boundary was implicit; it read "covers all rate fields" but actually meant "covers all *top-level scalar* rate fields." Anyone reading the test name (`TestMetaAuditRateFieldDisclosure`) could reasonably assume full coverage and skip building a sibling test for list-row fields.
+
+**Rule:** When writing a walker that audits a contract across compute functions, enumerate every shape the return value can take and either cover each shape or explicitly document which shapes are out-of-scope. The shapes to consider:
+1. Top-level scalar fields (simple) — covered by session 35.
+2. Top-level list-of-dict fields (cohorts[], vintages[], buckets[]) — per-row rates need disclosure via dict-level inheritance, list-level `<list>_population`/`<list>_confidence`, or row-level.
+3. Nested dict fields (e.g., compute_concentration's `hhi: {...}` sub-dict) — sub-dict's own keys may need independent declarations.
+4. Top-level list returns (like compute_cohorts returning bare list) — harder to attach disclosure; usually need an exemption documented in the walker test file.
+
+**How to apply:**
+- When authoring a walker in the future, start by mapping every return-value shape in the scope before writing heuristics. Write sibling `Test*` classes for each shape.
+- Accept §17 disclosure through 5 modes explicitly (dict-level, per-field, family-level, list-level, documented exemption) so compute-function authors have flexibility in how they declare.
+- When a new walker surfaces gaps, fix them in the SAME commit that lands the walker — keeps the first "walker pass" clean, so the next session isn't debugging which gaps pre-existed vs which the walker just introduced.
+- Reference: session 36 `f7ef580` walker extension surfaced Klaim `compute_facility_pd.transition_matrix[].to_default_pct`, SILQ `compute_silq_tenure.distribution[].margin_rate`, Aajil `compute_aajil_yield.by_deal_type[].avg_total_yield` — none of these would have been flagged by the session-35 scalar walker, and none were user-visible until a memo asked for a recovery_rate across vintages.
+
+---
+
+## 2026-04-24 — Multiple concurrent Claude Code sessions on the same repo share working tree state during branch switches
+
+**Problem:** Session 36 ran alongside another session (Tamara investor pack ingest) on the same `credit-platform` main repo. When I switched branches, the other session's uncommitted files (with modified working tree) followed me across `git checkout`. `git add -A` would have committed THEIR work to MY branch. I caught it by running `git status --short` before staging, but it's the kind of cross-contamination that can silently ship another session's WIP into production.
+
+Symptoms to watch for:
+- `git status` shows files you don't remember modifying.
+- Branch reflog shows `checkout: moving from <my-branch> to <other-session-branch>` entries you didn't initiate.
+- `git worktree list` shows more worktrees than you created.
+
+**Rule:** Never use `git add -A` or `git add .` when other Claude Code sessions are running on the same repo. Always `git add <specific-files>` with file paths you authored this session.
+
+**How to apply:**
+- Before EVERY `git add`, run `git status --short` and mentally diff: "which files did I touch, which are from another session?" If any file's modification is a surprise, stop — investigate with `git log --follow <file>` and `git blame` before staging.
+- Before EVERY `git commit`, re-check `git branch --show-current` — another session may have switched you to their branch during a stash pop or similar.
+- Use `git stash push -u -m "desc" -- <file-list>` with explicit file list when you need to temporarily isolate one session's work before branch-switching to another.
+- When you spot another session's uncommitted work in your working tree: stash it (`git stash push -u -m "other session WIP" -- <their-files>`), do your branch-switch + commit + push, then switch back to their branch and `git stash pop` to restore. Don't leave them with an empty working tree.
+- If you accidentally commit another session's file to your branch, cherry-pick or reset immediately — don't let it reach `origin/main`. The commit history is much harder to untangle after a push.
+
+Reference: session 36 caught `core/analysis_tamara.py`, `core/dataroom/classifier.py`, `data/Tamara/investor_packs/`, `frontend/src/pages/research/DocumentLibrary.jsx`, and `scripts/ingest_tamara_investor_pack.py` in the mixed working tree. Cleaned up via selective `git add` + stash push/pop dance across 3 branch switches.
+
+---
+
+## 2026-04-24 — Doctrine revision that lands in the framework doc must propagate to the UI + compute declarations in the same landing
+
+**Problem:** Session 35 codified §17 "Dual-view pattern taxonomy" arguing Pattern 1 (active-primary) applied to lending products (SILQ) and Pattern 2 (parallel-equal) applied to factoring (Klaim). Session 35's SILQ PAR fix implemented Pattern 1 exactly. Session 36 user review said: "flip it; lifetime-primary across all companies." The fix required touching 4 surfaces to stay coherent:
+
+1. `core/ANALYSIS_FRAMEWORK.md` §17 — revise the taxonomy subsection.
+2. `core/FRAMEWORK_INDEX.md` Core Principles — add new "Credit Quality PAR: lifetime-primary universal" principle, renumber subsequent.
+3. `frontend/src/pages/TapeAnalytics.jsx` (SILQ + Klaim sections) + `AajilDashboard.jsx` — flip value/subtitle/section-label in every Credit Quality KPI card.
+4. Backend compute functions — already emitted both populations; no change needed (the doctrine revision changed which one the UI selects as headline, not which the backend computes).
+
+Missing any one of the four creates analyst confusion: framework doc says lifetime but UI shows active, or UI flipped but framework still argues for Pattern 1. Session 36 landed all four in one cohesive series (`7d68c9c` docs, `4a43f02` UI) within the same PR branch.
+
+**Rule:** Framework doctrine changes are inseparable from their implementation surfaces. If you can't update all of (doctrine doc + index + UI + compute contracts) in the same landing, don't ship the doctrine change alone — the drift between doc and implementation is worse than the old doctrine being suboptimal.
+
+**How to apply:**
+- When proposing a framework revision, enumerate the surfaces it will touch BEFORE committing to the revision. If the implementation churn is too large, negotiate scope with the user first — maybe a narrower revision is enough.
+- When implementing a framework revision, land the doctrine + implementation in the same branch (not separate PRs); reviewers should see the whole story in one diff.
+- Framework §17 has two "kinds" of subsections: normative doctrine (principle propagation, pattern taxonomy) and descriptive taxonomy (the 7 populations). Normative changes need implementation churn; descriptive additions usually don't.
+- Reference: session 36 `7d68c9c` + `4a43f02` landed the §17 pattern-taxonomy revision AND the UI flip in sequential commits on the same branch, merged as a single coherent unit to main.
+
+---
+
 ## 2026-04-24 — Build walkers before eyeballing audits; per-company audits miss cross-company propagation
 
 **Problem:** Session 34 Framework §17 audit enumerated gaps company-by-company from tables I built by hand. After the sweep I declared it complete with 0 regressions and 0 new gaps surfaced. The user then pointed at the SILQ Credit Quality dashboard and asked: "why is PAR only shown vs Active Outstanding here, when the same dual was added for Aajil?" The SILQ PAR dual-view miss was visible to a human staring at the UI but invisible to my manual per-company walkthrough.

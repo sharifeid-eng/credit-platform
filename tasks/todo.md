@@ -80,6 +80,47 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ---
 
+## Completed — 2026-04-24 (Session 36: 8-gap follow-up sweep after §17 audit waves)
+
+After sessions 34 + 35 landed the initial §17 population-discipline audit + walker-driven fixes, a gap review identified 7 smaller items that weren't covered plus 1 user-directed change (flip Credit Quality PAR primacy across all companies to lifetime-primary).
+
+**Work landed in 4 commits on `main`:**
+
+1. **`f7ef580`** — `feat(§17)`: per-row meta-audit walker + analytics_bridge disclosure transmission.
+   - Gap 2: new `TestMetaAuditPerRowRateFieldDisclosure` in `tests/test_population_discipline_meta_audit.py`. Session 35's scalar walker caught 45 top-level gaps but left per-row rates inside dict-nested lists (`vintages[]`, `by_product[]`, `transition_matrix[]`) unaudited. New walker recurses into list values and accepts 5 disclosure modes (dict-level inheritance, list-level `<list>_population`, row-level, per-field, exempt). First run surfaced **19 additional gaps in 7 compute functions** — all fixed in-file: Klaim `compute_facility_pd` (transition_matrix/distribution/facility_pd), Klaim `compute_cohort_loss_waterfall.vintages`, SILQ `compute_silq_concentration.utilization/product_mix/size_distribution`, SILQ `compute_silq_tenure.distribution`, SILQ `compute_silq_borrowing_base.by_product`, SILQ `compute_silq_cohort_loss_waterfall.vintages`, Aajil `compute_aajil_underwriting.vintages`, Aajil `compute_aajil_yield.by_deal_type/by_vintage`.
+   - Gap 1: new `_get_disclosure(dct, field_name)` + `_attach_disclosure(metric, dct, field_name)` helpers in `core/memo/analytics_bridge.py`. Only `_build_covenants` was transmitting confidence/population/method to memo prompts; 5 non-covenant builders (portfolio_analytics, credit_quality, concentration, stress) now also flow §17 disclosure end-to-end. Family-level inheritance handles `par_*`, `hhi_*`, `collection_rate_*`. Smoke-tested live: Klaim `PAR 30 [conf=A, pop=active_outstanding]`, `Recovery Rate [conf=A, pop=loss_subset]`, `Net Loss Rate [conf=A, pop=total_originated]`.
+   - 743 tests pass, 0 warnings, 0 regressions.
+
+2. **`7d68c9c`** — `docs(§17)`: lifetime-primary universal PAR rule + taxonomy revision + Ejari exemption.
+   - Gap 8a: revised §17 "Dual-view pattern taxonomy" in `core/ANALYSIS_FRAMEWORK.md`. Session 35 codified Pattern 1 (active-primary for lending) as asset-class-dependent. Session 36 override: **for PAR family specifically, lifetime is ALWAYS primary across all asset classes**. Rationale: cross-company IC audience consistency (analysts compare Klaim's lifetime PAR to SILQ's to Aajil's without mentally re-normalising); lifetime captures what active hides (active resets to zero as bad deals close out); active remains available for covenant compliance unchanged.
+   - Gap 5: `core/FRAMEWORK_INDEX.md` — added §17 cross-references (principle propagation + pattern taxonomy) to the section-index table + new Core Principle #8 "Credit Quality PAR: lifetime-primary universal", renumbered subsequent principles.
+   - Gap 6: `core/analysis_ejari.py::parse_ejari_workbook` docstring — added explicit §17 exemption note. Ejari workbook is pre-computed by upstream; parser reshapes aggregated data, never touches individual loans. Upstream's denominator choice is documented in Notes sheet + `methodology_ejari.py`. Meta-audit walker correctly omits Ejari functions for this reason.
+
+3. **`4a43f02`** — `feat(ui)`: flip Credit Quality PAR to lifetime-primary + ConfidenceBadge on charts.
+   - Gap 8: `TapeAnalytics.jsx` SILQ Credit Quality section flipped — headline now `summary.lifetime_par30 ?? summary.par30`, subtitle `{at-risk amount} · Active: X.XX%`, section sublabel "vs Total Disbursed (lifetime)" (was "vs Active Outstanding"). Color thresholds retuned for lifetime scale (PAR30+ red at 10%, was 20% on active-denom). Klaim section already lifetime-primary; enhanced subtitle to match SILQ pattern with "Active: X.XX%" surface. `AajilDashboard.jsx` Delinquency tab: PAR 1+/2+/3+ Inst cards flipped to `par_N_inst_lifetime` primary with `par_N_inst` shown as "Active: X.X%" subtitle + confidence/population declarations. Ejari (single-PAR upstream — §17-exempt) and Tamara (DPD distribution, no dual cards) correctly skipped.
+   - Gap 3: `ConfidenceBadge` wired via ChartPanel's `action` slot into 8 chart panels: `CohortTable`, `ConcentrationChart` (Group + Provider), `CohortLossWaterfallChart`, `ReturnsAnalysisChart` (IRR by Vintage + Monthly Returns), `UnderwritingDriftChart`, `silq/DelinquencyChart` (DPD + Monthly Trend). §17 discipline now visible on charts, not just overview KPIs.
+   - Vite build green (1110 modules transformed). API data-flow confirmed live: SILQ lifetime_par30=1.45% vs active 7.81%, Klaim 2.37% vs 36.59%, Aajil par_1_inst_lifetime=0.07 vs active 0.33.
+
+4. **`074f430`** — `docs(session 36)`: `tasks/next-session-kickoff.md` refreshed (Gap 7).
+   - Archived the stale session-27 external.web_search smoke prompt as a `<details>` block. Replaced main body with session-36 carry-over: visual verification handoff checklist (what the user should click through + verify per company), status summary of all 8 gaps, and pattern guidance for future audits (the two §17 walkers now in CI + 4 disclosure-fix patterns).
+
+**Plus Gap 4 (visual/browser verification) — compile + data-flow verified, browser click-through deferred to user:**
+- `npm run build` green; 1110 modules transformed without error.
+- Backend + frontend dev servers both launched successfully; API endpoints returned expected dual-PAR + §17 fields for SILQ / Klaim / Aajil.
+- Per CLAUDE.md guidance ("Type checking and test suites verify code correctness, not feature correctness — if you can't test the UI, say so explicitly rather than claiming success"), full browser click-through handed off to user via the session-36 kickoff.
+
+**Design tension flagged + resolved:**
+- The Gap 8 user directive to flip PAR to lifetime-primary conflicted with session-35's codification of Pattern 1 (active-primary for lending products). Option (a) was chosen — revise §17 taxonomy to make lifetime-primary universal for PAR family rather than keeping asset-class-dependent Pattern 1. This preserves consistency between framework doctrine and UI without requiring UI-override caveats.
+
+**Final state:**
+- **main** at `074f430` with all 4 session-36 commits landed + pushed.
+- 743 pytest pass (same baseline; no regressions, no warning drift).
+- Two §17 walkers now running in CI (scalar + per-row); future rate-field additions without §17 disclosure fail the build.
+- §17 disclosure flows to memo prompts on 5 non-covenant section builders (not just covenants).
+- Credit Quality PAR renders lifetime-primary uniformly on Klaim / SILQ / Aajil dashboards.
+
+---
+
 ## Completed — 2026-04-24 (Session 35: Systematic §17 meta-audit + walker-driven gap fixes)
 
 User flagged that SILQ PAR hadn't gotten the dual-view treatment despite Aajil getting it (session 34 P1-5). User asked for "thorough rethink" — find all gaps systematically, implement principled fixes, add enforcement.
