@@ -342,7 +342,23 @@ def cmd_classify(args: argparse.Namespace) -> int:
         preview = chunks[0].get("text", "")[:2000] if chunks else ""
         filepath = doc.get("filepath", doc.get("filename", ""))
 
-        new_type = classify_document(filepath, preview).value
+        # For Excel files, read sheet names so the _SHEET_RULES phase fires.
+        # Skipping this was the silent bug that caused 15 files to regress
+        # to 'other' during the 2026-04-24 reclassify session — the re-classify
+        # script only passed filepath + sheet_names, NOT text_preview, and
+        # every file that relied on _TEXT_RULES for its original type lost
+        # classification. See tasks/lessons.md 2026-04-24 entry.
+        sheet_names = None
+        if filepath.lower().endswith(('.xlsx', '.xlsm', '.xls')):
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+                sheet_names = list(wb.sheetnames)
+                wb.close()
+            except Exception:  # noqa: BLE001
+                pass  # Classifier will rely on filepath + text_preview only
+
+        new_type = classify_document(filepath, preview, sheet_names).value
 
         # LLM fallback if still 'other'
         if new_type == "other" and llm_fn:
@@ -366,12 +382,13 @@ def cmd_classify(args: argparse.Namespace) -> int:
 
         after[new_type] = after.get(new_type, 0) + 1
 
-    if updated:
+    if updated and not args.dry_run:
         engine._save_registry(args.company, product, registry)
 
+    suffix = " (dry-run — no writes)" if args.dry_run else ""
     _err(
         f"[{args.company}] Classified {len(registry)} docs: "
-        f"{updated} updated, {llm_calls} LLM calls"
+        f"{updated} updated, {llm_calls} LLM calls{suffix}"
     )
     _emit({
         "command": "classify",
@@ -432,13 +449,25 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--yes", action="store_true", help="Skip confirmation")
     sp.set_defaults(func=cmd_wipe)
 
-    sp = sub.add_parser("classify", help="Re-classify docs without re-parsing")
+    sp = sub.add_parser(
+        "classify",
+        help="Re-classify docs without re-parsing",
+        description=(
+            "Re-run classify_document() on every registry entry using filepath + "
+            "text_preview + sheet_names. Typical flow after editing classifier.py: "
+            "`classify --company X --use-llm --dry-run` (preview) then drop "
+            "--dry-run. --use-llm preserves LLM-fallback classifications that "
+            "rule-only re-classify would otherwise regress to 'other'."
+        ),
+    )
     sp.add_argument("--company", required=True)
     sp.add_argument("--product")
     sp.add_argument("--only-other", action="store_true",
                     help="Only re-classify docs currently marked 'other' or 'unknown'")
     sp.add_argument("--use-llm", action="store_true",
-                    help="Enable Haiku LLM fallback (requires classifier_llm)")
+                    help="Enable Haiku LLM fallback (requires classifier_llm). Recommended when re-classifying after a rule edit — preserves originally-LLM-classified docs.")
+    sp.add_argument("--dry-run", action="store_true",
+                    help="Preview changes without writing registry. Prints before/after counts + updated count.")
     sp.set_defaults(func=cmd_classify)
 
     return p

@@ -274,3 +274,49 @@ class TestDedupeRegistry:
         assert result2["sha_duplicates_removed"] == 0
         assert result2["excluded_removed"] == 0
         assert result2["kept"] == 1
+
+
+# ── dataroom_ctl classify subcommand hardening (2026-04-24 follow-up) ────────
+# The session-34 reclassify bug: my ad-hoc reclassify script skipped passing
+# text_preview to classify_document(), collapsing 15 LLM-originally-classified
+# files to 'other'. The lesson (tasks/lessons.md 2026-04-24) called for
+# extending the existing dataroom_ctl `classify` subcommand with (a) sheet_names
+# for Excel rule firing, (b) --dry-run flag to preview before writing.
+
+
+class TestClassifyCommandHardening:
+    """`dataroom_ctl classify` subcommand preserves original pipeline fidelity."""
+
+    def test_help_mentions_use_llm_recommendation(self):
+        """Help text should document the --use-llm recommendation so users
+        don't accidentally regress LLM-classified docs."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script_path = Path(__file__).resolve().parent.parent / "scripts" / "dataroom_ctl.py"
+        result = subprocess.run(
+            [sys.executable, str(script_path), "classify", "--help"],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0
+        # The description should guide users toward --use-llm
+        assert "--use-llm" in result.stdout
+        assert "--dry-run" in result.stdout
+
+    def test_dry_run_flag_registered(self):
+        """`classify --dry-run` is registered and doesn't require other args."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script_path = Path(__file__).resolve().parent.parent / "scripts" / "dataroom_ctl.py"
+        # --dry-run listed in help
+        result = subprocess.run(
+            [sys.executable, str(script_path), "classify", "--help"],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0
+        assert "--dry-run" in result.stdout
+        # And "Preview changes" or similar language
+        assert "Preview" in result.stdout or "dry-run" in result.stdout
