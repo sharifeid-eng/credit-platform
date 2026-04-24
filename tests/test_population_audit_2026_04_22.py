@@ -667,6 +667,99 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# P1-2 — Aajil Operational WAL + stale classifier
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP12AajilStaleClassifier:
+    def test_loss_written_off_flagged(self):
+        from core.analysis_aajil import classify_aajil_deal_stale
+        df = _make_aajil_yield_tape()  # 1 WO
+        stale = classify_aajil_deal_stale(df)
+        assert int(stale['loss_written_off'].sum()) == 1
+
+    def test_any_stale_union(self):
+        from core.analysis_aajil import classify_aajil_deal_stale
+        df = _make_aajil_yield_tape()
+        stale = classify_aajil_deal_stale(df)
+        # any_stale >= each individual mask's count
+        assert int(stale['any_stale'].sum()) >= int(stale['loss_written_off'].sum())
+
+    def test_stuck_active_detected_when_all_installs_overdue(self):
+        from core.analysis_aajil import classify_aajil_deal_stale
+        df = _make_aajil_delinquency_tape()
+        # Rows C0, C1 have Overdue=3 Total=3 Status=Accrued → stuck_active.
+        stale = classify_aajil_deal_stale(df)
+        assert int(stale['stuck_active'].sum()) == 2
+
+    def test_overdue_dominant_when_sale_overdue_exceeds_half_principal(self):
+        from core.analysis_aajil import classify_aajil_deal_stale
+        df = _make_aajil_delinquency_tape()
+        # Rows C0/C1 have Sale_Overdue=143,750 > 50K (50% of 100K principal).
+        # Rows B0-B4 have Sale_Overdue=40K vs 50K threshold — NOT dominant.
+        stale = classify_aajil_deal_stale(df)
+        assert int(stale['overdue_dominant_active'].sum()) == 2
+
+
+class TestP12AajilOperationalWAL:
+    def test_returns_available_with_mixed_book(self):
+        from core.analysis_aajil import compute_aajil_operational_wal
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_operational_wal(df, mult=1,
+                                            ref_date=pd.Timestamp('2026-04-15'))
+        assert res['available'] is True
+
+    def test_operational_wal_confidence_is_B_when_expected_end_present(self):
+        from core.analysis_aajil import compute_aajil_operational_wal
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_operational_wal(df, mult=1,
+                                            ref_date=pd.Timestamp('2026-04-15'))
+        assert res['confidence'] == 'B'
+        assert res['method']     == 'direct'
+
+    def test_operational_wal_population_is_clean_book(self):
+        from core.analysis_aajil import compute_aajil_operational_wal
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_operational_wal(df, mult=1,
+                                            ref_date=pd.Timestamp('2026-04-15'))
+        assert res['population'] == 'clean_book'
+
+    def test_stale_excluded_from_operational_wal(self):
+        """Operational WAL is clean-book only — stale PV count > 0 means
+        at least one deal was correctly excluded."""
+        from core.analysis_aajil import compute_aajil_operational_wal
+        df = _make_aajil_delinquency_tape()
+        res = compute_aajil_operational_wal(df, mult=1,
+                                            ref_date=pd.Timestamp('2026-04-15'))
+        assert res['stale_deal_count'] > 0
+        assert res['clean_deal_count'] + res['stale_deal_count'] == res['total_deal_count']
+
+    def test_realized_wal_available_for_completed_clean(self):
+        from core.analysis_aajil import compute_aajil_operational_wal
+        df = _make_aajil_delinquency_tape()
+        # Tape has 3 realised deals with close_age = 180d (exp - invoice).
+        # realized_wal should be present and non-null.
+        res = compute_aajil_operational_wal(df, mult=1,
+                                            ref_date=pd.Timestamp('2026-04-15'))
+        assert res['realized_wal_days'] is not None
+        assert res['realized_wal_days'] > 0
+        # The realised rows on the synthetic tape all close at 180d.
+        assert res['realized_wal_days'] == pytest.approx(180.0, abs=0.5)
+
+    def test_degraded_confidence_C_when_expected_completion_missing(self):
+        from core.analysis_aajil import compute_aajil_operational_wal
+        df = _make_aajil_delinquency_tape()
+        df = df.drop(columns=['Expected Completion'])
+        res = compute_aajil_operational_wal(df, mult=1,
+                                            ref_date=pd.Timestamp('2026-04-15'))
+        assert res['available'] is True
+        assert res['confidence'] == 'C'
+        assert res['method'] == 'elapsed_only'
+        # Realized WAL unavailable in degraded mode
+        assert res['realized_wal_days'] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # P0-3 + P1-5 — Aajil PAR relabel + lifetime dual
 # ══════════════════════════════════════════════════════════════════════════════
 

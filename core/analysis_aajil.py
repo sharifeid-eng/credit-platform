@@ -831,6 +831,162 @@ def compute_aajil_customer_segments(df, mult=1, ref_date=None, aux=None):
     }
 
 
+def classify_aajil_deal_stale(df, ref_date=None, ineligibility_age_days=180):
+    """Flag Aajil deals that don't represent live portfolio behaviour.
+
+    Three rules (a deal may satisfy more than one):
+      - loss_written_off:       Status == 'Written Off' (direct tape flag).
+      - stuck_active:           Status == 'Accrued' AND Overdue No of
+                                Installments ≥ Total No. of Installments
+                                (economically matured with zero payments).
+      - overdue_dominant_active:Status == 'Accrued' AND Sale Overdue >= 50%
+                                of Principal Amount (overdue exposure
+                                dominates the deal's underwritten face).
+
+    `ineligibility_age_days` defaults to 180 (Aajil max tenor 6 months per
+    investor deck) — Aajil deals older than max tenor that are still active
+    should have resolved one way or another.
+
+    Session 30 Klaim pattern generalised to Aajil per Framework §17.
+
+    Returns a dict of Series (all indexed identically to df):
+      - loss_written_off, stuck_active, overdue_dominant_active: per-rule masks
+      - any_stale:                                               OR-reduction
+      - ineligibility_age_days:                                  int threshold
+    """
+    idx = df.index
+
+    def _col(name, default=0.0):
+        if name in df.columns:
+            return pd.to_numeric(df[name], errors='coerce').fillna(default)
+        return pd.Series(default, index=idx, dtype=float)
+
+    principal    = _col(C_PRINCIPAL)
+    sale_overdue = _col(C_SALE_OVERDUE)
+    overdue_inst = _col(C_OVERDUE_INST)
+    total_inst   = _col(C_INSTALLMENTS, default=1.0)
+    status       = df[C_STATUS] if C_STATUS in df.columns else pd.Series('', index=idx)
+
+    has_principal = principal > 0
+
+    loss_written_off         = status == 'Written Off'
+    stuck_active             = (status == 'Accrued') & (overdue_inst >= total_inst) & has_principal
+    overdue_dominant_active  = (status == 'Accrued') & (sale_overdue > 0.5 * principal) & has_principal
+    any_stale                = loss_written_off | stuck_active | overdue_dominant_active
+
+    return {
+        'loss_written_off':        loss_written_off,
+        'stuck_active':            stuck_active,
+        'overdue_dominant_active': overdue_dominant_active,
+        'any_stale':               any_stale,
+        'ineligibility_age_days':  int(ineligibility_age_days),
+    }
+
+
+def compute_aajil_operational_wal(df, mult=1, ref_date=None):
+    """PV-weighted age across the clean (non-stale) Aajil book.
+
+    Framework §17 Tape-side learning metric. Excludes the zombie tail
+    surfaced by classify_aajil_deal_stale. Confidence B — the stale filter
+    introduces judgement (three classification thresholds).
+
+    Per-deal age:
+      - Active (Accrued):  elapsed = ref_date - Invoice Date
+      - Completed (Realised / Written Off):
+            If Expected Completion <= ref_date → close_age = Expected Completion - Invoice Date.
+            Else                                → close_age = elapsed (degraded).
+      Clipped to [0, elapsed].
+
+    Returns:
+      {
+        'available': bool,
+        'operational_wal_days': float,     # clean-book PV-weighted (Confidence B)
+        'realized_wal_days':    float|None, # completed-clean only (Confidence B)
+        'method': str,                      # 'direct' (Expected Completion present) or
+                                            # 'elapsed_only' (all ages are elapsed — C)
+        'confidence': 'B' | 'C',
+        'clean_pv':         float,
+        'clean_deal_count': int,
+        'total_pv':         float,
+        'total_deal_count': int,
+        'stale_pv':         float,
+        'stale_deal_count': int,
+        'ineligibility_age_days': int,
+      }
+    """
+    if (C_INVOICE_DATE not in df.columns
+            or C_PRINCIPAL not in df.columns
+            or C_STATUS not in df.columns):
+        return {'available': False}
+    if len(df) == 0:
+        return {'available': False}
+
+    pv = pd.to_numeric(df[C_PRINCIPAL], errors='coerce').fillna(0) * mult
+    total_pv = float(pv.sum())
+    if total_pv <= 0:
+        return {'available': False}
+
+    ref = pd.Timestamp.now().normalize() if ref_date is None else pd.to_datetime(ref_date)
+    df_work = df.copy()
+    df_work[C_INVOICE_DATE] = pd.to_datetime(df_work[C_INVOICE_DATE], errors='coerce')
+
+    elapsed = (ref - df_work[C_INVOICE_DATE]).dt.days.clip(lower=0).fillna(0).astype(float)
+
+    # Build per-deal age
+    age = elapsed.copy()
+    has_exp = C_EXPECTED_END in df_work.columns
+    method = 'direct' if has_exp else 'elapsed_only'
+
+    if has_exp:
+        exp = pd.to_datetime(df_work[C_EXPECTED_END], errors='coerce')
+        # For completed-or-WO deals: close_age = exp - invoice, clipped when exp<=ref
+        completed_mask = df_work[C_STATUS].isin(['Realised', 'Written Off'])
+        close_age_days = (exp - df_work[C_INVOICE_DATE]).dt.days
+        closed_by_now = exp.notna() & (exp <= ref) & completed_mask
+        age = age.where(~closed_by_now, close_age_days.clip(lower=0))
+
+    # Clip to [0, elapsed] — age can never exceed physical elapsed time
+    age = np.minimum(np.maximum(age, 0), elapsed)
+
+    stale = classify_aajil_deal_stale(df_work, ref_date=ref_date)
+    clean_mask = ~stale['any_stale']
+
+    clean_pv  = pv[clean_mask]
+    clean_age = age[clean_mask]
+    if clean_pv.sum() <= 0:
+        return {'available': False}
+
+    operational_wal = float(np.average(clean_age, weights=clean_pv))
+
+    # Realized WAL — completed + clean only
+    realized_wal = None
+    completed = df_work[C_STATUS] == 'Realised'
+    completed_clean = completed & clean_mask
+    if completed_clean.any() and has_exp:
+        rpv  = pv[completed_clean]
+        rage = age[completed_clean]
+        if rpv.sum() > 0:
+            realized_wal = round(float(np.average(rage, weights=rpv)), 2)
+
+    confidence = 'B' if has_exp else 'C'
+
+    return {
+        'available':            True,
+        'operational_wal_days': round(operational_wal, 2),
+        'realized_wal_days':    realized_wal,
+        'method':               method,
+        'confidence':           confidence,
+        'population':           'clean_book',
+        'clean_pv':             round(float(clean_pv.sum()), 2),
+        'clean_deal_count':     int(clean_mask.sum()),
+        'total_pv':             round(total_pv, 2),
+        'total_deal_count':     int(len(df_work)),
+        'stale_pv':             round(float(pv[stale['any_stale']].sum()), 2),
+        'stale_deal_count':     int(stale['any_stale'].sum()),
+        'ineligibility_age_days': stale['ineligibility_age_days'],
+    }
+
+
 def separate_aajil_portfolio(df):
     """Split an Aajil DataFrame into (clean_df, loss_df) per Framework §17.
 
