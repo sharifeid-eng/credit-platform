@@ -3,7 +3,7 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
-## Tamara Q1-2026 Investor Pack ingest — ACTIVE (2026-04-24)
+## Completed — 2026-04-24 (Tamara Q1-2026 Investor Pack ingest pipeline)
 
 **Context:** User delivered two new Tamara documents — `2026-04-16_credit_risk_portfolio_update.pdf` (narrative credit update, 17 pages) and `2. 1Q2026 Tamara Cons. Investor Pack.xlsx` (structured 10-sheet investor pack, 27 months of monthly data through Mar-26). Analysis confirmed the Excel follows the SAME 10-sheet template as 4 prior files in the dataroom (Nov'25, Dec'25 ×2, Jan'26) — recurring quarterly reporting, not one-off.
 
