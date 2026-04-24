@@ -119,9 +119,26 @@ git worktree remove --force .claude/worktrees/<name>
 git branch -D claude/<name>
 ```
 
-If `worktree remove` fails with Windows "permission denied" (a process holds the directory — another Claude Code session, VS Code, a terminal cd'd inside, Explorer window), verify git's metadata is already released via `git worktree list | Select-String "<name>"` — empty output means metadata is gone and `git branch -D` will succeed regardless. The empty directory on disk clears at next reboot or when the holding process exits. Don't hunt it if it persists — cosmetic, not functional.
+If `worktree remove` fails with Windows "permission denied" (a process holds the directory — another Claude Code session, VS Code, a terminal cd'd inside, Explorer window), verify git's metadata is already released via `git worktree list | Select-String "<name>"` — empty output means metadata is gone and `git branch -D` will succeed regardless. The empty directory on disk clears at next reboot, when the holding process exits, or on the next EoD sweep (next step) — functionally harmless in the interim.
 
 Per-merge cleanup during the merge sequence is the better discipline; this sweep only catches stragglers that slipped through.
+
+**Opportunistic filesystem orphan sweep (mandatory — do not skip):** After the branch cleanup, walk `.claude/worktrees/` and attempt to remove any directory that git no longer tracks as a worktree. These are leftovers from prior sessions whose holding process failed to release the directory at the time — reboots and process exits since then may have freed them up. Silent-fail on busy directories; we'll catch them on the next EoD run.
+
+**From the main repo directory (bash in the `/c/.../credit-platform` root, NOT the worktree):**
+```bash
+cd /c/Users/SharifEid/credit-platform && \
+  for d in .claude/worktrees/*/; do
+    name=$(basename "$d")
+    # Skip directories that git still tracks as active worktrees
+    git worktree list | grep -q "/$name " && continue
+    rm -rf "$d" 2>/dev/null && echo "  swept: $name" || true
+  done
+```
+
+The loop is idempotent — running it on every EoD gradually reclaims orphans as their holders exit. The user's system had 12 orphans dating back 11+ days when this sweep was added; the first run cleaned 6 and left 5 stuck (which will clear on the next sweep once their Claude Code sessions exit).
+
+Report in the EoD summary how many orphans were swept (0 is the healthy steady state; > 0 is normal opportunistic catch-up). Don't investigate stuck ones — they'll clear naturally on a later run.
 
 ## Step 11 — Production redeploy reminder
 
