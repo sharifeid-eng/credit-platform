@@ -697,6 +697,15 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
     })
 
     # ── Covenant 3: Collection Ratio > 33% (3-month rolling avg) ─────────
+    # Population: specific_filter(maturing in period) — includes ALL loans
+    # (active + closed) whose Repayment_Deadline fell in the period window.
+    # This is intentional per the SILQ KSA facility cert methodology (Dec 2025
+    # cert 95.53% reconciles against this filter). A closed-repaid-in-full loan
+    # that matured in-period MUST contribute to the denominator; filtering to
+    # active-only would bias the covenant toward delinquent-dominated months.
+    # Audit P0-1: this contrasts with Klaim's Collection Ratio, which uses a
+    # cumulative approximation (method='cumulative', Confidence C per P0-5) —
+    # different covenant definition, not a cross-company inconsistency.
     monthly_ratios = []
     month_labels = []
     if C_REPAY_DEADLINE in df.columns and C_REPAID in df.columns and C_COLLECTABLE in df.columns:
@@ -745,7 +754,10 @@ def compute_silq_covenants(df, mult=1, ref_date=None):
 
     # ── Covenant 4: Repayment at Term > 95% ──────────────────────────────
     # Loans whose original term + 3 months ended in the 3 months before ref_date
-    # i.e., Repayment_Deadline between ref_date-6mo and ref_date-3mo
+    # i.e., Repayment_Deadline between ref_date-6mo and ref_date-3mo.
+    # Population: specific_filter(matured in 3-6mo window) — same doctrine as
+    # Coll Ratio: includes all statuses. A loan that matured 4 months ago AND
+    # closed repaid is a textbook "Repayment at Term" success and must count.
     rat_available = False
     rat_ratio = 0
     rat_breakdown = []

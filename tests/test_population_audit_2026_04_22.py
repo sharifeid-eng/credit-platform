@@ -326,3 +326,109 @@ class TestP06SILQConcentrationLimitsCarryConfidence:
             assert 'confidence' in lim, f"Missing confidence on '{lim['name']}'"
             assert lim['confidence'] == 'A'
             assert lim['population'] == 'active_outstanding'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0-1 — SILQ covenant maturing-period denominator doctrine
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP01SILQCollectionRatioIncludesClosedLoans:
+    """The SILQ Collection Ratio covenant MUST include Closed-repaid-in-full
+    loans in the denominator. Excluding them (filtering to active only) biases
+    the metric toward delinquent-dominated months. Validated against Dec 2025
+    cert — P0-1 resolution is documentation + regression guard, not code
+    change."""
+
+    def _make_tape_with_matured_closed(self, today):
+        # 5 closed-repaid-in-full loans matured in prior month.
+        prior_month = (today - pd.DateOffset(months=1)).replace(day=15)
+        rows = []
+        for i in range(5):
+            rows.append({
+                'Deal ID': f'C{i}', 'Shop_ID': f'S{i}',
+                'Disbursed_Amount (SAR)': 100_000,
+                'Outstanding_Amount (SAR)': 0,
+                'Overdue_Amount (SAR)': 0,
+                'Total_Collectable_Amount (SAR)': 110_000,
+                'Amt_Repaid': 110_000, 'Margin Collected': 10_000,
+                'Principal Collected': 100_000, 'Shop_Credit_Limit (SAR)': 500_000,
+                'Tenure': 12, 'Loan_Status': 'Closed',
+                'Product': 'BNPL',
+                'Disbursement_Date': prior_month - pd.Timedelta(days=180),
+                'Repayment_Deadline': prior_month,  # MATURED in prior month
+                'Last_Collection_Date': prior_month,
+                'Loan_Age': 180,
+            })
+        # 1 still-active-delinquent loan also matured in same prior month.
+        rows.append({
+            'Deal ID': 'D1', 'Shop_ID': 'S9',
+            'Disbursed_Amount (SAR)': 100_000,
+            'Outstanding_Amount (SAR)': 100_000,
+            'Overdue_Amount (SAR)': 100_000,
+            'Total_Collectable_Amount (SAR)': 110_000,
+            'Amt_Repaid': 0, 'Margin Collected': 0, 'Principal Collected': 0,
+            'Shop_Credit_Limit (SAR)': 500_000,
+            'Tenure': 12, 'Loan_Status': 'Active',
+            'Product': 'BNPL',
+            'Disbursement_Date': prior_month - pd.Timedelta(days=180),
+            'Repayment_Deadline': prior_month,
+            'Last_Collection_Date': None, 'Loan_Age': 180,
+        })
+        return pd.DataFrame(rows)
+
+    def test_closed_loans_contribute_to_coll_ratio_denominator(self):
+        """If we excluded Closed loans, the ratio would be 0/110K=0%. With
+        them included (correct per P0-1 doctrine), the ratio is
+        550K/660K ≈ 83%."""
+        from core.analysis_silq import compute_silq_covenants
+        today = pd.Timestamp('2026-03-15')
+        df = self._make_tape_with_matured_closed(today)
+        result = compute_silq_covenants(df, mult=1, ref_date=today)
+        coll = next(c for c in result['covenants'] if 'Collection Ratio' in c['name'])
+        # 5 closed × 110K repaid + 1 delinquent × 0 = 550K repaid;
+        # 5 closed × 110K collectable + 1 delinquent × 110K = 660K collectable.
+        # Only one of the three measurement months has maturing loans, so
+        # avg_collection = 550/660 ≈ 0.833.
+        assert coll['current'] > 0.5, (
+            f"Closed loans should contribute to denominator. Got {coll['current']!r}. "
+            "If this is near 0, the filter was changed to exclude Closed — that's wrong per P0-1."
+        )
+        # And the population field documents the semantics.
+        assert coll['population'] == 'specific_filter(maturing in period)'
+
+    def test_portfolio_py_silq_coll_ratio_same_doctrine(self):
+        """The memo-engine path (portfolio.py compute_covenants) uses the
+        same filter — guard against one path diverging from the other."""
+        from core.portfolio import compute_covenants
+        today = pd.Timestamp('2026-03-15')
+        df = self._make_tape_with_matured_closed(today)
+        result = compute_covenants(df, mult=1, ref_date=today)
+        coll = next(c for c in result['covenants'] if 'Collection Ratio' in c['name'])
+        assert coll['current'] > 0.5
+        assert coll['population'] == 'specific_filter(maturing in period)'
+
+
+class TestP01KlaimCollRatioDifferentDefinition:
+    """Klaim's Collection Ratio is a CUMULATIVE approximation (method=
+    'cumulative', Confidence C), not the same 'maturing in period' covenant
+    that SILQ implements. The audit's P0-1 flagged them as asymmetric; the
+    resolution is that they measure different things. This test locks in
+    the distinction."""
+
+    def test_klaim_coll_ratio_method_is_cumulative(self):
+        from core.portfolio import compute_klaim_covenants
+        today = pd.Timestamp('2026-04-15')
+        df = TestP06KlaimCovenantsCarryConfidence()._make_klaim_tape()[0]
+        result = compute_klaim_covenants(df, mult=1, ref_date=today)
+        coll = next(c for c in result['covenants'] if 'Collection Ratio' in c['name'])
+        assert coll['method'] == 'cumulative'
+        assert coll['confidence'] == 'C'
+
+    def test_silq_coll_ratio_method_is_direct(self):
+        from core.analysis_silq import compute_silq_covenants
+        df, today = TestP06SILQCovenantsCarryConfidence()._make_tape()
+        result = compute_silq_covenants(df, mult=1, ref_date=today)
+        coll = next(c for c in result['covenants'] if 'Collection Ratio' in c['name'])
+        assert coll['method'] == 'direct'
+        assert coll['confidence'] == 'A'

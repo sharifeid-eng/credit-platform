@@ -404,8 +404,11 @@ def compute_covenants(df, mult=1, ref_date=None, facility_params=None):
     })
 
     # ── Covenant 3: Collection Ratio > 33% (3M rolling avg) ─────────────
-    # For each of the 3 months before ref_date, find loans maturing in that
-    # month and compute repaid / collectable.
+    # Population: specific_filter(maturing in period) — all loans whose
+    # Repayment_Deadline fell in the period, regardless of Status. Closed-
+    # repaid-in-full loans MUST count; filtering to active-only would bias
+    # the denominator toward delinquent-dominated months. Validated against
+    # SILQ KSA Dec 2025 cert (95.53%). Audit P0-1 doctrine.
     monthly_ratios = []
     month_labels = []
     if C_REPAY_DEADLINE in df.columns and C_REPAID in df.columns and C_COLLECTABLE in df.columns:
