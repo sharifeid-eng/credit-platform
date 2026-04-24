@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import ChartPanel from '../ChartPanel'
+import ConfidenceBadge from '../ConfidenceBadge'
 import { getConcentrationChart, getGroupPerformanceChart, getAgeingChart } from '../../services/api'
 import { tooltipStyle, fmtMoney, fmtPct } from '../../styles/chartTheme'
 
@@ -112,7 +113,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
       )}
 
       {/* Group concentration donut */}
-      <ChartPanel title="Group Concentration" subtitle="Share of portfolio by provider group — top 15 shown" loading={loading} error={error} minHeight={260}>
+      <ChartPanel title="Group Concentration" subtitle="Share of portfolio by provider group — top 15 shown" loading={loading} error={error} minHeight={260} action={<ConfidenceBadge confidence="A" population="total_originated" note="HHI + share percentages on the full originated book. Clean-book HHI (stale-filtered) available in overview KPIs." />}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <ResponsiveContainer width={220} height={220}>
             <PieChart>
@@ -137,7 +138,7 @@ export default function ConcentrationChart({ company, product, snapshot, currenc
 
       {/* Provider concentration donut (Apr 2026+ only — hidden when res.provider absent) */}
       {providerData.length > 0 && (
-        <ChartPanel title="Provider Concentration" subtitle="Branch-level attribution within each group — top 15 shown" loading={loading} error={error} minHeight={260}>
+        <ChartPanel title="Provider Concentration" subtitle="Branch-level attribution within each group — top 15 shown" loading={loading} error={error} minHeight={260} action={<ConfidenceBadge confidence="A" population="total_originated" note="Per-provider share of total portfolio PV." />}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
             <ResponsiveContainer width={220} height={220}>
               <PieChart>

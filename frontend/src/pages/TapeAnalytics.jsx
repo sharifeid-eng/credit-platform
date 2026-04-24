@@ -406,24 +406,23 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
     { label: 'Total Repaid',     value: fmt(summary.total_repaid),     sub: 'cumulative collections',               color: 'teal', stale: bd },
   ] : Array(10).fill(null)
 
-  // Credit Quality — PAR as dedicated section (consistent with Klaim).
-  // Framework §17 dual view: active_outstanding stays as primary (lending
-  // products' IC-relevant read is "what fraction of the live book is
-  // delinquent") + lifetime_par* as context, displayed in the confidence
-  // badge tooltip. Subtitle now uses the absolute par*_amount from the
-  // backend (PAR numerator) — prior code multiplied par% × total_outstanding
-  // which was arithmetically meaningless (active-% × total-denom).
-  const silqParBuildSub = (amount, lifetimePct) => {
+  // Credit Quality — PAR as dedicated section.
+  // Framework §17 (session 36 universal rule): lifetime-primary across ALL
+  // asset classes. Lifetime goes in the headline (denominator: total_disbursed);
+  // active-outstanding is the secondary context shown in the subtitle +
+  // confidence tooltip. Cross-company IC consistency — analysts compare SILQ's
+  // lifetime PAR to Klaim's and Aajil's without re-normalising.
+  const silqParBuildSub = (amount, activePct) => {
     const atRisk = amount != null ? `${ccy} ${(amount / 1000).toFixed(0)}K at risk` : '—'
-    if (lifetimePct != null && lifetimePct > 0) {
-      return `${atRisk} · Lifetime: ${lifetimePct.toFixed(2)}%`
+    if (activePct != null) {
+      return `${atRisk} · Active: ${activePct.toFixed(2)}%`
     }
     return atRisk
   }
   const parKpis = summary ? [
-    { label: 'PAR 30+', value: pct(summary.par30), sub: silqParBuildSub(summary.par30_amount, summary.lifetime_par30), color: summary.par30 > 20 ? 'red' : summary.par30 > 10 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_population || 'active_outstanding', confidenceNote: summary.lifetime_par30 != null ? `Lifetime PAR 30+ (vs total disbursed): ${summary.lifetime_par30.toFixed(2)}%` : undefined },
-    { label: 'PAR 60+', value: pct(summary.par60), sub: silqParBuildSub(summary.par60_amount, summary.lifetime_par60), color: summary.par60 > 10 ? 'red' : summary.par60 > 5 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_population || 'active_outstanding', confidenceNote: summary.lifetime_par60 != null ? `Lifetime PAR 60+ (vs total disbursed): ${summary.lifetime_par60.toFixed(2)}%` : undefined },
-    { label: 'PAR 90+', value: pct(summary.par90), sub: silqParBuildSub(summary.par90_amount, summary.lifetime_par90), color: summary.par90 > 5 ? 'red' : summary.par90 > 2 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_population || 'active_outstanding', confidenceNote: summary.lifetime_par90 != null ? `Lifetime PAR 90+ (vs total disbursed): ${summary.lifetime_par90.toFixed(2)}%` : undefined },
+    { label: 'PAR 30+', value: pct(summary.lifetime_par30 ?? summary.par30), sub: silqParBuildSub(summary.par30_amount, summary.par30), color: (summary.lifetime_par30 ?? summary.par30) > 10 ? 'red' : (summary.lifetime_par30 ?? summary.par30) > 5 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_lifetime_population || 'total_originated', confidenceNote: summary.par30 != null ? `Active-outstanding PAR 30+ (live book): ${summary.par30.toFixed(2)}%` : undefined },
+    { label: 'PAR 60+', value: pct(summary.lifetime_par60 ?? summary.par60), sub: silqParBuildSub(summary.par60_amount, summary.par60), color: (summary.lifetime_par60 ?? summary.par60) > 5 ? 'red' : (summary.lifetime_par60 ?? summary.par60) > 2.5 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_lifetime_population || 'total_originated', confidenceNote: summary.par60 != null ? `Active-outstanding PAR 60+ (live book): ${summary.par60.toFixed(2)}%` : undefined },
+    { label: 'PAR 90+', value: pct(summary.lifetime_par90 ?? summary.par90), sub: silqParBuildSub(summary.par90_amount, summary.par90), color: (summary.lifetime_par90 ?? summary.par90) > 2.5 ? 'red' : (summary.lifetime_par90 ?? summary.par90) > 1 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_lifetime_population || 'total_originated', confidenceNote: summary.par90 != null ? `Active-outstanding PAR 90+ (live book): ${summary.par90.toFixed(2)}%` : undefined },
   ] : []
 
   const showSkeleton = summaryLoading || !summary
@@ -438,7 +437,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
         }
       </div>
 
-      {/* Credit Quality — PAR section */}
+      {/* Credit Quality — PAR section (lifetime-primary, session 36 §17 rule) */}
       {summary && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -446,7 +445,7 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
               Credit Quality
             </span>
             <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', opacity: 0.7 }}>
-              vs Active Outstanding
+              vs Total Disbursed (lifetime)
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
@@ -564,12 +563,19 @@ function OverviewTab({ summary, summaryLoading, company, product, snapshot, curr
     { label: 'HHI (Group)',     value: hhiFmt(summary.hhi_group), sub: `Top provider: ${pct(summary.top_1_group_pct)}`, color: summary.hhi_group > 0.15 ? 'red' : summary.hhi_group > 0.10 ? 'gold' : 'teal', confidence: 'A' },
   ] : Array(10).fill(null)
 
-  // PAR KPIs — dual perspective: lifetime (IC view) as headline, active as context
+  // PAR KPIs — Framework §17 session 36 rule: lifetime-primary across all asset
+  // classes. Lifetime = headline (denominator: total_originated), active = secondary.
   const parConfidence = par?.method === 'primary' ? 'B' : 'C'
+  const klaimParSub = (amount, activePct) => {
+    const atRisk = `${ccy} ${(amount / 1000).toFixed(0)}K at risk`
+    return activePct != null
+      ? `${atRisk} · Active: ${activePct.toFixed(2)}%`
+      : atRisk
+  }
   const parKpis = par?.available ? [
-    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: `${ccy} ${(par.par30_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
-    { label: 'PAR 60+', value: pct(par.lifetime_par60 ?? par.par60), sub: `${ccy} ${(par.par60_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par60 ?? par.par60) > 1.5 ? 'red' : (par.lifetime_par60 ?? par.par60) > 0.75 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
-    { label: 'PAR 90+', value: pct(par.lifetime_par90 ?? par.par90), sub: `${ccy} ${(par.par90_amount / 1000).toFixed(0)}K at risk`, color: (par.lifetime_par90 ?? par.par90) > 1 ? 'red' : (par.lifetime_par90 ?? par.par90) > 0.5 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence },
+    { label: 'PAR 30+', value: pct(par.lifetime_par30 ?? par.par30), sub: klaimParSub(par.par30_amount, par.par30), color: (par.lifetime_par30 ?? par.par30) > 2 ? 'red' : (par.lifetime_par30 ?? par.par30) > 1 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence, population: par.par_lifetime_population || 'total_originated', confidenceNote: par.par30 != null ? `Active-outstanding PAR 30+: ${par.par30.toFixed(2)}%` : undefined },
+    { label: 'PAR 60+', value: pct(par.lifetime_par60 ?? par.par60), sub: klaimParSub(par.par60_amount, par.par60), color: (par.lifetime_par60 ?? par.par60) > 1.5 ? 'red' : (par.lifetime_par60 ?? par.par60) > 0.75 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence, population: par.par_lifetime_population || 'total_originated', confidenceNote: par.par60 != null ? `Active-outstanding PAR 60+: ${par.par60.toFixed(2)}%` : undefined },
+    { label: 'PAR 90+', value: pct(par.lifetime_par90 ?? par.par90), sub: klaimParSub(par.par90_amount, par.par90), color: (par.lifetime_par90 ?? par.par90) > 1 ? 'red' : (par.lifetime_par90 ?? par.par90) > 0.5 ? 'gold' : 'teal', derived: par.method === 'derived', confidence: parConfidence, population: par.par_lifetime_population || 'total_originated', confidenceNote: par.par90 != null ? `Active-outstanding PAR 90+: ${par.par90.toFixed(2)}%` : undefined },
   ] : []
 
   // DTFC KPIs — only shown when available

@@ -305,13 +305,38 @@ export default function AajilDashboard() {
           const buckets = dd.buckets || []
           return (
           <div>
-            {/* KPIs */}
+            {/* KPIs — Framework §17 session 36 rule: lifetime-primary PAR across
+                all companies. Aajil reports install-count PAR family. */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
               <KpiCard label="Active Balance" value={fmt(dd.total_active_balance, 'SAR ')} index={0} />
               <KpiCard label="Overdue Balance" value={fmt(dd.total_overdue_balance, 'SAR ')} subtitle={dd.total_active_balance ? `${(dd.total_overdue_balance / dd.total_active_balance * 100).toFixed(1)}% of active` : ''} index={1} />
-              <KpiCard label="PAR 1+ Inst" value={dd.par_1_inst != null ? `${(dd.par_1_inst * 100).toFixed(1)}%` : '--'} subtitle="Overdue amount / Active balance" index={2} />
-              <KpiCard label="PAR 2+ Inst" value={dd.par_2_inst != null ? `${(dd.par_2_inst * 100).toFixed(1)}%` : '--'} index={3} />
-              <KpiCard label="PAR 3+ Inst" value={dd.par_3_inst != null ? `${(dd.par_3_inst * 100).toFixed(1)}%` : '--'} index={4} />
+              <KpiCard
+                label="PAR 1+ Inst"
+                value={dd.par_1_inst_lifetime != null ? `${(dd.par_1_inst_lifetime * 100).toFixed(1)}%`
+                      : (dd.par_1_inst != null ? `${(dd.par_1_inst * 100).toFixed(1)}%` : '--')}
+                subtitle={dd.par_1_inst != null ? `Active: ${(dd.par_1_inst * 100).toFixed(1)}% (of live book)` : 'Overdue / originated principal'}
+                index={2}
+                confidence={dd.par_confidence || 'A'}
+                population={dd.par_population_lifetime || 'total_originated'}
+              />
+              <KpiCard
+                label="PAR 2+ Inst"
+                value={dd.par_2_inst_lifetime != null ? `${(dd.par_2_inst_lifetime * 100).toFixed(1)}%`
+                      : (dd.par_2_inst != null ? `${(dd.par_2_inst * 100).toFixed(1)}%` : '--')}
+                subtitle={dd.par_2_inst != null ? `Active: ${(dd.par_2_inst * 100).toFixed(1)}%` : undefined}
+                index={3}
+                confidence={dd.par_confidence || 'A'}
+                population={dd.par_population_lifetime || 'total_originated'}
+              />
+              <KpiCard
+                label="PAR 3+ Inst"
+                value={dd.par_3_inst_lifetime != null ? `${(dd.par_3_inst_lifetime * 100).toFixed(1)}%`
+                      : (dd.par_3_inst != null ? `${(dd.par_3_inst * 100).toFixed(1)}%` : '--')}
+                subtitle={dd.par_3_inst != null ? `Active: ${(dd.par_3_inst * 100).toFixed(1)}%` : undefined}
+                index={4}
+                confidence={dd.par_confidence || 'A'}
+                population={dd.par_population_lifetime || 'total_originated'}
+              />
             </div>
 
             {/* Overdue Bucket Chart */}

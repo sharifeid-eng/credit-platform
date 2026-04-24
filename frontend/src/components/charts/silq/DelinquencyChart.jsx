@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, LineChart, Line,
 } from 'recharts'
 import ChartPanel from '../../ChartPanel'
+import ConfidenceBadge from '../../ConfidenceBadge'
 import api from '../../../services/api'
 import { gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps, GradientDefs, fmtMoney, fmtPct, COLORS } from '../../../styles/chartTheme'
 
@@ -56,7 +57,7 @@ export default function DelinquencyChart({ company, product, snapshot, currency,
       </div>
 
       {/* DPD Bucket Distribution */}
-      <ChartPanel title="DPD Bucket Distribution" subtitle="Overdue amount by days past due bucket" loading={loading} error={error} minHeight={320}>
+      <ChartPanel title="DPD Bucket Distribution" subtitle="Overdue amount by days past due bucket" loading={loading} error={error} minHeight={320} action={<ConfidenceBadge confidence="A" population="active_outstanding" note="Per-bucket pct of overdue / total_active_outstanding. DPD clock is contractual (days past Repayment_Deadline). Framework §17: active-outstanding population for live book view." />}>
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={buckets} layout="vertical" margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
             <GradientDefs />
@@ -113,7 +114,7 @@ export default function DelinquencyChart({ company, product, snapshot, currency,
       </ChartPanel>
 
       {/* Monthly Delinquency Trend */}
-      <ChartPanel title="Monthly Delinquency Trend" subtitle="Overdue rate and PAR30 rate over time" loading={loading} error={error} minHeight={300}>
+      <ChartPanel title="Monthly Delinquency Trend" subtitle="Overdue rate and PAR30 rate over time" loading={loading} error={error} minHeight={300} action={<ConfidenceBadge confidence="A" population="active_outstanding" note="Per-month overdue / PAR30 rate against that month's active outstanding. Snapshot-state time series — each point uses its own month's denominator." />}>
         {monthly.length === 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 260, fontSize: 11, color: 'var(--text-muted)' }}>
             Insufficient monthly data

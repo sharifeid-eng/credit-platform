@@ -4,6 +4,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ComposedChart, Area,
 } from 'recharts'
 import ChartPanel from '../ChartPanel'
+import ConfidenceBadge from '../ConfidenceBadge'
 import { getReturnsAnalysisChart } from '../../services/api'
 import {
   gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
@@ -63,7 +64,7 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
           </div>
 
           {/* IRR by Vintage */}
-          <ChartPanel title="IRR by Vintage" subtitle="Average expected vs actual IRR by origination month" minHeight={0}>
+          <ChartPanel title="IRR by Vintage" subtitle="Average expected vs actual IRR by origination month" minHeight={0} action={<ConfidenceBadge confidence="B" population="completed_only" note="Per-vintage average expected IRR (from underwriting) vs actual IRR (from realised cash flows). Actual IRR restricted to deals with sufficient cash flow history; Confidence B because vintage means can mix partially-realised and fully-realised deals." />}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={data.irr_by_vintage}>
                 <CartesianGrid {...gridProps} />
@@ -99,7 +100,7 @@ export default function ReturnsAnalysisChart({ company, product, snapshot, curre
       )}
 
       {/* ── Monthly Margin Chart ── */}
-      <ChartPanel title="Monthly Returns" subtitle="Realised vs expected margin by origination month" minHeight={0}>
+      <ChartPanel title="Monthly Returns" subtitle="Realised vs expected margin by origination month" minHeight={0} action={<ConfidenceBadge confidence="A" population="total_originated" note="Per-cohort margin: (collected − PP) / PP as realised, (PV − PP) / PP as expected. Rate is against purchase price (PP), not PV." />}>
         <ResponsiveContainer width="100%" height={280}>
           <ComposedChart data={data.monthly}>
             <defs>

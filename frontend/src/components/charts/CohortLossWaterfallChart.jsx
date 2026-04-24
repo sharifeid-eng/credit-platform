@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import ChartPanel from '../ChartPanel'
+import ConfidenceBadge from '../ConfidenceBadge'
 import { getCohortLossWaterfall, getVintageLossCurves, getLossCategorization } from '../../services/api'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -78,7 +79,7 @@ export default function CohortLossWaterfallChart({ company, product, snapshot, c
       )}
 
       {/* Cohort Loss Table */}
-      <ChartPanel title="Cohort Loss Waterfall" subtitle="Per-vintage gross default, recovery, and net loss breakdown" loading={loading} error={error} minHeight={0}>
+      <ChartPanel title="Cohort Loss Waterfall" subtitle="Per-vintage gross default, recovery, and net loss breakdown" loading={loading} error={error} minHeight={0} action={<ConfidenceBadge confidence="A" population="total_originated" note="Per-vintage rates: gross default / net loss against originated PV; recovery against loss_subset (defaulted deals only). Portfolio totals use the same denominators." />}>
         <div style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 900 }}>
             <thead>

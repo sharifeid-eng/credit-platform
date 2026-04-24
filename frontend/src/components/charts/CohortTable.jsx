@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import ChartPanel from '../ChartPanel'
+import ConfidenceBadge from '../ConfidenceBadge'
 import { getCohortChart } from '../../services/api'
 import { fmtPct, fmtMoney } from '../../styles/chartTheme'
 
@@ -76,6 +77,11 @@ export default function CohortTable({ company, product, snapshot, currency, asOf
       loading={loading}
       error={error}
       minHeight={0}
+      action={<ConfidenceBadge
+        confidence="A"
+        population="total_originated"
+        note="Per-vintage rates computed over each cohort's originated PV (collection/denial) and completed count (completion rate). Margins use PP as denom. §17: population is per-row cohort; denominators are visible in the table."
+      />}
     >
       <div style={{ overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: (hasIrr ? 1200 : 1000) + (hasSpeed ? 200 : 0) }}>

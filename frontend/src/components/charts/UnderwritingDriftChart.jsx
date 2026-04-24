@@ -4,6 +4,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import ChartPanel from '../ChartPanel'
+import ConfidenceBadge from '../ConfidenceBadge'
 import { getUnderwritingDrift } from '../../services/api'
 import {
   gridProps, xAxisProps, yAxisProps, tooltipStyle, legendProps,
@@ -71,7 +72,7 @@ export default function UnderwritingDriftChart({ company, product, snapshot, cur
       )}
 
       {/* Dual-axis chart: Deal Size (bars) + Discount (line) */}
-      <ChartPanel title="Underwriting Drift" subtitle="Average deal size and discount rate by cohort month with outcome overlay" loading={loading} error={error}>
+      <ChartPanel title="Underwriting Drift" subtitle="Average deal size and discount rate by cohort month with outcome overlay" loading={loading} error={error} action={<ConfidenceBadge confidence="A" population="total_originated" note="Per-vintage underwriting stats (avg deal size, avg discount, outcome proxy) computed over total_originated in that month." />}>
         {monthly.length > 0 ? (
           <ResponsiveContainer width="100%" height={340}>
             <ComposedChart data={monthly} barCategoryGap="30%">
