@@ -533,6 +533,172 @@ class TestP02AajilYieldDual:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# P1-6 — Klaim cohorts clean-book dual
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP16KlaimCohortsCleanDual:
+    def _make_tape(self):
+        """1 vintage with 3 healthy deals + 1 loss-subset deal (denial > 50% PV)."""
+        today = pd.Timestamp('2026-04-15')
+        rows = []
+        for i in range(3):
+            rows.append({
+                'Deal date': today - pd.Timedelta(days=180),
+                'Status': 'Completed',
+                'Purchase value': 100_000,
+                'Purchase price': 95_000,
+                'Collected till date': 95_000,
+                'Denied by insurance': 5_000,
+                'Pending insurance response': 0,
+                'Expected total': 100_000,
+                'Discount': 0.05,
+            })
+        # Loss deal in same vintage
+        rows.append({
+            'Deal date': today - pd.Timedelta(days=180),
+            'Status': 'Completed',
+            'Purchase value': 100_000,
+            'Purchase price': 95_000,
+            'Collected till date': 10_000,
+            'Denied by insurance': 80_000,
+            'Pending insurance response': 0,
+            'Expected total': 100_000,
+            'Discount': 0.05,
+        })
+        return pd.DataFrame(rows)
+
+    def test_collection_rate_clean_strips_loss_subset(self):
+        from core.analysis import compute_cohorts
+        df = self._make_tape()
+        res = compute_cohorts(df, mult=1)
+        assert len(res) == 1
+        vintage = res[0]
+        # Blended: (3 × 95K + 1 × 10K) / (4 × 100K) = 295/400 = 73.75%
+        assert vintage['collection_rate'] == pytest.approx(73.75, abs=0.1)
+        # Clean: 3 × 95K / 3 × 100K = 95%
+        assert vintage['collection_rate_clean'] == pytest.approx(95.0, abs=0.1)
+        # And denial rate: blended 21.25%, clean 5%
+        assert vintage['denial_rate_clean'] == pytest.approx(5.0, abs=0.1)
+        assert vintage['denial_rate'] > vintage['denial_rate_clean']
+
+    def test_clean_deal_count_reported(self):
+        from core.analysis import compute_cohorts
+        df = self._make_tape()
+        res = compute_cohorts(df, mult=1)
+        assert res[0]['clean_deal_count'] == 3
+
+    def test_backward_compat_all_original_fields_present(self):
+        from core.analysis import compute_cohorts
+        df = self._make_tape()
+        res = compute_cohorts(df, mult=1)
+        for field in ('month', 'total_deals', 'completed_deals',
+                      'completion_rate', 'purchase_value', 'purchase_price',
+                      'collected', 'denied', 'pending', 'collection_rate',
+                      'denial_rate', 'expected_margin', 'realised_margin'):
+            assert field in res[0], f"BC broken: '{field}' missing"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P1-7 — Tamara snapshot_date_state population declaration
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP17TamaraPopulationDeclaration:
+    def test_summary_kpis_declare_snapshot_date_state(self):
+        """Tamara has no total_originated — ensure the KPI dict surfaces
+        this structural limitation so the frontend/AI can render it."""
+        from core.analysis_tamara import get_tamara_summary_kpis
+        # Minimal synthetic Tamara data structure
+        data = {
+            'overview': {'total_pending': 1_000_000, 'registered_users': 20_000_000,
+                         'merchants': 87_000, 'vintage_count': 5, 'months_of_data': 12},
+            'deloitte_fdd': {},
+            'facility_terms': {'total_limit': 2_375_000_000},
+            'company_overview': {},
+            'hsbc_reports': [{'report_date': '2026-03-01'}] * 3,
+        }
+        res = get_tamara_summary_kpis(data)
+        assert res['total_purchase_value_population'] == 'snapshot_date_state'
+        assert res['total_purchase_value_confidence'] == 'A'
+        assert 'structural_data_limitation' in res
+        assert 'not recoverable' in res['structural_data_limitation'].lower() or \
+               'outstanding' in res['structural_data_limitation'].lower()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P1-8 — SILQ summary PAR/outstanding population clarity
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP18SILQSummaryPopulationLabels:
+    def test_par_population_is_active_outstanding(self):
+        from core.analysis_silq import compute_silq_summary
+        df, today = TestP06SILQCovenantsCarryConfidence()._make_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        assert res['par_population'] == 'active_outstanding'
+        assert res['par_confidence'] == 'A'
+
+    def test_total_outstanding_population_declared(self):
+        from core.analysis_silq import compute_silq_summary
+        df, today = TestP06SILQCovenantsCarryConfidence()._make_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        # PAR is over active, total_outstanding is over total → declare separately
+        assert res['total_outstanding_population'] == 'total_originated'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# UNCERTAIN 3 — Aajil HHI clean-book dual
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestU3AajilHHIDual:
+    def test_hhi_customer_clean_present(self):
+        from core.analysis_aajil import compute_aajil_summary
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_summary(df, mult=1)
+        assert 'hhi_customer_clean' in res
+        assert res['hhi_customer_population'] == 'total_originated'
+        assert res['hhi_customer_clean_population'] == 'clean_book'
+
+    def test_clean_hhi_confidence_B_blended_confidence_A(self):
+        from core.analysis_aajil import compute_aajil_summary
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_summary(df, mult=1)
+        assert res['hhi_customer_confidence'] == 'A'
+        assert res['hhi_customer_clean_confidence'] == 'B'
+
+    def test_clean_hhi_differs_from_blended_when_wo_present(self):
+        """With 1 WO customer out of 9, clean HHI removes their share
+        from the squared-share sum → values must differ."""
+        from core.analysis_aajil import compute_aajil_summary
+        df = _make_aajil_yield_tape()
+        res = compute_aajil_summary(df, mult=1)
+        assert res['hhi_customer'] != res['hhi_customer_clean']
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# UNCERTAIN 2 — Klaim stress test population declaration
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestU2KlaimStressTestPopulation:
+    def test_stress_test_declares_total_originated_population(self):
+        from core.analysis import compute_stress_test
+        df = TestP06KlaimCovenantsCarryConfidence()._make_klaim_tape()[0]
+        res = compute_stress_test(df, mult=1)
+        assert res['population'] == 'total_originated'
+        assert res['confidence'] == 'B'
+
+    def test_stress_test_separation_note_present(self):
+        from core.analysis import compute_stress_test
+        df = TestP06KlaimCovenantsCarryConfidence()._make_klaim_tape()[0]
+        res = compute_stress_test(df, mult=1)
+        assert 'separation_note' in res
+        assert 'separate_portfolio' in res['separation_note']
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # P1-3 — SILQ collections realised dual
 # ══════════════════════════════════════════════════════════════════════════════
 

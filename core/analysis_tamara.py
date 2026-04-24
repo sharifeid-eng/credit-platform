@@ -157,7 +157,21 @@ def _enrich_covenant_status(data):
 
 
 def _enrich_vintage_heatmap(data):
-    """Pre-compute heatmap color values for vintage matrices."""
+    """Pre-compute heatmap color values for vintage matrices.
+
+    UNCERTAIN 1 audit resolution: percentile bounds (p25/p75) are computed
+    across ALL vintage-MOB cells regardless of seasoning. This is the right
+    behaviour for an IC-view heatmap ("where does this vintage sit against
+    the long-run average"). It is NOT the right behaviour for a "is this
+    vintage worse than its same-age peers" view — mature vintages dominate
+    the distribution.
+    Resolution: keep the flat percentile scale as the primary surface
+    (matches HSBC investor report semantics) + emit `_color_scale_note`
+    documenting the interpretation, and include cell-count so the analyst
+    can judge sample size. An age-normalised variant would require
+    per-MOB percentile computation — deferred to a separate task (no
+    consumer today).
+    """
     vp = data.get('vintage_performance', {})
 
     for metric in ['default', 'delinquency', 'dilution']:
@@ -187,6 +201,14 @@ def _enrich_vintage_heatmap(data):
             'p25': round(p25, 6),
             'p75': round(p75, 6),
             'count': len(all_values),
+            'scale_type': 'flat_percentile_all_vintages',
+            'note': (
+                'Percentile scale computed across all vintage × MOB cells. '
+                'Appropriate for "where does this vintage sit against the '
+                'long-run average" (IC view). For "is this vintage worse '
+                'than its same-age peers", an age-normalised scale would be '
+                'needed — not currently emitted. Framework §17 UNCERTAIN 1.'
+            ),
         }
 
 
@@ -387,6 +409,15 @@ def get_tamara_summary_kpis(data):
     - total_deals = number of HSBC monthly reports (data points), NOT loan count
     - face_value_label = "Outstanding AR" (not "Face Value") for display purposes
     The frontend should check `face_value_label` to show the right label on cards.
+
+    P1-7 audit: Tamara has no `total_originated` concept. The Deloitte FDD +
+    HSBC reports deliver outstanding balances and DPD distributions by month;
+    the vintage heatmaps cover defaults/delinquency/dilution rates but NOT
+    origination volume. For Framework §17 L1 (Size & Composition), this is a
+    structural data-room limitation — not a platform bug. The dict therefore
+    carries `population: snapshot_date_state` and `confidence: A` tags so the
+    frontend can disclose this to the analyst. Total originated volume is not
+    recoverable from the current data room.
     """
     overview = data.get('overview', {})
     fdd = data.get('deloitte_fdd', {})
@@ -411,4 +442,14 @@ def get_tamara_summary_kpis(data):
         # Tamara-specific: tells the frontend to use different labels
         'face_value_label': 'Outstanding AR',
         'deals_label': 'Reports',
+        # P1-7 audit: Framework §17 population declaration.
+        # Tamara data room does not carry lifetime originated volume —
+        # outstanding AR is a point-in-time snapshot, not a rate.
+        'total_purchase_value_population': 'snapshot_date_state',
+        'total_purchase_value_confidence': 'A',
+        'structural_data_limitation': (
+            'Tamara data room delivers outstanding balances + DPD distributions '
+            'per reporting month; total_originated volume is not recoverable '
+            'from current sources. See Framework §17 Population Discipline.'
+        ),
     }

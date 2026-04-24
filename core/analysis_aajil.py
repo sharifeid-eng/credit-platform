@@ -115,10 +115,20 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
     collection_rate = total_realised / total_principal if total_principal > 0 else 0
     wo_rate = len(written_off) / n if n > 0 else 0
 
-    # Customer HHI
+    # Customer HHI — UNCERTAIN 3 resolution: dual view
+    # hhi_customer       = lifetime HHI (all statuses incl. WO), Confidence A
+    # hhi_customer_clean = current-exposure HHI (strips Written-Off historical
+    #                      principal), Confidence B (judgement filter).
     cust_shares = df.groupby(C_CUSTOMER_ID)[C_PRINCIPAL].sum()
     total_cust = cust_shares.sum()
     hhi = ((cust_shares / total_cust) ** 2).sum() if total_cust > 0 else 0
+
+    # Clean-book HHI: same primitive as separate_aajil_portfolio but inline
+    # (avoid double-separation for summary perf)
+    clean_df = df[df[C_STATUS] != 'Written Off'] if C_STATUS in df.columns else df
+    clean_shares = clean_df.groupby(C_CUSTOMER_ID)[C_PRINCIPAL].sum()
+    clean_total = clean_shares.sum()
+    hhi_clean = ((clean_shares / clean_total) ** 2).sum() if clean_total > 0 else 0
 
     return {
         'total_deals': n,
@@ -146,6 +156,12 @@ def compute_aajil_summary(df, mult=1, ref_date=None, aux=None):
         'avg_total_yield': _safe(df[C_TOTAL_YIELD].dropna().mean()),
         'avg_deal_size': _safe(total_principal / n),
         'hhi_customer': _safe(hhi),
+        # UNCERTAIN 3 resolution: clean-book HHI dual (Framework §17)
+        'hhi_customer_clean': _safe(hhi_clean),
+        'hhi_customer_population': 'total_originated',
+        'hhi_customer_clean_population': 'clean_book',
+        'hhi_customer_confidence': 'A',
+        'hhi_customer_clean_confidence': 'B',
         'date_range': {
             'min': _safe(df[C_INVOICE_DATE].min()),
             'max': _safe(df[C_INVOICE_DATE].max()),

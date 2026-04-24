@@ -150,6 +150,15 @@ def compute_silq_summary(df, mult=1, ref_date=None):
         'product_mix': product_mix,
         'hhi_shop': _safe(hhi_shop),
         'top_1_shop_pct': _safe(top_1_shop_pct),
+        # P1-8 audit: disambiguate populations on the Overview card —
+        # PAR denominator is active_outstanding, total_outstanding is
+        # all-statuses. Both are displayed; these fields let the frontend
+        # label them correctly without a subtitle hack.
+        'par_population': 'active_outstanding',
+        'par_confidence': 'A',
+        'total_outstanding_population': 'total_originated',
+        'collection_rate_population': 'total_originated',
+        'hhi_shop_population': 'total_originated',
     }
 
 
@@ -947,7 +956,16 @@ def compute_silq_seasonality(df, mult=1):
 def compute_silq_cohort_loss_waterfall(df, mult=1, ref_date=None):
     """Per-vintage loss waterfall: Disbursed -> Overdue -> Write-off progression.
 
-    For SILQ, "default" = loan with DPD > 90 or Status indicates write-off.
+    For SILQ, "default" is defined as DPD > 90 on the active pool (code uses
+    this definition). The earlier docstring also mentioned "Status indicates
+    write-off" but the code never referenced Status — the DPD > 90 mask
+    catches both active-delinquent and closed-unpaid via the _dpd() helper
+    which forces DPD=0 on Closed loans. P2-2 audit cleanup: docstring now
+    matches implementation.
+
+    For a more complete loss definition (Closed-with-outstanding AND
+    DPD > 90), use `separate_silq_portfolio()` and pass the `loss_df`
+    directly to downstream analysis — Framework §17 separation primitive.
     Returns per-vintage and portfolio totals.
     """
     if C_DISB_DATE not in df.columns:

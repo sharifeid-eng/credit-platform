@@ -295,8 +295,21 @@ def compute_denial_trend(df, mult):
 # ── Cohort Analysis ───────────────────────────────────────────────────────────
 
 def compute_cohorts(df, mult):
-    """Vintage cohort analysis by deal origination month."""
+    """Vintage cohort analysis by deal origination month.
+
+    P1-6 audit: per-vintage rates blend loss-subset (denial > 50% PV) with
+    the healthy majority, making a vintage look worse than its underlying
+    clean performance. This function now also emits `collection_rate_clean`
+    and `denial_rate_clean` per vintage using `separate_portfolio()`'s
+    clean-book split. Population codes per Framework §17:
+      - collection_rate / denial_rate: total_originated (blended)
+      - collection_rate_clean / denial_rate_clean: clean_book
+    Backwards compat: every pre-existing field preserved.
+    """
     df = add_month_column(df)
+    # P1-6: per-vintage clean mask — avoid re-separating inside the loop.
+    clean_df, _loss_df = separate_portfolio(df, mult=1)
+    clean_idx = set(clean_df.index)
     cohorts = []
 
     for month, grp in df.groupby('Month'):
@@ -307,6 +320,12 @@ def compute_cohorts(df, mult):
         collected = grp['Collected till date'].sum() * mult
         denied    = grp['Denied by insurance'].sum() * mult
         pending   = grp['Pending insurance response'].sum() * mult
+
+        # P1-6: clean-book sub-aggregate for this vintage
+        clean_grp = grp[grp.index.isin(clean_idx)]
+        clean_pv        = clean_grp['Purchase value'].sum() * mult
+        clean_collected = clean_grp['Collected till date'].sum() * mult
+        clean_denied    = clean_grp['Denied by insurance'].sum() * mult
 
         row = {
             'month':            month,
@@ -323,6 +342,11 @@ def compute_cohorts(df, mult):
             # Calculated margins (always available)
             'expected_margin':  round((pv - pp) / pp * 100, 2) if pp else 0,
             'realised_margin':  round((collected - pp) / pp * 100, 2) if pp else 0,
+            # P1-6 dual view: clean-book rates (loss-subset stripped)
+            'collection_rate_clean': round(clean_collected / clean_pv * 100, 1) if clean_pv else 0,
+            'denial_rate_clean':     round(clean_denied    / clean_pv * 100, 1) if clean_pv else 0,
+            'clean_deal_count':      int(len(clean_grp)),
+            'clean_purchase_value':  round(clean_pv, 2),
         }
 
         if 'Expected IRR' in grp.columns:
@@ -1028,7 +1052,29 @@ def compute_denial_funnel(df, mult):
 # ── Stress Testing ───────────────────────────────────────────────────────────
 
 def compute_stress_test(df, mult):
-    """Provider/group shock simulation across multiple scenarios."""
+    """Provider/group shock simulation across multiple scenarios.
+
+    UNCERTAIN 2 + P2-5 audit resolution: this function simulates a
+    haircut on the top-N group's collected amount, with total_pv as
+    denominator for the stressed collection rate. When the top-N group
+    is dominated by loss-subset (already-realised losses), applying
+    further haircuts double-counts loss already booked on those
+    groups' deals.
+
+    Intentional design: stress-test output is for the LENDER's exposure
+    view — it must operate on the full book because a facility draws
+    against the full eligible pool, and already-impaired deals are
+    still in the pool. Running on clean_book would understate facility
+    exposure in scenarios where the top group is precisely the one
+    most damaged. The confidence grade is therefore B (scenario-based)
+    with population = total_originated (PV basis).
+
+    Callers doing Tape-side learning analysis (e.g., "how stress-
+    resilient is the healthy book?") should stress-test on
+    `separate_portfolio(df)[0]` (clean_df) directly — no platform-
+    level override needed, and the parallel view is explicitly
+    analyst-driven.
+    """
     if 'Group' not in df.columns:
         return {'scenarios': [], 'error': 'No Group column available'}
 
@@ -1076,6 +1122,14 @@ def compute_stress_test(df, mult):
         'base_collection_rate':     base_collection_rate,
         'total_groups':             int(len(group_exposure)),
         'scenarios':                scenarios,
+        # Framework §17 declarations (UNCERTAIN 2 resolution)
+        'population':               'total_originated',
+        'confidence':               'B',  # scenario-based, not observed
+        'separation_note': (
+            'Runs on full book (intentional): facility exposure view. '
+            'For clean-book stress-testing, call separate_portfolio(df)[0] '
+            'before passing to this function.'
+        ),
     }
 
 
@@ -1318,7 +1372,16 @@ def compute_facility_pd(df, mult, as_of_date=None):
 # ── Loss Development Triangle ────────────────────────────────────────────────
 
 def compute_loss_triangle(df, mult):
-    """Denial development triangle by vintage age (months since origination)."""
+    """Denial development triangle by vintage age (months since origination).
+
+    P2-1 audit: largely redundant with `compute_vintage_loss_curves` which
+    reports the same per-vintage cumulative denial rate as a curve instead
+    of a triangle row. The two differ in presentation only:
+      - compute_loss_triangle       → one row per vintage, single point-in-time
+      - compute_vintage_loss_curves → one row per vintage, full development curve
+    Both live in the codebase for backward compat. If consolidation lands in
+    a future cleanup, prefer `compute_vintage_loss_curves` as the primary.
+    """
     df = add_month_column(df)
 
     # For each vintage, compute cumulative denial rate
