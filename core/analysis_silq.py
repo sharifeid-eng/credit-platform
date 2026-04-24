@@ -1069,6 +1069,29 @@ def compute_silq_underwriting_drift(df, mult=1, ref_date=None):
 
 # ── 13. CDR / CCR ─────────────────────────────────────────────────────────────
 
+def separate_silq_portfolio(df, ref_date=None):
+    """Split a SILQ DataFrame into (clean_df, loss_df) per Framework §17.
+
+    Loss definition for SILQ: Status=='Closed' with Outstanding > 0 (written
+    off / defaulted — closed but balance not recovered) OR an active loan
+    with DPD > 90. Clean portfolio excludes those deals.
+
+    Mirrors the Klaim `separate_portfolio()` primitive (core/analysis.py).
+    Use for learning-metric computation — DOES NOT replace the covenant-
+    facing active_outstanding population for Borrowing Base / PAR covenants.
+
+    Returns (clean_df, loss_df), both copies of the input.
+    """
+    if C_STATUS not in df.columns or C_OUTSTANDING not in df.columns:
+        # Column availability fallback — nothing to split on.
+        return df.copy(), df.iloc[0:0].copy()
+    closed_with_balance = (df[C_STATUS] == 'Closed') & (df[C_OUTSTANDING].fillna(0) > 0)
+    dpd = _dpd(df, ref_date)
+    deep_dpd_active = (df[C_STATUS] != 'Closed') & (dpd > 90)
+    loss_mask = closed_with_balance | deep_dpd_active
+    return df[~loss_mask].copy(), df[loss_mask].copy()
+
+
 def compute_silq_cdr_ccr(df, mult=1, ref_date=None):
     """Conditional Default Rate (CDR) and Conditional Collection Rate (CCR) by vintage.
 

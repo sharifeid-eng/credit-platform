@@ -831,6 +831,24 @@ def compute_aajil_customer_segments(df, mult=1, ref_date=None, aux=None):
     }
 
 
+def separate_aajil_portfolio(df):
+    """Split an Aajil DataFrame into (clean_df, loss_df) per Framework §17.
+
+    Loss definition for Aajil: Status=='Written Off'. This is the direct,
+    unambiguous classification carried on the tape (19 deals as of Apr 2026,
+    all Bullet per audit note). No heuristic needed — the status field IS
+    the loss declaration.
+
+    Mirrors Klaim's `separate_portfolio()` + SILQ's `separate_silq_portfolio()`.
+
+    Returns (clean_df, loss_df), both copies of the input.
+    """
+    if C_STATUS not in df.columns:
+        return df.copy(), df.iloc[0:0].copy()
+    loss_mask = df[C_STATUS] == 'Written Off'
+    return df[~loss_mask].copy(), df[loss_mask].copy()
+
+
 def compute_aajil_seasonality(df, mult=1, ref_date=None, aux=None):
     """YoY monthly origination patterns."""
     df_c = df.copy()

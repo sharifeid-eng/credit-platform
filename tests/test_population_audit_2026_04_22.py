@@ -533,6 +533,140 @@ class TestP02AajilYieldDual:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# P1-1 — separate_portfolio() primitives for SILQ + Aajil
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestP11SeparateSilqPortfolio:
+    """SILQ loss = Closed-with-outstanding OR active-DPD>90."""
+
+    def _make_tape(self):
+        today = pd.Timestamp('2026-03-01')
+        rows = []
+        # 3 clean active
+        for i in range(3):
+            rows.append({
+                'Deal ID': f'A{i}', 'Shop_ID': f'S{i}',
+                'Disbursed_Amount (SAR)': 100_000,
+                'Outstanding_Amount (SAR)': 80_000,
+                'Overdue_Amount (SAR)': 0,
+                'Total_Collectable_Amount (SAR)': 110_000,
+                'Amt_Repaid': 30_000, 'Margin Collected': 10_000,
+                'Principal Collected': 20_000, 'Shop_Credit_Limit (SAR)': 500_000,
+                'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+                'Disbursement_Date': today - pd.Timedelta(days=30),
+                'Repayment_Deadline': today + pd.Timedelta(days=60),
+                'Last_Collection_Date': today, 'Loan_Age': 30,
+            })
+        # 2 closed-repaid (clean)
+        for i in range(2):
+            rows.append({
+                'Deal ID': f'C{i}', 'Shop_ID': f'S{i}',
+                'Disbursed_Amount (SAR)': 100_000,
+                'Outstanding_Amount (SAR)': 0,  # cleanly closed
+                'Overdue_Amount (SAR)': 0,
+                'Total_Collectable_Amount (SAR)': 110_000,
+                'Amt_Repaid': 110_000, 'Margin Collected': 10_000,
+                'Principal Collected': 100_000, 'Shop_Credit_Limit (SAR)': 500_000,
+                'Tenure': 12, 'Loan_Status': 'Closed', 'Product': 'BNPL',
+                'Disbursement_Date': today - pd.Timedelta(days=300),
+                'Repayment_Deadline': today - pd.Timedelta(days=60),
+                'Last_Collection_Date': today - pd.Timedelta(days=30),
+                'Loan_Age': 300,
+            })
+        # 1 closed with outstanding (charged off — LOSS)
+        rows.append({
+            'Deal ID': 'L1', 'Shop_ID': 'S9',
+            'Disbursed_Amount (SAR)': 100_000,
+            'Outstanding_Amount (SAR)': 90_000,  # outstanding despite closed
+            'Overdue_Amount (SAR)': 90_000,
+            'Total_Collectable_Amount (SAR)': 110_000,
+            'Amt_Repaid': 20_000, 'Margin Collected': 0,
+            'Principal Collected': 20_000, 'Shop_Credit_Limit (SAR)': 500_000,
+            'Tenure': 12, 'Loan_Status': 'Closed', 'Product': 'BNPL',
+            'Disbursement_Date': today - pd.Timedelta(days=300),
+            'Repayment_Deadline': today - pd.Timedelta(days=60),
+            'Last_Collection_Date': today - pd.Timedelta(days=200),
+            'Loan_Age': 300,
+        })
+        # 1 active DPD > 90 (delinquent — LOSS)
+        rows.append({
+            'Deal ID': 'L2', 'Shop_ID': 'S10',
+            'Disbursed_Amount (SAR)': 100_000,
+            'Outstanding_Amount (SAR)': 100_000,
+            'Overdue_Amount (SAR)': 100_000,
+            'Total_Collectable_Amount (SAR)': 110_000,
+            'Amt_Repaid': 0, 'Margin Collected': 0, 'Principal Collected': 0,
+            'Shop_Credit_Limit (SAR)': 500_000,
+            'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+            'Disbursement_Date': today - pd.Timedelta(days=200),
+            'Repayment_Deadline': today - pd.Timedelta(days=120),  # DPD 120
+            'Last_Collection_Date': None, 'Loan_Age': 200,
+        })
+        return pd.DataFrame(rows), today
+
+    def test_loss_classification_two_deals(self):
+        from core.analysis_silq import separate_silq_portfolio
+        df, today = self._make_tape()
+        clean, loss = separate_silq_portfolio(df, ref_date=today)
+        assert len(loss) == 2  # closed-with-outstanding + active-DPD>90
+        assert set(loss['Deal ID']) == {'L1', 'L2'}
+
+    def test_clean_includes_closed_repaid(self):
+        from core.analysis_silq import separate_silq_portfolio
+        df, today = self._make_tape()
+        clean, loss = separate_silq_portfolio(df, ref_date=today)
+        # Closed loans with outstanding == 0 are CLEAN (repaid, no loss)
+        assert len(clean) == 5
+        assert {'C0', 'C1'} <= set(clean['Deal ID'])
+
+    def test_partition_preserves_all_rows(self):
+        from core.analysis_silq import separate_silq_portfolio
+        df, today = self._make_tape()
+        clean, loss = separate_silq_portfolio(df, ref_date=today)
+        assert len(clean) + len(loss) == len(df)
+
+    def test_returns_copies_not_views(self):
+        from core.analysis_silq import separate_silq_portfolio
+        df, today = self._make_tape()
+        clean, loss = separate_silq_portfolio(df, ref_date=today)
+        clean.loc[clean.index[0], 'Deal ID'] = 'MUTATED'
+        assert df.loc[clean.index[0], 'Deal ID'] != 'MUTATED'
+
+
+class TestP11SeparateAajilPortfolio:
+    """Aajil loss = Status == 'Written Off'. Direct, unambiguous."""
+
+    def test_loss_subset_is_written_off_only(self):
+        from core.analysis_aajil import separate_aajil_portfolio
+        df = _make_aajil_yield_tape()  # 5 realised + 3 accrued + 1 WO
+        clean, loss = separate_aajil_portfolio(df)
+        assert len(loss) == 1
+        assert (loss['Realised Status'] == 'Written Off').all()
+
+    def test_clean_includes_realised_and_accrued(self):
+        from core.analysis_aajil import separate_aajil_portfolio
+        df = _make_aajil_yield_tape()
+        clean, loss = separate_aajil_portfolio(df)
+        assert len(clean) == 8
+        statuses = set(clean['Realised Status'].unique())
+        assert statuses == {'Realised', 'Accrued'}
+
+    def test_partition_preserves_all_rows(self):
+        from core.analysis_aajil import separate_aajil_portfolio
+        df = _make_aajil_yield_tape()
+        clean, loss = separate_aajil_portfolio(df)
+        assert len(clean) + len(loss) == len(df)
+
+    def test_returns_copies_not_views(self):
+        from core.analysis_aajil import separate_aajil_portfolio
+        df = _make_aajil_yield_tape()
+        clean, loss = separate_aajil_portfolio(df)
+        clean.loc[clean.index[0], 'Transaction ID'] = 'MUTATED'
+        assert df.loc[clean.index[0], 'Transaction ID'] != 'MUTATED'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # P0-3 + P1-5 — Aajil PAR relabel + lifetime dual
 # ══════════════════════════════════════════════════════════════════════════════
 
