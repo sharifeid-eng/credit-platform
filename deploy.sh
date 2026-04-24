@@ -10,8 +10,41 @@ echo "=== Laith Deploy ==="
 # should have zero local edits; if `git pull` hits a conflict, we WANT to stop.
 
 # Pull latest code — record what changed
+#
+# Detect "untracked-file collides with incoming git commit" case (session 35).
+# This happens when a file was manually SCP'd to prod and LATER added to git
+# from a different machine — git pull refuses to overwrite the untracked file
+# even when byte-identical. For each colliding file, verify sha256 match with
+# the incoming git blob; if identical, remove the untracked copy so pull can
+# land cleanly. If different, stop and let the human investigate.
 echo "Pulling latest code..."
 BEFORE=$(git rev-parse HEAD)
+git fetch origin main
+# Files added by the incoming commits that currently exist untracked in the
+# working tree
+COLLIDING=$(git diff --name-only --diff-filter=A "HEAD..origin/main" 2>/dev/null | while read f; do
+    if [ -f "$f" ] && ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+        echo "$f"
+    fi
+done)
+if [ -n "$COLLIDING" ]; then
+    echo "  Detected untracked files colliding with incoming commits:"
+    echo "$COLLIDING" | sed 's/^/    /'
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        local_hash=$(sha256sum "$f" | awk '{print $1}')
+        incoming_hash=$(git cat-file -p "origin/main:$f" 2>/dev/null | sha256sum | awk '{print $1}')
+        if [ "$local_hash" = "$incoming_hash" ]; then
+            echo "  $f — identical sha256 ($local_hash); removing untracked copy"
+            rm -f "$f"
+        else
+            echo "  ⚠️  $f — local ($local_hash) != incoming ($incoming_hash)"
+            echo "     MANUAL RESOLUTION REQUIRED: back up the local file, diff vs incoming,"
+            echo "     decide which version to keep, then re-run deploy.sh."
+            exit 1
+        fi
+    done <<< "$COLLIDING"
+fi
 git pull origin main
 AFTER=$(git rev-parse HEAD)
 
