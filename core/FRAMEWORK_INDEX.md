@@ -26,7 +26,7 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 | 14 | Asset Class Decision Tree | Classification flowchart | `/onboard-company` |
 | 15 | As-of-Date Filtering & Data Integrity | Backdated view rules, metric classification | `/validate-tape`, `/framework-audit` |
 | 16 | Living Mind Architecture | Two-tier institutional memory, prompt injection layers | `/mind-review`, `/eod`, all AI endpoints |
-| 17 | Population Discipline & Tape-vs-Portfolio Duality | Seven standard populations, diagnostic ratio, confidence grading, dual-view doctrine | `/framework-audit`, `/extend-framework`, all compute fns |
+| 17 | Population Discipline & Tape-vs-Portfolio Duality | Seven standard populations, diagnostic ratio, confidence grading, dual-view doctrine, **principle propagation discipline** (session 35 add-on), **dual-view pattern taxonomy** (Pattern 1/2/3 + PAR lifetime-primary universal rule — session 36 revision) | `/framework-audit`, `/extend-framework`, all compute fns |
 | 18 | Legal Extraction & Facility Params Binding | AI extraction pipeline, 3-tier params merge | `/onboard-company`, portfolio analytics |
 | 19 | Data Room & Document Classification | File ingestion, chunking, TF-IDF indexing | `/onboard-company`, `/research-query` |
 | 20 | Research Hub & Query Engine | Claude RAG, citations | `/research-query` |
@@ -86,8 +86,9 @@ This file provides a fast lookup for Claude Code commands and sessions that need
 5. **Separation principle** — loss portfolio isolated from performance metrics
 6. **Confidence grading is mandatory** — A (observed) / B (inferred) / C (derived) on every compute-function output; method tag alone is insufficient (§10, §17)
 7. **Tape-vs-Portfolio duality** — covenant-facing metrics go on Portfolio unfiltered; learning metrics go on Tape with stale-filter + clean-book preference (§17)
-8. **Three clocks** — wrong clock = false PAR and false ineligibles
-9. **Asset-class-centric** — methodology organized by asset class, not company name
-10. **Living Mind feeds every AI prompt** — corrections, preferences, and IC feedback injected into all AI calls via 5-layer context
-11. **Legal extraction before hardcoded defaults** — facility params resolved document > manual > hardcoded
-12. **Memo numbers must match dashboard numbers** — analytics bridge calls the same compute functions as charts
+8. **Credit Quality PAR: lifetime-primary universal** — for PAR-family metrics across all asset classes, lifetime is always the headline with active/outstanding as secondary context. Cross-company IC consistency over asset-class-specific convention (§17 dual-view pattern taxonomy, session 36 revision)
+9. **Three clocks** — wrong clock = false PAR and false ineligibles
+10. **Asset-class-centric** — methodology organized by asset class, not company name
+11. **Living Mind feeds every AI prompt** — corrections, preferences, and IC feedback injected into all AI calls via 5-layer context
+12. **Legal extraction before hardcoded defaults** — facility params resolved document > manual > hardcoded
+13. **Memo numbers must match dashboard numbers** — analytics bridge calls the same compute functions as charts

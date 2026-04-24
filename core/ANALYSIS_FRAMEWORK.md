@@ -900,29 +900,37 @@ If an audit gap surfaces on company A and the fix pattern is adoptable elsewhere
 
 ### Dual-view pattern taxonomy
 
-Three distinct shapes of "dual view" have emerged; each serves a different analytical context. Codify which pattern applies when.
+Most metrics with multiple populations fall into one of three UI/rendering shapes. Pick the one that matches the metric's underlying economics.
 
-**Pattern 1: Single-primary + secondary context (lending-style)**
-- One population is the "IC-relevant primary" (the headline number).
-- Other populations are context, rendered as a subtitle / tooltip / secondary row.
-- Example: SILQ PAR — active_outstanding is primary (the live book metric for installment lending); lifetime_par30 is context.
+**Pattern 1: Single-primary + secondary context**
+- One population is the headline; others are context (subtitle, tooltip, secondary row).
 - Example: Aajil Operational WAL — clean_book (stale-filtered) is primary; realized_wal is context.
-- **When to use:** the product has a clear "live book" concept where active is the main facility basis.
+- Example: Aajil yield primary — `avg_total_yield_realised` (completed_only, A) is the cleanest realised view; blended (B) is context.
+- **When to use:** one population clearly dominates the decision the user is making (e.g., "is the live book performing?" → active; "did deals ever go bad?" → lifetime).
 
-**Pattern 2: Parallel-equal (factoring-style)**
-- Both populations are equally important — neither dominates as primary.
-- Frontend renders both with equal visual weight (e.g., two KPI cards side-by-side).
-- Example: Klaim PAR — active is covenant-bound (MMA threshold), lifetime is IC-bound (facility-exposure narrative). Both are headline.
-- **When to use:** the product has a meaningful tension between facility-covenant view and IC-narrative view where neither is clearly dominant.
+**Pattern 2: Parallel-equal**
+- Both populations are equally important — neither dominates.
+- Frontend renders both with equal visual weight (two KPI cards side-by-side, or a stacked chart).
+- **When to use:** the product has two genuinely distinct analytical lenses with no priority (rare — most metrics eventually collapse to a primary once the audience is decided).
 
-**Pattern 3: N-way population comparison (yield-style)**
+**Pattern 3: N-way population comparison**
 - Three or more populations each answer a distinct question.
-- Frontend surfaces all N with clear labels; no single primary.
+- Frontend surfaces all N with clear labels; no single primary unless one is the headline.
 - Example: Aajil yield — `avg_total_yield` (blended, B), `avg_total_yield_realised` (completed_only, A), `avg_total_yield_active` (active, A).
 - Example: Aajil collections — `overall_rate` (blended, B), `overall_rate_realised` (completed_only, A), `overall_rate_clean` (clean_book, B).
-- **When to use:** the metric inherently has 3+ analytically distinct interpretations (e.g., realised yield vs underwritten yield vs book-weighted yield).
+- **When to use:** the metric inherently has 3+ analytically distinct interpretations worth surfacing together.
 
-Applying the wrong pattern creates analyst confusion. A platform-wide lending product with Pattern 2 applied would make analysts stare at two equal-weight covenant numbers and not know which to cite. A factoring product with Pattern 1 applied would hide the IC-narrative in a tooltip. Pick the pattern that matches the asset class's underlying economics.
+**Universal convention: Credit-Quality PAR is Pattern 1 with lifetime as primary.**
+
+Earlier drafts of this taxonomy argued PAR pattern should depend on asset class (factoring → parallel-equal, lending → active-primary). Session-36 review overrode this: for the PAR family specifically (par30/60/90, par_N_inst), **lifetime is always the primary headline across all asset classes**, with active/outstanding rendered as the secondary context. Rationale:
+
+1. **Cross-company IC audience consistency.** Analysts compare Klaim's lifetime PAR to SILQ's lifetime PAR to Aajil's lifetime PAR without mentally re-normalising which denominator a given company uses. Asset-class-specific conventions create an invisible translation burden at exactly the moment — the IC meeting — when cognitive bandwidth is scarcest.
+2. **Lifetime captures what active hides.** Active PAR resets to zero as bad deals close out (written-off deals leave the active pool); lifetime PAR preserves the historical loss signal. For a 6-month vintage that wrote off 10%, lifetime PAR30 will carry that memory forward; active PAR30 might read clean the day after write-off.
+3. **Active remains available for covenant compliance.** Facility covenants (SILQ MMA, Klaim debt service coverage) are explicitly written against active pools — those thresholds still use active as the compliant-or-not number. The UI's lifetime-primary choice doesn't change the underlying covenant math; it changes which number is the *headline* credit-quality indicator.
+
+Implementation: Credit Quality KPI cards across SILQ, Klaim, Aajil, Ejari, Tamara (where PAR applies) render `lifetime_par30` as the headline value with "Active: X.XX%" as the subtitle. Compute functions continue to emit BOTH populations with full §17 disclosure — the UI chooses which goes in the headline slot.
+
+Applying the wrong pattern to non-PAR metrics still creates analyst confusion (a yield metric forced into Pattern 2 would make analysts stare at two equal-weight numbers and not know which to cite). But for PAR specifically, the pattern is fixed by convention: Pattern 1, lifetime-primary, universally.
 
 ---
 

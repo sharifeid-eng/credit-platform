@@ -33,6 +33,26 @@ def parse_ejari_workbook(filepath):
 
     Returns a dict with one key per sheet, each containing structured data
     ready for frontend rendering.
+
+    ── Framework §17 exemption ────────────────────────────────────────────
+    Ejari is an `ejari_summary` analysis_type — the ODS workbook is
+    PRE-COMPUTED by the data provider. Every rate, PAR bucket, collection
+    metric, etc. arrives already aggregated; this parser only reshapes them
+    for the frontend. The §17 "population discipline" rules (total_originated
+    vs active_outstanding vs clean_book etc.) apply to functions that
+    COMPUTE rates from a raw tape — they do not apply here because we
+    never touch individual loans.
+
+    What the upstream provider's populations are (e.g., whether PAR 30+ is
+    over active pool or lifetime) is documented in the workbook's own
+    Notes sheet and surfaced in `core/methodology_ejari.py`. If that
+    convention ever needs to change, the fix lives upstream (request a
+    different aggregation) not here.
+
+    For the same reason, the meta-audit walker in
+    `tests/test_population_discipline_meta_audit.py` does not include
+    Ejari functions in its rotation — no `_ejari_functions()` entry
+    exists, intentionally.
     """
     xls = pd.ExcelFile(filepath, engine='odf')
     result = {}
