@@ -1,6 +1,6 @@
 # Legal Extraction Schema
 
-Companion document to the Analysis Framework (Section 16). Defines **what** to extract from facility agreement PDFs and **how** the extraction engine works.
+Companion document to the Analysis Framework (Section 18). Defines **what** to extract from facility agreement PDFs and **how** the extraction engine works.
 
 ## 1. Document Types
 

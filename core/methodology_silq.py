@@ -294,10 +294,61 @@ def register_silq_methodology():
         ],
     )
 
+    # ── Population Discipline & Confidence Grading (Framework §17) ──
+    register_static_section(
+        section='Population & Confidence Declarations',
+        analysis_type='silq',
+        order=11,
+        prose=(
+            'Per Framework §17 (Population Discipline & Tape-vs-Portfolio Duality), '
+            'every SILQ compute output now carries `confidence` (A observed / B inferred '
+            '/ C derived) and a `population` code. Dual views emitted where the same '
+            'conceptual metric serves two different analytical questions.'
+        ),
+        tables=[
+            {'title': 'SILQ Covenants — Confidence + Population (compute_silq_covenants)',
+             'headers': ['Covenant', 'Method', 'Confidence', 'Population'],
+             'rows': [
+                ['PAR 30 Ratio',              'direct', 'A', 'active_outstanding'],
+                ['PAR 90 Ratio',              'direct', 'A', 'active_outstanding'],
+                ['Collection Ratio (3M Avg)', 'direct', 'A', 'specific_filter(maturing in period)'],
+                ['Repayment at Term',         'direct', 'A', 'specific_filter(matured 3-6mo window)'],
+                ['Loan-to-Value',             'manual', 'B', 'manual(facility + cash)'],
+             ]},
+            {'title': 'SILQ Concentration Limits — all Confidence A',
+             'headers': ['Limit', 'Population'],
+             'rows': [
+                ['Single Borrower Limit (tiered)', 'active_outstanding'],
+                ['Top 5 Borrower Concentration',    'active_outstanding'],
+                ['Single Product Concentration',    'active_outstanding'],
+                ['Weighted Avg Tenure',             'active_outstanding'],
+             ]},
+            {'title': 'SILQ Dual Views',
+             'headers': ['Metric', 'Primary view', 'Dual view'],
+             'rows': [
+                ['Collections',  'repayment_rate (total_originated, A)',      'repayment_rate_realised (completed_only, A)'],
+                ['Yield',        'margin_rate (total, pre-existing)',          'realised_margin_rate (Closed-only, pre-existing)'],
+             ]},
+            {'title': 'SILQ Summary Card (Overview) — Population Labels',
+             'headers': ['Field', 'Population', 'Confidence'],
+             'rows': [
+                ['par30 / par60 / par90',   'active_outstanding', 'A'],
+                ['total_outstanding',       'total_originated',   'A'],
+                ['collection_rate',         'total_originated',   'A'],
+                ['hhi_shop',                'total_originated',   'A'],
+             ]},
+        ],
+        notes=[
+            'Collection Ratio covenant maturing-period filter intentionally includes all statuses — closed-repaid loans must contribute to denominator (audit P0-1).',
+            'Primitive: separate_silq_portfolio(df, ref_date) returns (clean_df, loss_df). Loss = (Closed AND outstanding>0) OR (Active AND DPD>90).',
+            'Session 31 audit additions: see reports/metric_population_audit_2026-04-22.md.',
+        ],
+    )
+
     register_static_section(
         section='Currency Conversion',
         analysis_type='silq',
-        order=11,
+        order=12,
         prose='SILQ data is reported in Saudi Riyal (SAR). The dashboard supports toggling between SAR and USD. Non-monetary metrics (rates, percentages, days, counts) are unaffected.',
         notes=['Exchange rates are fetched live from open.er-api.com and cached for 1 hour. Falls back to static rates (SAR 0.2667) if the API is unavailable.'],
     )

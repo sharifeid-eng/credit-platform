@@ -771,7 +771,113 @@ Framework codification (added to ANALYSIS_FRAMEWORK.md)
 
 ---
 
-## 17. Legal Extraction & Facility Params Binding
+## 17. Population Discipline & the Tape-vs-Portfolio Duality
+
+Every Laith metric that expresses a rate, ratio, share, or weighted average must declare which **population** it computes over. "Population" is a deliberately stronger word than "denominator" — two metrics with the same denominator value can be measuring very different subsets (e.g. active outstanding on active_eligible vs active_outstanding itself). A population is a set of deals + the filter predicate that produced it.
+
+### The seven standard populations
+
+| Code | Definition | The question it answers |
+|---|---|---|
+| `total_originated` | Every deal in the tape, regardless of Status | "What has this product ever touched? What is its lifetime exposure?" |
+| `active_outstanding` | Status ≠ Closed/Completed, outstanding-weighted | "What is the current risk on the live book?" |
+| `active_pv` | Status ≠ Closed/Completed, face-value-weighted | "What is the current book at underwritten face value?" |
+| `completed_only` | Status = Closed/Completed (resolved) | "What has actually realised? What is the closed-book performance?" |
+| `clean_book` | `total_originated` minus loss-subset minus zombie-subset | "How does the product behave when stale tail is filtered out? (learning metric)" |
+| `loss_subset` | Deals resolved as defaults (asset-class-specific definition) | "What went wrong and why?" |
+| `zombie_subset` | Deals economically resolved but still on-book (stuck active / denial-dominant / loss-completed) | "How much of my exposure is operationally parked, not live?" |
+
+A metric reports on *one* of these. When the same conceptual metric is useful on two populations, the function returns a **dual view** (two fields on the same output dict — e.g., `wal_active_days` + `wal_total_days`; `par_active` + `par_lifetime`; `collection_rate` + `collection_rate_clean`). Dual views are not optional ornamentation — they are the defence against the population-mismatch failure mode.
+
+### The Tape-vs-Portfolio duality
+
+Every metric that appears on both Tape Analytics and Portfolio Analytics answers different questions on each surface. The discipline is:
+
+- **Portfolio Analytics is covenant-bound and unfiltered.** Its metrics use the population the facility document requires — typically `active_outstanding` or `active_outstanding → eligible`. No stale filter, no clean-book split. These metrics must match a compliance certificate if one were produced from the same data.
+- **Tape Analytics is the lens for learning about the product.** Its metrics should report a **stale-filtered version** that strips operationally-resolved-but-still-flagged deals. The learning metric answers "how does this product behave?", not "how exposed is the facility right now?".
+
+Session 30's Klaim WAL is the canonical illustration:
+
+- **Active WAL = 148d** (covenant, `active_outstanding`, Confidence A). MMA Art. 21 requires this. Path A ≤ 70d OR Path B (Extended Age ≤ 5%).
+- **Total WAL = 137d** (IC / book-wide view, `total_pv`, Confidence B via completed-deal close-age proxy). "How long does a dollar tie up, life-of-deal?"
+- **Operational WAL = 79d** (`clean_book`, PV-weighted, Confidence B). Strips zombie cohort. "How long does the live product actually take?"
+- **Realized WAL = 65d** (`completed_clean`, close-age-weighted, Confidence B). "How long did the clean book actually take to resolve?"
+
+All four are correct. They answer four different questions. Labelling any one of them as "WAL" on the IC card would mislead. The duality is:
+
+- Portfolio surface ships 148d (covenant-binding).
+- Tape surface ships 79d operational + 65d realized (learning).
+- Both surfaces display 137d total_book for reconciliation — "if you are reading both cards, here is the unfiltered number".
+
+### Diagnostic ratio — first-pass population triage
+
+When auditing a metric on a new subgroup (a company, a vintage, a customer segment), compute the diagnostic ratio:
+
+```
+diagnostic_ratio = Σ outstanding on subgroup / Σ PV on subgroup
+```
+
+And classify:
+
+| Ratio | Interpretation | Right population for that subgroup |
+|---|---|---|
+| < 1% | Fully resolved (completed or written off) | `completed_only` or `loss_subset` |
+| 1% - 5% | Nearly-resolved, operational tail | `zombie_subset` candidate |
+| 5% - 30% | Active in collection / distress | `active_outstanding` |
+| 30% - 70% | Fresh-to-mid-life active | `active_outstanding` |
+| > 70% | Very fresh origination | `active_outstanding` but thin denominator, annualise carefully |
+
+The ratio is diagnostic, not definitional — but a cohort with diagnostic_ratio < 2% computing a "collection rate" through standard `total_originated` math is almost certainly producing a number that understates the realised outcome (because outstanding → 0 means most of the denominator has resolved in one direction or another, and the "collection rate" is indistinguishable from the "write-off rate" at the aggregate level).
+
+### Confidence grading is mandatory (extension of §10)
+
+Every compute function return dict must carry a `confidence` field (or per-metric sub-fields when the function returns a bundle). Grading:
+
+- **A — Observed.** Numerator + denominator + filter are all directly observed on the tape, no proxy or model substitution. Example: `compute_ageing.total_outstanding` — outstanding = PV − Collected − Denied, all observed, no proxy.
+- **B — Inferred.** One of: (a) close-age/DPD derived from a proxy (e.g., Klaim completed-deal age via Collection days so far observed scalar → curve → Expected collection days); (b) denominator requires cross-snapshot reconstruction (e.g., roll rates); (c) filter uses a judgement threshold (e.g., `separate_portfolio` denial > 50% PV; `classify_klaim_deal_stale` stuck_active outstanding < 10% PV); (d) manual / off-tape input (observed externally, analyst-entered).
+- **C — Derived.** Value comes from a model, empirical benchmark, or single-snapshot approximation of a multi-snapshot definition. Example: `compute_par` method='derived' builds empirical benchmark from completed deals; `_compute_pv_adjusted_lgd`; Klaim `compute_expected_loss` PD; Klaim covenant Collection Ratio (cumulative, single-snapshot substitute).
+
+Dual-view functions carry per-view grades. Example: `compute_klaim_cash_duration.portfolio.duration_days_completed_only` = A; `compute_klaim_cash_duration.portfolio.duration_days` = B.
+
+Covenants specifically: the `method` field is necessary but not sufficient. `method='age_pending'` on Klaim PAR30 is tape-specific methodology, and the analyst reading "PAR30 = 12%, threshold = 7%" cannot tell from the method name that the PAR is computed off an operational-age proxy. **The covenant dict must carry `confidence` alongside `method`.** Binding after this section.
+
+Shared helper `method_to_confidence(method)` in `core/analysis.py` maps method tags to grades so compute functions can derive grade from method without a lookup-table-in-every-file.
+
+### Platform primitives
+
+Three helpers exist today for clean-book / zombie splits:
+
+- `separate_portfolio(df)` — Klaim. `(clean_df, loss_df)` where loss = Denied > 50% PV. `core/analysis.py`.
+- `separate_silq_portfolio(df, ref_date)` — SILQ. Loss = (Status='Closed' AND Outstanding > 0) OR (Status='Active' AND DPD > 90). `core/analysis_silq.py`.
+- `separate_aajil_portfolio(df)` — Aajil. Loss = Status='Written Off'. `core/analysis_aajil.py`.
+- `classify_klaim_deal_stale(df, ref_date, ineligibility_age_days=91)` / `classify_aajil_deal_stale(df, ref_date, ineligibility_age_days=180)` — asset-class stale classifiers returning per-rule masks + union. Klaim: `loss_completed` / `stuck_active` / `denial_dominant_active`. Aajil: `loss_written_off` / `stuck_active` / `overdue_dominant_active`.
+
+Every asset class should end up with its own `classify_{type}_deal_stale` (SILQ pending — candidate for next onboarding iteration) and a set of Tape-side learning metrics that consume it. This section does not prescribe which metrics — it prescribes the discipline of declaring, not the plumbing.
+
+### Decision table — picking a population for a new metric
+
+| Question the metric answers | Population to use | Confidence starter | Example |
+|---|---|---|---|
+| "How long does a dollar tie up on this product?" | `clean_book` PV-weighted | B | Klaim Operational WAL / Aajil Operational WAL |
+| "What is the covenant-bound delinquency right now?" | `active_outstanding`, eligible-filtered if covenant says so | A (if direct DPD) / B (if proxy) | SILQ Covenant PAR30 |
+| "What is the IC-grade realised loss rate on closed deals?" | `completed_only` or `loss_subset` | A | Klaim Returns `completed_loss_rate` |
+| "How concentrated is current exposure?" | `active_outstanding` | A | (Proposed — not yet implemented platform-wide) |
+| "How concentrated has the product been historically?" | `total_originated` | A | Klaim / SILQ / Aajil `compute_hhi` today |
+| "Which vintages went worst?" | `total_originated` (per-vintage slice), then `loss_subset` for attribution | A | `compute_cohort_loss_waterfall` |
+| "What is the book behaving like — not what is the facility bound to?" | `clean_book` or `completed_only` | B | Klaim `compute_cohorts.collection_rate_clean` / SILQ `repayment_rate_realised` / Aajil `overall_rate_clean` |
+| "Is the unresolved operational tail growing?" | `zombie_subset` | B | Klaim `compute_klaim_stale_exposure` |
+| "What is the forward PD on a healthy deal?" | `clean_book` for cohort; calibration on `completed_only` | B | Klaim `compute_facility_pd` |
+| "Vintage × MOB performance heatmap — against long-run or same-age peers?" | Flat-percentile over all cells for long-run; age-bucketed for peer-comparison. Current Tamara implementation is flat. | B | Tamara `_enrich_vintage_heatmap._color_scale` |
+
+### Backwards compat for dual-view rollout
+
+When adding a dual view to an existing metric, **keep the pre-existing field name** and add the new view alongside (e.g., `compute_cohorts` keeps `collection_rate` and adds `collection_rate_clean`). The frontend that only reads the old field keeps working; new analyst-facing code can consume the population-honest view. A later cleanup pass can rename the pre-existing field if the blended semantics is truly unwanted — but the migration must be explicit.
+
+This is not optional — silently changing the semantics of a field that IC memos have cited for a year is how methodology drift gets into archived IC documents.
+
+---
+
+## 18. Legal Extraction & Facility Params Binding
 
 AI-powered extraction of facility agreement terms — the third analytical pillar alongside tape analytics and portfolio monitoring. Instead of manually keying covenant thresholds and advance rates, Claude reads the facility agreement PDF and populates the system.
 
@@ -846,7 +952,7 @@ Initial extraction from the Klaim facility agreement revealed discrepancies vs h
 
 ---
 
-## 18. Data Room & Document Classification
+## 19. Data Room & Document Classification
 
 Generalized data room ingestion for any company's document collection. The Tamara onboarding proved that ~100 heterogeneous files can be parsed, classified, and indexed into a searchable research corpus. This section formalizes the pattern as a platform capability.
 
@@ -930,7 +1036,7 @@ Each product maintains a registry at `data/{co}/{prod}/dataroom/registry.json`:
 
 ---
 
-## 19. Research Hub & Query Engine
+## 20. Research Hub & Query Engine
 
 Research intelligence powered by Claude RAG, accessible through a dedicated Research page in the frontend. The Research Hub answers natural-language questions across all ingested documents, analytics snapshots, and mind entries.
 
@@ -976,7 +1082,7 @@ Research answers can cite both data room documents AND platform-computed analyti
 
 ---
 
-## 20. IC Memo Generation Pipeline
+## 21. IC Memo Generation Pipeline
 
 AI-powered investment memo generation with structured templates, analytics integration, versioned workflow, and feedback loop. The memo engine produces investment-committee-ready documents where every number matches the dashboard.
 
@@ -1093,7 +1199,7 @@ This creates a self-improving cycle: the first memo for a new company may need h
 
 ---
 
-## 21. Intelligence System & Knowledge Graph
+## 22. Intelligence System & Knowledge Graph
 
 Self-learning institutional memory built in 7 phases. The system captures corrections, extracts entities, detects patterns across companies, and feeds accumulated knowledge into every AI prompt.
 

@@ -666,11 +666,73 @@ def register_klaim_methodology():
         fn_name = sec.pop('function')
         METRIC_REGISTRY.append(sec)
 
-    # ── 18. Currency Conversion (static section) ──
+    # ── 18. Population Discipline & Confidence Grading (Framework §17) ──
+    # Documents the session 31 audit additions: every covenant + limit +
+    # top-level metric output dict now carries `confidence` + `population`
+    # fields. Dual views (Active/Lifetime PAR; Active/Total WAL; blended/
+    # clean cohort rates) are listed so analysts can map fields → audit.
+    register_static_section(
+        section='Population & Confidence Declarations',
+        analysis_type='klaim',
+        order=18,
+        prose=(
+            'Per Framework §17 (Population Discipline & Tape-vs-Portfolio Duality), '
+            'every compute function output carries a `confidence` grade (A observed / '
+            'B inferred / C derived) and a `population` code. Dual views are emitted '
+            'where the same conceptual metric serves two different analytical '
+            'questions. This section catalogues the declarations added for Klaim.'
+        ),
+        tables=[
+            {'title': 'Klaim Covenants — Confidence + Population (compute_klaim_covenants)',
+             'headers': ['Covenant', 'Method', 'Confidence', 'Population'],
+             'rows': [
+                ['Minimum Cash Balance', 'manual', 'B', 'manual(cash + net_burn)'],
+                ['WAL of Receivables',    'stable', 'A (active) / B (total)', 'active_outstanding (covenant) + total_pv (IC view)'],
+                ['PAR30',                 'age_pending', 'B', 'active_outstanding'],
+                ['PAR60',                 'age_pending', 'B', 'active_outstanding'],
+                ['Collection Ratio',      'cumulative', 'C', 'total_originated'],
+                ['Paid vs Due',           'direct/proxy', 'A (direct) / B (proxy)', 'specific_filter(expected_payment_date in period)'],
+                ['Parent Cash Balance',   'manual', 'B', 'manual(parent cash + burn)'],
+             ]},
+            {'title': 'Klaim Concentration Limits — Confidence + Population',
+             'headers': ['Limit', 'Confidence', 'Population'],
+             'rows': [
+                ['Single receivable',              'A',         'active_outstanding'],
+                ['Top-10 Receivables',             'A',         'active_outstanding'],
+                ['Single customer (Group)',        'A',         'active_outstanding'],
+                ['Single payer (Group proxy)',     'B',         'active_outstanding'],  # Confidence A when Payer column present
+                ['Extended Age Receivables',      'A',         'active_outstanding'],
+             ]},
+            {'title': 'Dual Views (Tape-side learning + Portfolio-side covenant)',
+             'headers': ['Metric', 'Tape view', 'Portfolio view'],
+             'rows': [
+                ['PAR',              'Active + Lifetime (dual denominators)',        'Active (covenant)'],
+                ['WAL',              'Operational + Realized (clean-book)',           'Active (outstanding-weighted)'],
+                ['Cohort rates',     'collection_rate_clean + denial_rate_clean',     'n/a'],
+                ['Collection Rate',  'total_originated (blended)',                    'Cumulative (Confidence C)'],
+                ['Cash Duration',    'duration_days + duration_days_completed_only',  'n/a'],
+             ]},
+            {'title': 'Stress Test — intentionally on full book',
+             'headers': ['Field', 'Value'],
+             'rows': [
+                ['population',      'total_originated'],
+                ['confidence',      'B (scenario-based)'],
+                ['separation_note', 'Call separate_portfolio(df)[0] for clean-book stress'],
+             ]},
+        ],
+        notes=[
+            'Helper: method_to_confidence(method) in core/analysis.py maps method tags to grades.',
+            'Stale classifier: classify_klaim_deal_stale returns 3 masks (loss_completed, stuck_active, denial_dominant_active) + any_stale union.',
+            'Separation primitives: separate_portfolio() in core/analysis.py.',
+            'Session 30 + 2026-04-22 audit introduced this discipline. See reports/metric_population_audit_2026-04-22.md.',
+        ],
+    )
+
+    # ── 19. Currency Conversion (static section) ──
     register_static_section(
         section='Currency Conversion',
         analysis_type='klaim',
-        order=18,
+        order=19,
         prose='Each portfolio company reports data in a local currency configured via config.json. All monetary values can be toggled between the reported currency and USD.',
         tables=[
             {'title': 'Supported Currencies', 'headers': ['Currency', 'USD Rate', 'Notes'], 'rows': [
