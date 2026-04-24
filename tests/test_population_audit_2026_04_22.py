@@ -913,6 +913,108 @@ class TestP11SeparateAajilPortfolio:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP: Platform-wide HHI clean-book duals (UNCERTAIN 3 full resolution)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestKlaimHHIDual:
+    def _make_tape(self):
+        """Mixed tape: 3 clean + 1 loss-subset (denial > 50% PV) in Group G1."""
+        today = pd.Timestamp('2026-04-15')
+        rows = []
+        # G1: 3 healthy + 1 denial-dominant
+        for _ in range(3):
+            rows.append({
+                'Deal date': today - pd.Timedelta(days=180),
+                'Status': 'Completed',
+                'Purchase value': 100_000, 'Purchase price': 95_000,
+                'Collected till date': 95_000,
+                'Denied by insurance': 5_000,
+                'Pending insurance response': 0,
+                'Expected total': 100_000, 'Discount': 0.05,
+                'Group': 'G1', 'Product': 'X',
+            })
+        rows.append({
+            'Deal date': today - pd.Timedelta(days=180),
+            'Status': 'Completed',
+            'Purchase value': 100_000, 'Purchase price': 95_000,
+            'Collected till date': 10_000,
+            'Denied by insurance': 80_000,   # > 50% → loss subset
+            'Pending insurance response': 0,
+            'Expected total': 100_000, 'Discount': 0.05,
+            'Group': 'G1', 'Product': 'X',
+        })
+        # G2: 2 healthy — adds separation on clean
+        for _ in range(2):
+            rows.append({
+                'Deal date': today - pd.Timedelta(days=200),
+                'Status': 'Completed',
+                'Purchase value': 100_000, 'Purchase price': 95_000,
+                'Collected till date': 95_000,
+                'Denied by insurance': 5_000,
+                'Pending insurance response': 0,
+                'Expected total': 100_000, 'Discount': 0.05,
+                'Group': 'G2', 'Product': 'Y',
+            })
+        return pd.DataFrame(rows)
+
+    def test_hhi_clean_field_present(self):
+        from core.analysis import compute_hhi
+        df = self._make_tape()
+        res = compute_hhi(df, mult=1)
+        assert 'hhi_clean' in res['group']
+        assert res['group']['population'] == 'total_originated'
+        assert res['group']['population_clean'] == 'clean_book'
+        assert res['group']['confidence'] == 'A'
+        assert res['group']['confidence_clean'] == 'B'
+
+    def test_hhi_clean_differs_from_blended_when_loss_present(self):
+        """Loss deal in G1 changes the squared-share numerator → values differ."""
+        from core.analysis import compute_hhi
+        df = self._make_tape()
+        res = compute_hhi(df, mult=1)
+        assert res['group']['hhi'] != res['group']['hhi_clean']
+
+    def test_hhi_for_snapshot_dual(self):
+        from core.analysis import compute_hhi_for_snapshot
+        df = self._make_tape()
+        res = compute_hhi_for_snapshot(df, mult=1)
+        assert 'group_hhi' in res
+        assert 'group_hhi_clean' in res
+        assert res['group_hhi'] is not None
+        assert res['group_hhi_clean'] is not None
+        assert res['group_hhi'] != res['group_hhi_clean']
+
+    def test_hhi_for_snapshot_clean_none_when_column_missing(self):
+        from core.analysis import compute_hhi_for_snapshot
+        df = self._make_tape()
+        df = df.drop(columns=['Provider'], errors='ignore')  # no Provider column anyway
+        res = compute_hhi_for_snapshot(df, mult=1)
+        assert res['provider_hhi'] is None
+        assert res['provider_hhi_clean'] is None
+
+
+class TestSILQHHIDual:
+    def test_hhi_clean_field_present(self):
+        from core.analysis_silq import compute_silq_concentration
+        df, _ = _make_silq_stale_tape()
+        res = compute_silq_concentration(df, mult=1)
+        assert 'hhi_clean' in res
+        assert res['hhi_population']       == 'total_originated'
+        assert res['hhi_clean_population'] == 'clean_book'
+        assert res['hhi_confidence']       == 'A'
+        assert res['hhi_clean_confidence'] == 'B'
+
+    def test_hhi_clean_computed_when_stale_present(self):
+        from core.analysis_silq import compute_silq_concentration
+        df, _ = _make_silq_stale_tape()
+        res = compute_silq_concentration(df, mult=1)
+        # 3 stale rows in tape → clean HHI should differ from blended
+        assert res['hhi_clean'] is not None
+        assert res['hhi_clean'] != res['hhi']
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FOLLOW-UP: SILQ stale classifier + Operational WAL (Framework §17 consistency)
 # ══════════════════════════════════════════════════════════════════════════════
 

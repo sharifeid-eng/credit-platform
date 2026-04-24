@@ -993,17 +993,50 @@ def compute_hhi(df, mult):
     """HHI concentration indices on Group, Provider and Product + top-N exposure caps.
 
     Provider is emitted only when the column is present (Apr 2026+ tapes).
+
+    Framework §17 dual view (platform-wide UNCERTAIN 3 resolution):
+    - hhi / top_N_pct / max_* fields: total_originated population,
+      Confidence A. Pre-existing — "how concentrated has the product
+      been historically?"
+    - hhi_clean / top_N_pct_clean / max_*_clean fields: clean_book
+      population (loss-subset stripped via separate_portfolio),
+      Confidence B. "How concentrated is the product when write-offs
+      are removed?" — answers the current-exposure question.
     """
     total = df['Purchase value'].sum() * mult
     result = {}
+
+    # Pre-compute clean subset once (Framework §17 — clean_book population)
+    clean_df, _loss_df = separate_portfolio(df, mult=1)
+    clean_total = clean_df['Purchase value'].sum() * mult if len(clean_df) else 0
 
     for col_name, key in [('Group', 'group'), ('Provider', 'provider'), ('Product', 'product')]:
         if col_name not in df.columns:
             continue
         agg = df.groupby(col_name)['Purchase value'].sum() * mult
-        shares = agg / total
+        shares = agg / total if total > 0 else agg
         hhi = float((shares ** 2).sum())
         sorted_shares = shares.sort_values(ascending=False)
+
+        # Clean-book HHI — stripped of loss-subset
+        clean_entry = {'hhi_clean': None, 'top_1_pct_clean': None,
+                       'top_5_pct_clean': None, 'top_10_pct_clean': None,
+                       'count_clean': 0, 'max_name_clean': '',
+                       'max_value_clean': 0}
+        if clean_total > 0 and col_name in clean_df.columns:
+            c_agg = clean_df.groupby(col_name)['Purchase value'].sum() * mult
+            c_shares = c_agg / clean_total
+            c_sorted = c_shares.sort_values(ascending=False)
+            clean_entry = {
+                'hhi_clean':       round(float((c_shares ** 2).sum()), 4),
+                'top_1_pct_clean': round(float(c_sorted.iloc[0]) * 100, 1) if len(c_sorted) >= 1 else 0,
+                'top_5_pct_clean': round(float(c_sorted.head(5).sum()) * 100, 1) if len(c_sorted) >= 5 else round(float(c_sorted.sum()) * 100, 1),
+                'top_10_pct_clean': round(float(c_sorted.head(10).sum()) * 100, 1) if len(c_sorted) >= 10 else round(float(c_sorted.sum()) * 100, 1),
+                'count_clean':      int(len(c_sorted)),
+                'max_name_clean':   str(c_sorted.index[0]) if len(c_sorted) >= 1 else '',
+                'max_value_clean':  round(float(c_agg.max()), 2) if len(c_agg) else 0,
+            }
+
         result[key] = {
             'hhi':       round(hhi, 4),
             'top_1_pct': round(float(sorted_shares.iloc[0]) * 100, 1) if len(sorted_shares) >= 1 else 0,
@@ -1012,6 +1045,12 @@ def compute_hhi(df, mult):
             'count':      int(len(sorted_shares)),
             'max_name':   str(sorted_shares.index[0]) if len(sorted_shares) >= 1 else '',
             'max_value':  round(float(agg.max()), 2) if len(agg) else 0,
+            # Framework §17 declarations
+            'population':           'total_originated',
+            'confidence':           'A',
+            'population_clean':     'clean_book',
+            'confidence_clean':     'B',
+            **clean_entry,
         }
 
     return result
@@ -3029,19 +3068,32 @@ def compute_klaim_stale_exposure(df, mult, ref_date=None, facility_params=None):
 def compute_hhi_for_snapshot(df, mult):
     """Compute HHI for a single snapshot — used by the time series endpoint.
 
-    Emits group_hhi, provider_hhi (Apr 2026+ only), product_hhi. Missing columns
-    yield None so frontend can render a null-aware line per-series.
+    Emits group_hhi / provider_hhi / product_hhi (total_originated,
+    Confidence A) and a parallel group_hhi_clean / provider_hhi_clean /
+    product_hhi_clean series (clean_book, Confidence B) per Framework §17.
+    Missing columns yield None so frontend can render null-aware lines.
     """
     total = (df['Purchase value'] * mult).sum()
     result = {}
 
+    # Clean subset once per snapshot (Framework §17)
+    clean_df, _loss_df = separate_portfolio(df, mult=1)
+    clean_total = (clean_df['Purchase value'] * mult).sum() if len(clean_df) else 0
+
     for col_name, key in [('Group', 'group'), ('Provider', 'provider'), ('Product', 'product')]:
         if col_name not in df.columns:
             result[f'{key}_hhi'] = None
+            result[f'{key}_hhi_clean'] = None
             continue
-        shares = df.groupby(col_name)['Purchase value'].sum() * mult / total
+        shares = df.groupby(col_name)['Purchase value'].sum() * mult / total if total > 0 else df.groupby(col_name)['Purchase value'].sum() * 0
         hhi = float((shares ** 2).sum())
         result[f'{key}_hhi'] = round(hhi, 6)
+
+        if clean_total > 0 and col_name in clean_df.columns:
+            c_shares = clean_df.groupby(col_name)['Purchase value'].sum() * mult / clean_total
+            result[f'{key}_hhi_clean'] = round(float((c_shares ** 2).sum()), 6)
+        else:
+            result[f'{key}_hhi_clean'] = None
 
     return result
 

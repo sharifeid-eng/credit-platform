@@ -339,9 +339,10 @@ def compute_silq_collections(df, mult=1):
 
 def compute_silq_concentration(df, mult=1):
     df = _ensure_str_shop_id(df)
-    # Shop concentration
+    # Shop concentration (Framework §17 dual view: total_originated + clean_book)
     shops = []
     hhi = 0
+    hhi_clean = None
     if C_SHOP_ID in df.columns and C_DISBURSED in df.columns:
         shop_totals = df.groupby(C_SHOP_ID)[C_DISBURSED].sum().sort_values(ascending=False)
         total = shop_totals.sum()
@@ -354,6 +355,15 @@ def compute_silq_concentration(df, mult=1):
                 'share': _safe(val / total * 100 if total else 0),
                 'deals': int((df[C_SHOP_ID] == shop_id).sum()),
             })
+
+        # Clean-book HHI (UNCERTAIN 3 platform-wide — strips charge-off + deep-DPD)
+        clean_df, _loss_df = separate_silq_portfolio(df)
+        if len(clean_df) > 0 and C_DISBURSED in clean_df.columns:
+            c_shop_totals = clean_df.groupby(C_SHOP_ID)[C_DISBURSED].sum()
+            c_total = c_shop_totals.sum()
+            if c_total > 0:
+                c_shares = c_shop_totals / c_total
+                hhi_clean = float((c_shares ** 2).sum())
 
     # Credit limit utilization
     utilization = []
@@ -404,6 +414,11 @@ def compute_silq_concentration(df, mult=1):
     return {
         'shops': shops,
         'hhi': _safe(hhi),
+        'hhi_clean': _safe(hhi_clean),  # Framework §17 dual view
+        'hhi_population':       'total_originated',
+        'hhi_confidence':       'A',
+        'hhi_clean_population': 'clean_book',
+        'hhi_clean_confidence': 'B',
         'utilization': utilization,
         'product_mix': product_mix,
         'size_distribution': size_dist,
