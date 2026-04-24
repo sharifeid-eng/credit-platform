@@ -104,14 +104,37 @@ def compute_silq_summary(df, mult=1, ref_date=None):
     collection_rate = (total_repaid / total_collectable * 100) if total_collectable else 0
     overdue_rate = (total_overdue / total_outstanding * 100) if total_outstanding else 0
 
-    # GBV-weighted PAR: Outstanding of DPD>X / Total Outstanding of active loans
+    # GBV-weighted PAR: Outstanding of DPD>X / Total Outstanding of active loans.
+    # Framework §17 dual view (session 34 follow-up):
+    #   par30/60/90          — active_outstanding denominator (PRIMARY for SILQ —
+    #                          active pool IS the live book for installment lending).
+    #   par30_amount/…       — absolute SAR at-risk (PAR numerator); replaces the
+    #                          frontend's old par% × total_outstanding math, which
+    #                          was semantically wrong (mixed numerators/denominators).
+    #   lifetime_par30/60/90 — same numerator / total_disbursed denominator
+    #                          (lifetime IC view; Klaim-style dual). Typically much
+    #                          smaller than active PAR because lifetime denom is
+    #                          bigger (includes closed + written-off disbursements).
     active_mask = df[C_STATUS] != 'Closed' if C_STATUS in df.columns else pd.Series(True, index=df.index)
     active_df = df[active_mask]
     active_dpd = _dpd(active_df, ref_date)
     total_active_out = active_df[C_OUTSTANDING].sum() if C_OUTSTANDING in active_df.columns else 0
-    par30 = float(active_df.loc[active_dpd > 30, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
-    par60 = float(active_df.loc[active_dpd > 60, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
-    par90 = float(active_df.loc[active_dpd > 90, C_OUTSTANDING].sum() / max(total_active_out, 1) * 100) if total_active_out else 0
+    par30_amount_raw = active_df.loc[active_dpd > 30, C_OUTSTANDING].sum() if C_OUTSTANDING in active_df.columns else 0
+    par60_amount_raw = active_df.loc[active_dpd > 60, C_OUTSTANDING].sum() if C_OUTSTANDING in active_df.columns else 0
+    par90_amount_raw = active_df.loc[active_dpd > 90, C_OUTSTANDING].sum() if C_OUTSTANDING in active_df.columns else 0
+    par30 = float(par30_amount_raw / max(total_active_out, 1) * 100) if total_active_out else 0
+    par60 = float(par60_amount_raw / max(total_active_out, 1) * 100) if total_active_out else 0
+    par90 = float(par90_amount_raw / max(total_active_out, 1) * 100) if total_active_out else 0
+    # Absolute SAR at-risk — apply mult so the value is in display currency
+    par30_amount = float(par30_amount_raw) * mult
+    par60_amount = float(par60_amount_raw) * mult
+    par90_amount = float(par90_amount_raw) * mult
+    total_active_out_mult = float(total_active_out) * mult
+    # Lifetime PAR — same numerator / total_disbursed denom (SAR, apply mult)
+    total_disbursed_for_par = float(total_disbursed)  # already multiplied
+    lifetime_par30 = float(par30_amount / total_disbursed_for_par * 100) if total_disbursed_for_par > 0 else 0
+    lifetime_par60 = float(par60_amount / total_disbursed_for_par * 100) if total_disbursed_for_par > 0 else 0
+    lifetime_par90 = float(par90_amount / total_disbursed_for_par * 100) if total_disbursed_for_par > 0 else 0
 
     avg_tenure = float(df[C_TENURE].mean()) if C_TENURE in df.columns else 0
 
@@ -146,6 +169,17 @@ def compute_silq_summary(df, mult=1, ref_date=None):
         'par30': _safe(par30),
         'par60': _safe(par60),
         'par90': _safe(par90),
+        # Framework §17 dual-view fields (session 34 follow-up: SILQ PAR gap).
+        # Absolute SAR at-risk (PAR numerator) — replaces the old frontend math
+        # which computed par% × total_outstanding (semantically wrong).
+        'par30_amount': _safe(par30_amount),
+        'par60_amount': _safe(par60_amount),
+        'par90_amount': _safe(par90_amount),
+        'total_active_outstanding': _safe(total_active_out_mult),
+        # Lifetime PAR — same numerator / total_disbursed (lifetime IC view)
+        'lifetime_par30': _safe(lifetime_par30),
+        'lifetime_par60': _safe(lifetime_par60),
+        'lifetime_par90': _safe(lifetime_par90),
         'avg_tenure': _safe(avg_tenure),
         'product_mix': product_mix,
         'hhi_shop': _safe(hhi_shop),
@@ -154,7 +188,8 @@ def compute_silq_summary(df, mult=1, ref_date=None):
         # PAR denominator is active_outstanding, total_outstanding is
         # all-statuses. Both are displayed; these fields let the frontend
         # label them correctly without a subtitle hack.
-        'par_population': 'active_outstanding',
+        'par_population': 'active_outstanding',           # primary view
+        'par_lifetime_population': 'total_originated',    # dual view (Framework §17)
         'par_confidence': 'A',
         'total_outstanding_population': 'total_originated',
         'collection_rate_population': 'total_originated',

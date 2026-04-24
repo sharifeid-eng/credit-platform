@@ -406,11 +406,24 @@ function SilqOverviewTab({ summary, summaryLoading, company, product, snapshot, 
     { label: 'Total Repaid',     value: fmt(summary.total_repaid),     sub: 'cumulative collections',               color: 'teal', stale: bd },
   ] : Array(10).fill(null)
 
-  // Credit Quality — PAR as dedicated section (consistent with Klaim)
+  // Credit Quality — PAR as dedicated section (consistent with Klaim).
+  // Framework §17 dual view: active_outstanding stays as primary (lending
+  // products' IC-relevant read is "what fraction of the live book is
+  // delinquent") + lifetime_par* as context, displayed in the confidence
+  // badge tooltip. Subtitle now uses the absolute par*_amount from the
+  // backend (PAR numerator) — prior code multiplied par% × total_outstanding
+  // which was arithmetically meaningless (active-% × total-denom).
+  const silqParBuildSub = (amount, lifetimePct) => {
+    const atRisk = amount != null ? `${ccy} ${(amount / 1000).toFixed(0)}K at risk` : '—'
+    if (lifetimePct != null && lifetimePct > 0) {
+      return `${atRisk} · Lifetime: ${lifetimePct.toFixed(2)}%`
+    }
+    return atRisk
+  }
   const parKpis = summary ? [
-    { label: 'PAR 30+', value: pct(summary.par30), sub: `${ccy} ${((summary.par30 ?? 0) * (summary.total_outstanding ?? 0) / 100 / 1000).toFixed(0)}K at risk`, color: summary.par30 > 20 ? 'red' : summary.par30 > 10 ? 'gold' : 'teal', stale: bd },
-    { label: 'PAR 60+', value: pct(summary.par60), sub: `${ccy} ${((summary.par60 ?? 0) * (summary.total_outstanding ?? 0) / 100 / 1000).toFixed(0)}K at risk`, color: summary.par60 > 10 ? 'red' : summary.par60 > 5 ? 'gold' : 'teal', stale: bd },
-    { label: 'PAR 90+', value: pct(summary.par90), sub: `${ccy} ${((summary.par90 ?? 0) * (summary.total_outstanding ?? 0) / 100 / 1000).toFixed(0)}K at risk`, color: summary.par90 > 5 ? 'red' : summary.par90 > 2 ? 'gold' : 'teal', stale: bd },
+    { label: 'PAR 30+', value: pct(summary.par30), sub: silqParBuildSub(summary.par30_amount, summary.lifetime_par30), color: summary.par30 > 20 ? 'red' : summary.par30 > 10 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_population || 'active_outstanding', confidenceNote: summary.lifetime_par30 != null ? `Lifetime PAR 30+ (vs total disbursed): ${summary.lifetime_par30.toFixed(2)}%` : undefined },
+    { label: 'PAR 60+', value: pct(summary.par60), sub: silqParBuildSub(summary.par60_amount, summary.lifetime_par60), color: summary.par60 > 10 ? 'red' : summary.par60 > 5 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_population || 'active_outstanding', confidenceNote: summary.lifetime_par60 != null ? `Lifetime PAR 60+ (vs total disbursed): ${summary.lifetime_par60.toFixed(2)}%` : undefined },
+    { label: 'PAR 90+', value: pct(summary.par90), sub: silqParBuildSub(summary.par90_amount, summary.lifetime_par90), color: summary.par90 > 5 ? 'red' : summary.par90 > 2 ? 'gold' : 'teal', stale: bd, confidence: summary.par_confidence || 'A', population: summary.par_population || 'active_outstanding', confidenceNote: summary.lifetime_par90 != null ? `Lifetime PAR 90+ (vs total disbursed): ${summary.lifetime_par90.toFixed(2)}%` : undefined },
   ] : []
 
   const showSkeleton = summaryLoading || !summary

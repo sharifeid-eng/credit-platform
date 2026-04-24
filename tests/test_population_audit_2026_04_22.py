@@ -648,6 +648,153 @@ class TestP18SILQSummaryPopulationLabels:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP (post-sweep user report): SILQ PAR lifetime dual + absolute amount
+#   User observed SILQ Credit Quality card showed PAR% "vs Active Outstanding"
+#   with an incorrect at-risk subtitle (active% × total_outstanding — mixed
+#   numerator/denominator). My audit had flagged Klaim's dual PAR (already
+#   implemented session 30) and Aajil's dual PAR (P1-5, implemented session
+#   34) but missed the equivalent SILQ treatment. Closing the gap now.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSILQPARLifetimeDualFollowup:
+    def _make_silq_par_tape(self):
+        """Mixed SILQ tape with active delinquent + closed-repaid + some
+        lifetime-only capital (closed) to exercise the dual-view math."""
+        today = pd.Timestamp('2026-04-24')
+        rows = []
+        # 10 active current
+        for i in range(10):
+            rows.append({
+                'Deal ID': f'A{i}', 'Shop_ID': f'S{i%3}',
+                'Disbursed_Amount (SAR)': 100_000,
+                'Outstanding_Amount (SAR)': 80_000,
+                'Overdue_Amount (SAR)': 0,
+                'Total_Collectable_Amount (SAR)': 110_000,
+                'Amt_Repaid': 30_000, 'Margin Collected': 10_000,
+                'Principal Collected': 20_000, 'Shop_Credit_Limit (SAR)': 500_000,
+                'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+                'Disbursement_Date': today - pd.Timedelta(days=60),
+                'Repayment_Deadline': today + pd.Timedelta(days=30),
+                'Last_Collection_Date': today - pd.Timedelta(days=5), 'Loan_Age': 60,
+            })
+        # 5 active delinquent (100 DPD)
+        for i in range(5):
+            rows.append({
+                'Deal ID': f'D{i}', 'Shop_ID': f'S{i}',
+                'Disbursed_Amount (SAR)': 100_000,
+                'Outstanding_Amount (SAR)': 100_000,
+                'Overdue_Amount (SAR)': 100_000,
+                'Total_Collectable_Amount (SAR)': 110_000,
+                'Amt_Repaid': 0, 'Margin Collected': 0, 'Principal Collected': 0,
+                'Shop_Credit_Limit (SAR)': 500_000,
+                'Tenure': 12, 'Loan_Status': 'Active', 'Product': 'BNPL',
+                'Disbursement_Date': today - pd.Timedelta(days=200),
+                'Repayment_Deadline': today - pd.Timedelta(days=100),  # 100 DPD
+                'Last_Collection_Date': None, 'Loan_Age': 200,
+            })
+        # 10 closed-repaid (contribute to total_disbursed but not active_outstanding)
+        for i in range(10):
+            rows.append({
+                'Deal ID': f'C{i}', 'Shop_ID': f'S{i%3}',
+                'Disbursed_Amount (SAR)': 100_000,
+                'Outstanding_Amount (SAR)': 0,
+                'Overdue_Amount (SAR)': 0,
+                'Total_Collectable_Amount (SAR)': 110_000,
+                'Amt_Repaid': 110_000, 'Margin Collected': 10_000,
+                'Principal Collected': 100_000, 'Shop_Credit_Limit (SAR)': 500_000,
+                'Tenure': 12, 'Loan_Status': 'Closed', 'Product': 'BNPL',
+                'Disbursement_Date': today - pd.Timedelta(days=300),
+                'Repayment_Deadline': today - pd.Timedelta(days=60),
+                'Last_Collection_Date': today - pd.Timedelta(days=30),
+                'Loan_Age': 300,
+            })
+        return pd.DataFrame(rows), today
+
+    def test_par_amounts_absolute_sar_surface_present(self):
+        from core.analysis_silq import compute_silq_summary
+        df, today = self._make_silq_par_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        # 5 delinquent loans × 100K outstanding = 500K at risk (> 30 DPD, > 60, > 90)
+        assert res['par30_amount'] == pytest.approx(500_000, abs=1)
+        assert res['par60_amount'] == pytest.approx(500_000, abs=1)
+        assert res['par90_amount'] == pytest.approx(500_000, abs=1)
+
+    def test_active_par_denominator_sanity(self):
+        from core.analysis_silq import compute_silq_summary
+        df, today = self._make_silq_par_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        # Active outstanding = 10 × 80K + 5 × 100K = 1,300K
+        # PAR30% = 500K / 1,300K ≈ 38.46%
+        assert res['total_active_outstanding'] == pytest.approx(1_300_000, abs=1)
+        assert res['par30'] == pytest.approx(38.46, abs=0.1)
+
+    def test_lifetime_par_uses_total_disbursed_denominator(self):
+        from core.analysis_silq import compute_silq_summary
+        df, today = self._make_silq_par_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        # Total disbursed = 25 loans × 100K = 2,500K
+        # Lifetime PAR30% = 500K / 2,500K = 20.00%
+        assert res['total_disbursed'] == pytest.approx(2_500_000, abs=1)
+        assert res['lifetime_par30'] == pytest.approx(20.00, abs=0.1)
+
+    def test_lifetime_par_strictly_smaller_than_active_par_when_closed_loans_exist(self):
+        """Lifetime denom > active denom → lifetime PAR < active PAR.
+        This is the arithmetic invariant that makes the dual view meaningful."""
+        from core.analysis_silq import compute_silq_summary
+        df, today = self._make_silq_par_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        assert res['lifetime_par30'] < res['par30']
+        assert res['lifetime_par60'] < res['par60']
+        assert res['lifetime_par90'] < res['par90']
+
+    def test_dual_view_population_declarations_present(self):
+        from core.analysis_silq import compute_silq_summary
+        df, today = self._make_silq_par_tape()
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        # Framework §17 dual population declarations
+        assert res['par_population'] == 'active_outstanding'
+        assert res['par_lifetime_population'] == 'total_originated'
+
+    def test_currency_multiplier_applied_to_absolute_fields(self):
+        """par*_amount fields must honour the display-currency multiplier so
+        the SAR-absolute subtitle renders correctly when the user toggles USD."""
+        from core.analysis_silq import compute_silq_summary
+        df, today = self._make_silq_par_tape()
+        sar = compute_silq_summary(df, mult=1, ref_date=today)
+        usd = compute_silq_summary(df, mult=0.2667, ref_date=today)
+        # USD value should be ~26.67% of SAR value
+        assert usd['par30_amount'] == pytest.approx(sar['par30_amount'] * 0.2667, rel=0.01)
+        assert usd['total_active_outstanding'] == pytest.approx(sar['total_active_outstanding'] * 0.2667, rel=0.01)
+        # But percentages are FX-invariant (rate on rate)
+        assert usd['par30'] == pytest.approx(sar['par30'], abs=0.01)
+        assert usd['lifetime_par30'] == pytest.approx(sar['lifetime_par30'], abs=0.01)
+
+    def test_zero_active_loans_returns_zero_par_without_crash(self):
+        """Edge case: if only closed loans exist, active_outstanding=0.
+        Function must return 0 PAR% cleanly (no div-by-zero)."""
+        from core.analysis_silq import compute_silq_summary
+        import pandas as pd
+        today = pd.Timestamp('2026-04-24')
+        df = pd.DataFrame([{
+            'Deal ID': f'C{i}', 'Shop_ID': f'S{i}',
+            'Disbursed_Amount (SAR)': 100_000, 'Outstanding_Amount (SAR)': 0,
+            'Overdue_Amount (SAR)': 0, 'Total_Collectable_Amount (SAR)': 110_000,
+            'Amt_Repaid': 110_000, 'Margin Collected': 10_000,
+            'Principal Collected': 100_000, 'Shop_Credit_Limit (SAR)': 500_000,
+            'Tenure': 12, 'Loan_Status': 'Closed', 'Product': 'BNPL',
+            'Disbursement_Date': today - pd.Timedelta(days=300),
+            'Repayment_Deadline': today - pd.Timedelta(days=60),
+            'Last_Collection_Date': today - pd.Timedelta(days=30),
+            'Loan_Age': 300,
+        } for i in range(3)])
+        res = compute_silq_summary(df, mult=1, ref_date=today)
+        assert res['par30'] == 0
+        assert res['par30_amount'] == 0
+        assert res['lifetime_par30'] == 0  # 0 numerator / 300K denom = 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # UNCERTAIN 3 — Aajil HHI clean-book dual
 # ══════════════════════════════════════════════════════════════════════════════
 
