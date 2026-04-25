@@ -24,6 +24,7 @@ data room to display 153 documents when it really had 76:
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -320,3 +321,297 @@ class TestClassifyCommandHardening:
         assert "--dry-run" in result.stdout
         # And "Preview changes" or similar language
         assert "Preview" in result.stdout or "dry-run" in result.stdout
+
+
+# ── needs-ingest detection (session 37 + this session) ───────────────────────
+# Closes the silent failure mode where sync-data.ps1 dropped new source
+# files on prod but deploy.sh's old inline `registry_count == chunk_count`
+# check was satisfied (e.g. 271 == 271) and skipped ingest. The new
+# subcommand checks BOTH registry corruption AND source-file freshness
+# vs ingest_log.jsonl mtime, so any of:
+#   - new file dropped via sync-data.ps1 since last deploy
+#   - registry/chunks mismatch
+#   - missing registry / missing ingest log (fresh install)
+# all return exit 0 ("ingest needed"). Engine-written sidecars +
+# dotfiles + chunks/+analytics/ subdirs are excluded via the same
+# _is_supported() filter the engine uses for ingest, so they can't
+# spuriously trigger.
+
+
+class TestNeedsIngest:
+    """`dataroom_ctl needs-ingest` detects newly-added source files
+    that the registry/chunks alignment check alone would miss."""
+
+    @staticmethod
+    def _seed_aligned_dataroom(
+        engine: DataRoomEngine,
+        data_root: Path,
+        n_files: int = 2,
+    ) -> Path:
+        """Helper: seed an aligned dataroom (registry == chunks) with N csv files,
+        then write an ingest_log.jsonl with mtime = NOW. Returns dataroom dir."""
+        import time
+
+        dr = data_root / "testco" / "dataroom"
+        for i in range(n_files):
+            _write_csv(dr / f"file{i}.csv", f"col,v\nrow_{i},{i}\n")
+
+        # Real ingest produces aligned registry+chunks
+        engine.ingest("testco", "", str(dr))
+        # ingest writes ingest_log.jsonl as part of the record_ingest call
+        # (not the engine itself — the cmd_ingest wrapper does it). For tests
+        # we synthesize the log directly so we control its mtime.
+        log = dr / "ingest_log.jsonl"
+        log.write_text('{"ts":"2026-04-25","action":"ingest","added":2}\n')
+        # Ensure source-file mtimes are clearly OLDER than the log mtime,
+        # otherwise the freshness check would trip on the seeded files.
+        old_ts = time.time() - 60.0
+        for csv in dr.rglob("*.csv"):
+            os.utime(csv, (old_ts, old_ts))
+        return dr
+
+    def test_returns_exit_1_when_aligned_and_no_new_files(self, tmp_path):
+        """The clean case: registry+chunks aligned, ingest_log.jsonl newer
+        than every source file → exit 1, reason='clean'."""
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        self._seed_aligned_dataroom(engine, data_root, n_files=3)
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is False
+        assert result["reason"] == "clean"
+        assert result["registry_count"] == 3
+        assert result["chunk_count"] == 3
+        assert result["source_file_count"] == 3
+
+    def test_returns_exit_0_when_new_source_file_added(self, tmp_path):
+        """The session-37 case: aligned registry+chunks, but a brand-new
+        .pdf got dropped after the last ingest → exit 0, reason='newer_files'."""
+        import time
+
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=2)
+
+        # Add a new source file with mtime > log mtime. Use a definitively-
+        # future stamp to be robust on filesystems with second-level mtime.
+        new_pdf = dr / "new_data" / "fresh_investor_pack.pdf"
+        new_pdf.parent.mkdir()
+        new_pdf.write_bytes(b"%PDF-1.4 fake")
+        future = time.time() + 60.0
+        os.utime(new_pdf, (future, future))
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is True
+        assert result["reason"] == "newer_files"
+        assert result["newer_count"] == 1
+        # Registry/chunks still aligned at 2 — alignment check alone wouldn't
+        # have triggered. This is the bug needs-ingest exists to catch.
+        assert result["registry_count"] == 2
+        assert result["chunk_count"] == 2
+
+    def test_returns_exit_0_when_alignment_broken(self, tmp_path):
+        """Pre-existing registry/chunks misalignment → exit 0, even if the
+        ingest_log.jsonl is fresh (alignment check fires first)."""
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=2)
+
+        # Delete one chunk file to simulate corruption
+        chunks = list((dr / "chunks").glob("*.json"))
+        chunks[0].unlink()
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is True
+        assert result["reason"] == "registry_chunk_mismatch"
+        assert result["registry_count"] == 2
+        assert result["chunk_count"] == 1
+
+    def test_returns_exit_0_when_no_ingest_log(self, tmp_path):
+        """Aligned registry+chunks but no ingest_log.jsonl (fresh install
+        scenario, or someone wiped the log) → exit 0, reason='no_ingest_log'.
+        Without this branch we'd silently treat a brand-new prod as clean."""
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=2)
+
+        (dr / "ingest_log.jsonl").unlink()
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is True
+        assert result["reason"] == "no_ingest_log"
+
+    def test_returns_exit_0_when_no_registry(self, tmp_path):
+        """No registry.json but source files present → exit 0, 'no_registry'."""
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = data_root / "testco" / "dataroom"
+        _write_csv(dr / "real.csv")
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is True
+        assert result["reason"] == "no_registry"
+        assert result["source_file_count"] == 1
+
+    def test_returns_clean_when_dataroom_is_empty(self, tmp_path):
+        """No source files at all → clean. Calling ingest on an empty
+        dataroom would just write an empty manifest entry every deploy."""
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        # Don't write any source files; dataroom dir already exists per fixture.
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is False
+        assert result["reason"] == "empty_dataroom"
+        assert result["source_file_count"] == 0
+
+    def test_excluded_files_dont_trigger_ingest(self, tmp_path):
+        """Engine-written sidecars in _EXCLUDE_FILENAMES (meta.json,
+        covenant_history.json, etc.) must NOT count as new source files.
+        meta.json is rewritten on every ingest cycle as part of the index
+        build; without exclusion, deploy.sh would treat the dataroom as
+        perpetually dirty."""
+        import time
+
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=2)
+
+        future = time.time() + 60.0
+
+        # `meta.json` is an existing engine-written sidecar — bump its mtime
+        # in place so we don't corrupt its JSON contents (overwriting with
+        # "{}" would also work since the file is excluded, but in-place
+        # mtime bump is the more realistic scenario).
+        meta = dr / "meta.json"
+        if meta.exists():
+            os.utime(meta, (future, future))
+
+        # Other sidecars that may not exist yet — write fresh ones with
+        # future mtime. None of these should appear in the source-file walk.
+        for excluded in ("covenant_history.json", "facility_params.json",
+                          "payment_schedule.json", "debtor_validation.json"):
+            p = dr / excluded
+            p.write_text("{}")
+            os.utime(p, (future, future))
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        # All excluded — should still be clean despite future mtimes.
+        assert result["needs_ingest"] is False, (
+            f"Excluded sidecars triggered ingest: reason={result['reason']}, "
+            f"newer_count={result.get('newer_count')}"
+        )
+        assert result["reason"] == "clean"
+
+    def test_dotfiles_dont_trigger_ingest(self, tmp_path):
+        """Dotfiles (e.g. `.classification_cache.json` written by the LLM
+        classifier) must NOT trigger ingest. Engine ignores them at ingest
+        time too — needs-ingest must agree."""
+        import time
+
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=2)
+
+        cache = dr / ".classification_cache.json"
+        cache.write_text('{"a":"b"}')
+        future = time.time() + 60.0
+        os.utime(cache, (future, future))
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is False
+        assert result["reason"] == "clean"
+
+    def test_chunks_dir_files_dont_trigger_ingest(self, tmp_path):
+        """Files inside chunks/ are engine output (one .json per registry
+        entry). A freshly-written chunk file must NOT mark the dataroom
+        as dirty — chunks are produced BY ingest, not consumed."""
+        import time
+
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=2)
+
+        # Touch one of the chunk files into the future
+        chunk = next((dr / "chunks").glob("*.json"))
+        future = time.time() + 60.0
+        os.utime(chunk, (future, future))
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is False
+        assert result["reason"] == "clean"
+
+    def test_real_json_in_dataroom_root_does_trigger_ingest(self, tmp_path):
+        """A real .json source file (e.g. an investor pack) at any
+        non-engine path SHOULD trigger ingest. The exclude list is for
+        engine-written sidecars by exact filename, not for the .json
+        extension generally."""
+        import time
+
+        from scripts.dataroom_ctl import _needs_ingest_check
+
+        engine, data_root = _make_engine(tmp_path)
+        dr = self._seed_aligned_dataroom(engine, data_root, n_files=1)
+
+        # Drop a non-excluded .json source file at a sub-folder path.
+        new_json = dr / "investor_packs" / "2026-04-15_investor_pack.json"
+        new_json.parent.mkdir()
+        new_json.write_text('{"period":"Q1 2026"}')
+        future = time.time() + 60.0
+        os.utime(new_json, (future, future))
+
+        result = _needs_ingest_check(engine, "testco", "")
+
+        assert result["needs_ingest"] is True
+        assert result["reason"] == "newer_files"
+        assert result["newer_count"] == 1
+
+    def test_help_lists_needs_ingest_subcommand(self):
+        """Top-level help should show the new subcommand."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script_path = Path(__file__).resolve().parent.parent / "scripts" / "dataroom_ctl.py"
+        result = subprocess.run(
+            [sys.executable, str(script_path), "--help"],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0
+        assert "needs-ingest" in result.stdout
+
+    def test_subcommand_help_documents_inverted_exit_codes(self):
+        """`needs-ingest --help` must explain the 0/1 inversion vs audit,
+        otherwise operators reading the help will misinterpret exit codes."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script_path = Path(__file__).resolve().parent.parent / "scripts" / "dataroom_ctl.py"
+        result = subprocess.run(
+            [sys.executable, str(script_path), "needs-ingest", "--help"],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0
+        # Must mention the bash idiom or the exit code semantics
+        text = result.stdout.lower()
+        assert "exit" in text
+        assert "needs-ingest" in result.stdout

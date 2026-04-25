@@ -63,36 +63,34 @@ docker compose exec backend alembic upgrade head
 
 # Rebuild dataroom search indexes if needed (bypasses HTTP auth by calling Python directly)
 #
-# Heuristic: compare the registry entry count with the chunk file count. Any
-# misalignment (0 chunks, fewer chunks than registry entries, zero registry
-# entries with stale chunk files) triggers a full ingest. The OLD heuristic —
-# "chunks dir non-empty → skip" — was fooled by single stray chunks from
-# previous failed ingests, leaving Klaim/Tamara stuck with 1 chunk each.
+# Decision is delegated to `dataroom_ctl needs-ingest`, which checks BOTH:
+#   (a) registry corruption (missing/empty registry, registry-vs-chunks
+#       mismatch) — replaces the old inline registry/chunks count heuristic
+#   (b) source files newer than ingest_log.jsonl mtime — catches the
+#       session-37 footgun where sync-data.ps1 dropped new source files
+#       on prod but the alignment check was satisfied (e.g. 271==271)
+#       and deploy silently skipped ingest, leaving the new files
+#       un-chunked and invisible to the dashboard.
+#
+# Iterates `data/*/dataroom/` (any company with a dataroom directory),
+# delegates to needs-ingest per company, ingests when exit 0.
 echo "Checking dataroom indexes..."
-for registry in data/*/dataroom/registry.json; do
-    if [ -f "$registry" ]; then
-        company_dir=$(dirname $(dirname "$registry"))
-        company=$(basename "$company_dir")
-        chunks_dir="$(dirname "$registry")/chunks"
+for dr_dir in data/*/dataroom/; do
+    if [ -d "$dr_dir" ]; then
+        company=$(basename "$(dirname "$dr_dir")")
 
-        # Count registry entries (docs) and chunk files on disk
-        registry_count=$(python3 -c "import json; print(len(json.load(open('$registry'))))" 2>/dev/null || echo "0")
-        if [ -d "$chunks_dir" ]; then
-            chunk_count=$(ls -1 "$chunks_dir"/*.json 2>/dev/null | wc -l | tr -d ' ')
-        else
-            chunk_count=0
-        fi
-
-        if [ "$registry_count" -gt 0 ] && [ "$registry_count" = "$chunk_count" ]; then
-            echo "  $company: registry aligned ($registry_count docs) — skipping ingest"
-        else
-            echo "  $company: misalignment (registry=$registry_count, chunks=$chunk_count) — ingesting via dataroom_ctl..."
-            # Unified CLI (scripts/dataroom_ctl.py) auto-resolves the product,
-            # writes a structured manifest entry, and returns a non-zero exit
-            # code on failure. Human-readable summary on stderr; JSON on stdout.
+        # `needs-ingest` exits 0 if ingest needed, 1 if clean. Discard JSON
+        # on stdout but let the human-readable per-company summary on stderr
+        # surface in deploy logs (code-review flag — `2>&1 >/dev/null` here
+        # silenced both streams, hiding the reason for ingest decisions).
+        if docker compose exec -T backend \
+            python scripts/dataroom_ctl.py needs-ingest --company "$company" >/dev/null; then
+            echo "  $company: ingest needed — running dataroom_ctl ingest..."
             docker compose exec -T backend \
                 python scripts/dataroom_ctl.py ingest --company "$company" \
                 || echo "    Failed (exit=$?)"
+        else
+            echo "  $company: clean — skipping ingest"
         fi
     fi
 done

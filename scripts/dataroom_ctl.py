@@ -9,6 +9,10 @@ Designed to be run inside the backend container via:
 Commands
 --------
     audit [--company X]          Health report (alignment + deps + last ingest)
+    needs-ingest --company X [--product P]
+                                 Detect whether ingest is required (registry
+                                 corruption OR new source files since last
+                                 ingest). Exit 0 = ingest needed, 1 = clean.
     ingest --company X [--product P] [--source-dir DIR]
                                  Full ingest (DataRoomEngine.ingest)
     refresh --company X [--product P] [--source-dir DIR]
@@ -30,6 +34,9 @@ Exit codes
     0 success, 1 audit detected misalignment, 2 usage/argument error,
     3 operation failed, 4 user aborted destructive op.
 
+    `needs-ingest` inverts the audit convention to fit shell idiom
+    `if needs-ingest; then ingest; fi`: 0 = ingest needed, 1 = clean.
+
 All commands emit structured single-line JSON on stdout for easy scraping
 by deploy.sh and CI, plus a human-readable summary on stderr.
 """
@@ -46,7 +53,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from core.dataroom.engine import DataRoomEngine  # noqa: E402
+from core.dataroom.engine import DataRoomEngine, _is_supported  # noqa: E402
 from core.loader import get_companies, get_products  # noqa: E402
 
 
@@ -126,6 +133,148 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
     _emit({"command": "audit", "reports": reports})
     return 1 if any_misaligned else 0
+
+
+def _needs_ingest_check(engine: DataRoomEngine, company: str, product: str) -> dict:
+    """Determine whether a company's dataroom needs an ingest run.
+
+    Pure function — caller decides exit code + stderr formatting. Two
+    conditions trigger `needs_ingest=True`:
+
+      (a) Registry corruption: registry.json missing, registry empty, or
+          registry/chunks misalignment. Same heuristic as the legacy
+          deploy.sh check, just expressed once instead of in inline bash.
+
+      (b) Source files newer than `ingest_log.jsonl` mtime. This catches
+          the session-37 footgun: sync-data.ps1 drops new source files on
+          prod, deploy.sh runs, registry+chunks are still aligned (e.g.
+          271 == 271), so the alignment check skips ingest — even though
+          two new files are sitting on disk un-chunked. Comparing mtimes
+          against the append-only ingest log is the simplest signal that
+          new source data has arrived since the last successful run.
+
+    Engine-written files (config.json, registry.json, meta.json,
+    ingest_log.jsonl, etc.), dotfiles, and chunks/ + analytics/ subdirs
+    are excluded from the source scan via `_is_supported()` — the same
+    filter the engine uses during ingest. Importing it (rather than
+    re-listing the exclusions here) keeps a single source of truth.
+
+    Args:
+        engine: DataRoomEngine instance (so tests can use a tmp data root).
+        company: Company identifier.
+        product: Product identifier (typically "" — dataroom is company-level).
+
+    Returns:
+        dict with: company, needs_ingest (bool), reason (str),
+        registry_count, chunk_count, source_file_count, plus newer_count
+        when reason == "newer_files".
+    """
+    dr_dir = engine._data_root / company / "dataroom"
+    base = {
+        "company": company,
+        "registry_count": 0,
+        "chunk_count": 0,
+        "source_file_count": 0,
+    }
+
+    if not dr_dir.is_dir():
+        return {**base, "needs_ingest": False, "reason": "no_dataroom_dir"}
+
+    # Walk the dataroom for source files using the engine's exclusion logic.
+    # Same filter as ingest()/refresh() so the two paths can never disagree.
+    source_files = []
+    for root, _dirs, filenames in os.walk(str(dr_dir)):
+        for fname in filenames:
+            fpath = Path(root) / fname
+            if _is_supported(str(fpath)):
+                source_files.append(fpath)
+
+    base["source_file_count"] = len(source_files)
+
+    # Empty dataroom — clean. No point ingesting nothing; would just write
+    # an empty entry to ingest_log.jsonl every deploy.
+    if not source_files:
+        return {**base, "needs_ingest": False, "reason": "empty_dataroom"}
+
+    # Condition (a): registry / chunks alignment
+    registry_path = dr_dir / "registry.json"
+    if not registry_path.exists():
+        return {**base, "needs_ingest": True, "reason": "no_registry"}
+
+    registry = engine._load_registry(company, product)
+    base["registry_count"] = len(registry)
+
+    chunks_root = dr_dir / "chunks"
+    if chunks_root.is_dir():
+        base["chunk_count"] = sum(1 for _ in chunks_root.glob("*.json"))
+
+    if base["registry_count"] == 0:
+        return {**base, "needs_ingest": True, "reason": "empty_registry"}
+
+    if base["registry_count"] != base["chunk_count"]:
+        return {**base, "needs_ingest": True, "reason": "registry_chunk_mismatch"}
+
+    # Condition (b): source files newer than ingest_log.jsonl mtime
+    ingest_log = dr_dir / "ingest_log.jsonl"
+    if not ingest_log.exists():
+        return {**base, "needs_ingest": True, "reason": "no_ingest_log"}
+
+    log_mtime = ingest_log.stat().st_mtime
+    newer_count = 0
+    for f in source_files:
+        try:
+            if f.stat().st_mtime > log_mtime:
+                newer_count += 1
+        except OSError:
+            # File disappeared between walk and stat — ignore; refresh
+            # will reconcile on the next pass.
+            continue
+
+    if newer_count > 0:
+        return {
+            **base,
+            "needs_ingest": True,
+            "reason": "newer_files",
+            "newer_count": newer_count,
+        }
+
+    return {**base, "needs_ingest": False, "reason": "clean"}
+
+
+def cmd_needs_ingest(args: argparse.Namespace) -> int:
+    """Detect whether ingest is required for a company's dataroom.
+
+    Exit code:
+        0 — ingest needed (deploy.sh runs `dataroom_ctl ingest` next)
+        1 — clean (deploy.sh skips)
+
+    NB: This inverts the audit-style 0/1 convention to fit the bash idiom
+    `if dataroom_ctl needs-ingest --company X; then ...; fi`. The unusual
+    direction is documented in the module docstring.
+    """
+    engine = DataRoomEngine()
+    product = _resolve_product(engine, args.company, args.product)
+    result = _needs_ingest_check(engine, args.company, product)
+
+    # Human-readable line on stderr
+    if result["needs_ingest"]:
+        suffix = ""
+        if result.get("newer_count") is not None:
+            suffix = f" newer={result['newer_count']}"
+        _err(
+            f"[{args.company}] ingest needed ({result['reason']}): "
+            f"registry={result['registry_count']} chunks={result['chunk_count']} "
+            f"source_files={result['source_file_count']}{suffix}"
+        )
+    else:
+        _err(
+            f"[{args.company}] clean ({result['reason']}): "
+            f"registry={result['registry_count']} chunks={result['chunk_count']} "
+            f"source_files={result['source_file_count']}"
+        )
+
+    _emit({"command": "needs-ingest", "product": product, **result})
+    return 0 if result["needs_ingest"] else 1
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
@@ -417,6 +566,24 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--company", help="Audit only this company (default: all)")
     ap.add_argument("--product", help="Product key (rarely needed)")
     ap.set_defaults(func=cmd_audit)
+
+    nip = sub.add_parser(
+        "needs-ingest",
+        help="Detect whether ingest is required (registry corruption OR new source files)",
+        description=(
+            "Returns exit code 0 if ingestion is needed for COMPANY, 1 if "
+            "the dataroom is fully reality-aligned. Two trigger conditions: "
+            "(a) registry corruption (missing/empty registry, registry-vs-chunks "
+            "mismatch); (b) any source file newer than ingest_log.jsonl mtime. "
+            "Source-file scan uses the same exclusion list as the engine "
+            "(_EXCLUDE_FILENAMES + dotfiles + chunks/ + analytics/). "
+            "Exit codes invert the audit convention to match the bash idiom "
+            "`if needs-ingest; then ingest; fi`."
+        ),
+    )
+    nip.add_argument("--company", required=True, help="Company to check")
+    nip.add_argument("--product", help="Product key (autodetected if omitted)")
+    nip.set_defaults(func=cmd_needs_ingest)
 
     for name, func in [("ingest", cmd_ingest), ("refresh", cmd_refresh)]:
         sp = sub.add_parser(name, help=f"{name.capitalize()} a dataroom")
