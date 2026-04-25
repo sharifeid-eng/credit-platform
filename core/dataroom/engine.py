@@ -85,7 +85,14 @@ _SUPPORTED_EXTENSIONS = {
 _EXCLUDE_FILENAMES = {"config.json", "methodology.json", "registry.json",
                       "index.pkl", "meta.json", "ingest_log.jsonl",
                       "covenant_history.json", "facility_params.json",
-                      "debtor_validation.json", "payment_schedule.json"}
+                      "debtor_validation.json", "payment_schedule.json",
+                      # Google NotebookLM workspace state — transient app
+                      # metadata, not analyst content. Tamara dataroom had
+                      # `notebooklm_state.json` after analyst used NotebookLM
+                      # for research; later removed when NotebookLM workflow
+                      # was retired. Without this exclusion, re-syncing dataroom
+                      # would re-ingest the file as `type=other`. Session 37.
+                      "notebooklm_state.json"}
 
 # Directories to skip during recursive scan (prevents ingesting engine output)
 _EXCLUDE_DIRS = {"chunks", "analytics", "__pycache__", "node_modules", ".git", "mind"}

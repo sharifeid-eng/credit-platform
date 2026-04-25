@@ -150,19 +150,65 @@ If this session changed any backend, frontend, core/, or data/ files (not just d
 > cd /opt/credit-platform && ./deploy.sh
 > ```
 
-**Dataroom sync check (mandatory — do not skip):** Run this command to detect if any dataroom registry was modified this session:
+**Dataroom sync check (mandatory — do not skip):**
+
+The prior version of this check (`git diff HEAD~10 | grep registry.json`) has been structurally broken since session 26.1 removed `registry.json` from git tracking (see `.gitignore:55`). A `git diff` will NEVER see registry changes now — the check always returned empty regardless of whether raw dataroom files were added. Session 37 surfaced the gap: two new Tamara files were added to the local dataroom, EoD said "no sync needed", prod silently missed them until the user manually ran `sync-data.ps1`.
+
+Since raw dataroom files are ALL gitignored, git cannot detect dataroom changes. Use filesystem mtime instead — the `ingest_log.jsonl` per-dataroom is the authoritative signal. Every successful `dataroom_ctl ingest`/`refresh` appends a line to that file.
+
+```powershell
+# PowerShell — find any dataroom ingest_log modified in last 24 hours
+Get-ChildItem -Path "data\*\dataroom\ingest_log.jsonl" -ErrorAction SilentlyContinue `
+  | Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-1) } `
+  | ForEach-Object { $_.FullName }
 ```
-git diff HEAD~10 --name-only | grep "registry.json"
+
+```bash
+# Bash equivalent
+find data/*/dataroom/ingest_log.jsonl -mtime -1 -type f 2>/dev/null
 ```
-If ANY registry.json files appear in the output, remind the user:
+
+Also check for NEW source files added but not yet ingested (still bearing a `.classification_cache.json` / registry mtime older than the source file):
+
+```bash
+# Find any source file newer than its parent dataroom's ingest_log
+for log in data/*/dataroom/ingest_log.jsonl; do
+  [ ! -f "$log" ] && continue
+  co=$(basename $(dirname $(dirname "$log")))
+  newer=$(find "data/$co/dataroom" -type f \
+    \( -name "*.pdf" -o -name "*.xlsx" -o -name "*.xls" -o -name "*.docx" -o -name "*.ods" -o -name "*.csv" \) \
+    -newer "$log" 2>/dev/null | head -5)
+  [ -n "$newer" ] && echo "$co has newer source files than last ingest:" && echo "$newer"
+done
+```
+
+If EITHER check returns anything (dataroom ingested this session OR disk has newer source files than last ingest), remind the user:
 
 > **Sync dataroom files to production.** Raw dataroom files (PDFs, xlsx, docx) are not in git. Run from your laptop PowerShell:
 > ```powershell
 > cd C:\Users\SharifEid\credit-platform
 > .\scripts\sync-data.ps1                    # all companies
-> .\scripts\sync-data.ps1 -Company Tamara    # one company only
+> .\scripts\sync-data.ps1 -Company {name}    # one company only
 > ```
-> Then redeploy — `deploy.sh` will auto-ingest any datarooms with missing chunks.
+>
+> **CRITICAL: `deploy.sh` alone is NOT sufficient after sync.** The alignment check inside `deploy.sh` only detects registry-vs-chunks misalignment — it does NOT detect new source files on disk. After `sync-data.ps1` lands new files on prod, you must MANUALLY trigger re-ingest:
+> ```bash
+> ssh root@204.168.252.26 'cd /opt/credit-platform && \
+>   docker compose exec -T backend python scripts/dataroom_ctl.py ingest --company {name}'
+> ```
+>
+> For Tamara-specific flows (investor packs + thesis), additional commands:
+> ```bash
+> # Parse new investor pack into structured JSON
+> ssh root@204.168.252.26 'cd /opt/credit-platform && \
+>   docker compose exec -T backend python scripts/ingest_tamara_investor_pack.py \
+>   --file "data/Tamara/dataroom/Financials/54.2.2 Management Financials/<pack.xlsx>"'
+>
+> # Seed thesis (one-time per prod environment)
+> ssh root@204.168.252.26 'cd /opt/credit-platform && \
+>   docker compose exec -T backend python scripts/seed_tamara_thesis.py'
+> ```
+> The Tamara flow requires 2-3 steps (dataroom ingest + pack parse + thesis seed) because the investor pack produces a per-machine JSON (gitignored) and the thesis is also per-machine. A future enhancement would wrap these into a single `post-sync-tamara.sh` on the server.
 
 **Tape file tracking check (mandatory — do not skip):** Raw loan tapes (`data/{company}/{product}/YYYY-MM-DD_*.csv|xlsx|ods`) ARE tracked in git — they ship to production via `git pull` during `deploy.sh` just like code. There is no gitignore rule for them. An untracked tape is almost always a mistake (tape was copied onto the laptop but never `git add`'d — surfaced once in session 34 when an Apr 15 Klaim tape had been on disk for 4 days without being committed, causing a silent Tape-vs-Portfolio Analytics skew on prod). Run:
 ```
