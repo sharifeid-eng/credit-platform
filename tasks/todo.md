@@ -3,6 +3,35 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-25 (deploy.sh `needs-ingest` detection — session-37 footgun fix)
+
+**Context:** Session 37 wrap-up flagged this as "filed but not in scope": the architectural fix for the silent failure where `sync-data.ps1` dropped fresh source files on prod, deploy.sh's old inline `registry_count == chunk_count` alignment check was satisfied (271 == 271), and ingest got skipped — leaving new files un-chunked while the dashboard showed stale data. The session-37 EoD step 11 was patched to nudge analysts to manually re-run `dataroom_ctl ingest`, but that's a markdown workaround. Architectural fix lives in this branch.
+
+**Branch:** `claude/deploy-sh-needs-ingest-detection` (review-gated; **not merged to main** per spawning prompt)
+
+**What shipped (commit `b5a753a`):**
+- New `needs-ingest` subcommand in `scripts/dataroom_ctl.py`. Pure function `_needs_ingest_check(engine, company, product)` returns `{needs_ingest, reason, registry_count, chunk_count, source_file_count, [newer_count]}`. CLI wrapper exits 0 if ingest needed, 1 if clean (inverted vs `audit` to fit `if needs-ingest; then ingest; fi` bash idiom — documented in module docstring + subparser description).
+- Two trigger conditions: (a) registry corruption (no registry, empty registry, registry vs chunks mismatch); (b) any source file newer than `ingest_log.jsonl` mtime. Source-file walk uses `_is_supported()` imported from `core.dataroom.engine` — exclusion list lives in ONE place (no bash duplicate).
+- 6 reasons emitted: `no_dataroom_dir`, `empty_dataroom`, `no_registry`, `empty_registry`, `registry_chunk_mismatch`, `no_ingest_log`, `newer_files`, `clean`.
+- `deploy.sh` rewrite: iterates `data/*/dataroom/` (any dataroom, not just those with registry.json), delegates per-company to `needs-ingest`, ingests on exit 0, prints "skipping" on exit 1. Bash syntax validated with `bash -n`.
+- 12 new tests in `tests/test_dataroom_pipeline.py::TestNeedsIngest` (target was 8). Full suite **786 passing, 0 warnings, 0 regressions** (was 774 + 38 baseline).
+- CLAUDE.md "Key Architectural Decisions" entry near existing dataroom hardening notes — locks in the session-37 lesson + exclusion-list single-source rule.
+
+**Smoke test against real Tamara dataroom (137 source files, 129 aligned registry+chunks):**
+```
+baseline: clean (137 files, 129 aligned)
+touch data/Tamara/dataroom/Portfolio Investor Reporting/_smoke_test_fake.pdf
+  → needs_ingest: true, reason: newer_files, newer_count: 1
+rm <fake.pdf>
+  → clean
+```
+
+**Deferred (not in scope this session):**
+- EoD step 11's bash freshness loop should be replaced with a `dataroom_ctl needs-ingest` call across all companies — same logic, single source of truth. Tracked as a follow-up; skipped here to keep this PR surgical.
+- `needs-ingest` could be promoted to an engine method (sibling of `audit()`) if other callers want the check. Currently CLI-level only. No active need.
+
+---
+
 ## Completed — 2026-04-24 (Tamara Q1-2026 Investor Pack ingest pipeline)
 
 **Context:** User delivered two new Tamara documents — `2026-04-16_credit_risk_portfolio_update.pdf` (narrative credit update, 17 pages) and `2. 1Q2026 Tamara Cons. Investor Pack.xlsx` (structured 10-sheet investor pack, 27 months of monthly data through Mar-26). Analysis confirmed the Excel follows the SAME 10-sheet template as 4 prior files in the dataroom (Nov'25, Dec'25 ×2, Jan'26) — recurring quarterly reporting, not one-off.

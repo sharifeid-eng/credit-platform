@@ -3,6 +3,23 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-25 — Aggregate-count alignment is a coarse signal; freshness needs a manifest mtime delta
+
+**Problem:** deploy.sh's old dataroom check compared `registry_count == chunk_count` and skipped ingest when they matched. The check was logically sound for the failure mode it was designed to catch (registry corruption: missing chunks, stray chunk files). But it had a blind spot: when `sync-data.ps1` dropped 2 fresh source files on prod, the count was still 271 == 271 (because the new files weren't yet in either side of the comparison), so deploy silently skipped ingest. New files sat un-chunked, dashboard showed stale data, manual `dataroom_ctl ingest` was needed to recover. Surfaced in session 37 with the Tamara investor pack drop.
+
+The more general lesson: aggregate-count alignment answers "is internal state self-consistent?" — not "is internal state up-to-date with the world?". A dataroom can be perfectly self-consistent AND completely out-of-date.
+
+**Rule:** When a check needs to detect "new external input has arrived", compare the input's mtime against the most recent **authoritative manifest** the system writes when it processes input. Do not rely on aggregate counts of derived state — those measure self-consistency, not freshness.
+
+**How to apply:**
+- For dataroom ingest: `ingest_log.jsonl` is appended to on every successful ingest; compare source-file mtimes against its mtime. Implemented as `dataroom_ctl needs-ingest` — exits 0 if any source file is newer (or registry is broken).
+- For other pipelines that ingest external data: pick the manifest file the pipeline writes on completion (e.g., `last_run.json`, `migration_history.txt`). If no such manifest exists, write one — its mtime is the only honest "we processed up to here" signal.
+- When a "should this run?" decision involves walking source files, **import the producer's exclusion filter** rather than re-listing exclusions in bash. `dataroom_ctl needs-ingest` imports `_is_supported` from `core.dataroom.engine` so engine-written sidecars (config.json, registry.json, meta.json, ingest_log.jsonl, etc.) and dotfiles can never spuriously trigger ingest. A bash-side duplicate of the exclusion list would drift from the engine's reality on every onboard.
+- When a CLI's exit-code direction must fit a bash idiom (`if cmd; then ...; fi`), inverting the convention is fine — but document it in BOTH the module docstring AND the subparser description, otherwise operators reading `--help` misinterpret the codes.
+- Reference: session 25, commit `b5a753a` — `needs-ingest` subcommand + deploy.sh rewrite. Session 37 EoD step 11 (markdown nudge to manually ingest after sync) is the patch this commit makes architectural.
+
+---
+
 ## 2026-04-24 — Absolute-path tool calls from a worktree session land in the main repo, not the worktree
 
 **Problem:** Working in a worktree at `C:\Users\SharifEid\credit-platform\.claude\worktrees\modest-bhabha-b2a227`, I passed absolute paths like `C:\Users\SharifEid\credit-platform\tests\conftest.py` to the Write/Edit tools. Those paths point at the **main repo**, not the worktree. Pytest runs from the worktree's cwd, so my edits and my verification runs were passing through each other — my "fix" appeared to do nothing because pytest was reading untouched files. Spent multiple verification cycles debugging a monkeypatch that "wasn't firing" when it actually was, just in a different working tree. Only caught it when I ran `pwd` + `ls tests/conftest.py` side-by-side with `ls /c/Users/SharifEid/credit-platform/tests/conftest.py` and saw the conftest existed in one but not the other.
