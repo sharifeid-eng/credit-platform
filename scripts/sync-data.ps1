@@ -30,9 +30,7 @@ $LocalData = Join-Path $PSScriptRoot "..\data"
 
 # Files and folders the SERVER owns — never push these from laptop.
 # Server rebuilds registry.json / chunks / index.pkl / meta.json on ingest.
-# `notebooklm_state.json` is Google NotebookLM workspace state (transient app
-# metadata, not analyst content) — see core/dataroom/engine.py _EXCLUDE_FILENAMES.
-$ServerOwnedFiles = @('index.pkl', 'registry.json', 'meta.json', 'notebooklm_state.json')
+$ServerOwnedFiles = @('index.pkl', 'registry.json', 'meta.json')
 $ServerOwnedFolders = @('chunks', 'analytics')
 
 # Find companies with dataroom folders

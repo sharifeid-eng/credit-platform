@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 class DualResearchEngine:
     """Research engine wrapping Claude RAG for document queries.
 
-    Provides a consistent interface for research queries. Previously
-    orchestrated Claude RAG + NotebookLM; now Claude-only.
+    Provides a consistent interface for research queries across all
+    ingested documents.
     """
 
     def __init__(
