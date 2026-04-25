@@ -15,6 +15,12 @@ alembic/versions/__pycache__/
 # See session 24 Tier 1.2 + session 26 deploy-collision root cause.
 data/*/dataroom/*
 
+# Post-ingest hooks ARE deployment infrastructure (authored bash scripts that
+# auto-process newly-ingested files), not per-machine state. Re-include them
+# so they ship to prod via git pull. Same-bytes scp from sync-data.ps1 is
+# idempotent overwrite — no dual-rail collision risk.
+!data/*/dataroom/.post-ingest.sh
+
 # Agent session state (regenerated at runtime, per-machine)
 data/_agent_sessions/
 

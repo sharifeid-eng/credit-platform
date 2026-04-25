@@ -3,6 +3,26 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-25 — Forward-compatible automation hooks beat company-specific deploy.sh edits
+
+**Problem:** Tamara's quarterly investor pack pipeline left an analyst footgun: after `sync-data.ps1` + `./deploy.sh`, the analyst still had to remember to manually run `scripts/ingest_tamara_investor_pack.py` on prod to generate the structured JSON the Quarterly Financials dashboard tab consumed. Skipping the manual step left the dashboard showing the previous quarter's data — silent staleness.
+
+The naive fix would be: hardcode the Tamara parser invocation into `deploy.sh` after the dataroom ingest call. That works once. But the next company (SILQ when it gets a similar quarterly pack, or any future onboard) would force a second deploy.sh edit. Each new company's logic accumulates in deploy.sh until the script becomes a per-company conditional swamp. deploy.sh is shared infrastructure — coupling it to one company's paths is a refactor trap.
+
+**Rule:** When a single company needs post-ingest processing, add a generic mechanism (any company can opt in) rather than a company-specific deploy.sh edit. The platform-level cost is one if-check; the analyst-level benefit is permanent — every future company gets the same plumbing for free.
+
+**How to apply:**
+- The pattern: deploy.sh checks for `data/{co}/dataroom/.post-ingest.sh` after a successful `dataroom_ctl ingest`. If present, runs `bash "$hook"`. Failures logged, never fatal. Each company writes its own hook script in its own dataroom dir — owned by the company, not by deploy.sh.
+- Invocation discipline: use `bash "$hook"` (not `./$hook`) so the executable bit isn't required. Windows clones (where most analysts are working) don't reliably preserve `+x`. Same reasoning applies to any cross-platform script discovery — never depend on the executable bit when `bash <path>` works.
+- Test discipline: every shell file added to deployment infrastructure needs a `bash -n` syntax check in the test suite. Bash regressions are silent — a typo in a hook block disables post-ingest processing for every company AND deploy keeps shipping. Without an explicit syntax test, you discover the breakage only when the dashboard goes stale weeks later.
+- Gitignore pattern: hooks are deployment infrastructure (authored bash scripts), not per-machine state. Re-include via negation rule: `!data/*/dataroom/.post-ingest.sh`. This is safe because the bytes are identical across machines (same git source) — different from the session-26.1 collision where `registry.json` had per-machine UUIDs. The collision lesson from 26.1 doesn't bar all negations; it bars negations on per-machine state.
+- Test hooks in the script: support env-var overrides (`LAITH_HOOK_DRY_RUN=1`, `LAITH_TAMARA_SEARCH_DIR=/tmp/...`) so tests can exercise the file-finding logic without touching docker. Hardcoded prod paths make the hook un-testable, which means the next regression is silent.
+- When the spec says "hook is fire-and-forget at the deploy.sh level", design exit-code semantics accordingly: hook exits 0 on success OR no-op (no work needed); deploy.sh wraps with `|| echo "Hook failed"` so non-zero is logged but doesn't abort. Both layers contribute to fault isolation — neither alone is sufficient.
+
+Reference: session 38 (commit on `claude/post-ingest-hook-tamara`). 9 regression tests in `tests/test_post_ingest_hook.py`. First consumer: Tamara investor pack parsing.
+
+---
+
 ## 2026-04-25 — EoD checks built on `git diff` against gitignored files silently break forever
 
 **Problem:** Session 37 post-EoD discovered that `/eod` step 11's dataroom-sync check was `git diff HEAD~10 | grep registry.json`. Looks plausible. Fails permanently in practice because session 26.1 added `registry.json` to `.gitignore`. Once a file is gitignored, `git diff` will NEVER see changes to it — the output is forever empty regardless of how much the file actually changed on disk.

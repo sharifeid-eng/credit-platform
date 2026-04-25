@@ -86,9 +86,29 @@ for dr_dir in data/*/dataroom/; do
         if docker compose exec -T backend \
             python scripts/dataroom_ctl.py needs-ingest --company "$company" >/dev/null; then
             echo "  $company: ingest needed — running dataroom_ctl ingest..."
-            docker compose exec -T backend \
-                python scripts/dataroom_ctl.py ingest --company "$company" \
-                || echo "    Failed (exit=$?)"
+            if docker compose exec -T backend \
+                python scripts/dataroom_ctl.py ingest --company "$company"; then
+                # Generic post-ingest hook. Companies can register a per-company
+                # bash script at `data/{co}/dataroom/.post-ingest.sh` that runs
+                # AFTER `dataroom_ctl ingest` lands successfully. Failures are
+                # logged but do NOT fail the deploy — the hook is fire-and-forget
+                # at this layer. Skipped when ingest itself failed AND when
+                # needs-ingest reports clean (no new data → no work to do).
+                #
+                # The hook runs ON THE HOST (not inside the container) and is
+                # responsible for using `docker compose exec -T backend ...`
+                # itself when it needs to invoke Python in the backend
+                # container. Invoked via `bash "$hook"` (not `./$hook`) so the
+                # executable bit isn't required — Windows clones don't
+                # reliably preserve it.
+                hook="data/${company}/dataroom/.post-ingest.sh"
+                if [ -f "$hook" ]; then
+                    echo "  $company: running post-ingest hook ($hook)..."
+                    bash "$hook" || echo "    Hook failed (exit=$?)"
+                fi
+            else
+                echo "    Failed (exit=$?)"
+            fi
         else
             echo "  $company: clean — skipping ingest"
         fi

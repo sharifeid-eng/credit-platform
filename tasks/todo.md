@@ -3,6 +3,27 @@ Track active work here. Claude updates this as tasks progress.
 
 ---
 
+## Completed — 2026-04-25 (generic post-ingest hook + Tamara investor pack automation)
+
+**Context:** After session-37's `needs-ingest` shipped, Tamara's quarterly investor pack pipeline still had a manual step: after `sync-data.ps1` + `./deploy.sh`, the analyst had to remember to run `scripts/ingest_tamara_investor_pack.py` on prod to generate the structured JSON the Quarterly Financials dashboard depended on. This branch eliminates that step.
+
+**Branch:** `claude/post-ingest-hook-tamara` (merged to main per spawning prompt)
+
+**What shipped:**
+- **Generic post-ingest hook in `deploy.sh`** — after `dataroom_ctl ingest` lands successfully for a company, deploy.sh checks for `data/{co}/dataroom/.post-ingest.sh` and runs it via `bash "$hook"`. Hook failures are logged but never fatal. Skipped when needs-ingest reports clean OR when ingest itself failed. The `if/else` rewrite around the docker-exec ingest call enables checking ingest exit status for hook gating without breaking existing behavior.
+- **Tamara hook at `data/Tamara/dataroom/.post-ingest.sh`** — locates the newest investor pack file in the management financials folder via `find -printf '%T@ %p\n' | sort -rn | head -1`, then runs `docker compose exec -T backend python scripts/ingest_tamara_investor_pack.py --file "$LATEST" --force`. The `--force` flag covers historical-pack revisions (same pack-date, different bytes). Filename pattern `*Investor*Pack*.xlsx` OR `*Investor*Reporting*.xlsx` covers both quarterly + monthly cadences. Parser auto-fires the thesis drift check by default (no `--no-update-thesis` flag passed).
+- **`.gitignore` negation `!data/*/dataroom/.post-ingest.sh`** — re-includes the hook script so it ships via `git pull`. Hooks are deployment infrastructure (authored bash scripts), not per-machine state — different from the session-26.1 registry collision pattern which involved per-machine UUIDs. Safe because hook bytes are identical across machines.
+- **Test hooks via env vars** — `LAITH_TAMARA_SEARCH_DIR` overrides the default search folder; `LAITH_HOOK_DRY_RUN=1` prints what-would-run + exits 0 without touching docker. Lets tests exercise file-finding logic without prod-shaped fixtures.
+- **9 regression tests** in `tests/test_post_ingest_hook.py` (target was 7) covering: deploy.sh runs hook when present, skips when absent, continues when hook fails, deploy.sh contains the expected hook block (substring pin against drift), Tamara hook finds latest pack by mtime, no-op when no packs, no-op when search dir missing, deploy.sh syntax valid (`bash -n`), Tamara hook syntax valid (`bash -n`).
+
+**Acceptance:** Drop a Tamara investor pack into `data/Tamara/dataroom/Financials/54.2.2 Management Financials/` on the laptop, run `sync-data.ps1 -Company Tamara`, run `./deploy.sh` on prod. Quarterly Financials dashboard tab shows the new pack data without further commands.
+
+**Tests:** 795 passing in worktree (824 baseline − 38 DB-skipped tests + 9 new tests; DATABASE_URL not set in worktree). Zero warnings, zero regressions.
+
+**To ship:** `ssh root@204.168.252.26 'cd /opt/credit-platform && ./deploy.sh'` after merge.
+
+---
+
 ## Completed — 2026-04-25 (deploy.sh `needs-ingest` detection — session-37 footgun fix)
 
 **Context:** Session 37 wrap-up flagged this as "filed but not in scope": the architectural fix for the silent failure where `sync-data.ps1` dropped fresh source files on prod, deploy.sh's old inline `registry_count == chunk_count` alignment check was satisfied (271 == 271), and ingest got skipped — leaving new files un-chunked while the dashboard showed stale data. The session-37 EoD step 11 was patched to nudge analysts to manually re-run `dataroom_ctl ingest`, but that's a markdown workaround. Architectural fix lives in this branch.
