@@ -213,11 +213,87 @@ After the initial session 30 foundation (validation + dual-view WAL + Provider +
 
 ---
 
+## Completed — 2026-04-25 (Session 37: Post-EoD continuation — prod ops + NotebookLM full purge + EoD step 11 fix)
+
+After the formal `/eod` close (commit `c99c185` → merge `670f57d`) the user moved to production deployment + a follow-up cleanup pass that produced two more commits and a meaningful body of work that wasn't captured at original-EoD time.
+
+### Production deployment + Tamara investor pack go-live (prod ops)
+
+- **First `./deploy.sh` on prod** — pulled `670f57d..eca4dce` (my Tamara work + other session's `tests/conftest.py` test isolation fix). Backend rebuilt fresh (130s), frontend cached. Dataroom alignment check reported "Tamara: aligned 271 docs — skipping ingest", which silently masked the fact that 2 new Tamara files were ON DISK on prod but NOT YET registered. **This surfaced the EoD step 11 structural bug** (see fix below).
+- **`sync-data.ps1 -Company Tamara`** — pushed 139 raw files to prod incl. the new credit-risk PDF + 1Q2026 investor pack xlsx. ~12 MB total transfer.
+- **Manual prod commands (4 steps)** — issued via `docker compose exec -T backend`:
+  1. `dataroom_ctl ingest --company Tamara` — registered the 2 new files. Bonus: dedupe pass cleaned **142 stale sha-duplicate registry entries** that had accumulated on prod (registry went 271 → 130). 1 file flagged `unclassified` (the stale `notebooklm_state.json`).
+  2. `ingest_tamara_investor_pack.py --file <pack>` — produced `data/Tamara/investor_packs/2026-04-15_investor_pack.json` (~411KB). Drift check skipped (no thesis yet — by design).
+  3. `seed_tamara_thesis.py` — wrote 8 pillars to `data/Tamara/mind/thesis.json`. Initial conviction 66/100 (avg of seed values 75/70/70/65/65/60/65/55).
+  4. `ingest_tamara_investor_pack.py --file <pack> --force` — re-fired drift check now that thesis exists. **All 8 pillars transitioned `holding → strengthening`** (every metric had >20% headroom above threshold). Conviction 66 → 68/100.
+- **Final dataroom audit** — 130/130 aligned → after surgical removal of stale `notebooklm_state.json` registry entry → **129/129 aligned, 0 unclassified, index ok**.
+
+### EoD step 11 dataroom-sync check structural fix (commit `ef315c8`)
+
+The EoD step 11 had been broken since session 26.1 (when `registry.json` was removed from git tracking). The check was `git diff HEAD~10 | grep registry.json` — which never matches because the file is gitignored. Result: every EoD since session 26 falsely reported "no sync needed."
+
+Replacement uses filesystem mtime instead:
+- `find data/*/dataroom/ingest_log.jsonl -mtime -1 -type f` detects datarooms ingested in last 24h
+- Bash loop also checks for source files newer than their dataroom's last ingest_log
+- Either signal triggers the full sync reminder
+
+The fix lives in `.claude/commands/eod.md` step 11. Also added explicit warning that **`deploy.sh` alone is NOT sufficient after sync** because its alignment check only catches registry corruption, not new files. The post-sync command sequence (sync-data.ps1 + manual `dataroom_ctl ingest` + Tamara-specific pack/thesis commands) is documented inline in the EoD step.
+
+### NotebookLM full purge from active code (commit `8b63d48`)
+
+User clarified that NotebookLM should not exist anywhere on the platform anymore. The session 22b "NotebookLM Removal" (2026-04-16) had claimed "zero notebooklm references in codebase" but a grep this session surfaced 4 surviving references in ACTIVE code:
+
+1. `docker/nginx.conf` — `location /notebooklm { proxy_pass http://backend:8000; ... }` route block. Backend has no handler so any request 404'd, but the route survived.
+2. `core/research/dual_engine.py` — DualResearchEngine docstring still said "Previously orchestrated Claude RAG + NotebookLM; now Claude-only."
+3. `core/dataroom/engine.py` `_EXCLUDE_FILENAMES` — earlier in this session I added `notebooklm_state.json` as a defensive exclusion. Per analyst direction (NotebookLM fully retired), reverted — exclusions shouldn't reference it.
+4. `scripts/sync-data.ps1` `$ServerOwnedFiles` — same defensive entry, also reverted.
+
+After `8b63d48` the active codebase has zero NotebookLM references. Historical references in CLAUDE.md (Session 17 Klaim cleanup) and tasks/todo.md (Session 22b NotebookLM Removal completion) are preserved as audit trail of past architectural decisions — not active code.
+
+### deploy.sh source-newer-than-registry detection — spawned as a separate task
+
+The deeper architectural fix (deploy.sh natively detecting new files instead of relying on the EoD step 11 reminder + manual prod commands) is filed as a spawned task chip:
+- **Title:** "Add deploy.sh source-newer-than-registry detection"
+- **Approach:** new `dataroom_ctl needs-ingest` subcommand that imports `_EXCLUDE_FILENAMES` from the engine + 8 regression tests + thin bash loop in deploy.sh
+- **Branch:** `claude/deploy-sh-needs-ingest-detection` (when clicked)
+- **Not done this session** — proper implementation needs focused time + bash testing on prod-shaped fixtures. The spawned-task prompt is fully self-contained per the CCD spawn pattern.
+
+### Commits added since formal EoD (chronological, all on `origin/main`)
+
+| Commit | Subject |
+|---|---|
+| `ef315c8` | feat(dataroom): exclude notebooklm_state.json from ingest + sync (also pushed `.claude/commands/eod.md` step 11 fix as side-effect via the `!.claude/commands/` gitignore negation) |
+| `8b63d48` | chore: purge residual NotebookLM references from active code |
+
+Plus the formal-EoD commit `c99c185` and merge `670f57d` from the original EoD pass.
+
+### Tests + warnings (verification at second EoD pass)
+
+- **812 tests passing** — same baseline as original EoD, no regressions
+- **0 warnings** — baseline maintained
+- **Working tree clean** — only `data/Tamara/investor_packs/` untracked (gitignored per Tamara convention)
+
+### Open items at session close
+
+- **Prod runs `eca4dce` not `8b63d48`** — the post-EoD commits (`ef315c8`, `8b63d48`) haven't been deployed. Functional impact: zero (NotebookLM nginx route 404s either way; engine+sync changes are net-zero behavior since 8b63d48 reverts ef315c8's exclude additions). Cosmetic impact: prod nginx still has `/notebooklm` location block. Recommend redeploy when convenient — not urgent.
+- **deploy.sh source-newer-than-registry spawned task** — chip queued in user's UI, not yet clicked.
+- **Conviction tuning** — left at 68/100 per analyst decision (system designed for slow conviction-earn over time; will tick up by 2 per quarterly drift check).
+
+### Lesson captured (post-EoD update)
+
+EoD step 11's structural break was the single most impactful discovery this session. It had silently masked dataroom-sync gaps for ~10 sessions since 26.1. Now corrected at the source — every future EoD will use the filesystem-mtime-based check instead of the broken git-diff-on-gitignored-file pattern. See `.claude/commands/eod.md` line 153 for the live check.
+
+---
+
 ## Active
 
 **One chip outstanding:**
 
 1. **Klaim email response parked session** — spawned as a ready-to-receive session. When Klaim replies to the email asking about Account Debtor column + status hygiene + Pending status + Collection days so far negatives, paste their response as the first user message and the session will classify the answer against the 4-option Account Debtor menu, write Mind entries, and recommend platform actions.
+
+**One chip queued (not active until clicked):**
+
+2. **deploy.sh source-newer-than-registry detection** — spawned task with full implementation prompt. Will create `claude/deploy-sh-needs-ingest-detection` branch with new `dataroom_ctl needs-ingest` subcommand + 8 tests + deploy.sh loop replacement. Click to launch in a fresh worktree.
 
 ---
 

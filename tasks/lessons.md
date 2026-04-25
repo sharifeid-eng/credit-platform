@@ -3,6 +3,26 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-25 — EoD checks built on `git diff` against gitignored files silently break forever
+
+**Problem:** Session 37 post-EoD discovered that `/eod` step 11's dataroom-sync check was `git diff HEAD~10 | grep registry.json`. Looks plausible. Fails permanently in practice because session 26.1 added `registry.json` to `.gitignore`. Once a file is gitignored, `git diff` will NEVER see changes to it — the output is forever empty regardless of how much the file actually changed on disk.
+
+Net effect: **every EoD since session 26 falsely reported "no dataroom sync needed"**, even when raw dataroom files had been newly added. A user could ingest 50 new PDFs locally, run /eod, see "no sync needed", and ship to prod with prod silently behind by 50 documents. We surfaced this only because session 37 actually deployed Tamara files and noticed the dashboard showed nothing — then traced backwards to find the EoD step had been quiet for ~10 prior sessions.
+
+The git-diff-against-gitignored-file pattern is a class of bug that survives indefinitely because it produces no output, no error, no warning. It just doesn't fire. Functional invisibility is the worst kind of bug.
+
+**Rule:** Never write a check using `git diff` or `git log` to detect changes in a file that might be gitignored. If you want to detect "did this file change", use a filesystem-level check (mtime, size, hash) — not git's view of it. Git's view is incomplete by design.
+
+**How to apply:**
+- When designing a "did X change this session" check: ask first "is X tracked in git?" If gitignored or might-become-gitignored later, use mtime/hash comparison, not `git diff`.
+- The corrected pattern in `.claude/commands/eod.md` step 11 (session 37 fix): `find data/*/dataroom/ingest_log.jsonl -mtime -1 -type f` plus a follow-up scan for source files newer than ingest_log. mtime is reliable; git status of a gitignored file is always empty.
+- For files that START tracked but might LATER become gitignored: write the check with a comment naming the gitignore rule it depends on. If the rule is later inverted (negation added), the check breaks silently. Leave a breadcrumb: "if line N of .gitignore changes, re-evaluate this check."
+- Audit pattern: at every EoD-skill / commands edit, ask "does this rely on `git diff` for any file that's in .gitignore today?" If yes — convert to filesystem check immediately.
+
+Reference: session 37 post-EoD continuation (commit `ef315c8` re-fixes step 11). See `tasks/todo.md` "Completed — 2026-04-25" for the forensic trace + the corrected check.
+
+---
+
 ## 2026-04-24 — Absolute-path tool calls from a worktree session land in the main repo, not the worktree
 
 **Problem:** Working in a worktree at `C:\Users\SharifEid\credit-platform\.claude\worktrees\modest-bhabha-b2a227`, I passed absolute paths like `C:\Users\SharifEid\credit-platform\tests\conftest.py` to the Write/Edit tools. Those paths point at the **main repo**, not the worktree. Pytest runs from the worktree's cwd, so my edits and my verification runs were passing through each other — my "fix" appeared to do nothing because pytest was reading untouched files. Spent multiple verification cycles debugging a monkeypatch that "wasn't firing" when it actually was, just in a different working tree. Only caught it when I ran `pwd` + `ls tests/conftest.py` side-by-side with `ls /c/Users/SharifEid/credit-platform/tests/conftest.py` and saw the conftest existed in one but not the other.
