@@ -79,10 +79,12 @@ for dr_dir in data/*/dataroom/; do
     if [ -d "$dr_dir" ]; then
         company=$(basename "$(dirname "$dr_dir")")
 
-        # `needs-ingest` exits 0 if ingest needed, 1 if clean. 2>&1 keeps
-        # the human-readable summary visible in deploy logs alongside JSON.
+        # `needs-ingest` exits 0 if ingest needed, 1 if clean. Discard JSON
+        # on stdout but let the human-readable per-company summary on stderr
+        # surface in deploy logs (code-review flag — `2>&1 >/dev/null` here
+        # silenced both streams, hiding the reason for ingest decisions).
         if docker compose exec -T backend \
-            python scripts/dataroom_ctl.py needs-ingest --company "$company" >/dev/null 2>&1; then
+            python scripts/dataroom_ctl.py needs-ingest --company "$company" >/dev/null; then
             echo "  $company: ingest needed — running dataroom_ctl ingest..."
             docker compose exec -T backend \
                 python scripts/dataroom_ctl.py ingest --company "$company" \
