@@ -22,7 +22,7 @@ Run `pytest tests/ -q` from the project root. Report pass/fail counts. If any te
 
 **Warning-drift check (mandatory — do not skip):** also capture the pytest warning count from the final line (`N passed, M warnings in …`). Compare against the baseline below:
 
-> **Last recorded baseline: 0 warnings (session 30 tail, 2026-04-22, post-deprecation-cleanup `6805cec`)**
+> **Last recorded baseline: 0 warnings, 824 tests (session 37 + post-EoD continuation, 2026-04-25, after deploy.sh needs-ingest fix landed `8395a47`).** Test count baseline grew from 812 → 824 with the +12 new TestNeedsIngest cases. Warning baseline unchanged.
 
 If the current count is within ±5 of baseline, proceed without comment. If it jumped by >10, this means today's work introduced new deprecations or code smells worth flagging. Extract the top 3 warning categories:
 
