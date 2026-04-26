@@ -6,6 +6,7 @@ These tests mock the AI calls and assert:
 - Judgment sections run sequentially with body context
 - Polish pass is invoked and preserves metrics/citations
 - Generation metadata is recorded per section and at memo level
+- Citation audit failures synthesize an _audit_failed marker (not silent [])
 """
 
 from __future__ import annotations
@@ -501,3 +502,92 @@ class TestGenerateFullMemo:
         assert polish_meta["sections_attempted"] == len(polishable_keys)
         assert polish_meta["sections_polished"] == len(other_keys)
         assert polish_meta["sections_failed"] == 1
+
+
+# ── Citation audit failure-mode regression (Mode 6 Red Team Finding E#5) ───
+#
+# Bug: _validate_citations returned [] on JSON parse failure or AI exception.
+# That's INDISTINGUISHABLE from a genuine "no issues found" — fabricated
+# citations slipped through to polished memo with no signal to the analyst.
+# Fix: synthesize an _audit_failed marker so polish + downstream callers can
+# distinguish "audit ran clean" from "audit failed to verify".
+
+class TestCitationAuditFailureMarker:
+
+    def _memo_with_citations(self):
+        return {
+            "sections": [
+                {
+                    "key": "section_a",
+                    "content": "Sample section content",
+                    "citations": [
+                        {"source": "doc.pdf", "snippet": "claim 1"},
+                        {"source": "doc.pdf", "snippet": "claim 2"},
+                    ],
+                }
+            ]
+        }
+
+    def _make_generator_with_dataroom(self):
+        gen = MemoGenerator()
+        gen._dataroom = MagicMock()
+        gen._dataroom.search.return_value = []  # no excerpts → simpler path
+        return gen
+
+    def test_parse_failure_emits_audit_failed_marker(self, monkeypatch):
+        """Malformed JSON from the audit AI must surface as an _audit_failed
+        sentinel — NOT silently as 'no issues found'."""
+        gen = self._make_generator_with_dataroom()
+        bad_resp = MagicMock()
+        bad_resp.content = [MagicMock(text="this is { not valid json at all")]
+        monkeypatch.setattr("core.ai_client.complete", lambda **kw: bad_resp)
+        memo = self._memo_with_citations()
+        issues = gen._validate_citations(memo, company="klaim", product="UAE_healthcare")
+        assert len(issues) > 0, "Parse failure must NOT return empty list"
+        assert any(issue.get("_audit_failed") for issue in issues), (
+            "Parse failure must emit a sentinel _audit_failed=True issue so polish "
+            "+ analyst can see the audit didn't run"
+        )
+
+    def test_complete_exception_emits_audit_failed_marker(self, monkeypatch):
+        """AI call exception (rate limit, network, model 503) must also surface
+        as _audit_failed, not silent []."""
+        gen = self._make_generator_with_dataroom()
+        def _raise(**kw):
+            raise RuntimeError("Anthropic API: 503 Service Unavailable")
+        monkeypatch.setattr("core.ai_client.complete", _raise)
+        memo = self._memo_with_citations()
+        issues = gen._validate_citations(memo, company="klaim", product="UAE_healthcare")
+        assert any(issue.get("_audit_failed") for issue in issues), (
+            "Exception path must emit a sentinel _audit_failed=True issue"
+        )
+
+    def test_clean_audit_returns_empty_no_false_marker(self, monkeypatch):
+        """Positive case: when audit returns valid `{"issues": []}`, no false
+        _audit_failed sentinel — clean audits look clean."""
+        gen = self._make_generator_with_dataroom()
+        clean_resp = MagicMock()
+        clean_resp.content = [MagicMock(text='{"issues": []}')]
+        monkeypatch.setattr("core.ai_client.complete", lambda **kw: clean_resp)
+        memo = self._memo_with_citations()
+        issues = gen._validate_citations(memo, company="klaim", product="UAE_healthcare")
+        assert issues == [], (
+            f"Clean audit must return [] — no false sentinel. Got: {issues}"
+        )
+
+    def test_real_issues_returned_as_normal(self, monkeypatch):
+        """Positive case: real flagged issues come through with their fields."""
+        gen = self._make_generator_with_dataroom()
+        real_resp = MagicMock()
+        real_resp.content = [MagicMock(text=(
+            '{"issues": [{"section_key": "section_a", "citation_index": 0, '
+            '"source": "doc.pdf", "reason": "Claim not in source", "severity": "high"}]}'
+        ))]
+        monkeypatch.setattr("core.ai_client.complete", lambda **kw: real_resp)
+        memo = self._memo_with_citations()
+        issues = gen._validate_citations(memo, company="klaim", product="UAE_healthcare")
+        assert len(issues) == 1
+        assert issues[0]["reason"] == "Claim not in source"
+        assert issues[0]["severity"] == "high"
+        # NO false _audit_failed marker on real issues
+        assert not issues[0].get("_audit_failed")

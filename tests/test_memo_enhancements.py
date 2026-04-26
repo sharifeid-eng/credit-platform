@@ -108,6 +108,12 @@ class TestCitationValidation:
         assert issues[0]["severity"] == "high"
 
     def test_handles_malformed_json_from_validator(self, monkeypatch):
+        """Mode 6 Red Team Finding E#5 changed this contract: malformed JSON
+        no longer silently returns []. It now emits an _audit_failed sentinel
+        so polish + analyst can distinguish 'audit ran clean' from 'audit
+        could not verify'. Without the sentinel, fabricated citations slipped
+        through to polished memo with no signal.
+        """
         gen = MemoGenerator()
         gen._dataroom = MagicMock()
         gen._dataroom.search.return_value = [{"source_file": "x.pdf", "text": "s"}]
@@ -127,7 +133,11 @@ class TestCitationValidation:
             }]
         }
         issues = gen._validate_citations(memo, "TestCo", "KSA")
-        assert issues == []  # Graceful degradation — no issues rather than crash
+        # No longer silently empty — must surface a sentinel so the failure is visible
+        assert len(issues) >= 1
+        assert any(i.get("_audit_failed") for i in issues), (
+            "Malformed JSON must now surface an _audit_failed marker (Mode 6 Finding E#5)"
+        )
 
 
 # ── #3: Research pack sidecar storage ───────────────────────────────────────

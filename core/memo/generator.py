@@ -801,6 +801,21 @@ class MemoGenerator:
                 f"{excerpts_block}"
             )
 
+            def _audit_failed(reason: str) -> List[Dict[str, Any]]:
+                """Synthesize a sentinel issue so callers can distinguish 'audit
+                ran clean' (returns []) from 'audit failed to verify' (returns
+                this marker). Without this, fabricated citations slipped through
+                because parse-fail looked identical to no-issues-found.
+                """
+                return [{
+                    "section_key": section_key,
+                    "citation_index": -1,
+                    "source": "",
+                    "reason": f"Citation audit failed: {reason}. Citations not verified — review manually.",
+                    "severity": "high",
+                    "_audit_failed": True,
+                }]
+
             from core.ai_client import complete
             try:
                 resp = complete(
@@ -814,7 +829,7 @@ class MemoGenerator:
             except Exception as e:
                 logger.warning("Citation audit failed for section '%s': %s",
                                section_key, e)
-                return []
+                return _audit_failed(f"AI call exception ({type(e).__name__})")
 
             text = resp.content[0].text if resp.content else ""
             if text.strip().startswith("```"):
@@ -827,12 +842,14 @@ class MemoGenerator:
                 parsed = json.loads(text)
             except json.JSONDecodeError:
                 logger.warning("Citation audit JSON parse failed for section "
-                               "'%s' — treating as no issues", section_key)
-                return []
+                               "'%s' — surfacing as _audit_failed sentinel", section_key)
+                return _audit_failed("JSON parse error")
 
             issues = parsed.get("issues", [])
             if not isinstance(issues, list):
-                return []
+                logger.warning("Citation audit returned non-list issues field for "
+                               "section '%s' — surfacing as _audit_failed sentinel", section_key)
+                return _audit_failed("issues field is not a list")
 
             out: List[Dict[str, Any]] = []
             for issue in issues:
