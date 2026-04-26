@@ -246,8 +246,11 @@ def generate_compliance_cert(
     if limits:
         cl_rows = []
         for lim in limits:
-            compliant = lim.get('compliant', True)
-            status = 'COMPLIANT' if compliant else 'BREACH'
+            compliant = lim.get('compliant')  # may be None for proxy/data-gap limits
+            if compliant is None:
+                status = 'UNVERIFIED'
+            else:
+                status = 'COMPLIANT' if compliant else 'BREACH'
             cl_rows.append([
                 lim.get('name', ''),
                 _fmt(lim.get('current_value'), ccy),
@@ -261,12 +264,19 @@ def generate_compliance_cert(
             [W * 0.32, W * 0.20, W * 0.12, W * 0.16, W * 0.20],
             ccy,
         )
-        # Color status column
+        # Color status column. None (UNVERIFIED) renders gold/amber so the
+        # certificate doesn't mislead with a false PASS/FAIL on a proxy field.
+        try:
+            from reportlab.lib.colors import HexColor
+            GOLD = HexColor('#C9A84C')
+        except Exception:
+            GOLD = TEAL  # fallback if HexColor not importable
         for i, lim in enumerate(limits):
             row_idx = i + 1  # 0 is header
-            is_compliant = lim.get('compliant', True)
+            compliant = lim.get('compliant')
+            color = GOLD if compliant is None else (TEAL if compliant else RED)
             cl_tbl.setStyle(TableStyle([
-                ('TEXTCOLOR', (4, row_idx), (4, row_idx), TEAL if is_compliant else RED),
+                ('TEXTCOLOR', (4, row_idx), (4, row_idx), color),
                 ('FONTNAME',  (4, row_idx), (4, row_idx), 'Helvetica-Bold'),
             ]))
         story.append(cl_tbl)

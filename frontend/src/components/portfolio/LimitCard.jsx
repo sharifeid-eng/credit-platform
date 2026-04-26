@@ -5,10 +5,17 @@ import ConfidenceBadge from '../ConfidenceBadge'
 export default function LimitCard({ name, current, threshold, compliant, unit, format,
                                      breaching_shops, breaches, conc_adjustment, breakdown, wal_days,
                                      // Framework §17 discipline fields
-                                     confidence, population, method, proxy_column }) {
+                                     confidence, population, method, proxy_column,
+                                     // Proxy/data-gap fields (compliant=null in proxy mode)
+                                     compliant_unverified_reason }) {
   const [expanded, setExpanded] = useState(false)
   const ratio = Math.min(current / threshold, 1.5)
   const barWidth = Math.min(ratio * 100, 100)
+
+  // Three states: true (compliant), false (breach), null/undefined (unverified — proxy/data gap).
+  // Null must NOT render as breach (red) — that's the bug Fix #3 closes.
+  const isUnverified = compliant == null
+  const isBreaching = compliant === false
 
   const fmtValue = (v) => {
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`
@@ -28,20 +35,34 @@ export default function LimitCard({ name, current, threshold, compliant, unit, f
     return v.toFixed(0)
   }
 
-  const barColor = !compliant
+  const barColor = isBreaching
     ? 'var(--accent-red)'
+    : isUnverified
+    ? 'var(--accent-gold, #C9A84C)'
     : ratio > 0.8
     ? 'var(--gold)'
     : 'var(--accent-teal)'
 
+  const borderColor = isBreaching
+    ? 'rgba(240, 96, 96, 0.3)'
+    : isUnverified
+    ? 'rgba(201, 168, 76, 0.30)'
+    : 'var(--border)'
+
+  const valueColor = isBreaching
+    ? 'var(--accent-red)'
+    : isUnverified
+    ? 'var(--accent-gold, #C9A84C)'
+    : 'var(--text-primary)'
+
   // Determine if there's drill-down data
   const drillItems = breaching_shops || breaches || []
-  const hasDrillDown = !compliant && drillItems.length > 0
+  const hasDrillDown = isBreaching && drillItems.length > 0
 
   return (
     <div style={{
       background: 'var(--bg-surface)',
-      border: `1px solid ${compliant ? 'var(--border)' : 'rgba(240, 96, 96, 0.3)'}`,
+      border: `1px solid ${borderColor}`,
       borderRadius: 'var(--radius-md)',
       padding: '20px',
       cursor: hasDrillDown ? 'pointer' : 'default',
@@ -65,14 +86,14 @@ export default function LimitCard({ name, current, threshold, compliant, unit, f
               note={proxy_column ? `Proxy column: ${proxy_column}` : undefined}
             />
           )}
-          <ComplianceBadge compliant={compliant} />
+          <ComplianceBadge compliant={compliant} unverifiedReason={compliant_unverified_reason} />
         </div>
       </div>
 
       {/* Value */}
       <div style={{
         fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 700,
-        color: compliant ? 'var(--text-primary)' : 'var(--accent-red)', marginBottom: 4,
+        color: valueColor, marginBottom: 4,
       }}>
         {fmtValue(current)}
       </div>

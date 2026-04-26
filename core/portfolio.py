@@ -1012,18 +1012,32 @@ def compute_klaim_concentration_limits(df, mult=1, ref_date=None, facility_param
 
     # Single payer: A if tape has explicit Payer column, B when using Group as proxy
     # (Klaim's current Apr 2026 tape lacks Payer — see Company Mind debtor_validation.json).
+    # In proxy mode the boolean compliant flag would be misleading: the facility
+    # binds against ~13 insurance Payers but Group is ~144 providers (different
+    # population). Surface compliant=None + partial=True so the compliance
+    # certificate can render UNVERIFIED rather than a false PASS/FAIL.
     payer_confidence = 'A' if payer_col in ('Payer', 'Insurance company') else 'B'
+    is_proxy_mode = payer_confidence == 'B'
+    compliant_field = None if is_proxy_mode else payer_compliant
+    unverified_reason = (
+        f"Tape lacks Payer column; using {payer_col!r} as proxy. "
+        f"Cannot verify against true Single Payer limit (~13 insurance companies "
+        f"vs {payer_col!r} ~144 distinct values)."
+    ) if is_proxy_mode else None
     limits.append({
         'name': 'Single payer concentration',
         'current': _safe(worst_payer_pct),
         'threshold': _safe(payer_threshold),
-        'compliant': payer_compliant,
+        'compliant': compliant_field,
+        'partial': is_proxy_mode,
+        'compliant_unverified_reason': unverified_reason,
+        'proxy_compliant': payer_compliant,  # diagnostic — what the boolean WOULD be
         'unit': '%',
         'format': 'pct',
         'confidence': payer_confidence,
         'population': 'active_outstanding',
         'method': 'direct' if payer_confidence == 'A' else 'proxy',
-        'proxy_column': payer_col if payer_confidence == 'B' else None,
+        'proxy_column': payer_col if is_proxy_mode else None,
         'conc_adjustment': _safe(conc_adjustment),
         'breaches': payer_breaches,
         'breakdown': [

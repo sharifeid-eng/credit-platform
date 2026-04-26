@@ -313,6 +313,41 @@ class TestP06KlaimConcentrationLimitsCarryConfidence:
         assert payer['confidence'] == 'B'
         assert payer['proxy_column'] == 'Group'
 
+    def test_single_payer_compliant_is_None_in_proxy_mode(self):
+        """Klaim Single Payer limit MUST report compliant=None in proxy mode (no
+        Payer column on tape). The boolean computed against Group is misleading:
+        the facility doc binds against Payer (~13 insurance companies), but the
+        proxy uses Group (144 distinct providers — different population). A
+        boolean compliant value here would carry false confidence into the
+        compliance certificate.
+        """
+        from core.portfolio import compute_klaim_concentration_limits
+        df, today = self._make_klaim_tape()
+        result = compute_klaim_concentration_limits(df, mult=1, ref_date=today)
+        payer = next(l for l in result['limits'] if 'Single payer' in l['name'])
+        # Proxy mode → cannot verify against true Payer column
+        assert payer['compliant'] is None, (
+            f"Single Payer compliant must be None in proxy mode, got {payer['compliant']}"
+        )
+        assert payer.get('partial') is True
+        assert payer.get('compliant_unverified_reason')  # human-readable explanation
+        # The boolean we WOULD have reported is preserved for diagnostic use
+        assert isinstance(payer.get('proxy_compliant'), bool)
+
+    def test_single_payer_compliant_is_bool_when_real_payer_column_present(self):
+        """Positive case: when the tape has a real Payer/Insurance company column,
+        compliant is a proper boolean (no proxy)."""
+        from core.portfolio import compute_klaim_concentration_limits
+        df, today = self._make_klaim_tape()
+        # Inject a synthetic Payer column to simulate a future tape upgrade
+        df = df.copy()
+        df['Payer'] = ['DAMAN'] * (len(df) // 2) + ['THIQA'] * (len(df) - len(df) // 2)
+        result = compute_klaim_concentration_limits(df, mult=1, ref_date=today)
+        payer = next(l for l in result['limits'] if 'Single payer' in l['name'])
+        assert payer['confidence'] == 'A'
+        assert payer['proxy_column'] is None
+        assert isinstance(payer['compliant'], bool)  # real boolean, not None
+
 
 class TestP06SILQConcentrationLimitsCarryConfidence:
     def _make_tape(self):
