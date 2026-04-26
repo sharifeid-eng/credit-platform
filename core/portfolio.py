@@ -1279,12 +1279,17 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     # Single-tape approximation: cumulative collected / face value.
     coll_threshold = facility_params.get('collection_ratio_limit', 0.25)
     coll_ratio = 0
+    total_pv = 0
+    total_coll = 0
     if 'Deal date' in df.columns and 'Collected till date' in df.columns:
-        # Deals active at start of period
-        period_deals = df[
-            (df['Deal date'] <= period_end) &
-            (df['Status'] == 'Executed') if 'Status' in df.columns else True
-        ]
+        # Deals active at start of period. Explicit if/else avoids the operator-
+        # precedence trap where `df[mask if cond else True]` parsed as `df[True]`
+        # → KeyError when Status column missing.
+        date_mask = df['Deal date'] <= period_end
+        if 'Status' in df.columns:
+            period_deals = df[date_mask & (df['Status'] == 'Executed')]
+        else:
+            period_deals = df[date_mask]
         total_pv = period_deals['Purchase value'].sum() * mult if 'Purchase value' in period_deals.columns else 0
         total_coll = period_deals['Collected till date'].sum() * mult if len(period_deals) else 0
         coll_ratio = total_coll / total_pv if total_pv > 0 else 0
@@ -1325,16 +1330,18 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
             exp_days = df['Expected collection days'].fillna(0).astype(float)
             df_pvd = df.copy()
             df_pvd['_exp_pay_date'] = df_pvd['Deal date'] + _pd2.to_timedelta(exp_days, unit='D')
-            period_deals = df_pvd[
-                (df_pvd['_exp_pay_date'] <= period_end) &
-                (df_pvd['Status'] == 'Executed') if 'Status' in df_pvd.columns else True
-            ]
+            date_mask_pvd = df_pvd['_exp_pay_date'] <= period_end
+            if 'Status' in df_pvd.columns:
+                period_deals = df_pvd[date_mask_pvd & (df_pvd['Status'] == 'Executed')]
+            else:
+                period_deals = df_pvd[date_mask_pvd]
             pvd_method = 'direct'
         else:
-            period_deals = df[
-                (df['Deal date'] <= period_end) &
-                (df['Status'] == 'Executed') if 'Status' in df.columns else True
-            ]
+            date_mask_pvd = df['Deal date'] <= period_end
+            if 'Status' in df.columns:
+                period_deals = df[date_mask_pvd & (df['Status'] == 'Executed')]
+            else:
+                period_deals = df[date_mask_pvd]
         amount_due = period_deals['Expected total'].sum() * mult if 'Expected total' in period_deals.columns else 0
         amount_paid = period_deals['Collected till date'].sum() * mult if len(period_deals) else 0
         pvd_ratio = amount_paid / amount_due if amount_due > 0 else 0
