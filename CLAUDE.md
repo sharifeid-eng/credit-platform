@@ -268,7 +268,8 @@ credit-platform/
 │   │   ├── session.py         # Session state tracker for delta briefings
 │   │   ├── kb_decomposer.py   # Decomposes lessons.md + CLAUDE.md into KnowledgeNodes
 │   │   ├── kb_query.py        # Unified search across all knowledge stores
-│   │   └── framework_codification.py  # Session 28 D6 — surfaces framework_evolution queue + mark_codified flag
+│   │   ├── framework_codification.py  # Session 28 D6 — surfaces framework_evolution queue + mark_codified flag
+│   │   └── pattern_detector.py  # Session 38 — auto-detects recurring data channels (≥3 files of same document_type), classifies AUTOMATED/PARTIAL/CANDIDATE/EARLY, surfaces cross-company emergent patterns. Auto-fired post-ingest; writes to Company Mind, never auto-writes to Asset Class Mind.
 │   ├── metric_registry.py  # @metric decorator + METRIC_REGISTRY + get_methodology() — powers living methodology
 │   ├── methodology_klaim.py # Klaim methodology metadata (17 sections incl §17 declarations)
 │   ├── methodology_silq.py # SILQ methodology metadata (16 sections incl §17 declarations)
