@@ -443,6 +443,13 @@ export const getDataroomHealthAll    = () => api.get('/dataroom/health').then(r 
 export const getDataroomHealthOne    = (co, prod) =>
   api.get(`/companies/${co}/products/${prod}/dataroom/health`).then(r => r.data);
 
+// Recurring channel detection — per-company patterns (PRIMARY storage in
+// Company Mind) + cross-company emergent patterns (analyst-promoted to
+// Asset Class Mind via promoteMindEntry). Both endpoints are pure reads;
+// mind writes happen post-ingest via dataroom_ctl auto-fire.
+export const getRecurringChannels    = () => api.get('/api/operator/recurring-channels').then(r => r.data);
+export const getEmergentPatterns     = () => api.get('/api/operator/emergent-patterns').then(r => r.data);
+
 // ── External Intelligence: pending review + asset class mind ─────────────
 export const getPendingReview        = ({ status = 'pending', targetScope = null, targetKey = null, limit = null } = {}) =>
   api.get('/api/pending-review', {

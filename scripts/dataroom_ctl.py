@@ -14,9 +14,13 @@ Commands
                                  corruption OR new source files since last
                                  ingest). Exit 0 = ingest needed, 1 = clean.
     ingest --company X [--product P] [--source-dir DIR]
-                                 Full ingest (DataRoomEngine.ingest)
+                                 Full ingest (DataRoomEngine.ingest).
+                                 Auto-fires recurring-channel pattern detection
+                                 on success (writes to Company Mind).
     refresh --company X [--product P] [--source-dir DIR]
-                                 Incremental refresh (DataRoomEngine.refresh)
+                                 Incremental refresh (DataRoomEngine.refresh).
+                                 Auto-fires recurring-channel pattern detection
+                                 on success (writes to Company Mind).
     rebuild-index --company X [--product P]
                                  Rebuild TF-IDF index from existing chunks
     prune [--company X] [--product P]
@@ -28,6 +32,12 @@ Commands
                                  Delete registry/chunks/index/meta (prompts)
     classify --company X [--product P] [--only-other]
                                  Re-classify docs (optionally limited to 'other')
+    detect-patterns [--company X] [--all] [--emergent]
+                                 Detect recurring data channels (>=3 files of
+                                 same document_type). Default: scan all
+                                 companies. --emergent: also include
+                                 cross-company asset-class candidates for
+                                 analyst promotion to Asset Class Mind.
 
 Exit codes
 ----------
@@ -277,6 +287,27 @@ def cmd_needs_ingest(args: argparse.Namespace) -> int:
     return 0 if result["needs_ingest"] else 1
 
 
+def _auto_fire_pattern_detection(company: str) -> dict:
+    """Best-effort: detect recurring channels + write to Company Mind +
+    refresh fund-wide stats. Failures are logged + included in the result
+    payload but NEVER raise — pattern detection must not break ingest/refresh
+    for deploy.sh.
+    """
+    try:
+        from core.mind.pattern_detector import auto_fire_after_ingest
+    except ImportError as e:
+        return {"error": f"pattern_detector import failed: {e}"}
+    summary = auto_fire_after_ingest(company)
+    if summary.get("error"):
+        _err(f"  Pattern detection: FAILED (non-fatal): {summary['error']}")
+    else:
+        _err(
+            f"  Pattern detection: {summary.get('patterns_detected', 0)} pattern(s), "
+            f"{summary.get('new_mind_entries', 0)} new mind entry(ies)."
+        )
+    return summary
+
+
 def cmd_ingest(args: argparse.Namespace) -> int:
     engine = DataRoomEngine()
     product = _resolve_product(engine, args.company, args.product)
@@ -302,6 +333,10 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         f"orphans_dropped={result.get('orphans_dropped', 0)} "
         f"errors={len(result.get('errors', []))}"
     )
+
+    # Auto-fire pattern detection. Best-effort; never breaks deploy on failure.
+    result["pattern_detection"] = _auto_fire_pattern_detection(args.company)
+
     _emit({"command": "ingest", "company": args.company, "product": product, **result})
     return 0
 
@@ -329,7 +364,66 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         f"removed={result.get('removed', 0)} unchanged={result.get('unchanged', 0)} "
         f"errors={len(result.get('errors', []))}"
     )
+
+    # Auto-fire pattern detection. Best-effort; never breaks deploy on failure.
+    result["pattern_detection"] = _auto_fire_pattern_detection(args.company)
+
     _emit({"command": "refresh", "company": args.company, "product": product, **result})
+    return 0
+
+
+def cmd_detect_patterns(args: argparse.Namespace) -> int:
+    """Manually trigger recurring-channel pattern detection.
+
+    Without --company, scans every company. With --emergent, also surfaces
+    cross-company (asset_class, document_type) combos eligible for analyst
+    promotion to Asset Class Mind.
+    """
+    from core.mind.pattern_detector import (
+        detect_emergent_asset_class_patterns,
+        detect_recurring_patterns,
+    )
+
+    if args.company:
+        companies = [args.company]
+    else:
+        companies = [c for c in get_companies() if not c.startswith("_")]
+
+    by_company: dict = {}
+    total = 0
+    summary_by_status: dict = {"AUTOMATED": 0, "PARTIAL": 0, "CANDIDATE": 0, "EARLY": 0}
+    for co in companies:
+        patterns = detect_recurring_patterns(co)
+        by_company[co] = [p.to_dict() for p in patterns]
+        if patterns:
+            _err(f"[{co}] {len(patterns)} pattern(s):")
+            for p in patterns:
+                summary_by_status[p.automation_status] = summary_by_status.get(p.automation_status, 0) + 1
+                _err(
+                    f"  - {p.document_type}: {p.file_count} files, "
+                    f"{p.cadence_label}, status={p.automation_status}"
+                )
+        total += len(patterns)
+
+    output: dict = {
+        "command": "detect-patterns",
+        "patterns_by_company": by_company,
+        "total_patterns": total,
+        "summary": summary_by_status,
+    }
+
+    if args.emergent:
+        emergent = detect_emergent_asset_class_patterns()
+        output["emergent_patterns"] = [e.to_dict() for e in emergent]
+        output["total_emergent"] = len(emergent)
+        _err(f"Cross-company emergent patterns: {len(emergent)}")
+        for e in emergent:
+            _err(
+                f"  - {e.asset_class} x {e.document_type} "
+                f"({len(e.companies)} companies: {', '.join(e.companies)})"
+            )
+
+    _emit(output)
     return 0
 
 
@@ -615,6 +709,25 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--product")
     sp.add_argument("--yes", action="store_true", help="Skip confirmation")
     sp.set_defaults(func=cmd_wipe)
+
+    dp = sub.add_parser(
+        "detect-patterns",
+        help="Detect recurring data channels (>=3 same-type files)",
+        description=(
+            "Scans data/{company}/dataroom/registry.json grouped by "
+            "document_type. Classifies each cluster by file_count + presence "
+            "of post-ingest hook + parser script. Without --company, walks "
+            "every company. --emergent surfaces cross-company "
+            "(asset_class, document_type) combos shared by 2+ companies "
+            "as candidates for analyst promotion to Asset Class Mind."
+        ),
+    )
+    dp.add_argument("--company", help="Detect for one company only (default: all)")
+    dp.add_argument("--all", action="store_true",
+                    help="Explicit all-companies flag (default behavior; kept for symmetry)")
+    dp.add_argument("--emergent", action="store_true",
+                    help="Include cross-company emergent (asset_class, document_type) candidates")
+    dp.set_defaults(func=cmd_detect_patterns)
 
     sp = sub.add_parser(
         "classify",

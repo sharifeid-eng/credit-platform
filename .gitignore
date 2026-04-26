@@ -53,6 +53,13 @@ data/_pending_review/
 # Startup dependency probe output (regenerated every app boot)
 data/_platform_health.json
 
+# Recurring channel detection — derived rolling stats file overwritten by
+# core/mind/pattern_detector.write_fund_wide_stats() on every ingest. Per-
+# machine because it reflects the local data/ directory state (which datarooms
+# are populated, which hooks/parsers exist). Prod regenerates on every
+# `dataroom_ctl ingest`; tracking it would cause noisy diffs.
+data/_master_mind/recurring_channel_stats.json
+
 # Per-product covenant evaluation history — the backend appends to this file
 # every /portfolio/covenants call, so laptop and prod diverge immediately. Each
 # machine keeps its own local history. Audit-trail; not source state. Session

@@ -487,6 +487,56 @@ def get_mind_entries(company: Optional[str] = None, category: Optional[str] = No
 # need to actually do them") for the why.
 
 
+@router.get("/recurring-channels")
+def get_recurring_channels():
+    """All detected recurring channel patterns across all companies.
+
+    Per CLAUDE.md design: per-company detections are PRIMARY storage in
+    Company Mind (auto-written post-ingest by core/mind/pattern_detector.py).
+    This endpoint computes them on-demand from the registry — independent of
+    Mind state — so the UI always reflects current dataroom contents even
+    if no ingest has fired since the last detection.
+    """
+    from core.mind.pattern_detector import detect_recurring_patterns
+
+    patterns_by_company: Dict[str, List[Dict[str, Any]]] = {}
+    summary_by_status = {"AUTOMATED": 0, "PARTIAL": 0, "CANDIDATE": 0, "EARLY": 0}
+    for co in get_companies():
+        if co.startswith("_"):
+            continue
+        patterns = detect_recurring_patterns(co)
+        if not patterns:
+            continue
+        patterns_by_company[co] = [p.to_dict() for p in patterns]
+        for p in patterns:
+            summary_by_status[p.automation_status] = summary_by_status.get(p.automation_status, 0) + 1
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "patterns_by_company": patterns_by_company,
+        "summary": summary_by_status,
+        "total_patterns": sum(len(v) for v in patterns_by_company.values()),
+    }
+
+
+@router.get("/emergent-patterns")
+def get_emergent_patterns():
+    """Cross-company emergent (asset_class, document_type) candidates.
+
+    Combos shared by 2+ companies surfaced as CANDIDATES for analyst
+    promotion to Asset Class Mind via the existing /api/mind/promote
+    endpoint (core/mind/promotion.py). NEVER auto-written.
+    """
+    from core.mind.pattern_detector import detect_emergent_asset_class_patterns
+
+    emergent = detect_emergent_asset_class_patterns()
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "patterns": [e.to_dict() for e in emergent],
+        "total": len(emergent),
+    }
+
+
 @router.post("/digest")
 def generate_operator_digest(webhook_url: Optional[str] = None):
     """Generate a weekly operator digest.

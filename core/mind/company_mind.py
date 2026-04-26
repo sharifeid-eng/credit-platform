@@ -32,6 +32,12 @@ _FILES = {
     "data_quality": "data_quality.jsonl",
     "session_lessons": "session_lessons.jsonl",
     "entities": "entities.jsonl",
+    # Auto-detected recurring data channels (one entry per company × document_type
+    # cluster, written by core/mind/pattern_detector.py post-ingest). Distinct
+    # from `findings` because these are operational/automation observations,
+    # not research conclusions — kept out of `_TASK_RELEVANCE` so they don't
+    # leak into AI prompt context.
+    "recurring_channels": "recurring_channels.jsonl",
 }
 
 # Task-type to category relevance mapping
@@ -211,6 +217,27 @@ class CompanyMind:
         return entries
 
     # ── Recording methods ──────────────────────────────────────────────
+
+    def record(
+        self,
+        category: str,
+        content: str,
+        metadata: Optional[Dict] = None,
+    ) -> MindEntry:
+        """Generic recorder for non-typed structured records (e.g.
+        auto-detected patterns from `core/mind/pattern_detector.py`).
+
+        Mirrors `MasterMind.record()` and `AssetClassMind.record()` so all
+        three Mind layers expose the same minimal API. Validates the
+        category against `_FILES`.
+        """
+        if category not in _FILES:
+            raise ValueError(
+                f"Unknown category: {category}. Valid: {list(_FILES.keys())}"
+            )
+        entry = _make_entry(category, content, metadata or {})
+        self._append_entry(entry)
+        return entry
 
     def record_correction(
         self, category: str, original: str, corrected: str, reason: str = ""

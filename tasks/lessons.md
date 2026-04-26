@@ -3,6 +3,25 @@ Persistent log of mistakes and patterns. Claude reviews this at session start to
 
 ---
 
+## 2026-04-26 — Per-company observations belong in Company Mind, not Master Mind. Promotions are analyst-curated, never automatic.
+
+**Problem:** When designing the recurring-channel detection capability, an early instinct was to write all detected patterns directly to Master Mind under a `recurring_channels` category — one Master Mind entry per detected (company, document_type) pair. That seemed simple: one place to query. But it would have polluted the fund-level institutional memory with hundreds of operational records (Tamara has 17 patterns alone; multiplied across 5+ companies and growing → 50-100+ rows immediately, all per-company specifics that don't apply fund-wide). Master Mind exists for what's TRUE across all companies; per-company facts dilute its signal-to-noise.
+
+A second wrong instinct was to auto-write cross-company emergent patterns ("BNPL companies typically deliver quarterly_investor_pack files") into Asset Class Mind as soon as ≥2 companies showed the same combo. But emergent patterns are SIGNALS, not generalisations — the analyst has to phrase them. "Tamara and a hypothetical RivalBNPL both have 4 quarterly_pack files" might mean "BNPL is a quarterly-reporting asset class" OR it might mean "two companies happen to both deliver a quarterly thing for unrelated reasons." Auto-writing the strong claim before human judgment runs is the classic external-evidence-into-Mind mistake — exactly the trust violation that prompted the session-27 pending-review queue for `external.web_search`.
+
+**Rule:** The Mind hierarchy maps to a question of trust + scope: per-company observations (CompanyMind) → cross-company patterns surfaced as candidates (AssetClassMind, analyst-curated) → fund-level rules (MasterMind, codified). Detection layers RIDE on top of these — they write per-company observations directly to CompanyMind via the existing `record()` API, but for any cross-company or fund-level claim they SURFACE candidates only. The promotion path goes through the same `core/mind/promotion.py` infrastructure session 27 built for `external.web_search`. Master Mind only earns generic strategic facts, never per-pattern rows; the right Master Mind footprint for a detection capability is one rolling stats file (overwritten, not appended) — fund-wide visibility without per-pattern noise.
+
+**How to apply:**
+- Per-company finding → `CompanyMind.record(category, content, metadata)`. Use a dedicated category name (e.g. `recurring_channels`) added to `_FILES`. Deliberately omit it from `_TASK_RELEVANCE` if the records are operational/automation observations rather than research conclusions — otherwise they'll leak into AI prompt context and dilute the prompts.
+- Cross-company emergent pattern → return the candidate from a detection function (do NOT call `AssetClassMind.record()`). Surface in the UI with a "Promote" button that hands off to `core/mind/promotion.py::promote_entry()` — analyst writes the generalisation in their own words.
+- Fund-level statistics → write a SINGLE rolling JSON file at `data/_master_mind/{capability}_stats.json`, overwritten each detection run. NOT a JSONL append; NOT a Mind entry. Master Mind's JSONL files are for analyst-curated knowledge, not derived statistics.
+- Idempotency contract: when writing to Company Mind, identify each pattern by a stable `pattern_id` (e.g. `f"{company}::{document_type}"`), check the latest existing entry, and only append a new row when meaningful state has changed. Status transitions create history (audit trail); steady state is a no-op.
+- Test the architectural constraint, not just the happy path: `test_emergent_pattern_does_not_auto_write_to_asset_class_mind` snapshots the asset_class_mind dir before AND after detection, asserts they're identical. Without this test, a future refactor could silently flip the constraint.
+
+Reference: session 38 (commit on `claude/recurring-channel-detection-v2`). `core/mind/pattern_detector.py` is the first detection layer following this discipline. Future detection capabilities (drift detection, dataroom anomaly detection, cross-company concentration alerts) should mirror the same pattern.
+
+---
+
 ## 2026-04-25 — Forward-compatible automation hooks beat company-specific deploy.sh edits
 
 **Problem:** Tamara's quarterly investor pack pipeline left an analyst footgun: after `sync-data.ps1` + `./deploy.sh`, the analyst still had to remember to manually run `scripts/ingest_tamara_investor_pack.py` on prod to generate the structured JSON the Quarterly Financials dashboard tab consumed. Skipping the manual step left the dashboard showing the previous quarter's data — silent staleness.

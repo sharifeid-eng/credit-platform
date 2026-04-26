@@ -11,6 +11,7 @@ import {
   getPendingReview, approvePendingEntry, rejectPendingEntry,
   getAssetClasses, getAssetClassEntries, promoteMindEntry,
   getFrameworkCodificationCandidates, markFrameworkEntryCodified,
+  getRecurringChannels, getEmergentPatterns,
 } from '../services/api'
 
 // ── Section label (reused pattern from Home.jsx) ─────────────────────────────
@@ -783,6 +784,8 @@ export default function OperatorCenter() {
   const [pending,   setPending]   = useState(null)
   const [assetClasses, setAssetClasses] = useState(null)
   const [codification, setCodification] = useState(null)  // D6 queue
+  const [channels,  setChannels]  = useState(null)        // recurring channel detection
+  const [emergent,  setEmergent]  = useState(null)        // cross-company emergent patterns
   const [activeTab, setActiveTab] = useState('health')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -849,6 +852,20 @@ export default function OperatorCenter() {
         .catch(e => {
           console.error('Codification queue load failed:', e)
           setCodification({ candidates: [], counts: {}, error: 'Load failed' })
+        })
+    }
+    if (activeTab === 'channels' && channels === null) {
+      // Fire both detection endpoints in parallel — emergent depends on the
+      // same scan as per-company so doing them together avoids a wait.
+      Promise.all([getRecurringChannels(), getEmergentPatterns()])
+        .then(([ch, em]) => {
+          setChannels(ch)
+          setEmergent(em)
+        })
+        .catch(e => {
+          console.error('Recurring channels load failed:', e)
+          setChannels({ patterns_by_company: {}, summary: {}, total_patterns: 0, error: 'Load failed' })
+          setEmergent({ patterns: [], total: 0, error: 'Load failed' })
         })
     }
   }, [activeTab, mindFilter, thesisCompany])
@@ -1045,6 +1062,16 @@ export default function OperatorCenter() {
             active={activeTab === 'codification'}
             onClick={() => setActiveTab('codification')}
             count={codification?.counts?.pending || null}
+          />
+          <TabButton
+            label="Channels"
+            active={activeTab === 'channels'}
+            onClick={() => setActiveTab('channels')}
+            count={
+              channels
+                ? (channels.summary?.CANDIDATE || 0) + (emergent?.total || 0) || null
+                : null
+            }
           />
         </div>
 
@@ -1684,6 +1711,24 @@ export default function OperatorCenter() {
                   getFrameworkCodificationCandidates({ includeCodified: true, limit: 100 })
                     .then(setCodification)
                     .catch(() => setCodification({ candidates: [], counts: {}, error: 'Load failed' }))
+                }}
+              />
+            )}
+
+            {/* ── Recurring Channels Tab ── */}
+            {activeTab === 'channels' && (
+              <ChannelsTab
+                channels={channels}
+                emergent={emergent}
+                onRefresh={() => {
+                  setChannels(null)
+                  setEmergent(null)
+                  Promise.all([getRecurringChannels(), getEmergentPatterns()])
+                    .then(([ch, em]) => { setChannels(ch); setEmergent(em) })
+                    .catch(() => {
+                      setChannels({ patterns_by_company: {}, summary: {}, total_patterns: 0, error: 'Reload failed' })
+                      setEmergent({ patterns: [], total: 0, error: 'Reload failed' })
+                    })
                 }}
               />
             )}
@@ -2746,6 +2791,311 @@ function CodificationCard({ entry, onCodified, onError }) {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ── Recurring Channels Tab ─────────────────────────────────────────────────
+// Surfaces auto-detected (company × document_type) clusters with their
+// automation status (AUTOMATED / PARTIAL / CANDIDATE / EARLY) plus
+// cross-company emergent (asset_class × document_type) candidates eligible
+// for analyst promotion to Asset Class Mind. Detection runs on every
+// `dataroom_ctl ingest`/`refresh` and writes per-pattern entries to
+// Company Mind. Master Mind only receives the rolling fund-wide stats file
+// (data/_master_mind/recurring_channel_stats.json).
+
+const STATUS_COLORS = {
+  AUTOMATED: '#2DD4BF',
+  PARTIAL:   '#C9A84C',
+  CANDIDATE: '#F6AE2D',
+  EARLY:     '#8494A7',
+}
+
+function StatusPill({ status }) {
+  return (
+    <span style={{
+      fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700,
+      color: STATUS_COLORS[status] || '#8494A7',
+      letterSpacing: '0.1em',
+      padding: '2px 6px',
+      border: `1px solid ${STATUS_COLORS[status] || '#8494A7'}`,
+      borderRadius: 3,
+      whiteSpace: 'nowrap',
+    }}>
+      {status}
+    </span>
+  )
+}
+
+function PatternCard({ pattern, onCopyPrompt, copied }) {
+  const status = pattern.automation_status
+  const statusColor = STATUS_COLORS[status] || '#8494A7'
+
+  return (
+    <div style={{
+      background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderRadius: 6, padding: 14,
+      borderLeft: `3px solid ${statusColor}`,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)',
+                      fontFamily: 'var(--font-mono)' }}>
+          {pattern.document_type}
+        </div>
+        <StatusPill status={status} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr',
+                    gap: 6, fontSize: 11, marginBottom: 10 }}>
+        <Row label="Files" value={pattern.file_count} />
+        <Row label="Cadence" value={pattern.cadence_label || 'unknown'} />
+        <Row label="Hook" value={pattern.hook_exists ? 'yes' : 'no'}
+             valueColor={pattern.hook_exists ? '#2DD4BF' : '#F06060'} />
+        <Row label="Parser" value={pattern.parser_exists ? 'yes' : 'no'}
+             valueColor={pattern.parser_exists ? '#2DD4BF' : '#F06060'} />
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text-muted)',
+                    lineHeight: 1.5, marginBottom: 10 }}>
+        {pattern.recommendation}
+      </div>
+
+      {(status === 'CANDIDATE' || status === 'PARTIAL') && (
+        <button
+          onClick={() => onCopyPrompt(pattern)}
+          style={{
+            fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            background: 'var(--bg-deep)', color: 'var(--gold)',
+            border: '1px solid var(--gold)', padding: '6px 12px',
+            borderRadius: 4, cursor: 'pointer', width: '100%',
+          }}
+        >
+          {copied ? '✓ Copied' : 'Copy setup prompt'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function EmergentCard({ pattern }) {
+  return (
+    <div style={{
+      background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderRadius: 6, padding: 14,
+      borderLeft: '3px solid #A78BFA',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {pattern.asset_class} <span style={{ color: 'var(--text-muted)' }}>×</span>{' '}
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{pattern.document_type}</span>
+        </div>
+        <span style={{
+          fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700,
+          color: '#A78BFA', letterSpacing: '0.1em',
+          padding: '2px 6px', border: '1px solid #A78BFA', borderRadius: 3,
+        }}>
+          EMERGENT
+        </span>
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text-muted)',
+                    lineHeight: 1.5, marginBottom: 10 }}>
+        {pattern.suggested_text}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4,
+                    paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+        {pattern.companies.map(co => (
+          <div key={co} style={{ display: 'flex', justifyContent: 'space-between',
+                                 fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+            <span style={{ color: 'var(--text-primary)' }}>{co}</span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              {pattern.company_file_counts[co]} files
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 10, padding: 8,
+                    background: 'var(--bg-deep)', borderRadius: 4,
+                    fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+        Promote via the Mind tab → select a relevant Company Mind entry → "Promote to Asset Class".
+        Generalisations need analyst phrasing; the platform surfaces the
+        signal but never auto-writes to Asset Class Mind.
+      </div>
+    </div>
+  )
+}
+
+function ChannelsTab({ channels, emergent, onRefresh }) {
+  const [copiedId, setCopiedId] = useState(null)
+
+  if (channels === null) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading recurring channels…</div>
+  }
+
+  const summary = channels.summary || {}
+  const totalCandidates = summary.CANDIDATE || 0
+  const totalAutomated  = summary.AUTOMATED || 0
+  const totalPartial    = summary.PARTIAL || 0
+  const totalEarly      = summary.EARLY || 0
+  const emergentCount   = emergent?.total || 0
+
+  const buildPrompt = (p) => (
+    `${p.company} has accumulated ${p.file_count} ${p.document_type} files in their dataroom (${p.cadence_label} cadence).\n\n` +
+    `Set up automation following the Tamara pattern:\n` +
+    `1. Write parser script \`scripts/ingest_${p.company.toLowerCase()}_${p.document_type}.py\` modeled on \`scripts/ingest_tamara_investor_pack.py\`.\n` +
+    `2. ${p.hook_exists ? 'Extend the existing' : 'Add a'} \`data/${p.company}/dataroom/.post-ingest.sh\` to invoke it after every ingest.\n` +
+    `3. Update ${p.company}'s dashboard to render the parsed data.\n` +
+    `4. Add tests in \`tests/test_ingest_${p.company.toLowerCase()}_${p.document_type}.py\`.\n` +
+    `5. Commit, push, and instruct the user to redeploy.\n\n` +
+    `Match the existing Tamara automation pattern precisely — see scripts/ingest_tamara_investor_pack.py and data/Tamara/dataroom/.post-ingest.sh.`
+  )
+
+  const handleCopyPrompt = (pattern) => {
+    const prompt = buildPrompt(pattern)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(prompt).then(() => {
+        setCopiedId(pattern.pattern_id)
+        setTimeout(() => setCopiedId(null), 2000)
+      }).catch(() => window.alert(prompt))
+    } else {
+      window.alert(prompt)
+    }
+  }
+
+  const companies = Object.keys(channels.patterns_by_company || {}).sort()
+
+  return (
+    <div>
+      {/* Summary strip */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+        gap: 12, marginBottom: 24,
+      }}>
+        <SummaryStat label="Automated" value={totalAutomated} color={STATUS_COLORS.AUTOMATED} />
+        <SummaryStat label="Partial" value={totalPartial} color={STATUS_COLORS.PARTIAL} />
+        <SummaryStat label="Candidates" value={totalCandidates} color={STATUS_COLORS.CANDIDATE} accent />
+        <SummaryStat label="Early" value={totalEarly} color={STATUS_COLORS.EARLY} />
+        <SummaryStat label="Emergent" value={emergentCount} color="#A78BFA" />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between', marginBottom: 18 }}>
+        <SectionLabel
+          text={`Per-Company Detections · ${channels.total_patterns || 0} pattern(s)`}
+          accent={totalCandidates ? STATUS_COLORS.CANDIDATE : STATUS_COLORS.AUTOMATED}
+        />
+        <button
+          onClick={onRefresh}
+          style={{
+            fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            background: 'var(--bg-deep)', color: 'var(--text-muted)',
+            border: '1px solid var(--border)', padding: '6px 12px',
+            borderRadius: 4, cursor: 'pointer',
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {channels.error ? (
+        <div style={{ color: '#F06060', fontSize: 13 }}>Error: {channels.error}</div>
+      ) : companies.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+          No recurring channels detected. Patterns appear here when a company's
+          dataroom contains 3+ files of the same document_type.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginBottom: 32 }}>
+          {companies.map(co => (
+            <div key={co}>
+              <div style={{
+                fontSize: 12, fontWeight: 700, color: 'var(--text-primary)',
+                marginBottom: 10, letterSpacing: '0.04em',
+              }}>
+                {co}
+                <span style={{
+                  marginLeft: 8, fontSize: 11, fontWeight: 400,
+                  color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+                }}>
+                  {channels.patterns_by_company[co].length} pattern(s)
+                </span>
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: 12,
+              }}>
+                {channels.patterns_by_company[co].map(p => (
+                  <PatternCard
+                    key={p.pattern_id}
+                    pattern={p}
+                    onCopyPrompt={handleCopyPrompt}
+                    copied={copiedId === p.pattern_id}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Emergent patterns section */}
+      <SectionLabel
+        text={`Emergent Asset-Class Patterns · ${emergentCount} candidate(s)`}
+        accent="#A78BFA"
+      />
+      {emergent === null ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading emergent patterns…</div>
+      ) : emergent.error ? (
+        <div style={{ color: '#F06060', fontSize: 13 }}>Error: {emergent.error}</div>
+      ) : emergentCount === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+          No cross-company emergent patterns yet. A pattern surfaces here when
+          2+ companies in the same asset_class show 3+ files of the same
+          document_type.
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: 12,
+        }}>
+          {emergent.patterns.map((e, i) => (
+            <EmergentCard key={`${e.asset_class}-${e.document_type}-${i}`} pattern={e} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SummaryStat({ label, value, color, accent }) {
+  return (
+    <div style={{
+      background: accent ? 'var(--bg-surface)' : 'var(--bg-deep)',
+      border: `1px solid ${accent ? color : 'var(--border)'}`,
+      borderRadius: 6, padding: 12,
+    }}>
+      <div style={{
+        fontSize: 22, fontWeight: 700, color: color,
+        fontFamily: 'var(--font-mono)', lineHeight: 1,
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontSize: 10, color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.1em',
+        marginTop: 6,
+      }}>
+        {label}
+      </div>
     </div>
   )
 }
