@@ -1474,14 +1474,23 @@ def annotate_covenant_eod(result, history):
             if prev_records:
                 prev_period = prev_records[0].get('period', '')
                 current_period = cov.get('period', '')
-                is_consecutive = True
+                # Default fail-CLOSED: if we can't verify consecutiveness, do NOT
+                # advance the EoD chain. Better to under-trigger EoD than to fire
+                # it on every parse failure.
+                is_consecutive = False
                 if prev_period and current_period:
                     try:
                         import pandas as _pd
-                        gap_days = (_pd.Timestamp(current_period) - _pd.Timestamp(prev_period)).days
+                        # `period` is written by compute_klaim_covenants as a
+                        # date-range string ('2026-04-01 – 2026-04-30'). Parse the
+                        # START of each range; pd.Timestamp can't parse the full
+                        # range. Single-date legacy entries pass through unchanged.
+                        prev_start = prev_period.split(' – ')[0].strip()
+                        current_start = current_period.split(' – ')[0].strip()
+                        gap_days = (_pd.Timestamp(current_start) - _pd.Timestamp(prev_start)).days
                         is_consecutive = 15 <= gap_days <= 45  # roughly one calendar month
                     except Exception:
-                        is_consecutive = True  # if date parsing fails, assume consecutive
+                        is_consecutive = False  # fail closed on parse failure
 
                 prev_method = prev_records[0].get('method')
                 current_method = cov.get('method')

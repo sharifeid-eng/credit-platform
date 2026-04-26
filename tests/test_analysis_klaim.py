@@ -1099,6 +1099,103 @@ class TestCovenantMethodTagging:
         assert pvd['consecutive_breaches'] == 2
 
 
+class TestAnnotateCovenantEodFailClosed:
+    """Regression: annotate_covenant_eod parsed `period` field via pd.Timestamp(...).
+    For two-consecutive-breach covenants (Coll Ratio, Paid vs Due) the codebase
+    writes `period` as a date-range string ('2026-04-01 – 2026-04-30') — which
+    pd.Timestamp can't parse. The bare `except Exception: is_consecutive = True`
+    fail-OPEN trap fired EoD on EVERY parse failure when prior was breaching.
+
+    Fix: parse the START of the date-range; fail CLOSED (no EoD) on unparseable.
+    """
+
+    def test_six_month_gap_with_date_range_period_does_not_trigger_eod(self):
+        """Periods 6 months apart should NOT count as consecutive — but the
+        parse-failure fail-OPEN bug used to call them consecutive (because parse
+        raised, is_consecutive defaulted to True)."""
+        from core.portfolio import annotate_covenant_eod
+        fake_result = {
+            'covenants': [{
+                'name': 'Paid vs Due Ratio',
+                'compliant': False,
+                'current': 0.83,
+                'period': '2026-04-01 – 2026-04-30',
+                'method': 'direct',
+                'eod_rule': 'two_consecutive_breaches',
+            }]
+        }
+        fake_history = {
+            'Paid vs Due Ratio': [{
+                'period': '2025-10-01 – 2025-10-31',  # 6 months earlier — NOT consecutive
+                'compliant': False,
+                'current': 0.70,
+                'date': '2025-10-31',
+                'method': 'direct',
+            }]
+        }
+        annotated = annotate_covenant_eod(fake_result, fake_history)
+        pvd = annotated['covenants'][0]
+        assert pvd['eod_triggered'] is False, "6-month gap must not trigger EoD"
+        assert pvd['consecutive_breaches'] == 1
+        assert pvd['eod_status'] == 'first_breach'
+
+    def test_unparseable_period_fails_closed(self):
+        """If period is truly unparseable, default to NOT consecutive (fail closed)."""
+        from core.portfolio import annotate_covenant_eod
+        fake_result = {
+            'covenants': [{
+                'name': 'Paid vs Due Ratio',
+                'compliant': False,
+                'current': 0.83,
+                'period': 'WHATEVER UNPARSEABLE',
+                'method': 'direct',
+                'eod_rule': 'two_consecutive_breaches',
+            }]
+        }
+        fake_history = {
+            'Paid vs Due Ratio': [{
+                'period': 'ALSO UNPARSEABLE',
+                'compliant': False,
+                'current': 0.70,
+                'date': '2026-03-31',
+                'method': 'direct',
+            }]
+        }
+        annotated = annotate_covenant_eod(fake_result, fake_history)
+        pvd = annotated['covenants'][0]
+        # Fail CLOSED — credit-risk surface defaults to no-EoD when we can't verify.
+        assert pvd['eod_triggered'] is False, "Unparseable period must fail closed (no EoD)"
+        assert pvd['consecutive_breaches'] == 1
+
+    def test_calendar_month_gap_with_date_range_period_still_triggers_eod(self):
+        """Positive case: with the date-range parse working, true consecutive
+        months should still trigger EoD (unchanged from the previous behaviour)."""
+        from core.portfolio import annotate_covenant_eod
+        fake_result = {
+            'covenants': [{
+                'name': 'Paid vs Due Ratio',
+                'compliant': False,
+                'current': 0.83,
+                'period': '2026-04-01 – 2026-04-30',
+                'method': 'direct',
+                'eod_rule': 'two_consecutive_breaches',
+            }]
+        }
+        fake_history = {
+            'Paid vs Due Ratio': [{
+                'period': '2026-03-01 – 2026-03-31',  # one month earlier — consecutive
+                'compliant': False,
+                'current': 0.70,
+                'date': '2026-03-31',
+                'method': 'direct',
+            }]
+        }
+        annotated = annotate_covenant_eod(fake_result, fake_history)
+        pvd = annotated['covenants'][0]
+        assert pvd['eod_triggered'] is True
+        assert pvd['consecutive_breaches'] == 2
+
+
 class TestCovenantFilterStatusColumnAbsent:
     """Regression: defensive `if 'Status' in df.columns else True` fallback in
     Coll Ratio + Paid vs Due filters used a Python operator-precedence-broken
