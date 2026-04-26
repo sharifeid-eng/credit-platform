@@ -86,7 +86,18 @@ def compute_roll_rates(old_df, new_df, as_of_old, as_of_new):
     new['days_new'] = (new_date - new['Deal date']).dt.days
     new['bucket_new'] = new.apply(lambda r: _assign_bucket(r['days_new'], r['Status']), axis=1)
 
-    # Merge on ID
+    # Dedup before merge — Klaim's denial-reopen pattern (Status reverses
+    # Completed → Executed) routinely produces duplicate Deal IDs in the same
+    # snapshot. Without dedup, merge() Cartesian-explodes counts. Keep the LAST
+    # occurrence so the most-recently-recorded state of each deal is used.
+    old_rows_before = len(old)
+    new_rows_before = len(new)
+    old = old.drop_duplicates(subset=[id_col], keep='last')
+    new = new.drop_duplicates(subset=[id_col], keep='last')
+    old_duplicates_dropped = old_rows_before - len(old)
+    new_duplicates_dropped = new_rows_before - len(new)
+
+    # Merge on ID — now safe (one row per id_col per side)
     merged = old[[id_col, 'bucket_old', 'Status']].merge(
         new[[id_col, 'bucket_new', 'Status']],
         on=id_col,
@@ -156,13 +167,15 @@ def compute_roll_rates(old_df, new_df, as_of_old, as_of_new):
         'matrix': matrix_rows,
         'cure_rates': cure_rates,
         'summary': {
-            'total_matched_deals': total_deals,
-            'improved':            int(improved),
-            'stable':              int(stable),
-            'worsened':            int(worsened),
-            'improved_pct':        round(improved / total_deals * 100, 1) if total_deals else 0,
-            'worsened_pct':        round(worsened / total_deals * 100, 1) if total_deals else 0,
-            'old_snapshot':        as_of_old,
-            'new_snapshot':        as_of_new,
+            'total_matched_deals':      total_deals,
+            'improved':                 int(improved),
+            'stable':                   int(stable),
+            'worsened':                 int(worsened),
+            'improved_pct':             round(improved / total_deals * 100, 1) if total_deals else 0,
+            'worsened_pct':             round(worsened / total_deals * 100, 1) if total_deals else 0,
+            'old_snapshot':             as_of_old,
+            'new_snapshot':             as_of_new,
+            'old_duplicates_dropped':   int(old_duplicates_dropped),
+            'new_duplicates_dropped':   int(new_duplicates_dropped),
         },
     }
