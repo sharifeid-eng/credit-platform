@@ -629,13 +629,32 @@ def _klaim_outstanding(df, mult=1):
 
 
 def _klaim_deal_age_days(df, ref_date=None):
-    """Days since Deal date for each row."""
-    if ref_date is None:
-        ref_date = pd.Timestamp.now().normalize()
-    else:
-        ref_date = pd.to_datetime(ref_date)
+    """Days since Deal date for each row.
+
+    When `ref_date` is None, falls back to `df['Deal date'].max()` — a
+    deterministic per-snapshot proxy that makes the same snapshot's WAL/age
+    reproducible regardless of when computed. The previous default of
+    `pd.Timestamp.now().normalize()` made historic snapshots' covenants drift
+    day-by-day (a 2026-03-03 snapshot evaluated "as of None" computed age vs
+    today's calendar — so the same data produced different covenant compliance
+    on different days).
+
+    Production callers should always pass `ref_date` explicitly (e.g.,
+    `snap.taken_at` per Session 31 snapshot dimensioning). The None fallback
+    exists for legacy direct invocation; using df.Deal_date.max() keeps results
+    stable per snapshot, which matters for IC reproducibility.
+    """
     if 'Deal date' not in df.columns:
         return pd.Series(0, index=df.index)
+    if ref_date is None:
+        deal_dates = pd.to_datetime(df['Deal date'], errors='coerce')
+        if deal_dates.notna().any():
+            ref_date = deal_dates.max()
+        else:
+            # Empty / all-NaT — last resort, use wall clock (caller error path).
+            ref_date = pd.Timestamp.now().normalize()
+    else:
+        ref_date = pd.to_datetime(ref_date)
     return (ref_date - df['Deal date']).dt.days.clip(lower=0)
 
 

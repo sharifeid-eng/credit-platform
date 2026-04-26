@@ -1099,6 +1099,58 @@ class TestCovenantMethodTagging:
         assert pvd['consecutive_breaches'] == 2
 
 
+class TestKlaimDealAgeDeterministicFallback:
+    """Regression: _klaim_deal_age_days defaulted to pd.Timestamp.now().normalize()
+    when ref_date was None. Same historic snapshot's WAL would drift day-by-day
+    (2026-03-03 snapshot's WAL "as of None" would compute age vs current calendar
+    day). Session 31 snapshot-dimensioning fixed source ambiguity but this helper
+    still used wall-clock fallback.
+
+    Fix: when ref_date is None, fall back to df['Deal date'].max() — deterministic
+    per-snapshot. Same snapshot → same answer regardless of when computed.
+    """
+
+    def _df_with_known_dates(self):
+        # Deal dates spanning Jan-Apr 2026, max = 2026-04-15
+        rows = []
+        for i in range(10):
+            rows.append({
+                'Deal date': pd.Timestamp('2026-04-15') - pd.Timedelta(days=i * 10),
+                'Status': 'Executed',
+                'Purchase value': 10000.0,
+                'Collected till date': 5000.0,
+                'Denied by insurance': 0.0,
+            })
+        return pd.DataFrame(rows)
+
+    def test_no_ref_date_returns_deterministic_per_snapshot(self):
+        """Two calls in a row must return identical age values (no wall-clock drift)."""
+        from core.portfolio import _klaim_deal_age_days
+        df = self._df_with_known_dates()
+        ages_a = _klaim_deal_age_days(df, ref_date=None)
+        ages_b = _klaim_deal_age_days(df, ref_date=None)
+        assert (ages_a == ages_b).all(), "Two calls must produce identical ages — deterministic fallback"
+
+    def test_no_ref_date_uses_max_deal_date_as_fallback(self):
+        """Fallback should be the latest Deal date in the slice, not Timestamp.now()."""
+        from core.portfolio import _klaim_deal_age_days
+        df = self._df_with_known_dates()
+        # Latest Deal date in the df is 2026-04-15. Age relative to that:
+        ages_fallback = _klaim_deal_age_days(df, ref_date=None)
+        ages_explicit = _klaim_deal_age_days(df, ref_date='2026-04-15')
+        assert (ages_fallback == ages_explicit).all(), (
+            "Fallback ages must match what explicit ref_date='2026-04-15' produces"
+        )
+
+    def test_explicit_ref_date_overrides_fallback(self):
+        from core.portfolio import _klaim_deal_age_days
+        df = self._df_with_known_dates()
+        # Explicit ref way in the future — every age should be larger
+        ages_future = _klaim_deal_age_days(df, ref_date='2027-01-01')
+        ages_fallback = _klaim_deal_age_days(df, ref_date=None)
+        assert (ages_future > ages_fallback).all()
+
+
 class TestAnnotateCovenantEodFailClosed:
     """Regression: annotate_covenant_eod parsed `period` field via pd.Timestamp(...).
     For two-consecutive-breach covenants (Coll Ratio, Paid vs Due) the codebase
