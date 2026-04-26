@@ -370,6 +370,10 @@ EoD step 11's structural break was the single most impactful discovery this sess
 
 2. **deploy.sh source-newer-than-registry detection** — spawned task with full implementation prompt. Will create `claude/deploy-sh-needs-ingest-detection` branch with new `dataroom_ctl needs-ingest` subcommand + 8 tests + deploy.sh loop replacement. Click to launch in a fresh worktree.
 
+**Preserved from removed worktree `claude/silly-goodall` (2026-04-26 worktree audit):**
+
+3. **Audit AI help-box suggested questions** — verify each suggested question in Data Chat and TabInsight is relevant to its context, answerable with the available data for that company/product/tab, and not generic or misleading. Check Klaim, SILQ, and Ejari separately.
+
 ---
 
 ## Completed — 2026-04-24 (Session 37: Test-fixture leakage fix)
