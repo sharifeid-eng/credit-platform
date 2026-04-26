@@ -259,6 +259,15 @@ def load_klaim_from_db(db, company: str, product: str,
         .group_by(Payment.invoice_id)
     ).all())
 
+    # Decide whether to expose the Payer column. The DB schema preserves
+    # Invoice.payer_name as nullable for forward compatibility, but if the
+    # source tape never had a Payer column, every invoice has payer_name=None.
+    # Injecting `'Payer': ''` on every row would falsely advertise a real
+    # Payer column to downstream code (compute_klaim_concentration_limits
+    # checks `'Payer' in df.columns`), bypassing the §17 proxy-mode logic
+    # that Wave 1+2 Fix #3 added. See Mode 6 Red Team Wave 1+2 Fix #8.
+    has_any_payer = any(bool(inv.payer_name) for inv in invoices)
+
     rows = []
     for inv in invoices:
         row = {
@@ -266,10 +275,11 @@ def load_klaim_from_db(db, company: str, product: str,
             'Status': inv.status,
             'Purchase value': float(inv.amount_due) if inv.amount_due is not None else 0.0,
             'Group': inv.customer_name or '',
-            'Payer': inv.payer_name or '',
             'Deal ID': inv.invoice_number,
             _KLAIM_PAYMENT_DERIVED: float(pay_totals.get(inv.id, 0)),
         }
+        if has_any_payer:
+            row['Payer'] = inv.payer_name or ''
         if inv.extra_data:
             # Spread every extra_data key back under its original tape column name.
             # Skip any core/reconstructed columns if somehow present (shouldn't be).

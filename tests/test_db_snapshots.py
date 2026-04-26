@@ -410,3 +410,47 @@ def _wal(covenant_result: dict) -> dict:
 def _tape_path(company: str, product: str, filename: str) -> str:
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(here, 'data', company, product, filename)
+
+
+# ── Mode 6 Wave 1+2 Fix #8 — DB loader empty-Payer-column suppression ─────
+
+class TestPayerColumnNotInjectedWhenEmpty:
+    """Regression: load_klaim_from_db unconditionally injected a `Payer` column
+    via `'Payer': inv.payer_name or ''`. When source CSV lacks a Payer column
+    (Klaim's reality — see data/klaim/legal/debtor_validation.json), every
+    invoice has payer_name=None, so the DataFrame got a Payer column with all
+    empty strings. Downstream `compute_klaim_concentration_limits` sees
+    `'Payer' in df.columns` → True → marks confidence='A' (real data!) and
+    skips the proxy-mode codepath that Wave 1+2 Fix #3 wired up.
+
+    Fix: only include the Payer column when at least ONE invoice has a
+    non-empty payer_name. This way the §17 proxy-mode logic correctly fires
+    on tapes that lack a Payer column.
+    """
+
+    def test_klaim_apr15_no_payer_column_in_loaded_df(self, db):
+        """Apr 15 Klaim tape doesn't carry a Payer column — DB loader must
+        NOT inject one with empty strings."""
+        snap_id = _snap_id(db, '2026-04-15_uae_healthcare')
+        df = load_klaim_from_db(db, 'klaim', 'UAE_healthcare', snapshot_id=snap_id)
+        assert 'Payer' not in df.columns, (
+            f"DB loader injected an empty Payer column. Columns: "
+            f"{[c for c in df.columns if 'payer' in c.lower() or 'group' in c.lower()]}"
+        )
+
+    def test_klaim_concentration_now_uses_group_proxy_on_real_data(self, db):
+        """End-to-end: Fix #8 lets Fix #3's proxy-mode trigger fire on real
+        Klaim data. The Single Payer limit should report compliant=None (not
+        a misleading boolean) on Apr 15 because the tape lacks Payer."""
+        from core.portfolio import compute_klaim_concentration_limits
+        snap_id = _snap_id(db, '2026-04-15_uae_healthcare')
+        df = load_klaim_from_db(db, 'klaim', 'UAE_healthcare', snapshot_id=snap_id)
+        result = compute_klaim_concentration_limits(df, mult=1, ref_date='2026-04-15')
+        payer = next(l for l in result['limits'] if 'Single payer' in l['name'])
+        assert payer['confidence'] == 'B', (
+            f"Single Payer must be Confidence B (proxy) on Klaim — got {payer['confidence']}"
+        )
+        assert payer['compliant'] is None, (
+            f"Single Payer compliant must be None in proxy mode — got {payer['compliant']}"
+        )
+        assert payer['proxy_column'] == 'Group'
