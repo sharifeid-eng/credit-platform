@@ -1099,6 +1099,103 @@ class TestCovenantMethodTagging:
         assert pvd['consecutive_breaches'] == 2
 
 
+class TestCovenantSeparationPrincipleDual:
+    """Regression: Klaim Coll Ratio and Paid vs Due covenants used to filter
+    only on Status (not on the separation-principle loss subset). Loss-dominated
+    deals (denial > 50% PV) drag both numerator AND denominator down; the
+    covenant ratio deteriorates deterministically with the loss tail.
+
+    Per Framework §17 dual-view doctrine, the covenant must report:
+    - `current` — covenant-binding value (current population, matches MMA def)
+    - `current_clean` — clean-book companion (loss subset removed)
+    Compliance decision still keys off `current`.
+    """
+
+    def _mixed_df(self, n_clean=20, n_loss=5):
+        """Build a Klaim-shaped DataFrame with both clean + loss-dominated deals."""
+        rows = []
+        base_date = pd.Timestamp('2026-04-01')
+        # Clean deals: collected most of PV, denied < 50% PV
+        for i in range(n_clean):
+            pv = 10000.0 + i * 100
+            rows.append({
+                'Deal date': base_date - pd.Timedelta(days=10 + i * 3),
+                'Status': 'Executed',
+                'Purchase value': pv,
+                'Collected till date': pv * 0.85,    # high collection
+                'Denied by insurance': pv * 0.05,    # low denial — clean
+                'Pending insurance response': pv * 0.05,
+                'Expected total': pv * 1.10,
+                'Expected collection days': 60.0,
+                'Group': f'PROVIDER_{i % 4}',
+            })
+        # Loss-dominated deals: denial > 50% PV (separation principle excludes)
+        for i in range(n_loss):
+            pv = 12000.0 + i * 150
+            rows.append({
+                'Deal date': base_date - pd.Timedelta(days=180 + i * 5),
+                'Status': 'Executed',
+                'Purchase value': pv,
+                'Collected till date': pv * 0.05,    # almost no collection
+                'Denied by insurance': pv * 0.85,    # high denial — loss
+                'Pending insurance response': 0.0,
+                'Expected total': pv * 1.10,
+                'Expected collection days': 60.0,
+                'Group': 'PROBLEM_PROVIDER',
+            })
+        return pd.DataFrame(rows)
+
+    def test_coll_ratio_carries_clean_dual(self):
+        """Coll Ratio must surface both the binding value and the clean dual."""
+        from core.portfolio import compute_klaim_covenants
+        df = self._mixed_df(n_clean=20, n_loss=5)
+        res = compute_klaim_covenants(df, mult=1, ref_date='2026-04-15')
+        coll = next(c for c in res['covenants'] if c['name'] == 'Collection Ratio (cumulative)')
+        assert 'current_clean' in coll, "Coll Ratio must carry the §17 clean-book dual"
+        # Clean book has higher collection ratio (loss tail dragged the binding down)
+        assert coll['current_clean'] > coll['current'], (
+            f"clean ({coll['current_clean']}) should exceed binding ({coll['current']}) "
+            f"when loss subset is present"
+        )
+
+    def test_paid_vs_due_carries_clean_dual(self):
+        from core.portfolio import compute_klaim_covenants
+        df = self._mixed_df(n_clean=20, n_loss=5)
+        res = compute_klaim_covenants(df, mult=1, ref_date='2026-04-15')
+        pvd = next(c for c in res['covenants'] if c['name'] == 'Paid vs Due Ratio')
+        assert 'current_clean' in pvd, "PVD must carry the §17 clean-book dual"
+        assert pvd['current_clean'] > pvd['current']
+
+    def test_compliance_decision_keys_off_binding_not_clean(self):
+        """Covenant compliance MUST decide on the binding value, not the clean dual.
+        MMA def is unambiguous — the covenant binds on the full live book.
+        """
+        from core.portfolio import compute_klaim_covenants
+        df = self._mixed_df(n_clean=2, n_loss=20)  # heavy loss tail → binding breach
+        res = compute_klaim_covenants(df, mult=1, ref_date='2026-04-15')
+        coll = next(c for c in res['covenants'] if c['name'] == 'Collection Ratio (cumulative)')
+        # Binding value will be low (loss subset drags it); clean might still be OK.
+        # Compliance must reflect the binding decision regardless of the clean dual.
+        if coll['current'] < coll['threshold']:
+            assert coll['compliant'] is False, (
+                "Compliance MUST key off binding value (covenant breach if binding < threshold), "
+                "not on the clean dual"
+            )
+
+    def test_clean_population_documented_in_breakdown(self):
+        """The clean dual must surface in the breakdown so analysts see it
+        without reading the raw API response."""
+        from core.portfolio import compute_klaim_covenants
+        df = self._mixed_df(n_clean=20, n_loss=5)
+        res = compute_klaim_covenants(df, mult=1, ref_date='2026-04-15')
+        coll = next(c for c in res['covenants'] if c['name'] == 'Collection Ratio (cumulative)')
+        breakdown_labels = [item['label'] for item in coll.get('breakdown', [])]
+        # Either a "(clean)" companion line or a population-attribution line
+        assert any('clean' in label.lower() for label in breakdown_labels), (
+            f"Coll Ratio breakdown must surface the clean dual. Labels: {breakdown_labels}"
+        )
+
+
 class TestKlaimDealAgeDeterministicFallback:
     """Regression: _klaim_deal_age_days defaulted to pd.Timestamp.now().normalize()
     when ref_date was None. Same historic snapshot's WAL would drift day-by-day

@@ -20,7 +20,7 @@ from core.analysis_silq import (
     C_DEAL_ID, C_SHOP_ID, C_TENURE, C_STATUS, C_PRODUCT,
     C_DISB_DATE, C_REPAY_DEADLINE, C_LAST_COLL, C_LOAN_AGE,
 )
-from core.analysis import filter_by_date, method_to_confidence
+from core.analysis import filter_by_date, method_to_confidence, separate_portfolio
 
 
 # ── Concentration limit tiers (from loan documents) ─────────────────────────
@@ -1312,8 +1312,11 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     # Single-tape approximation: cumulative collected / face value.
     coll_threshold = facility_params.get('collection_ratio_limit', 0.25)
     coll_ratio = 0
+    coll_ratio_clean = 0
     total_pv = 0
     total_coll = 0
+    total_pv_clean = 0
+    total_coll_clean = 0
     if 'Deal date' in df.columns and 'Collected till date' in df.columns:
         # Deals active at start of period. Explicit if/else avoids the operator-
         # precedence trap where `df[mask if cond else True]` parsed as `df[True]`
@@ -1326,12 +1329,22 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         total_pv = period_deals['Purchase value'].sum() * mult if 'Purchase value' in period_deals.columns else 0
         total_coll = period_deals['Collected till date'].sum() * mult if len(period_deals) else 0
         coll_ratio = total_coll / total_pv if total_pv > 0 else 0
+        # Framework §17 clean-book companion — strips loss subset (denial > 50% PV)
+        # so analysts can attribute breach to "loss tail accumulating" vs
+        # "live-book degrading". Compliance still keys off the binding `current`
+        # value above (covenant population is total_originated per MMA def).
+        if len(period_deals) and 'Purchase value' in period_deals.columns:
+            clean_period_deals, _loss_period_deals = separate_portfolio(period_deals, mult)
+            total_pv_clean = clean_period_deals['Purchase value'].sum() * mult if len(clean_period_deals) else 0
+            total_coll_clean = clean_period_deals['Collected till date'].sum() * mult if len(clean_period_deals) else 0
+            coll_ratio_clean = total_coll_clean / total_pv_clean if total_pv_clean > 0 else 0
 
     covenants.append({
         'name': 'Collection Ratio (cumulative)',
         'current': _safe(coll_ratio),
+        'current_clean': _safe(coll_ratio_clean),  # §17 dual: loss-subset removed
         'threshold': _safe(coll_threshold),
-        'compliant': bool(coll_ratio >= coll_threshold),
+        'compliant': bool(coll_ratio >= coll_threshold),  # binds on `current`, not `current_clean`
         'operator': '>=',
         'format': 'pct',
         'period': period_str,
@@ -1340,12 +1353,20 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'method': 'cumulative',  # single-tape approximation; stable across tapes
         'confidence': 'C',  # derived — single-snapshot approximation of a multi-snapshot definition (P0-5)
         'population': 'total_originated',
+        'population_clean': 'clean_book',  # §17: loss-subset excluded
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(ii): 2 consecutive breaches for EoD
-        'note': 'Single-tape approximation: cumulative collected / face value. True period ratio requires two snapshots (Framework §17: Confidence C — derived).',
+        'note': (
+            'Single-tape approximation: cumulative collected / face value. '
+            'True period ratio requires two snapshots (Framework §17: Confidence C — derived). '
+            'Compliance binds on `current` (full live book per MMA); `current_clean` strips '
+            'loss subset (denial > 50% PV) so analysts can attribute drift to loss-tail accumulation '
+            'vs live-book degradation.'
+        ),
         'breakdown': [
-            {'label': 'Collections (period)', 'value': _safe(total_coll if 'total_coll' in dir() else 0)},
-            {'label': 'Total A/R (period)', 'value': _safe(total_pv if 'total_pv' in dir() else 0)},
-            {'label': 'Collection Ratio', 'value': _safe(coll_ratio), 'bold': True},
+            {'label': 'Collections (period)', 'value': _safe(total_coll)},
+            {'label': 'Total A/R (period)', 'value': _safe(total_pv)},
+            {'label': 'Collection Ratio (binding)', 'value': _safe(coll_ratio), 'bold': True},
+            {'label': 'Collection Ratio (clean book)', 'value': _safe(coll_ratio_clean)},
         ],
     })
 
@@ -1353,8 +1374,11 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     # Amount paid in period / Amount due in period
     pvd_threshold = facility_params.get('paid_vs_due_limit', 0.95)
     pvd_ratio = 0
+    pvd_ratio_clean = 0
     amount_due = 0
     amount_paid = 0
+    amount_due_clean = 0
+    amount_paid_clean = 0
     pvd_method = 'proxy'
     if 'Expected total' in df.columns and 'Collected till date' in df.columns:
         if 'Expected collection days' in df.columns:
@@ -1378,6 +1402,12 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         amount_due = period_deals['Expected total'].sum() * mult if 'Expected total' in period_deals.columns else 0
         amount_paid = period_deals['Collected till date'].sum() * mult if len(period_deals) else 0
         pvd_ratio = amount_paid / amount_due if amount_due > 0 else 0
+        # §17 clean-book companion (mirrors Coll Ratio fix)
+        if len(period_deals) and 'Purchase value' in period_deals.columns:
+            clean_period_deals, _loss_period_deals = separate_portfolio(period_deals, mult)
+            amount_due_clean = clean_period_deals['Expected total'].sum() * mult if (len(clean_period_deals) and 'Expected total' in clean_period_deals.columns) else 0
+            amount_paid_clean = clean_period_deals['Collected till date'].sum() * mult if len(clean_period_deals) else 0
+            pvd_ratio_clean = amount_paid_clean / amount_due_clean if amount_due_clean > 0 else 0
 
     # Paid vs Due: confidence tracks the method — 'direct' is A (uses Expected collection days
     # to filter deals whose payment falls in the period), 'proxy' is B (Deal date proxy).
@@ -1389,8 +1419,9 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
     covenants.append({
         'name': 'Paid vs Due Ratio',
         'current': _safe(pvd_ratio),
+        'current_clean': _safe(pvd_ratio_clean),  # §17 dual: loss-subset removed
         'threshold': _safe(pvd_threshold),
-        'compliant': bool(pvd_ratio >= pvd_threshold),
+        'compliant': bool(pvd_ratio >= pvd_threshold),  # binds on `current`, not `current_clean`
         'operator': '>=',
         'format': 'pct',
         'period': period_str,
@@ -1399,12 +1430,18 @@ def compute_klaim_covenants(df, mult=1, ref_date=None, facility_params=None):
         'method': pvd_method,  # 'direct' uses Expected collection days, 'proxy' uses Deal date
         'confidence': method_to_confidence(pvd_method),
         'population': pvd_population,
+        'population_clean': 'clean_book',  # §17: loss-subset excluded
         'eod_rule': 'two_consecutive_breaches',  # MMA 18.3(iii): 2 consecutive breaches for EoD
-        'note': 'EoD requires 2 consecutive monthly breaches (MMA 18.3(iii))',
+        'note': (
+            'EoD requires 2 consecutive monthly breaches (MMA 18.3(iii)). '
+            'Compliance binds on `current` (full live book per MMA); `current_clean` strips '
+            'loss subset (denial > 50% PV) so analysts can attribute drift to loss-tail accumulation.'
+        ),
         'breakdown': [
-            {'label': 'Amount paid (period)', 'value': _safe(amount_paid if 'amount_paid' in dir() else 0)},
-            {'label': 'Amount due (period)', 'value': _safe(amount_due if 'amount_due' in dir() else 0)},
-            {'label': 'Paid vs Due', 'value': _safe(pvd_ratio), 'bold': True},
+            {'label': 'Amount paid (period)', 'value': _safe(amount_paid)},
+            {'label': 'Amount due (period)', 'value': _safe(amount_due)},
+            {'label': 'Paid vs Due (binding)', 'value': _safe(pvd_ratio), 'bold': True},
+            {'label': 'Paid vs Due (clean book)', 'value': _safe(pvd_ratio_clean)},
         ],
     })
 
